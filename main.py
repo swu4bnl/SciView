@@ -30,7 +30,8 @@ HC_E = 12398.425
 # Ensure SciAnalysis is on the path
 SCIANALYSIS_PATH = os.getenv(
     'SCIANA_PATH',
-    'C:/Users/dimo1/GitHub/SciAnalysis/'
+    # 'C:/Users/dimo1/GitHub/SciAnalysis/'
+    '/Users/siyuwu/Documents/GitHub/SciAnalysis'
 )
 if SCIANALYSIS_PATH not in sys.path:
     sys.path.append(SCIANALYSIS_PATH)
