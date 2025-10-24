@@ -75,9 +75,9 @@ def generate_pairing_list(folder: str, output_csv: str, mode: str = 'saxs', scan
     pos2_files = glob.glob(os.path.join(source_dir, config['file_pattern'].replace('pos1', 'pos2')))
     pos1_files.sort()
     pos2_files.sort()
-    
+
     pairs = []
-    
+
     import re
     def extract_motor_positions(filename):
         """
@@ -101,45 +101,65 @@ def generate_pairing_list(folder: str, output_csv: str, mode: str = 'saxs', scan
             except Exception:
                 pass
         return sample_prefix, motor_positions
-    
-    # Create lookup dictionary for pos2 files by sample and motor positions
+
+    # Helper to extract scan id from filename (use last 7-digit number before .tiff)
+    def extract_scan_id(filename):
+        # Look for 7+ digit number before .tiff (e.g., ..._2135928_000000_waxs.tiff)
+        m = re.findall(r'(\d{7,})', filename)
+        if m:
+            # Use the last occurrence as scan id
+            return int(m[-2]) if len(m) > 1 else int(m[-1])
+        return None
+
+    # Create lookup dictionary for pos2 files by sample and motor positions and scan id
     pos2_lookup = {}
     for pos2_file in pos2_files:
         pos2_filename = os.path.basename(pos2_file)
         sample_prefix, motor_pos = extract_motor_positions(pos2_filename)
-        
-        # Create key from sample and motor positions
-        key = (sample_prefix, motor_pos.get('x', 0), motor_pos.get('th', 0))
+        scan_id = extract_scan_id(pos2_filename)
+        key = (sample_prefix, motor_pos.get('x', 0), motor_pos.get('th', 0), scan_id)
         pos2_lookup[key] = pos2_filename
-    
+
     # Match each pos1 file with corresponding pos2 file
     for pos1_file in pos1_files:
         pos1_filename = os.path.basename(pos1_file)
         sample_prefix, motor_pos = extract_motor_positions(pos1_filename)
-        
-        # Look for exact match in motor positions
-        key = (sample_prefix, motor_pos.get('x', 0), motor_pos.get('th', 0))
-        if key in pos2_lookup:
-            pairs.append((pos1_filename, pos2_lookup[key]))
-            print(f"Matched {pos1_filename} with {pos2_lookup[key]}")
-        else:
-            # If no exact match, try to find pos2 with same sample but different motor positions
-            # This handles cases where pos2 might have slightly different motor positions
+        scan_id = extract_scan_id(pos1_filename)
+
+        matched = False
+        if scan_offset is not None and scan_id is not None:
+            # Try to match pos2 with scan id offset
+            pos2_scan_id = scan_id + scan_offset
+            key = (sample_prefix, motor_pos.get('x', 0), motor_pos.get('th', 0), pos2_scan_id)
+            # Try exact match with offset scan id
+            if key in pos2_lookup:
+                pairs.append((pos1_filename, pos2_lookup[key]))
+                print(f"Matched {pos1_filename} with {pos2_lookup[key]} using scan_offset {scan_offset}")
+                matched = True
+        if not matched:
+            # Fallback to old logic: match by sample and motor positions (ignore scan id)
+            # Try to find any pos2 with same sample and motor positions
+            possible = [k for k in pos2_lookup if k[0] == sample_prefix and k[1] == motor_pos.get('x', 0) and k[2] == motor_pos.get('th', 0)]
+            if possible:
+                pairs.append((pos1_filename, pos2_lookup[possible[0]]))
+                print(f"Matched {pos1_filename} with {pos2_lookup[possible[0]]} (no scan id match)")
+                matched = True
+        if not matched:
+            # If no match, try to find pos2 with same sample (ignore motor positions)
             sample_matches = [(k, v) for k, v in pos2_lookup.items() if k[0] == sample_prefix]
             if sample_matches:
-                # Take the first match for this sample
                 matched_pos2 = sample_matches[0][1]
                 pairs.append((pos1_filename, matched_pos2))
                 print(f"Approximate match: {pos1_filename} with {matched_pos2}")
             else:
                 print(f"Warning: No pos2 match found for {pos1_filename}")
-    
+
     # Write results to CSV
     with open(output_csv, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['image1', 'image2'])
         writer.writerows(pairs)
-    
+
     print(f"Generated {len(pairs)} image pairs in {output_csv}")
     return pairs
 
