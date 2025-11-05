@@ -2,7 +2,7 @@
 
 Purpose
 -------
-SciAnalysis GUI is a modular PyQt5 application that integrates CFN/SciAnalysis X-ray scattering functionality with an interactive graphical frontend. The project provides on-the-fly data inspection and light-weight analysis workflows (calibration, ring-center finding, 1D profiling) while supporting local files and NSLS-II tiled data sources.
+SciAnalysis GUI is a modular PyQt5 application that integrates CFN/SciAnalysis (https://github.com/CFN-softbio/SciAnalysis) X-ray scattering functionality with an interactive graphical frontend. The project provides on-the-fly data inspection and light-weight analysis workflows (calibration, ring-center finding, 1D profiling) while supporting local files and NSLS-II tiled data sources.
 
 Design and architecture
 ------------------------
