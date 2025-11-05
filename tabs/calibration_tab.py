@@ -28,6 +28,7 @@ from tabs.base_image_tab import BaseImageTab
 from config.beamline_config import (
     DEFAULT_CALIBRATION, PHYSICAL_CONSTANTS, get_file_status
 )
+from config.app_style import *
 from tools.ring_center import RingCenterCalculator
 
 # Get constants
@@ -42,6 +43,9 @@ class CalibrationApp(BaseImageTab):
         
         # Initialize ring center calculator
         self.ring_calculator = RingCenterCalculator()
+        
+        # Add crosshair hook to show beam center
+        self.add_display_hook(self._add_beam_center_crosshair, 'post')
         
         # Load standards database
         self.standards_db = self._load_standards_db()
@@ -73,7 +77,7 @@ class CalibrationApp(BaseImageTab):
         visualization_splitter.addWidget(plot_panel)
         
         # Set initial sizes for visualization panels (image larger than plot)
-        visualization_splitter.setSizes([300, 100])  # 3:1 ratio
+        setup_splitter_layout(visualization_splitter, AppStyle.get_layout_ratios()['viz_splitter_ratio'])
         
         main_splitter.addWidget(visualization_splitter)
 
@@ -97,12 +101,12 @@ class CalibrationApp(BaseImageTab):
         controls_splitter.addWidget(standards_panel)
         
         # Set initial sizes for control panels (adjust based on content)
-        controls_splitter.setSizes([80, 120, 150, 60])
+        setup_splitter_layout(controls_splitter, AppStyle.get_layout_ratios()['controls_splitter_ratio'])
         
         main_splitter.addWidget(controls_splitter)
 
         # Set initial sizes for main areas (visualization larger than controls)
-        main_splitter.setSizes([600, 200])  # 3:1 ratio
+        setup_splitter_layout(main_splitter, AppStyle.get_layout_ratios()['main_splitter_ratio'])
         
         main_layout.addWidget(main_splitter)
 
@@ -111,69 +115,6 @@ class CalibrationApp(BaseImageTab):
         self.canvas_raw.mpl_connect('button_press_event', self.on_mouse_click)
         self.canvas_plot.mpl_connect('motion_notify_event', self.on_mouse_move)
 
-    def _create_image_panel(self):
-        """Create the image display panel"""
-        panel = QWidget()
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(1)  # Remove all spacing
-
-        # Load button
-        btn_load = QPushButton("Load Image")
-        btn_load.clicked.connect(self.load_image)
-        btn_load.setMaximumHeight(30)  # Compact button
-        layout.addWidget(btn_load)
-        
-        # Image display title - smaller font
-        title = QLabel("Raw Image")
-        title.setStyleSheet("font-weight: bold; font-size: 12px;")
-        layout.addWidget(title)
-
-        # Dynamic filename label - smaller font
-        self.filename_label = QLabel("File Name: No image loaded")
-        self.filename_label.setStyleSheet("font-size: 10px;")
-        layout.addWidget(self.filename_label)
-
-        # Create matplotlib figure with tighter margins
-        self.fig_raw, self.ax_raw = plt.subplots(figsize=(6, 6))
-        # Reduce margins around the image
-        self.fig_raw.subplots_adjust(left=0.05, bottom=0.05, right=0.99, top=0.99)
-        
-        self.canvas_raw = FigureCanvas(self.fig_raw)
-        layout.addWidget(self.canvas_raw)
-        
-        # Compact navigation toolbar
-        toolbar_raw = NavigationToolbar(self.canvas_raw, self)
-        toolbar_raw.setMaximumHeight(25)
-        layout.addWidget(toolbar_raw)
-
-        # Image controls
-        img_ctrl = QHBoxLayout()
-        img_ctrl.addWidget(QLabel("vmin:"))
-        self.vmin_input = QLineEdit("-2")
-        # self.vmin_input.setFixedWidth(60)
-        self.vmin_input.editingFinished.connect(self.update_plot)
-        img_ctrl.addWidget(self.vmin_input)
-        img_ctrl.addWidget(QLabel("vmax:"))
-        self.vmax_input = QLineEdit("1000")
-        # self.vmax_input.setFixedWidth(60)
-        self.vmax_input.editingFinished.connect(self.update_plot)
-        img_ctrl.addWidget(self.vmax_input)
-        img_ctrl.addWidget(QLabel("cmap:"))
-        self.cmap_selector = QComboBox()
-        self.cmap_selector.addItems(plt.colormaps())
-        self.cmap_selector.setCurrentText("gray")
-        self.cmap_selector.currentTextChanged.connect(self.update_plot)
-        img_ctrl.addWidget(self.cmap_selector)
-        img_ctrl.addWidget(QLabel("scale:"))
-        self.img_scale_combo = QComboBox()
-        self.img_scale_combo.addItems(["linear", "log"])
-        self.img_scale_combo.currentTextChanged.connect(self.update_plot)
-        img_ctrl.addWidget(self.img_scale_combo)
-        layout.addLayout(img_ctrl)
-        
-        return panel
-    
     def _create_plot_panel(self):
         """Create the analysis plot panel"""
         panel = QWidget()
@@ -186,18 +127,17 @@ class CalibrationApp(BaseImageTab):
         title_layout.setContentsMargins(0, 0, 0, 0)
         
         title = QLabel("1D Profiles")
-        title.setStyleSheet("font-weight: bold; font-size: 12px;")  # Smaller title font
+        apply_subtitle_style(title)
         title_layout.addWidget(title)
         
         title_layout.addStretch()  # Push scale controls to the right
         
         scale_label = QLabel("Scale:")
-        scale_label.setStyleSheet("font-size: 10px;")  # Smaller font
         title_layout.addWidget(scale_label)
         
         self.scale_combo = QComboBox()
         self.scale_combo.addItems(["linear", "logx", "logy", "loglog"])
-        self.scale_combo.currentTextChanged.connect(self.update_plot)
+        self.scale_combo.currentTextChanged.connect(self.update_plot_calibration)
         self.scale_combo.setMaximumWidth(80)  # Limit width
         title_layout.addWidget(self.scale_combo)
         
@@ -206,7 +146,7 @@ class CalibrationApp(BaseImageTab):
         # Create matplotlib plot with tighter margins
         self.fig_plot, self.ax_plot = plt.subplots(figsize=(6.0, 2.8))
         # Reduce margins around the plot
-        self.fig_plot.subplots_adjust(left=0.05, bottom=0.10, right=0.99, top=0.99)
+        self.fig_plot.subplots_adjust(left=0.08, bottom=0.15, right=0.99, top=0.99)
         
         self.canvas_plot = FigureCanvas(self.fig_plot)
         layout.addWidget(self.canvas_plot)
@@ -226,7 +166,7 @@ class CalibrationApp(BaseImageTab):
         
         # Title
         title = QLabel("Calibration Parameters")
-        title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        apply_title_style(title)
         layout.addWidget(title)
         
         # Parameter spinboxes using config defaults
@@ -286,7 +226,7 @@ class CalibrationApp(BaseImageTab):
         
         # Title
         title = QLabel("Ring Center Calculation")
-        title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        apply_title_style(title)
         layout.addWidget(title)
         
         # Instructions
@@ -331,16 +271,12 @@ class CalibrationApp(BaseImageTab):
             x_spin.setRange(-9999, 9999)
             x_spin.setDecimals(1)
             x_spin.setValue(0)
-            # x_spin.setFixedWidth(65)
-            x_spin.setStyleSheet("font-size: 10px;")
             point_layout.addWidget(x_spin)
             
             y_spin = QDoubleSpinBox()
             y_spin.setRange(-9999, 9999)
             y_spin.setDecimals(1)
             y_spin.setValue(0)
-            # y_spin.setFixedWidth(65)
-            y_spin.setStyleSheet("font-size: 10px;")
             point_layout.addWidget(y_spin)
             
             self.ring_center_inputs.append((x_spin, y_spin))
@@ -364,7 +300,7 @@ class CalibrationApp(BaseImageTab):
         # Result display
         self.ring_result_label = QLabel("Ring center: Not calculated")
         self.ring_result_label.setWordWrap(True)
-        self.ring_result_label.setStyleSheet("font-size: 11px; background-color: #f0f0f0; padding: 5px; border: 1px solid #ccc;")
+        apply_info_style(self.ring_result_label)
         layout.addWidget(self.ring_result_label)
         
         # Update beam position button
@@ -375,7 +311,7 @@ class CalibrationApp(BaseImageTab):
         # Click instruction
         click_instruction = QLabel("Tip: Right-click on the image to fill coordinates")
         click_instruction.setWordWrap(True)
-        click_instruction.setStyleSheet("color: gray; font-style: italic; font-size: 10px;")
+        apply_info_style(click_instruction)
         layout.addWidget(click_instruction)
         
         # Initialize click tracking
@@ -392,7 +328,7 @@ class CalibrationApp(BaseImageTab):
         layout.setContentsMargins(2, 2, 2, 2)
 
         title = QLabel("Standard Materials")
-        title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        apply_title_style(title)
         layout.addWidget(title)
 
         # Dropdown menu
@@ -406,7 +342,7 @@ class CalibrationApp(BaseImageTab):
         # Info label
         self.standards_info_label = QLabel("Select a material to show its diffraction lines in the 1D plot.")
         self.standards_info_label.setWordWrap(True)
-        self.standards_info_label.setStyleSheet("font-size: 11px; color: gray;")
+        apply_info_style(self.standards_info_label)
         layout.addWidget(self.standards_info_label)
 
         return panel
@@ -420,8 +356,8 @@ class CalibrationApp(BaseImageTab):
         spin.setSingleStep(step)
         spin.setValue(default)
         spin.setDecimals(4 if step < 0.01 else 2)
-        # Connect value changes to status updates
-        spin.editingFinished.connect(self.update_status_info)
+        # Connect value changes to both status updates and plot updates
+        spin.editingFinished.connect(self.calibrate_and_update_status)
         lay.addWidget(spin)
         parent.addLayout(lay)
         return spin
@@ -433,6 +369,29 @@ class CalibrationApp(BaseImageTab):
         standards_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(standards_module)
         return getattr(standards_module, "STANDARDS", {})
+
+    def _add_beam_center_crosshair(self, ax):
+        """Hook to add crosshair at beam center position"""
+        if hasattr(self, 'spin_x') and hasattr(self, 'spin_y'):
+            center_x = self.spin_x.value()
+            center_y = self.spin_y.value()
+            
+            # Add crosshair lines
+            if hasattr(self, 'image_data') and self.image_data is not None:
+                # Get image dimensions
+                if hasattr(self.image_data, 'data'):
+                    img_shape = self.image_data.data.shape
+                else:
+                    img_shape = self.image_data.shape
+                
+                # Draw crosshair lines
+                ax.axhline(y=center_y, color='red', linestyle='--', linewidth=1, alpha=0.7)
+                ax.axvline(x=center_x, color='red', linestyle='--', linewidth=1, alpha=0.7)
+                
+                # Add a small circle at the center
+                import matplotlib.pyplot as plt
+                circle = plt.Circle((center_x, center_y), radius=3, color='red', fill=False, linewidth=2, alpha=0.8)
+                ax.add_patch(circle)
 
     def calculate_ring_center(self):
         """Calculate the center of a circle from multiple points"""
@@ -535,8 +494,8 @@ class CalibrationApp(BaseImageTab):
             self.ring_result_label.setText(f"Center: ({center_x:.1f}, {center_y:.1f}), Radius: {radius:.1f}")
             
             # Update the plot to show new beam position
-            self.update_plot()
-            
+            self.update_plot_calibration()
+
             # Update status info to reflect changes
             self.update_status_info()
             
@@ -598,7 +557,7 @@ class CalibrationApp(BaseImageTab):
 
     def calibrate_and_update_status(self):
         """Update calibration and status information"""
-        self.update_plot()
+        self.update_plot_calibration()
         self.update_status_info()
         self.parent_app.show_status("Calibration updated and plots refreshed")
 
@@ -607,16 +566,14 @@ class CalibrationApp(BaseImageTab):
         wavelength = self.spin_wl_ang.value()
         energy = HC_E / wavelength
         self.spin_energy_ev.setValue(energy)
-        self.update_plot()
-        self.update_status_info()  # Update status when calibration changes
+        self.calibrate_and_update_status()
 
     def on_energy_changed(self):
         """Handle energy changes"""
         energy = self.spin_energy_ev.value()
         wavelength = HC_E / energy
         self.spin_wl_ang.setValue(wavelength)
-        self.update_plot()
-        self.update_status_info()  # Update status when calibration changes
+        self.calibrate_and_update_status()
 
     def _draw_standard_lines(self):
         """Draw vertical lines for selected standard in 1D plot"""
@@ -634,7 +591,7 @@ class CalibrationApp(BaseImageTab):
             self.selected_standard = text
             qvals = self.standards_db.get(text, [])
             self.standards_info_label.setText(f"Selected: {text} ({len(qvals)} lines)")
-        self.update_plot()
+        self.update_plot_calibration()
 
         # === STANDARDS STATUS ===
         try:
@@ -647,84 +604,96 @@ class CalibrationApp(BaseImageTab):
         except Exception as e:
             print(f"Error updating standards status: {e}")
 
-    def update_plot(self):
+    def update_plot_calibration(self):
         """Update plots based on current calibration and image data"""
         if self.image_data is None:
             return
         
-        # Store current limits only if they are not default/unset
-        raw_xlim, raw_ylim = self.ax_raw.get_xlim(), self.ax_raw.get_ylim()
+        # Store current limits for 1D plot
         plot_xlim, plot_ylim = self.ax_plot.get_xlim(), self.ax_plot.get_ylim()
-        
-        # Check if limits are meaningful (not default matplotlib values)
-        raw_xlim_valid = not np.allclose(raw_xlim, (0, 1))
-        raw_ylim_valid = not np.allclose(raw_ylim, (0, 1))
         plot_xlim_valid = not np.allclose(plot_xlim, (0, 1))
         plot_ylim_valid = not np.allclose(plot_ylim, (0, 1))
 
+        # First, update the raw image using the unified base class method
+        self.update_plot()
+        
+        # Then, update the 1D plots
+        self._update_1d_plots(plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
+    
+    def _update_1d_plots(self, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid):
+        """Update the 1D analysis plots"""
         # Update calibration if SciAnalysis is available
-        if self.scianalysis_available and self.calibration:
-            cal = self.calibration
-            cal.set_beam_position(self.spin_x.value(), self.spin_y.value())
-            cal.set_angles(det_orient=self.spin_orient.value(), det_tilt=self.spin_tilt.value(), det_phi=self.spin_phi.value())
-            cal.set_distance(self.spin_dist.value())
-            cal.set_pixel_size(pixel_size_um=self.spin_pixel.value())
-            cal.set_wavelength(self.spin_wl_ang.value())
-            cal.clear_maps()
-            
-            # Calculate Q-space data using SciAnalysis
-            circ = self.image_data.circular_average_q_bin(apply_mask=False)
-            hor_1 = self.image_data.sector_average_q_bin(angle=0, dangle=5, apply_mask=False)
-            hor_2 = self.image_data.sector_average_q_bin(angle=180, dangle=5, apply_mask=False)
-            ver_1 = self.image_data.sector_average_q_bin(angle=90, dangle=5, apply_mask=False)
-            ver_2 = self.image_data.sector_average_q_bin(angle=-90, dangle=5, apply_mask=False)
-        else:
-            # Create mock Q-space data for testing
-            class MockProfile:
-                def __init__(self, x_data, y_data):
-                    self.x = x_data
-                    self.y = y_data
-            
-            # Generate mock Q-space profiles
-            x_vals = np.linspace(0.01, 2.0, 100)
-            circ = MockProfile(x_vals, 1000 * np.exp(-x_vals * 2) + 50)
-            hor_1 = MockProfile(x_vals, 800 * np.exp(-x_vals * 1.5) + 30)
-            hor_2 = MockProfile(x_vals, 750 * np.exp(-x_vals * 1.8) + 25)
-            ver_1 = MockProfile(x_vals, 900 * np.exp(-x_vals * 1.2) + 40)
-            ver_2 = MockProfile(x_vals, 850 * np.exp(-x_vals * 1.6) + 35)
+        if self.scianalysis_available and self.image_data.calibration:
 
-        # Update raw image display
-        self.ax_raw.clear()
-        try:
-            vmin = float(self.vmin_input.text())
-            vmax = float(self.vmax_input.text())
-        except ValueError:
-            vmin = vmax = None
-        
-        cmap = self.cmap_selector.currentText()
-        scale = self.img_scale_combo.currentText()
-        if scale == 'log':
-            norm = LogNorm(vmin=vmin, vmax=vmax) if vmin and vmax else LogNorm()
-            self.ax_raw.imshow(self.image_data.data, origin='upper', cmap=cmap, norm=norm)
-        else:
-            self.ax_raw.imshow(self.image_data.data, origin='upper', cmap=cmap, vmin=vmin, vmax=vmax)
-        
-        # Add beam center crosshairs
-        self.ax_raw.axhline(self.spin_y.value(), color='r', ls='--', alpha=0.8)
-        self.ax_raw.axvline(self.spin_x.value(), color='r', ls='--', alpha=0.8)
-        self.ax_raw.set_title('Raw Image', fontsize=9)  # Smaller title
-        self.ax_raw.tick_params(labelsize=7)  # Smaller tick labels
-        
-        # Restore limits only if they were meaningful
-        if raw_xlim_valid:
-            self.ax_raw.set_xlim(raw_xlim)
-        if raw_ylim_valid:
-            self.ax_raw.set_ylim(raw_ylim)
+            height, width = self.image_data.data.shape
+            self.image_data.calibration.width = width
+            self.image_data.calibration.height = height
 
-        # Update raw image canvas with custom tight margins
-        self.fig_raw.subplots_adjust(left=0.05, bottom=0.05, right=0.99, top=0.99)
-        self.canvas_raw.draw()
-        
+            self.image_data.calibration.set_beam_position(self.spin_x.value(), self.spin_y.value())
+            self.image_data.calibration.set_angles(det_orient=self.spin_orient.value(), 
+                                        det_tilt=self.spin_tilt.value(), 
+                                        det_phi=self.spin_phi.value())
+            self.image_data.calibration.set_distance(self.spin_dist.value())
+            self.image_data.calibration.set_pixel_size(pixel_size_um=self.spin_pixel.value())
+            self.image_data.calibration.set_wavelength(self.spin_wl_ang.value())
+
+            self.image_data.calibration.clear_maps()
+
+
+            # cal = self.calibration
+            # cal.set_beam_position(self.spin_x.value(), self.spin_y.value())
+            # cal.set_angles(det_orient=self.spin_orient.value(), det_tilt=self.spin_tilt.value(), det_phi=self.spin_phi.value())
+            # cal.set_distance(self.spin_dist.value())
+            # cal.set_pixel_size(pixel_size_um=self.spin_pixel.value())
+            # cal.set_wavelength(self.spin_wl_ang.value())
+            
+            # # Set detector dimensions if image data is available
+            # if hasattr(self.image_data, 'data'):
+            #     height, width = self.image_data.data.shape
+            #     cal.width = width
+            #     cal.height = height
+            
+            # cal.clear_maps()
+            
+            # Re-assign the updated calibration to the image data
+            # This is crucial for Q-space calculations to use the new parameters
+            # self.image_data.calibration = cal
+            
+            # Calculate Q-space data using SciAnalysis with error handling
+            try:
+                circ = self.image_data.circular_average_q_bin(apply_mask=False)
+                hor_1 = self.image_data.sector_average_q_bin(angle=0, dangle=5, apply_mask=False)
+                hor_2 = self.image_data.sector_average_q_bin(angle=180, dangle=5, apply_mask=False)
+                ver_1 = self.image_data.sector_average_q_bin(angle=90, dangle=5, apply_mask=False)
+                ver_2 = self.image_data.sector_average_q_bin(angle=-90, dangle=5, apply_mask=False)
+            except Exception as e:
+                # If Q-space analysis fails, clear the plot and show error
+                print(f"Warning: Q-space analysis failed: {e}")
+                self._clear_1d_plots()
+                return
+        else:
+            # SciAnalysis not available - clear plots and show message
+            self._clear_1d_plots()
+            return
+            
+        # Update 1D plot with real data
+        self._draw_1d_plots(circ, hor_1, hor_2, ver_1, ver_2, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
+    
+    def _clear_1d_plots(self):
+        """Clear 1D plots when SciAnalysis is not available or analysis fails"""
+        self.ax_plot.clear()
+        self.ax_plot.text(0.5, 0.5, 'No Q-space analysis available\n\nRequires:\n• Valid image data\n• SciAnalysis library\n• Proper calibration parameters', 
+                         transform=self.ax_plot.transAxes, 
+                         ha='center', va='center', 
+                         fontsize=10, color='gray',
+                         bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.7))
+        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=8)
+        self.ax_plot.set_ylabel('Intensity', fontsize=8)
+        self.ax_plot.tick_params(labelsize=7)
+        self.canvas_plot.draw()
+    
+    def _draw_1d_plots(self, circ, hor_1, hor_2, ver_1, ver_2, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid):
+        """Draw the 1D plots with given data"""
         # Update 1D plot
         self.ax_plot.clear()
         self.ax_plot.plot(circ.x, circ.y, label='Circular Avg', color='#22BB44', linewidth=1.5)
@@ -737,10 +706,10 @@ class CalibrationApp(BaseImageTab):
         self._draw_standard_lines()
 
         # Set labels and legend with smaller fonts
-        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=8)  # Smaller xlabel
-        self.ax_plot.set_ylabel('Intensity', fontsize=8)  # Smaller ylabel
-        self.ax_plot.legend(fontsize=6, loc='best', frameon=False)  # Smaller legend, no frame
-        self.ax_plot.tick_params(labelsize=7)  # Smaller tick labels
+        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=8)
+        self.ax_plot.set_ylabel('Intensity', fontsize=8)
+        self.ax_plot.legend(fontsize=6, loc='best', frameon=False)
+        self.ax_plot.tick_params(labelsize=7)
         
         # Apply scaling options properly
         ps = self.scale_combo.currentText()
@@ -759,20 +728,16 @@ class CalibrationApp(BaseImageTab):
         
         # Restore limits only if they were meaningful and scale hasn't changed
         if plot_xlim_valid and plot_ylim_valid:
-            # Check if current scale is compatible with stored limits
             try:
                 if ps in ['logx', 'loglog'] and plot_xlim[0] <= 0:
-                    # Log scale incompatible with stored limits, let it autoscale
-                    pass
+                    pass  # Log scale incompatible with stored limits
                 elif ps in ['logy', 'loglog'] and plot_ylim[0] <= 0:
-                    # Log scale incompatible with stored limits, let it autoscale
-                    pass
+                    pass  # Log scale incompatible with stored limits
                 else:
                     self.ax_plot.set_xlim(plot_xlim)
                     self.ax_plot.set_ylim(plot_ylim)
             except ValueError:
-                # If setting limits fails, let matplotlib autoscale
-                pass
+                pass  # If setting limits fails, let matplotlib autoscale
         
         # Ensure plot fills the canvas with custom tight margins
         self.fig_plot.subplots_adjust(left=0.05, bottom=0.10, right=0.99, top=0.99)
@@ -862,4 +827,4 @@ class CalibrationApp(BaseImageTab):
         """Handle key press events"""
         # Enter key to update plot
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
-            self.update_plot()
+            self.calibrate_and_update_status()

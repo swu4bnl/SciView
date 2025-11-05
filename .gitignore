@@ -12,3 +12,4 @@
 *.bak
 *.dev
 test*
+*debug*

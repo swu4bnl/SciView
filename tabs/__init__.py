@@ -11,3 +11,15 @@ try:
 except ImportError:
     # Handle missing dependencies gracefully
     CalibrationApp = None
+
+try:
+    from .image_browser_tab import ImageBrowserApp
+except ImportError:
+    # Handle missing dependencies gracefully
+    ImageBrowserApp = None
+
+try:
+    from .mask_tab import MaskApp
+except ImportError:
+    # Handle missing dependencies gracefully
+    MaskApp = None

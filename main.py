@@ -18,22 +18,22 @@ from PyQt5.QtCore import Qt
 from config.beamline_config import (
     SCIANALYSIS_PATH, GUI_SETTINGS, BEAMLINE_NAME
 )
+from config.app_style import AppStyle
 
 # Ensure SciAnalysis is on the path
 if SCIANALYSIS_PATH not in sys.path:
     sys.path.append(SCIANALYSIS_PATH)
 
-# Import SciAnalysis dependencies
-try:
+# Import configuration including SciAnalysis availability
+from config.beamline_config import (
+    get_file_status, DEFAULT_CALIBRATION, BEAMLINE_NAME, GUI_SETTINGS, 
+    SCIANALYSIS_AVAILABLE
+)
+
+# Import SciAnalysis dependencies only if available  
+if SCIANALYSIS_AVAILABLE:
     from SciAnalysis.XSAnalysis.Data import Data2DScattering
     from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
-    SCIANALYSIS_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: SciAnalysis not available: {e}")
-    SCIANALYSIS_AVAILABLE = False
-
-# Import application modules
-from config.beamline_config import get_file_status, DEFAULT_CALIBRATION
 from utils.calibration_utils import calibration_manager
 
 
@@ -63,6 +63,17 @@ class SciAnaApp(QMainWindow):
     def show_status(self, msg):
         """Display status message"""
         self.status.showMessage(msg)
+    
+    def update_all_displays(self):
+        """Update display across all tabs when display settings change"""
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            if hasattr(tab, 'update_plot'):
+                try:
+                    tab.update_plot()
+                except Exception as e:
+                    print(f"Error updating tab {i}: {e}")
+            # Remove the fallback to update_display since we unified on update_plot
     
     def load_image(self, calibration=None, file_filters="*.tiff *.tif *.h5 *.dat"):
         """
@@ -131,21 +142,12 @@ class SciAnaApp(QMainWindow):
         self.calibration = calibration
 
 
-class MaskCheckApp:
-    """Placeholder for mask checking functionality"""
-    
-    def __init__(self, parent_app):
-        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
-        
-        self.parent_app = parent_app
-        self.widget = QWidget()
-        layout = QVBoxLayout(self.widget)
-        layout.addWidget(QLabel("Mask Checking Tab\\n(to be implemented)"))
-
-
 def create_application():
     """Create and configure the main application"""
     app = QApplication(sys.argv)
+    
+    # Apply global styling
+    AppStyle.apply_global_style(app)
     
     # Set application properties
     app.setApplicationName("SciAnalysis GUI")
@@ -156,8 +158,22 @@ def create_application():
     main_window = SciAnaApp()
     
     # Add tabs
+    
+    # Image Browser tab (first tab for primary image loading)
     try:
-        # Try to import calibration tab
+        from tabs.image_browser_tab import ImageBrowserApp
+        image_browser_tab = ImageBrowserApp(main_window)
+        main_window.add_tab(image_browser_tab, "Image Browser")
+    except ImportError as e:
+        print(f"Warning: Could not load image browser tab: {e}")
+        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+        placeholder = QWidget()
+        layout = QVBoxLayout(placeholder)
+        layout.addWidget(QLabel(f"Image Browser Tab\\n(Import error: {e})"))
+        main_window.add_tab(placeholder, "Image Browser")
+    
+    # Calibration tab
+    try:
         if SCIANALYSIS_AVAILABLE:
             from tabs.calibration_tab import CalibrationApp
             calibration_tab = CalibrationApp(main_window)
@@ -177,9 +193,18 @@ def create_application():
         layout.addWidget(QLabel(f"Calibration Tab\\n(Import error: {e})"))
         main_window.add_tab(placeholder, "Calibration")
     
-    # Add mask checking tab
-    mask_tab = MaskCheckApp(main_window)
-    main_window.add_tab(mask_tab.widget, "Mask Checking")
+    # Mask editing tab
+    try:
+        from tabs.mask_tab import MaskApp
+        mask_tab = MaskApp(main_window)
+        main_window.add_tab(mask_tab, "Mask Editing")
+    except ImportError as e:
+        print(f"Warning: Could not load mask tab: {e}")
+        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+        placeholder = QWidget()
+        layout = QVBoxLayout(placeholder)
+        layout.addWidget(QLabel(f"Mask Tab\\n(Import error: {e})"))
+        main_window.add_tab(placeholder, "Mask Editing")
     
     return app, main_window
 

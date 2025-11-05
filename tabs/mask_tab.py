@@ -27,6 +27,7 @@ from tabs.base_image_tab import BaseImageTab
 from config.beamline_config import (
     DEFAULT_CALIBRATION, PHYSICAL_CONSTANTS, get_file_status
 )
+from config.app_style import *
 
 
 class MaskApp(BaseImageTab):
@@ -39,6 +40,9 @@ class MaskApp(BaseImageTab):
         self.mask_data = None
         self.mask_applied = False
         self.custom_mask_points = []
+        
+        # Add mask overlay hook to post-display hooks
+        self.add_display_hook(self._add_mask_overlay, 'post')
         
         # Build UI
         self._build_ui()
@@ -74,66 +78,61 @@ class MaskApp(BaseImageTab):
         controls_splitter.addWidget(mask_editing_panel)
         
         # Set initial sizes for control panels
-        controls_splitter.setSizes([120, 150, 100])
+        mask_control_ratios = [120, 150, 100]  # Custom ratios for mask tab
+        setup_splitter_layout(controls_splitter, mask_control_ratios)
         
         main_splitter.addWidget(controls_splitter)
 
         # Set initial sizes for main areas (visualization larger than controls)
-        main_splitter.setSizes([600, 200])  # 3:1 ratio
+        setup_splitter_layout(main_splitter, AppStyle.get_layout_ratios()['main_splitter_ratio'])
         
         main_layout.addWidget(main_splitter)
+        main_layout.addStretch()
 
         # Connect matplotlib events
         self.canvas_image.mpl_connect('motion_notify_event', self.on_mouse_move)
         self.canvas_image.mpl_connect('button_press_event', self.on_mask_click)
 
     def _create_visualization_panel(self):
-        """Create the image and mask visualization panel"""
+        """Create the image and mask visualization panel using unified display system"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(1)
-
-        # Load button using inherited method
-        btn_load = self.create_load_button(layout)
         
         # Image display title
         title = QLabel("Image with Mask Overlay")
-        title.setStyleSheet("font-weight: bold; font-size: 12px;")
+        apply_subtitle_style(title)
         layout.addWidget(title)
 
         # Filename label using inherited method
         self.create_filename_label(layout)
 
-        # Create matplotlib figure
-        self.fig_image, self.ax_image = plt.subplots(figsize=(8, 8))
-        self.fig_image.subplots_adjust(left=0.05, bottom=0.05, right=0.99, top=0.99)
+        # Use the base class image panel (creates self.ax_raw, self.canvas_raw, etc.)
+        base_image_panel = self._create_image_panel()
+        layout.addWidget(base_image_panel)
         
-        self.canvas_image = FigureCanvas(self.fig_image)
-        layout.addWidget(self.canvas_image)
-        
-        # Navigation toolbar
-        toolbar = NavigationToolbar(self.canvas_image, self)
-        toolbar.setMaximumHeight(25)
-        layout.addWidget(toolbar)
+        # Use unified canvas references for mask tab
+        self.ax_image = self.ax_raw
+        self.canvas_image = self.canvas_raw
 
-        # Image controls
-        controls_layout = QHBoxLayout()
-        controls_layout.addWidget(QLabel("Transparency:"))
+        # Mask-specific controls
+        mask_controls_layout = QHBoxLayout()
+        mask_controls_layout.addWidget(QLabel("Transparency:"))
         self.alpha_spin = QSpinBox()
         self.alpha_spin.setRange(0, 100)
         self.alpha_spin.setValue(50)
         self.alpha_spin.setSuffix("%")
-        self.alpha_spin.valueChanged.connect(self.update_display)
-        controls_layout.addWidget(self.alpha_spin)
+        self.alpha_spin.valueChanged.connect(self.update_plot)
+        mask_controls_layout.addWidget(self.alpha_spin)
         
-        controls_layout.addWidget(QLabel("Mask Color:"))
+        mask_controls_layout.addWidget(QLabel("Mask Color:"))
         self.mask_color_combo = QComboBox()
         self.mask_color_combo.addItems(["red", "blue", "green", "yellow", "magenta", "cyan"])
-        self.mask_color_combo.currentTextChanged.connect(self.update_display)
-        controls_layout.addWidget(self.mask_color_combo)
+        self.mask_color_combo.currentTextChanged.connect(self.update_plot)
+        mask_controls_layout.addWidget(self.mask_color_combo)
         
-        layout.addLayout(controls_layout)
+        layout.addLayout(mask_controls_layout)
         
         return panel
 
@@ -144,8 +143,8 @@ class MaskApp(BaseImageTab):
         layout.setContentsMargins(2, 2, 2, 2)
         
         # Title
-        title = QLabel("Mask Controls")
-        title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        title = QLabel("Mask Control")
+        apply_title_style(title)
         layout.addWidget(title)
         
         # Load mask button
@@ -161,7 +160,7 @@ class MaskApp(BaseImageTab):
         # Mask statistics
         self.mask_stats_label = QLabel("Mask: Not loaded")
         self.mask_stats_label.setWordWrap(True)
-        self.mask_stats_label.setStyleSheet("font-size: 11px; background-color: #f0f0f0; padding: 5px; border: 1px solid #ccc;")
+        apply_info_style(self.mask_stats_label)
         layout.addWidget(self.mask_stats_label)
         
         # Export mask button
@@ -180,13 +179,13 @@ class MaskApp(BaseImageTab):
         
         # Title
         title = QLabel("Mask Editing")
-        title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        apply_title_style(title)
         layout.addWidget(title)
         
         # Editing instructions
         instructions = QLabel("Click on image to add/remove mask points")
         instructions.setWordWrap(True)
-        instructions.setStyleSheet("font-size: 10px; color: #666;")
+        apply_info_style(instructions)
         layout.addWidget(instructions)
         
         # Clear custom mask
@@ -196,7 +195,7 @@ class MaskApp(BaseImageTab):
         
         # Custom mask info
         self.custom_mask_label = QLabel("Custom points: 0")
-        self.custom_mask_label.setStyleSheet("font-size: 11px;")
+        apply_info_style(self.custom_mask_label)
         layout.addWidget(self.custom_mask_label)
         
         layout.addStretch()
@@ -250,7 +249,7 @@ class MaskApp(BaseImageTab):
                     f"Masked: {masked_pixels:,} pixels ({mask_percentage:.1f}%)"
                 )
                 
-                self.update_display()
+                self.update_plot()
                 self.update_status_info()
                 self.parent_app.show_status(f"Mask loaded: {os.path.basename(file_path)}")
                 
@@ -260,29 +259,9 @@ class MaskApp(BaseImageTab):
     def toggle_mask(self, state):
         """Toggle mask application"""
         self.mask_applied = state == Qt.Checked
-        self.update_display()
-        self.update_status_info()
-
-    def update_display(self):
-        """Update the image and mask display"""
-        if self.image_data is None:
-            return
         
-        self.ax_image.clear()
-        
-        # Display image
-        if hasattr(self.image_data, 'data'):
-            image = self.image_data.data.copy()
-        else:
-            image = self.image_data.copy()
-        
-        # Apply mask if enabled
-        if self.mask_applied and self.mask_data is not None:
-            image = np.ma.masked_where(self.mask_data == 0, image)
-        
-        # Display image
-        im = self.ax_image.imshow(image, origin='upper', cmap='gray')
-        
+    def _add_mask_overlay(self, ax):
+        """Hook to add mask overlay after base image display"""
         # Overlay mask if available
         if self.mask_data is not None:
             alpha = self.alpha_spin.value() / 100.0
@@ -290,28 +269,24 @@ class MaskApp(BaseImageTab):
             mask_overlay = np.zeros((*self.mask_data.shape, 4))
             
             # Set color for masked pixels
-            if color == 'red':
-                mask_overlay[self.mask_data == 0] = [1, 0, 0, alpha]
-            elif color == 'blue':
-                mask_overlay[self.mask_data == 0] = [0, 0, 1, alpha]
-            elif color == 'green':
-                mask_overlay[self.mask_data == 0] = [0, 1, 0, alpha]
-            elif color == 'yellow':
-                mask_overlay[self.mask_data == 0] = [1, 1, 0, alpha]
-            elif color == 'magenta':
-                mask_overlay[self.mask_data == 0] = [1, 0, 1, alpha]
-            elif color == 'cyan':
-                mask_overlay[self.mask_data == 0] = [0, 1, 1, alpha]
+            color_map = {
+                'red': [1, 0, 0, alpha],
+                'blue': [0, 0, 1, alpha],
+                'green': [0, 1, 0, alpha],
+                'yellow': [1, 1, 0, alpha],
+                'magenta': [1, 0, 1, alpha],
+                'cyan': [0, 1, 1, alpha]
+            }
             
-            self.ax_image.imshow(mask_overlay, origin='upper')
+            if color in color_map:
+                mask_overlay[self.mask_data == 0] = color_map[color]
+            
+            ax.imshow(mask_overlay, origin='upper')
         
         # Mark custom mask points
         if self.custom_mask_points:
             xs, ys = zip(*self.custom_mask_points)
-            self.ax_image.scatter(xs, ys, c='white', s=20, marker='x', linewidth=2)
-        
-        self.ax_image.set_title('Image with Mask Overlay', fontsize=10)
-        self.canvas_image.draw()
+            ax.scatter(xs, ys, c='white', s=20, marker='x', linewidth=2)
 
     def on_mask_click(self, event):
         """Handle clicks for mask editing"""
@@ -331,14 +306,14 @@ class MaskApp(BaseImageTab):
                 self.parent_app.show_status(f"Added custom mask point at ({x}, {y})")
             
             self.custom_mask_label.setText(f"Custom points: {len(self.custom_mask_points)}")
-            self.update_display()
+            self.update_plot()
             self.update_status_info()
 
     def clear_custom_mask(self):
         """Clear all custom mask points"""
         self.custom_mask_points = []
         self.custom_mask_label.setText("Custom points: 0")
-        self.update_display()
+        self.update_plot()
         self.update_status_info()
         self.parent_app.show_status("Custom mask points cleared")
 
@@ -368,7 +343,3 @@ class MaskApp(BaseImageTab):
                 
             except Exception as e:
                 self.parent_app.show_status(f"Error exporting mask: {str(e)}")
-
-    def update_plot(self):
-        """Override update_plot for mask-specific behavior"""
-        self.update_display()

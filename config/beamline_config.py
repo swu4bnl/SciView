@@ -29,6 +29,17 @@ MASK_BASE_DIR = os.path.join(
     "SciAnalysis/XSAnalysis/masks/"
 )
 
+# SciAnalysis availability check
+try:
+    import sys
+    if SCIANALYSIS_PATH not in sys.path:
+        sys.path.insert(0, SCIANALYSIS_PATH)
+    from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
+    SCIANALYSIS_AVAILABLE = True
+except ImportError:
+    print("Warning: SciAnalysis not available - using mock mode")
+    SCIANALYSIS_AVAILABLE = False
+
 # =============================================================================
 # DETECTOR CONFIGURATIONS
 # =============================================================================
@@ -39,7 +50,9 @@ DETECTOR_CONFIGS = {
         'custom_mask': './Pilatus2M_current-mask.png',
         'calibration_file': 'caliXS.yaml',
         'pixel_size_um': 172.0,
-        'default_distance_m': 0.261
+        'default_distance_m': 5.0,
+        'beam_center_x': 740,
+        'beam_center_y': 1081
     },
     'waxs': {
         'name': 'Pilatus800k', 
@@ -47,7 +60,9 @@ DETECTOR_CONFIGS = {
         'custom_mask': './Pilatus800_current-mask.png',
         'calibration_file': 'caliWS.yaml',
         'pixel_size_um': 172.0,
-        'default_distance_m': 0.261
+        'default_distance_m': 0.261,
+        'beam_center_x': 476,
+        'beam_center_y': 650
     },
     'maxs': {
         'name': 'Pilatus800k',
@@ -55,7 +70,9 @@ DETECTOR_CONFIGS = {
         'custom_mask': './Pilatus800_current-mask.png',
         'calibration_file': 'caliMS.yaml',
         'pixel_size_um': 172.0,
-        'default_distance_m': 0.261
+        'default_distance_m': 0.220,
+        'beam_center_x': 476,
+        'beam_center_y': 650
     }
 }
 
@@ -68,7 +85,7 @@ DEFAULT_CALIBRATION = {
     'pixel_size_um': 172.0,
     'distance_m': 0.261,
     'beam_center_x': 476,
-    'beam_center_y': 800,
+    'beam_center_y': 650,
     'detector_orient_deg': 0,
     'detector_tilt_deg': 0,
     'detector_phi_deg': 0
@@ -115,7 +132,7 @@ GUI_SETTINGS = {
     'default_window_size': (960, 1200),
     'visualization_ratio': 3,  # relative to controls
     'controls_ratio': 1,
-    'image_plot_ratio': 2,     # image:plot = 2:1
+    'image_plot_ratio': 3,     # image:plot = 3:1
     'plot_ratio': 1
 }
 
@@ -124,6 +141,78 @@ GUI_SETTINGS = {
 # =============================================================================
 PHYSICAL_CONSTANTS = {
     'hc_over_e_eV_A': 12398.425  # hc/e in eV·Å
+}
+
+# =============================================================================
+# IMAGE BROWSER SETTINGS
+# =============================================================================
+IMAGE_BROWSER_SETTINGS = {
+    'default_folder_patterns': ['*.tif', '*.tiff', '*.h5', '*saxs*.tif', '*waxs*.tif'],
+    'max_recent_files': 10,
+    'default_max_files': 500,
+    'default_scan_id': 2181336  # Generic default scan ID for tiled loading
+}
+
+# =============================================================================
+# TILED SERVER CONFIGURATION
+# =============================================================================
+
+# Get default tiled profile and detector from first available
+def get_default_tiled_settings():
+    """Get default tiled profile and detector from configuration"""
+    if not TILED_PROFILES:
+        return None, None
+    
+    # Get first profile as default
+    default_profile_name = list(TILED_PROFILES.keys())[0]
+    default_profile = TILED_PROFILES[default_profile_name]
+    
+    # Get first detector as default
+    default_detector = None
+    if default_profile.get('default_detectors'):
+        default_detector = list(default_profile['default_detectors'].keys())[0]
+    
+    return default_profile_name, default_detector
+
+TILED_PROFILES = {
+    'cms_raw': {
+        'description': 'CMS Raw Data',
+        'uri': 'http://tiled.nsls2.bnl.gov',
+        'path': ['cms', 'raw'],
+        'requires_login': True,
+        'default_detectors': {
+            'pilatus2m-1_image': 'SAXS',
+            'pilatus800k-1_image': 'WAXS',
+            'pilatus800k-2_image': 'MAXS',
+            'primary': 'Primary Detector Data'
+        },
+        'scan_id_range': (-999, 9999999),
+        'data_structure': 'h.primary.data[detector_name].read()'
+    },
+    'cms_processed': {
+        'description': 'Processed Data (test)',
+        'uri': 'http://tiled.nsls2.bnl.gov',
+        'path': ['cms', 'processed'],
+        'requires_login': True,
+        'default_detectors': {
+            'primary': 'Processed Primary Data',
+            'reduced': 'Reduced Data'
+        },
+        'scan_id_range': (-999, 9999999),
+        'data_structure': 'standard'
+    },
+    'nsls2_general': {
+        'description': 'NSLS-II General(test)',
+        'uri': 'http://tiled.nsls2.bnl.gov',
+        'path': [],
+        'requires_login': True,
+        'default_detectors': {
+            'primary': 'Primary Detector',
+            'detector': 'Generic Detector'
+        },
+        'scan_id_range': (-999, 9999999),
+        'data_structure': 'standard'
+    }
 }
 
 # =============================================================================
