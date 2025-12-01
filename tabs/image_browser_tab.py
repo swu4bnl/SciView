@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
     QFileDialog, QMessageBox, QScrollArea, QGridLayout, QTableWidget,
     QTableWidgetItem, QHeaderView
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QPixmap, QIcon
 
 import matplotlib.pyplot as plt
@@ -74,7 +74,12 @@ class ImageLoadWorker(QThread):
         self.is_cancelled = True
     
     def _load_from_folder(self):
-        """Load images from folder with pattern matching"""
+        """Load images from folder with pattern matching using deferred loading.
+        
+        Creates file references without loading data into memory. This allows
+        efficient handling of large image collections. Data is loaded on-demand
+        when each image is accessed.
+        """
         folder_path = self.kwargs['folder_path']
         pattern = self.kwargs['pattern']
         
@@ -86,25 +91,22 @@ class ImageLoadWorker(QThread):
         total_files = len(file_paths)
         self.progress_updated.emit(0, f"Found {total_files} matching files")
         
+        # Get parent reference if available to add images to session
+        # Note: This worker doesn't directly access session manager
+        # Images are added via the image_loaded signal which the parent handles
         for i, file_path in enumerate(file_paths):
             if self.is_cancelled:
                 break
-                
-            try:
-                # Load image data
-                image_data = self._load_image_file(file_path)
-                if image_data is not None:
-                    self.image_loaded.emit(image_data, file_path)
-                
-                # Update progress
-                progress = int((i + 1) * 100 / total_files)
-                self.progress_updated.emit(progress, f"Loaded {i+1}/{total_files}: {os.path.basename(file_path)}")
-                
-            except Exception as e:
-                self.error_occurred.emit(f"Error loading {file_path}: {str(e)}")
+            
+            # Emit reference without loading data - parent will add as deferred reference
+            self.image_loaded.emit(None, file_path)  # None signals this is a reference only
+            
+            # Update progress
+            progress = int((i + 1) * 100 / total_files)
+            self.progress_updated.emit(progress, f"Added {i+1}/{total_files}: {os.path.basename(file_path)}")
     
     def _load_from_tiled(self):
-        """Load images from tiled client using scan ID"""
+        """Load images from tiled client using scan ID (single or range)"""
         if not self.tiled_manager.is_available():
             self.error_occurred.emit("Tiled client is not available")
             return
@@ -113,42 +115,95 @@ class ImageLoadWorker(QThread):
         default_profile, default_detector = self.tiled_manager.get_default_settings()
         
         profile_name = self.kwargs.get('profile', default_profile)
-        scan_id = self.kwargs['scan_id']
+        scan_id = self.kwargs.get('scan_id')
+        scan_range = self.kwargs.get('scan_range')  # Tuple (start, end) if loading range
         detector = self.kwargs.get('detector', default_detector)
         
-        try:
-            self.progress_updated.emit(10, f"Connecting to tiled server: {profile_name}")
+        # Determine if loading single scan or range
+        if scan_range is not None:
+            # Load multiple scans in range
+            start_id, end_id = scan_range
+            total_scans = end_id - start_id + 1
+            loaded_count = 0
+            skipped_count = 0
+            processed_count = 0
             
-            # Use centralized tiled manager for loading
-            image_array, metadata = self.tiled_manager.load_image_data(
-                scan_id=scan_id,
-                detector=detector,
-                profile_name=profile_name
-            )
+            for current_scan_id in range(start_id, end_id + 1):
+                if self.is_cancelled:
+                    self.progress_updated.emit(100, f"Cancelled: Loaded {loaded_count}, skipped {skipped_count} of {processed_count} scans")
+                    break
+                
+                processed_count += 1
+                progress = int((processed_count / total_scans) * 100)
+                self.progress_updated.emit(progress, f"Scan {current_scan_id}: loaded={loaded_count}, skipped={skipped_count}/{processed_count}")
+                
+                try:
+                    # Attempt to load this scan
+                    image_array, metadata = self.tiled_manager.load_image_data(
+                        scan_id=current_scan_id,
+                        detector=detector,
+                        profile_name=profile_name
+                    )
+                    
+                    if image_array is not None:
+                        image_array = self._convert_image_shape(image_array)
+                        pseudo_path = self.tiled_manager.create_pseudo_path(current_scan_id, detector, profile_name)
+                        self.image_loaded.emit(image_array, pseudo_path)
+                        loaded_count += 1
+                    else:
+                        # Scan not found or detector missing - skip quietly
+                        skipped_count += 1
+                        error_msg = metadata.get('error', 'Unknown')
+                        if 'not found' not in error_msg.lower():
+                            # Only log non-trivial errors
+                            print(f"Skipped scan {current_scan_id}: {error_msg}")
+                        
+                except Exception as e:
+                    skipped_count += 1
+                    print(f"Skipped scan {current_scan_id}: {e}")
+                    
+            if not self.is_cancelled:
+                self.progress_updated.emit(100, f"Complete: Loaded {loaded_count}, skipped {skipped_count} of {total_scans} scans")
             
-            if image_array is None:
-                error_msg = metadata.get('error', 'Unknown tiled loading error')
-                self.error_occurred.emit(error_msg)
-                return
-            
-            self.progress_updated.emit(80, "Reading image data...")
-            
-            # Convert image shape for display compatibility
-            image_array = self._convert_image_shape(image_array)
-            
-            self.progress_updated.emit(90, "Processing image data...")
-            
-            # Create pseudo file path for tracking with metadata
-            pseudo_path = self.tiled_manager.create_pseudo_path(scan_id, detector, profile_name)
-            
-            # Emit the loaded image with metadata
-            self.image_loaded.emit(image_array, pseudo_path)
-            self.progress_updated.emit(100, f"Tiled loading complete - Scan {scan_id}")
-            
-        except Exception as e:
-            self.error_occurred.emit(f"Tiled loading error: {str(e)}")
-            import traceback
-            print(f"Detailed tiled error: {traceback.format_exc()}")
+        else:
+            # Load single scan
+            try:
+                self.progress_updated.emit(10, f"Connecting to tiled server: {profile_name}")
+                
+                # Use centralized tiled manager for loading
+                image_array, metadata = self.tiled_manager.load_image_data(
+                    scan_id=scan_id,
+                    detector=detector,
+                    profile_name=profile_name
+                )
+                
+                if image_array is None:
+                    error_msg = metadata.get('error', 'Unknown tiled loading error')
+                    # Check if it's a "not found" error vs connection error
+                    if 'not found' in error_msg.lower():
+                        self.error_occurred.emit(f"Scan {scan_id} not found in catalog")
+                    else:
+                        self.error_occurred.emit(error_msg)
+                    return
+                
+                self.progress_updated.emit(80, "Reading image data...")
+                
+                # Convert image shape for display compatibility
+                image_array = self._convert_image_shape(image_array)
+                
+                self.progress_updated.emit(90, "Processing image data...")
+                
+                # Create pseudo file path for tracking with metadata
+                pseudo_path = self.tiled_manager.create_pseudo_path(scan_id, detector, profile_name)
+                
+                # Emit the loaded image with metadata
+                self.image_loaded.emit(image_array, pseudo_path)
+                self.progress_updated.emit(100, f"Tiled loading complete - Scan {scan_id}")
+                
+            except Exception as e:
+                self.error_occurred.emit(f"Tiled loading error: {str(e)}")
+                import traceback
+                print(f"Detailed tiled error: {traceback.format_exc()}")
     
     def _load_single_file(self):
         """Load a single image file"""
@@ -281,34 +336,136 @@ class ImageLoadWorker(QThread):
 
 
 class ImageSessionManager:
-    """Manages the list of images loaded in the current session"""
+    """
+    Manages the list of images loaded in the current session.
+    
+    Supports deferred data loading where image references (paths/metadata) are stored
+    without immediately loading image data into memory. Data is loaded on-demand when
+    the image is accessed, with automatic caching to optimize memory usage.
+    """
     
     def __init__(self):
         self.images = []  # List of image metadata dicts
         self.current_index = -1
         self.callbacks = []  # Callbacks for when image list changes
+        self.data_cache = {}  # Cache for loaded image data {index: data}
+        self.cache_limit = 10  # Max number of images to cache
+        self.cache_access_order = []  # Track access order for LRU eviction
     
-    def add_image(self, image_data, file_path, metadata=None):
-        """Add an image to the session"""
+    def add_image(self, image_data, file_path, metadata=None, lazy=False):
+        """Add an image to the session with optional deferred data loading.
+        
+        Args:
+            image_data: Image data array. Can be None if lazy=True to defer loading.
+            file_path: Path or identifier for the image.
+            metadata: Optional metadata dict for image properties.
+            lazy: If True, stores only the reference without loading data into memory.
+                  Data is loaded on-demand when accessed. Default False for immediate load.
+        """
         image_info = {
-            'data': image_data,
+            'data': None if lazy else image_data,  # Data is None when deferred; loaded on-demand
             'path': file_path,
-            'filename': os.path.basename(file_path),
+            'filename': os.path.basename(file_path) if not file_path.startswith('tiled://') else file_path.split('/')[-1],
             'timestamp': np.datetime64('now'),
             'metadata': metadata or {},
-            'size': image_data.shape if hasattr(image_data, 'shape') else None,
-            'source': self._determine_source(file_path)
+            'size': image_data.shape if (image_data is not None and hasattr(image_data, 'shape')) else None,
+            'source': self._determine_source(file_path),
+            'lazy': lazy
         }
         
+        index = len(self.images)
         self.images.append(image_info)
-        self.current_index = len(self.images) - 1
+        
+        # Cache immediately loaded data; deferred data cached when accessed
+        if not lazy and image_data is not None:
+            self.data_cache[index] = image_data
+            self._trim_cache()
+        
+        self.current_index = index
         self._notify_callbacks()
     
-    def get_current_image(self):
-        """Get the currently selected image"""
+    def add_image_reference(self, file_path, metadata=None, estimated_size=None):
+        """Add an image reference without loading data to memory (deferred loading).
+        
+        This method creates a lightweight reference to an image file without loading
+        its data immediately. The actual image data is loaded on-demand when the image
+        is accessed, reducing initial memory overhead for large batches.
+        
+        Args:
+            file_path: Path or identifier for the image.
+            metadata: Optional metadata dict for image properties.
+            estimated_size: Optional size tuple (H, W) if known beforehand.
+        """
+        self.add_image(None, file_path, metadata=metadata, lazy=True)
+        if estimated_size:
+            self.images[-1]['size'] = estimated_size
+    
+    def get_current_image(self, load_data=False, loader_callback=None):
+        """Get the currently selected image.
+        
+        If load_data=True and the image uses deferred loading, triggers on-demand
+        loading via the loader_callback. Loaded data is automatically cached for
+        subsequent accesses.
+        
+        Args:
+            load_data: If True, load data for deferred images. Default False.
+            loader_callback: Callback function to load data on-demand.
+                           Signature: loader_callback(path, metadata) -> image_data
+            
+        Returns:
+            Image info dict containing data, path, metadata, etc., or None if no image selected.
+        """
         if 0 <= self.current_index < len(self.images):
-            return self.images[self.current_index]
+            img = self.images[self.current_index].copy()  # Return a copy to avoid direct modification
+            
+            # Trigger on-demand loading for deferred images when accessed
+            if load_data and img['lazy']:
+                if loader_callback:
+                    # Try to load from cache first
+                    if self.current_index in self.data_cache:
+                        # Already in cache, retrieve it and update access time
+                        img['data'] = self.data_cache[self.current_index]
+                        self._track_cache_access(self.current_index)
+                    else:
+                        # Load data using callback
+                        try:
+                            loaded_data = loader_callback(img['path'], img['metadata'])
+                            if loaded_data is not None:
+                                # Update size if it wasn't set (store in original)
+                                if img['size'] is None and hasattr(loaded_data, 'shape'):
+                                    img['size'] = loaded_data.shape
+                                    self.images[self.current_index]['size'] = loaded_data.shape
+                                # Add to cache (NOT to img['data'] permanently)
+                                self.data_cache[self.current_index] = loaded_data
+                                self._track_cache_access(self.current_index)
+                                self._trim_cache()
+                                # Set data in returned copy
+                                img['data'] = loaded_data
+                        except Exception as e:
+                            print(f"Error loading deferred image data from {img['path']}: {e}")
+            
+            return img
         return None
+    
+    def _track_cache_access(self, index):
+        """Track cache access for LRU eviction"""
+        # Remove if already in list (move to end)
+        if index in self.cache_access_order:
+            self.cache_access_order.remove(index)
+        # Add to end (most recently used)
+        self.cache_access_order.append(index)
+    
+    def _trim_cache(self):
+        """Keep cache size under limit by removing least recently used entries"""
+        while len(self.data_cache) > self.cache_limit:
+            if self.cache_access_order:
+                # Remove least recently used (first in list)
+                lru_index = self.cache_access_order.pop(0)
+                if lru_index in self.data_cache:
+                    del self.data_cache[lru_index]
+            else:
+                # Fallback: remove arbitrary entry if access order is empty
+                self.data_cache.pop(next(iter(self.data_cache)))
     
     def set_current_index(self, index):
         """Set the current image by index"""
@@ -331,8 +488,23 @@ class ImageSessionManager:
     def clear_session(self):
         """Clear all images from session"""
         self.images.clear()
+        self.data_cache.clear()
+        self.cache_access_order.clear()
         self.current_index = -1
         self._notify_callbacks()
+    
+    def clear_cache(self):
+        """Manually clear the data cache"""
+        self.data_cache.clear()
+        self.cache_access_order.clear()
+    
+    def get_cache_info(self):
+        """Get information about current cache state"""
+        return {
+            'cached_images': len(self.data_cache),
+            'cache_limit': self.cache_limit,
+            'total_images': len(self.images)
+        }
     
     def get_image_list(self):
         """Get list of all images in session"""
@@ -372,11 +544,18 @@ class ImageBrowserApp(BaseImageTab):
         
         # Loading worker
         self.load_worker = None
+        self.is_batch_loading = False  # Flag to prevent display updates during batch operations
         
         # Tiled client cache for persistent connections
         self.tiled_manager = tiled_manager
         self.tiled_client = None
         self.current_tiled_profile = None
+        
+        # Monitor timer for automatic loading
+        self.monitor_timer = QTimer()
+        self.monitor_timer.timeout.connect(self._monitor_check)
+        self.last_loaded_scan_id = None
+        self.is_monitoring = False
         
         # Build UI
         self._build_ui()
@@ -445,10 +624,18 @@ class ImageBrowserApp(BaseImageTab):
         
         layout.addWidget(self.loading_tabs)
         
-        # Progress bar
+        # Progress bar and cancel button
+        progress_layout = QHBoxLayout()
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        layout.addWidget(self.progress_bar)
+        progress_layout.addWidget(self.progress_bar)
+        
+        self.cancel_load_button = QPushButton("Cancel")
+        self.cancel_load_button.setVisible(False)
+        self.cancel_load_button.clicked.connect(self._cancel_loading)
+        self.cancel_load_button.setMaximumWidth(80)
+        progress_layout.addWidget(self.cancel_load_button)
+        layout.addLayout(progress_layout)
         
         # Status label
         self.loading_status_label = QLabel("Ready to load images")
@@ -507,14 +694,30 @@ class ImageBrowserApp(BaseImageTab):
         self.tiled_profile_combo.currentTextChanged.connect(self._on_profile_changed)
         layout.addWidget(self.tiled_profile_combo)
         
-        # Scan ID input
-        layout.addWidget(QLabel("Scan ID:"))
-        self.scan_id_input = QSpinBox()
-        self.scan_id_input.setRange(-9999999, 9999999)
+        # Scan ID range input
+        scan_id_layout = QHBoxLayout()
+        layout.addWidget(QLabel("Scan ID Range:"))
+        
+        self.scan_id_start_input = QSpinBox()
+        self.scan_id_start_input.setRange(-9999999, 9999999)
+        self.scan_id_start_input.setPrefix("Start: ")
         # Use configuration-based default instead of hardcoded value
         from config.beamline_config import IMAGE_BROWSER_SETTINGS
-        self.scan_id_input.setValue(IMAGE_BROWSER_SETTINGS['default_scan_id'])
-        layout.addWidget(self.scan_id_input)
+        self.scan_id_start_input.setValue(IMAGE_BROWSER_SETTINGS['default_scan_id'])
+        scan_id_layout.addWidget(self.scan_id_start_input)
+        
+        self.scan_id_end_input = QSpinBox()
+        self.scan_id_end_input.setRange(-9999999, 9999999)
+        self.scan_id_end_input.setPrefix("End: ")
+        self.scan_id_end_input.setValue(IMAGE_BROWSER_SETTINGS['default_scan_id'])
+        scan_id_layout.addWidget(self.scan_id_end_input)
+        
+        layout.addLayout(scan_id_layout)
+        
+        # Single scan ID checkbox for backward compatibility
+        self.single_scan_checkbox = QCheckBox("Load single scan only")
+        self.single_scan_checkbox.setChecked(True)
+        layout.addWidget(self.single_scan_checkbox)
         
         # Detector selection
         layout.addWidget(QLabel("Detector:"))
@@ -526,6 +729,25 @@ class ImageBrowserApp(BaseImageTab):
         btn_load_tiled = QPushButton("Load from Tiled")
         btn_load_tiled.clicked.connect(self._load_from_tiled)
         layout.addWidget(btn_load_tiled)
+        
+        # Monitor function controls
+        monitor_layout = QHBoxLayout()
+        self.monitor_button = QPushButton("Start Monitor")
+        self.monitor_button.setCheckable(True)
+        self.monitor_button.clicked.connect(self._toggle_monitor)
+        monitor_layout.addWidget(self.monitor_button)
+        
+        self.monitor_interval_input = QSpinBox()
+        self.monitor_interval_input.setRange(1, 300)
+        self.monitor_interval_input.setValue(5)
+        self.monitor_interval_input.setSuffix(" sec")
+        self.monitor_interval_input.setPrefix("Interval: ")
+        monitor_layout.addWidget(self.monitor_interval_input)
+        layout.addLayout(monitor_layout)
+        
+        self.monitor_status_label = QLabel("Monitor: Inactive")
+        apply_info_style(self.monitor_status_label)
+        layout.addWidget(self.monitor_status_label)
         
         # Connection status
         self.tiled_status_label = QLabel("Status: Ready to connect")
@@ -560,12 +782,12 @@ class ImageBrowserApp(BaseImageTab):
         
         # File pattern
         layout.addWidget(QLabel("File Pattern:"))
-        self.pattern_input = QLineEdit("*.tif")
+        self.pattern_input = QLineEdit("*.tiff")
         self.pattern_input.setPlaceholderText("e.g., *.tiff, *saxs*.tif, sample_*.h5")
         layout.addWidget(self.pattern_input)
         
         # Preview matching files
-        btn_preview = QPushButton("Preview Files")
+        btn_preview = QPushButton("Preview File Names")
         btn_preview.clicked.connect(self._preview_folder_files)
         layout.addWidget(btn_preview)
         
@@ -636,7 +858,7 @@ class ImageBrowserApp(BaseImageTab):
         layout.addWidget(base_image_panel)
         
         # Sync button - the only Image Browser specific control
-        self.sync_button = QPushButton("Send to Other Tabs")
+        self.sync_button = QPushButton("Use This Image")
         self.sync_button.setToolTip("Send current image to other tabs in the main application")
         apply_sync_button_style(self.sync_button)
         self.sync_button.setFixedHeight(60)
@@ -702,30 +924,59 @@ class ImageBrowserApp(BaseImageTab):
             self._start_loading('file', file_path=file_path)
 
     def _load_multiple_files(self):
-        """Load multiple image files"""
+        """Load multiple image files with deferred data loading.
+        
+        Creates references for each selected file without loading data immediately.
+        This approach is memory-efficient for large file batches. Data is loaded
+        on-demand when the user navigates to each image.
+        """
         file_paths, _ = QFileDialog.getOpenFileNames(
             self, "Load Images", "", SUPPORTED_FORMATS['image_files']
         )
         
         if file_paths:
+            # Enter batch loading mode to prevent display updates for each reference
+            self.is_batch_loading = True
+            
+            # Create references without loading data
             for file_path in file_paths:
-                self._start_loading('file', file_path=file_path)
+                self.session_manager.add_image_reference(file_path)
+            
+            # Exit batch loading mode and trigger final display update
+            self.is_batch_loading = False
+            self._update_display()
+            
+            self.loading_status_label.setText(f"Added {len(file_paths)} files to session")
+            self.parent_app.show_status(f"Imported {len(file_paths)} file references")
 
     def _load_from_tiled(self):
-        """Load image from tiled client"""
+        """Load image(s) from tiled client - single or range"""
         current_data = self.tiled_profile_combo.currentData()
         # Use config-based default instead of hardcoded
         from config.beamline_config import get_default_tiled_settings
         default_profile, _ = get_default_tiled_settings()
         profile = current_data if current_data else default_profile
-        scan_id = self.scan_id_input.value()
         detector = self.detector_combo.currentText()
         
         # Extract detector key if it's in "key - description" format
         if ' - ' in detector:
             detector = detector.split(' - ')[0]
         
-        self._start_loading('tiled', profile=profile, scan_id=scan_id, detector=detector)
+        if self.single_scan_checkbox.isChecked():
+            # Load single scan
+            scan_id = self.scan_id_start_input.value()
+            self._start_loading('tiled', profile=profile, scan_id=scan_id, detector=detector)
+        else:
+            # Load scan range - use eager loading with skip to avoid adding bad references
+            start_id = self.scan_id_start_input.value()
+            end_id = self.scan_id_end_input.value()
+            
+            if start_id > end_id:
+                QMessageBox.warning(self, "Invalid Range", "Start scan ID must be <= End scan ID")
+                return
+            
+            # Use worker to load range (it will skip scans without data)
+            self._start_loading('tiled', profile=profile, scan_range=(start_id, end_id), detector=detector)
 
     def _on_profile_changed(self):
         """Handle profile selection change"""
@@ -766,8 +1017,12 @@ class ImageBrowserApp(BaseImageTab):
             self.tiled_info_label.setText(info_text)
 
     def _load_from_folder(self):
-        """Load images from folder"""
-        #TODO: only load file path list first, then load on demand upon navigation
+        """Load images from folder with pattern matching and deferred data loading.
+        
+        Scans folder for matching files and creates references without loading data.
+        Ideal for working with large image collections. Data loads on-demand during
+        browsing to keep memory footprint minimal.
+        """
         folder_path = self.folder_path_input.text()
         pattern = self.pattern_input.text()
         
@@ -775,13 +1030,43 @@ class ImageBrowserApp(BaseImageTab):
             QMessageBox.warning(self, "Input Required", "Please select folder and pattern")
             return
         
-        self._start_loading('folder', folder_path=folder_path, pattern=pattern)
+        # Find matching files
+        search_pattern = os.path.join(folder_path, pattern)
+        file_paths = glob.glob(search_pattern)
+        file_paths.sort()  # Sort for consistent ordering
+        
+        if not file_paths:
+            QMessageBox.warning(self, "No Files Found", f"No files matching pattern '{pattern}' found in folder")
+            return
+        
+        # Limit files if needed
+        if not self.load_all_checkbox.isChecked():
+            max_files = self.max_files_input.value()
+            file_paths = file_paths[:max_files]
+        
+        # Enter batch loading mode to prevent display updates for each reference
+        self.is_batch_loading = True
+        
+        # Create references without loading data
+        for file_path in file_paths:
+            self.session_manager.add_image_reference(file_path)
+        
+        # Exit batch loading mode and trigger final display update
+        self.is_batch_loading = False
+        self._update_display()
+        
+        self.loading_status_label.setText(f"Added {len(file_paths)} files to session")
+        self.parent_app.show_status(f"Imported {len(file_paths)} file references from folder")
 
     def _start_loading(self, method, **kwargs):
         """Start background loading operation"""
         if self.load_worker and self.load_worker.isRunning():
             self.load_worker.cancel()
             self.load_worker.wait()
+        
+        # Enter batch loading mode for folder and tiled range operations
+        if method in ['folder', 'tiled'] and 'scan_range' in kwargs:
+            self.is_batch_loading = True
         
         self.load_worker = ImageLoadWorker(method, **kwargs)
         self.load_worker.progress_updated.connect(self._on_loading_progress)
@@ -790,8 +1075,16 @@ class ImageBrowserApp(BaseImageTab):
         self.load_worker.error_occurred.connect(self._on_loading_error)
         
         self.progress_bar.setVisible(True)
+        self.cancel_load_button.setVisible(True)
         self.progress_bar.setValue(0)
         self.load_worker.start()
+    
+    def _cancel_loading(self):
+        """Cancel the current loading operation"""
+        if self.load_worker and self.load_worker.isRunning():
+            self.load_worker.cancel()
+            self.loading_status_label.setText("Loading cancelled by user")
+            self.parent_app.show_status("Loading operation cancelled")
 
     # Event Handlers
     def _on_loading_progress(self, progress, message):
@@ -800,19 +1093,35 @@ class ImageBrowserApp(BaseImageTab):
         self.loading_status_label.setText(message)
 
     def _on_image_loaded(self, image_data, file_path):
-        """Handle successful image loading"""
-        self.session_manager.add_image(image_data, file_path)
-        # Use _update_display to properly set self.image_data and display
-        self._update_display()
+        """Handle successful image loading - add to session appropriately.
+        
+        If image_data is None, this is a deferred reference (from folder loading).
+        Otherwise, this is actual loaded data from single file or Tiled loading.
+        """
+        if image_data is None:
+            # This is a deferred reference - add without data
+            self.session_manager.add_image_reference(file_path)
+        else:
+            # This is actual image data - add with data immediately
+            self.session_manager.add_image(image_data, file_path)
+            # Update display for eagerly loaded images
+            self._update_display()
 
     def _on_loading_finished(self):
         """Handle loading completion"""
         self.progress_bar.setVisible(False)
+        self.cancel_load_button.setVisible(False)
         self.loading_status_label.setText("Loading complete")
+        
+        # End batch loading mode and trigger display update for final state
+        if self.is_batch_loading:
+            self.is_batch_loading = False
+            self._update_display()
 
     def _on_loading_error(self, error_message):
         """Handle loading errors"""
         self.progress_bar.setVisible(False)
+        self.cancel_load_button.setVisible(False)
         self.loading_status_label.setText(f"Error: {error_message}")
         QMessageBox.warning(self, "Loading Error", error_message)
 
@@ -820,8 +1129,10 @@ class ImageBrowserApp(BaseImageTab):
         """Handle session changes"""
         self._update_session_table()
         self._update_navigation_controls()
-        # Use _update_display to properly set self.image_data and display
-        self._update_display()
+        # Only update display if we're not in the middle of batch loading
+        # This prevents triggering data loads for every reference added
+        if not self.is_batch_loading:
+            self._update_display()
 
     def _update_session_table(self):
         """Update the session table display"""
@@ -857,14 +1168,32 @@ class ImageBrowserApp(BaseImageTab):
             self.image_counter_label.setText("0 / 0")
 
     def _update_display(self):
-        """Update the image display using unified system"""
-        current_image = self.session_manager.get_current_image()
+        """Update the image display with on-demand data loading.
+        
+        Retrieves the current image with deferred loading support. If the image
+        data hasn't been loaded yet, triggers the loader callback to fetch and
+        cache it. Displays placeholder while loading is in progress.
+        """
+        # Get current image, triggering on-demand loading if needed
+        current_image = self.session_manager.get_current_image(
+            load_data=True, 
+            loader_callback=self._lazy_load_callback
+        )
         
         if current_image is None:
             self.ax_raw.clear()
             self.ax_raw.text(0.5, 0.5, 'No Image Loaded', 
                         transform=self.ax_raw.transAxes, ha='center', va='center')
             self.current_image_label.setText("No image loaded")
+            self.canvas_raw.draw()
+            return
+        
+        # Check if data is available (might still be None if loading failed)
+        if current_image['data'] is None:
+            self.ax_raw.clear()
+            self.ax_raw.text(0.5, 0.5, f"Loading: {current_image['filename']}", 
+                        transform=self.ax_raw.transAxes, ha='center', va='center')
+            self.current_image_label.setText(f"Loading: {current_image['filename']}")
             self.canvas_raw.draw()
             return
         
@@ -880,6 +1209,50 @@ class ImageBrowserApp(BaseImageTab):
         
         # Final canvas refresh
         self.canvas_raw.draw()
+    
+    def _lazy_load_callback(self, path, metadata):
+        """Load image data on-demand when accessed.
+        
+        Called by the session manager when an image with deferred loading is accessed
+        for the first time. Handles loading from both file paths and Tiled data sources.
+        Result is automatically cached by the session manager.
+        
+        Args:
+            path: File path or Tiled pseudo-path identifier.
+            metadata: Metadata dict containing Tiled connection details if applicable.
+            
+        Returns:
+            Loaded image data array (2D), or None if loading fails.
+        """
+        try:
+            if path.startswith('tiled://'):
+                # Load from tiled
+                scan_id = metadata.get('scan_id')
+                detector = metadata.get('detector')
+                profile = metadata.get('profile')
+                
+                if scan_id is not None:
+                    image_array, load_metadata = self.tiled_manager.load_image_data(
+                        scan_id=scan_id,
+                        detector=detector,
+                        profile_name=profile
+                    )
+                    
+                    if image_array is not None:
+                        # Use the existing worker's conversion method
+                        worker = ImageLoadWorker('file', file_path='')
+                        return worker._convert_image_shape(image_array)
+                    else:
+                        print(f"Failed to load tiled scan {scan_id}: {load_metadata.get('error', 'Unknown error')}")
+                        return None
+            else:
+                # Load from file
+                worker = ImageLoadWorker('file', file_path='')
+                return worker._load_image_file(path)
+                
+        except Exception as e:
+            print(f"Error in lazy load callback: {e}")
+            return None
 
     def _sync_to_parent(self):
         """Sync current image to parent application and other tabs"""
@@ -970,7 +1343,7 @@ class ImageBrowserApp(BaseImageTab):
             self.folder_path_input.setText(folder)
 
     def _preview_folder_files(self):
-        """Preview files in selected folder"""
+        """Preview files in selected folder - fast, no loading"""
         folder_path = self.folder_path_input.text()
         pattern = self.pattern_input.text()
         
@@ -982,8 +1355,16 @@ class ImageBrowserApp(BaseImageTab):
         file_paths.sort()
         
         self.folder_files_list.clear()
-        for file_path in file_paths[:self.max_files_input.value()]:
+        
+        # Show limited preview
+        max_preview = min(self.max_files_input.value() if not self.load_all_checkbox.isChecked() else len(file_paths), 100)
+        
+        for file_path in file_paths[:max_preview]:
             self.folder_files_list.addItem(os.path.basename(file_path))
+        
+        # Show summary
+        if len(file_paths) > max_preview:
+            self.folder_files_list.addItem(f"... and {len(file_paths) - max_preview} more files")
 
     def _clear_session(self):
         """Clear the session"""
@@ -1022,14 +1403,105 @@ class ImageBrowserApp(BaseImageTab):
         info_lines.append("=== IMAGE BROWSER STATUS ===")
         info_lines.append(f"Session images: {len(self.session_manager.images)}")
         
-        current_image = self.session_manager.get_current_image()
+        # Cache information
+        cache_info = self.session_manager.get_cache_info()
+        info_lines.append(f"Cached in memory: {cache_info['cached_images']}/{cache_info['total_images']} (limit: {cache_info['cache_limit']})")
+        
+        current_image = self.session_manager.get_current_image(load_data=False)
         if current_image:
             info_lines.append(f"Current: {current_image['filename']}")
             info_lines.append(f"Source: {current_image['source']}")
+            # Show loading mode for developer context
+            loading_mode = "Deferred (on-demand)" if current_image.get('lazy', False) else "Immediate (preloaded)"
+            info_lines.append(f"Loading mode: {loading_mode}")
             if current_image['size']:
                 info_lines.append(f"Dimensions: {current_image['size'][0]} x {current_image['size'][1]}")
+        
+        # Monitor status
+        if self.is_monitoring:
+            info_lines.append(f"Monitor: Active (last scan: {self.last_loaded_scan_id})")
+        else:
+            info_lines.append("Monitor: Inactive")
 
     def _load_recent_file(self, item):
         """Load a file from recent files list"""
         # Placeholder for recent files functionality
         pass
+    
+    def _toggle_monitor(self):
+        """Toggle monitor mode on/off"""
+        if self.monitor_button.isChecked():
+            # Start monitoring
+            self.is_monitoring = True
+            interval_sec = self.monitor_interval_input.value()
+            self.monitor_timer.start(interval_sec * 1000)  # Convert to milliseconds
+            self.monitor_button.setText("Stop Monitor")
+            self.monitor_status_label.setText(f"Monitor: Active (checking every {interval_sec}s)")
+            self.parent_app.show_status(f"Monitor started - checking for new scans every {interval_sec}s")
+        else:
+            # Stop monitoring
+            self.is_monitoring = False
+            self.monitor_timer.stop()
+            self.monitor_button.setText("Start Monitor")
+            self.monitor_status_label.setText("Monitor: Inactive")
+            self.parent_app.show_status("Monitor stopped")
+    
+    def _monitor_check(self):
+        """Check for new scans in monitor mode (loads latest scan with scan_id=-1)"""
+        if not self.is_monitoring:
+            return
+        
+        try:
+            current_data = self.tiled_profile_combo.currentData()
+            from config.beamline_config import get_default_tiled_settings
+            default_profile, _ = get_default_tiled_settings()
+            profile = current_data if current_data else default_profile
+            detector = self.detector_combo.currentText()
+            
+            # Extract detector key if it's in "key - description" format
+            if ' - ' in detector:
+                detector = detector.split(' - ')[0]
+            
+            # Use scan_id = -1 to get latest scan
+            scan_id = -1
+            
+            # Attempt to load the latest scan
+            image_array, metadata = self.tiled_manager.load_image_data(
+                scan_id=scan_id,
+                detector=detector,
+                profile_name=profile
+            )
+            
+            if image_array is not None:
+                # Get actual scan ID from metadata if available
+                actual_scan_id = metadata.get('scan_id', -1)
+                
+                # Check if this is a new scan (different from last loaded)
+                if actual_scan_id != self.last_loaded_scan_id:
+                    self.last_loaded_scan_id = actual_scan_id
+                    
+                    # Convert image shape
+                    worker = ImageLoadWorker('file', file_path='')
+                    image_array = worker._convert_image_shape(image_array)
+                    
+                    # Create pseudo path
+                    pseudo_path = self.tiled_manager.create_pseudo_path(actual_scan_id, detector, profile)
+                    
+                    # Add to session
+                    self.session_manager.add_image(image_array, pseudo_path, metadata=metadata)
+                    
+                    self.monitor_status_label.setText(f"Monitor: Active - Loaded scan {actual_scan_id}")
+                    self.parent_app.show_status(f"Monitor: Auto-loaded scan {actual_scan_id}")
+                else:
+                    # Same scan as before, no new data
+                    self.monitor_status_label.setText(f"Monitor: Active - No new data (last: {actual_scan_id})")
+            else:
+                # No data available or error
+                error_msg = metadata.get('error', 'Unknown error')
+                self.monitor_status_label.setText(f"Monitor: Active - No data available")
+                # Don't spam errors, just log
+                print(f"Monitor check: {error_msg}")
+                
+        except Exception as e:
+            print(f"Monitor check error: {e}")
+            self.monitor_status_label.setText(f"Monitor: Active - Error occurred")

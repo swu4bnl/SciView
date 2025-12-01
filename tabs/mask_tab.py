@@ -226,7 +226,7 @@ class MaskApp(BaseImageTab):
         from PyQt5.QtWidgets import QFileDialog
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Load Mask File", "", 
-            "Mask Files (*.npy *.tif *.tiff);;All Files (*)"
+            "Mask Files (*.npy *.tif *.tiff *.png);;All Files (*)"
         )
         
         if file_path:

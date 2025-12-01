@@ -176,7 +176,7 @@ class CalibrationApp(BaseImageTab):
             ("spin_orient", ("Detector Orient (°)", -180, 180, DEFAULT_CALIBRATION['detector_orient_deg'], 1)),
             ("spin_tilt", ("Detector Tilt (°)", -180, 180, DEFAULT_CALIBRATION['detector_tilt_deg'], 1)),
             ("spin_phi", ("Detector Phi (°)", -180, 180, DEFAULT_CALIBRATION['detector_phi_deg'], 1)),
-            ("spin_dist", ("Distance (m)", 0.1, 5.5, DEFAULT_CALIBRATION['distance_m'], 0.001)),
+            ("spin_dist", ("Distance (m)", 0.1, 15, DEFAULT_CALIBRATION['distance_m'], 0.001)),
             ("spin_pixel", ("Pixel Size (µm)", 50, 500, DEFAULT_CALIBRATION['pixel_size_um'], 0.1)),
         ]
         

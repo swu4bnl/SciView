@@ -11,8 +11,11 @@ import os
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget
-from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QTabWidget, QLabel, 
+    QPushButton, QWidget, QHBoxLayout, QVBoxLayout
+)
+from PyQt5.QtCore import Qt, QTimer
 
 # Import configuration
 from config.beamline_config import (
@@ -29,12 +32,14 @@ from config.beamline_config import (
     get_file_status, DEFAULT_CALIBRATION, BEAMLINE_NAME, GUI_SETTINGS, 
     SCIANALYSIS_AVAILABLE
 )
+from config.app_style import *
 
 # Import SciAnalysis dependencies only if available  
 if SCIANALYSIS_AVAILABLE:
     from SciAnalysis.XSAnalysis.Data import Data2DScattering
     from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
 from utils.calibration_utils import calibration_manager
+from utils.resource_monitor import get_resource_monitor
 
 
 class SciAnaApp(QMainWindow):
@@ -44,8 +49,19 @@ class SciAnaApp(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"SciAnalysis GUI - {BEAMLINE_NAME}")
         self.status = self.statusBar()
+        
+        # Tab widget
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
+        
+        # Refresh button - add to tab widget's corner
+        self.refresh_button = QPushButton("🔄")
+        self.refresh_button.setToolTip("Reload current tab and clear cache (Ctrl+R)")
+        self.refresh_button.setFixedSize(30, 25)
+        self.refresh_button.clicked.connect(self._refresh_current_tab)
+        
+        # Use QTabWidget's corner widget feature to place button on same line as tabs
+        self.tab_widget.setCornerWidget(self.refresh_button, Qt.TopRightCorner)
         
         # Shared application state
         self.image_data = None
@@ -55,6 +71,15 @@ class SciAnaApp(QMainWindow):
         # Set initial window size from config
         window_size = GUI_SETTINGS['default_window_size']
         self.resize(*window_size)
+        
+        # Setup resource monitoring
+        self._setup_resource_monitor()
+        
+        # Setup keyboard shortcut for refresh
+        from PyQt5.QtWidgets import QShortcut
+        from PyQt5.QtGui import QKeySequence
+        self.refresh_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
+        self.refresh_shortcut.activated.connect(self._refresh_current_tab)
 
     def add_tab(self, widget, name):
         """Add a tab to the main interface"""
@@ -63,6 +88,29 @@ class SciAnaApp(QMainWindow):
     def show_status(self, msg):
         """Display status message"""
         self.status.showMessage(msg)
+    
+    def _setup_resource_monitor(self):
+        """Setup periodic resource usage updates in status bar"""
+        self.resource_monitor = get_resource_monitor()
+        self.resource_label = QLabel()
+        self.resource_label.setMaximumWidth(250)
+        self.status.addPermanentWidget(self.resource_label)
+        apply_info_style(self.resource_label)
+        
+        # Timer to update resource info
+        self.monitor_timer = QTimer()
+        self.monitor_timer.timeout.connect(self._update_resource_display)
+        # Update every 1 second
+        self.monitor_timer.start(1000)
+    
+    def _update_resource_display(self):
+        """Update the resource usage display in status bar"""
+        try:
+            resource_info = self.resource_monitor.get_resource_status()
+            if resource_info:
+                self.resource_label.setText(resource_info)
+        except Exception as e:
+            print(f"Error updating resource display: {e}")
     
     def update_all_displays(self):
         """Update display across all tabs when display settings change"""
@@ -140,6 +188,61 @@ class SciAnaApp(QMainWindow):
     def set_calibration(self, calibration):
         """Update the current calibration object"""
         self.calibration = calibration
+    
+    def _refresh_current_tab(self):
+        """Refresh the current tab by reloading its module and recreating it"""
+        current_index = self.tab_widget.currentIndex()
+        if current_index < 0:
+            return
+        
+        current_tab = self.tab_widget.widget(current_index)
+        tab_name = self.tab_widget.tabText(current_index)
+        
+        try:
+            self.show_status(f"Refreshing {tab_name}...")
+            
+            # Clear cache if it's the Image Browser tab
+            if hasattr(current_tab, 'session_manager'):
+                cache_info = current_tab.session_manager.get_cache_info()
+                current_tab.session_manager.clear_cache()
+                self.show_status(f"Cleared {cache_info['cached_images']} cached images")
+            
+            # Get the module name for reload
+            module_map = {
+                "Image Browser": "tabs.image_browser_tab.ImageBrowserApp",
+                "Calibration": "tabs.calibration_tab.CalibrationApp",
+                "Mask Editing": "tabs.mask_tab.MaskApp",
+                "Data Reduction": "tabs.data_reduction_tab.DataReductionApp"
+            }
+            
+            if tab_name not in module_map:
+                self.show_status(f"Cannot refresh {tab_name} - unknown tab type")
+                return
+            
+            # Reload the module
+            module_path = module_map[tab_name]
+            module_name, class_name = module_path.rsplit('.', 1)
+            
+            import importlib
+            module = importlib.import_module(module_name)
+            importlib.reload(module)
+            
+            # Get the class and create new instance
+            tab_class = getattr(module, class_name)
+            new_tab = tab_class(self)
+            
+            # Replace the tab
+            self.tab_widget.removeTab(current_index)
+            self.tab_widget.insertTab(current_index, new_tab, tab_name)
+            self.tab_widget.setCurrentIndex(current_index)
+            
+            self.show_status(f"✓ Refreshed {tab_name} successfully")
+            
+        except Exception as e:
+            self.show_status(f"Error refreshing {tab_name}: {str(e)}")
+            print(f"Error refreshing tab: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 def create_application():
