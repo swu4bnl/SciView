@@ -1,94 +1,89 @@
-# SciAnalysis GUI — Overview and usage
+# SciAnaGui — Quick start and user guide
 
-Purpose
--------
-SciAnalysis GUI is a modular PyQt5 application that integrates CFN/SciAnalysis (https://github.com/CFN-softbio/SciAnalysis) X-ray scattering functionality with an interactive graphical frontend. The project provides on-the-fly data inspection and light-weight analysis workflows (calibration, ring-center finding, 1D profiling) while supporting local files and NSLS-II tiled data sources.
+What the app does
+-----------------
+SciAnaGui is a compact PyQt5 application for viewing and doing light data analysis of 2D X‑ray scattering images. It focuses on practical, repeatable tasks you need at the beamline:
 
-Design and architecture
-------------------------
-- Configuration-driven: beamline-specific settings (detectors, tiled profiles, calibration defaults) are stored in `config/beamline_config.py` so the same codebase can be reused across beamlines by updating configuration only.
-- Tab-based UI: features are organized into independent tabs under `tabs/`. Each tab implements UI and interacts with shared tools and managers for heavy processing.
-- Tools vs UI separation: numerical routines and algorithms live in `tools/` (for example `ring_center.py`), and are intentionally decoupled from Qt code to remain testable.
-- Centralized clients and helpers: `utils/tiled_client.py` centralizes tiled connectivity, caching, and image extraction. `ImageSessionManager` (used by the Image Browser) centralizes session state and metadata.
-- Centralized styling: `config/app_style.py` provides `AppStyle` and helper functions so the visual theme and layout ratios are consistent across tabs.
+- Browse and display 2D X‑ray scattering images from local files or a tiled data service.
+- Adjust calibration (beam center, distance, wavelength) and inspect 1D profiles.
+- Create and edit layered masks with an interactive paint tool.
+- Run small analysis tasks (under development).
 
-Repository layout (high level)
+The codebase is structured to keep instrument-specific settings in configuration files so the same software can be reused across beamlines.
+
+Where things are
 -----------------------------
+- `main.py` — start the GUI
+- `config/` — beamline configuration and UI styling
+- `tabs/` — UI components (Image Browser, Calibration, Mask Editor, Data Reduction)
+- `tools/` — numerical and analysis routines
+- `utils/` — shared helpers (image utilities, tiled client, cache manager)
+- `standards/` — diffraction standard values used for overlays
+
+Quick setup
+--------------------
+1. The app expects PyQt5 and common scientific Python packages. If you don’t have that, create a local venv:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install PyQt5 numpy matplotlib pillow
 ```
-SciAnaGui/
-├── main.py                      # GUI entrypoint
-├── config/                      # beamline configuration and app style
-├── tabs/                        # UI tabs (calibration, image browser, ...)
-├── tools/                       # numeric/analysis algorithms
-├── utils/                       # shared clients and helpers (tiled client, image utils)
-├── standards/                   # diffraction standards database
-├── dev/                         # developer notes (devlog)
-└── testdata/                    # sample inputs used for testing
-```
 
-Key features (current)
-----------------------
-- Image Browser
-    - File, folder and tiled loading modes.
-    - Background loader thread for non-blocking I/O.
-    - Session manager that tracks loaded images and metadata.
-    - Image-shape normalization utilities for common detector/tiled formats.
+2. Install SciAnalysis (https://github.com/CFN-softbio/SciAnalysis).
 
-- TiledClientManager (`utils/tiled_client.py`)
-    - Profile-driven connections with optional authentication.
-    - Cached client instances and validation.
-    - Image extraction and metadata packaging by scan ID + detector.
-    - Graceful fallback if `tiled` is not installed.
+2. (Optional) Install `tiled` if you want to load images from a tiled data service.
 
-- Calibration tab
-    - Beam center and detector geometry controls.
-    - Multi-point ring-center calculation UI and update action.
-    - 1D profile plotting with optional standards overlay from `standards/`.
-
-- AppStyle and UI utilities
-    - Central palette, fonts and widget style templates.
-    - Splitter layout helpers and convenience functions to keep the UI consistent.
-
-Usage example (quickstart)
---------------------------
-1. Prepare an environment with required packages (PyQt5, matplotlib, numpy). Install `tiled` if you want tiled access.
-
-2. Edit `config/beamline_config.py` to match your beamline defaults (detectors, `DEFAULT_CALIBRATION`, `TILED_PROFILES`).
-
-3. Launch the GUI from the repository root:
+3. Run the app from the repository root:
 
 ```bash
 python main.py
 ```
 
-4. In the Image Browser tab:
-    - Load a single file or multiple files, or point to a folder with a matching pattern.
-    - If tiled is available and configured, select a tiled profile and load a scan by ID.
-    - Use the session manager to navigate images and export session lists.
+Basic user workflows
+--------------------
 
-5. Open the Calibration tab to inspect beam center, run ring-center calculations, adjust detector geometry, and view 1D profiles.
+Image Browser
+- Load a single file, a folder, or use a tiled profile if configured.
+- The session manager tracks loaded images so you can step through and export session lists.
+- You can sync the current image to other tabs (Calibration, Mask, Data Reduction) with the "Use This Image" button.
 
-Configuration notes
--------------------
-- `config/beamline_config.py` controls:
-    - Detector configurations (pixel size, masks), default calibration parameters, and tiled profiles.
-    - File naming patterns and export preferences.
-- Updating this file is the primary step to adapt the GUI to a new beamline.
+Calibration
+- Use the Calibration tab to edit beam center, sample-to-detector distance, and wavelength.
+- You can use a simple ring-center finding tool to help locate the beam center.
+- 1D profiles and common standard overlays are available for quick checks to inspect data quality.
 
-Testing and reliability notes
-----------------------------
-- The project intentionally keeps numerical logic in `tools/` to make unit testing straightforward.
-- Tiled functionality checks for the `tiled` package at runtime; if missing, tiled operations are disabled with clear messaging.
-- Image-shape conversion covers common dimensionalities used by tiled servers and detectors, but rare/custom formats may require additional conversion helpers.
+Mask Editor
+- Masks are layer-based: create layers, paint (add/remove), toggle visibility, combine, and export.
+- You can also load instrument default masks, generate threshold-based masks, and edit masks in GIMP.
 
-Roadmap / future work
----------------------
-- Additional analysis tabs (batch processing, automated reduction, fit-based analysis).
-- Persist session state and thumbnails for long-running user sessions.
-- Add a thumbnail cache and lazy-loading strategy for very large image sets.
-- Improve onboarding: example beamline configs, a guided tiled-profile setup, and a developer setup script (conda/pip environment specification).
+Data Reduction (under development)
+- For common batch-like data reduction workflows.
 
-Contact and contribution
+Configuration
+-------------
+Edit `config/beamline_config.py` to adapt to your instrument. Important keys:
+- `DETECTOR_CONFIGS` — known detectors and defaults
+- `DEFAULT_CALIBRATION` — starting calibration values
+- `FILE_PATTERNS` — file naming patterns to recognize
+- `SCIANALYSIS_PATH` — optional path if SciAnalysis is required
+
+Troubleshooting and tips
 ------------------------
-Contributions are welcome. Please open an issue or a PR with a clear description of the change and any test/data needed to validate it.
+- If the GUI won’t start: ensure PyQt5 is installed or use your facility’s environment loader.
+- SciAnalysis features are required. If missing, some calibration and reduction features will be limited; set `SCIANALYSIS_PATH` if needed.
+- This app attempts to convert various image input types (NumPy arrays, memoryviews, SciAnalysis objects) for display. If you encounter unsupported formats, consider adding conversion helpers in `utils/image_utils.py`.
+- For large image collections prefer tiled profiles or a machine with enough memory; the app includes basic caching helpers but is not an image database.
+
+Contributing and development notes
+---------------------------------
+- Keep scientific code in `tools/` and UI code in `tabs/`.
+- Use `utils/` for shared helpers (image conversion, caching, tiled client).
+- Change beamline defaults in `config/beamline_config.py` rather than editing core code.
+
+For developer notes and tests, see `dev/` and `testscript/`.
+
+License and contact
+-------------------
+This repository is maintained by the project owner. For licensing or deployment questions, open an issue or contact the repository maintainer.
 
