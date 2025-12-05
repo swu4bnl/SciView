@@ -65,9 +65,9 @@ DETECTOR_CONFIGS = {
         'beam_center_y': 650
     },
     'maxs': {
-        'name': 'Pilatus800k',
-        'mask_file': 'Dectris/Pilatus800k_gaps-mask.png', 
-        'custom_mask': './Pilatus800_current-mask.png',
+        'name': 'Pilatus800k2',
+        'mask_file': 'Dectris/Pilatus800k2_gaps-mask.png', 
+        'custom_mask': './Pilatus800k2_current-mask.png',
         'calibration_file': 'caliMS.yaml',
         'pixel_size_um': 172.0,
         'default_distance_m': 0.220,

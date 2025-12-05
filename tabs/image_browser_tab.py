@@ -39,6 +39,9 @@ from config.app_style import *
 # Import centralized tiled client manager
 from utils.tiled_client import tiled_manager
 
+# Import shared utilities
+from utils.image_utils import ImageShapeConverter, ImageCacheManager
+
 
 class ImageLoadWorker(QThread):
     """Background worker for loading images without blocking UI"""
@@ -247,14 +250,10 @@ class ImageLoadWorker(QThread):
     
     def _convert_image_shape(self, image_array):
         """
-        Convert image array to standard 2D format for display
+        Convert image array to standard 2D format using shared utility
         
-        Handles various input shapes:
-        - (1, 1, H, W) -> (H, W) - Single frame from tiled
-        - (N, H, W) -> (H, W) - Time series, take first frame  
-        - (H, W, 3) -> (H, W) - RGB to grayscale
-        - (H, W, 4) -> (H, W) - RGBA to grayscale
-        - (H, W) -> (H, W) - Already 2D, no change
+        This method now delegates to the shared ImageShapeConverter utility
+        for consistency across all image-loading tabs and applications.
         
         Args:
             image_array: Input image array with arbitrary shape
@@ -262,95 +261,31 @@ class ImageLoadWorker(QThread):
         Returns:
             numpy.ndarray: 2D image array suitable for analysis
         """
-        if image_array is None:
-            return None
-        
-        # Convert to numpy array if not already
-        if not isinstance(image_array, np.ndarray):
-            image_array = np.array(image_array)
-        
-        original_shape = image_array.shape
-        print(f"Converting image shape from {original_shape}")
-        
-        # Handle different dimensionalities
-        if image_array.ndim == 2:
-            # Already 2D - perfect
-            converted = image_array
-            
-        elif image_array.ndim == 3:
-            # Three possibilities: (N, H, W), (H, W, 3), or (H, W, 4)
-            if image_array.shape[2] in [3, 4]:
-                # RGB or RGBA image: (H, W, 3/4) -> (H, W)
-                if image_array.shape[2] == 3:
-                    # RGB to grayscale using standard weights
-                    converted = np.dot(image_array[...,:3], [0.2989, 0.5870, 0.1140])
-                else:  # RGBA
-                    # RGBA to grayscale (ignore alpha channel)
-                    converted = np.dot(image_array[...,:3], [0.2989, 0.5870, 0.1140])
-            else:
-                # Time series or stack: (N, H, W) -> (H, W)
-                # Take the first frame
-                converted = image_array[0]
-                print(f"Time series detected: taking first frame from {image_array.shape[0]} frames")
-                
-        elif image_array.ndim == 4:
-            # Handle 4D arrays: (1, 1, H, W) or (N, 1, H, W) or (1, N, H, W) etc.
-            if image_array.shape[0] == 1 and image_array.shape[1] == 1:
-                # Single frame: (1, 1, H, W) -> (H, W)
-                converted = image_array[0, 0]
-            elif image_array.shape[0] == 1:
-                # (1, N, H, W) -> take first of N
-                converted = image_array[0, 0]
-            elif image_array.shape[1] == 1:
-                # (N, 1, H, W) -> take first of N  
-                converted = image_array[0, 0]
-            else:
-                # (N, M, H, W) -> take first frame
-                converted = image_array[0, 0]
-                print(f"4D array detected: taking first frame from shape {original_shape}")
-                
-        elif image_array.ndim == 5:
-            # Handle 5D arrays: take first frame
-            converted = image_array[0, 0, 0]
-            print(f"5D array detected: taking first frame from shape {original_shape}")
-            
-        else:
-            # Fallback: flatten extra dimensions
-            while image_array.ndim > 2:
-                image_array = image_array[0]
-            converted = image_array
-            print(f"High-dimensional array flattened from {original_shape} to {converted.shape}")
-        
-        # Ensure we have a 2D array
-        if converted.ndim != 2:
-            raise ValueError(f"Failed to convert to 2D: resulting shape is {converted.shape}")
-        
-        # Convert data type to float for analysis
-        if converted.dtype in [np.uint8, np.uint16, np.uint32]:
-            converted = converted.astype(np.float64)
-        elif converted.dtype in [np.int8, np.int16, np.int32]:
-            converted = converted.astype(np.float64)
-        
-        print(f"Image conversion complete: {original_shape} -> {converted.shape}, dtype: {converted.dtype}")
-        return converted
+        return ImageShapeConverter.convert_to_2d(image_array)
 
 
 class ImageSessionManager:
     """
     Manages the list of images loaded in the current session.
     
-    Supports deferred data loading where image references (paths/metadata) are stored
-    without immediately loading image data into memory. Data is loaded on-demand when
-    the image is accessed, with automatic caching to optimize memory usage.
+    Combines image metadata tracking with the shared ImageCacheManager
+    for deferred data loading and LRU cache eviction.
+    
+    Features:
+    - Lazy loading: images referenced without loading data immediately
+    - LRU caching: automatic eviction of least-recently-used images
+    - Session tracking: maintains current image index and metadata
+    - Callbacks: notifies UI of session changes
     """
     
-    def __init__(self):
+    def __init__(self, cache_limit: int = 5):
         self.images = []  # List of image metadata dicts
         self.current_index = -1
         self.callbacks = []  # Callbacks for when image list changes
-        self.data_cache = {}  # Cache for loaded image data {index: data}
-        self.cache_limit = 10  # Max number of images to cache
-        self.cache_access_order = []  # Track access order for LRU eviction
+        
+        # Use shared cache manager for data caching
+        self.cache_manager = ImageCacheManager(cache_limit=cache_limit)
+        self.cache_manager.add_callback(self._on_cache_changed)
     
     def add_image(self, image_data, file_path, metadata=None, lazy=False):
         """Add an image to the session with optional deferred data loading.
@@ -360,112 +295,56 @@ class ImageSessionManager:
             file_path: Path or identifier for the image.
             metadata: Optional metadata dict for image properties.
             lazy: If True, stores only the reference without loading data into memory.
-                  Data is loaded on-demand when accessed. Default False for immediate load.
         """
         image_info = {
-            'data': None if lazy else image_data,  # Data is None when deferred; loaded on-demand
             'path': file_path,
             'filename': os.path.basename(file_path) if not file_path.startswith('tiled://') else file_path.split('/')[-1],
             'timestamp': np.datetime64('now'),
             'metadata': metadata or {},
             'size': image_data.shape if (image_data is not None and hasattr(image_data, 'shape')) else None,
             'source': self._determine_source(file_path),
-            'lazy': lazy
+            'lazy': lazy,
+            'cache_key': file_path  # Use path as cache key
         }
         
         index = len(self.images)
         self.images.append(image_info)
         
-        # Cache immediately loaded data; deferred data cached when accessed
+        # Add to cache if not lazy
         if not lazy and image_data is not None:
-            self.data_cache[index] = image_data
-            self._trim_cache()
+            self.cache_manager.put(file_path, image_data)
         
         self.current_index = index
         self._notify_callbacks()
     
     def add_image_reference(self, file_path, metadata=None, estimated_size=None):
-        """Add an image reference without loading data to memory (deferred loading).
-        
-        This method creates a lightweight reference to an image file without loading
-        its data immediately. The actual image data is loaded on-demand when the image
-        is accessed, reducing initial memory overhead for large batches.
-        
-        Args:
-            file_path: Path or identifier for the image.
-            metadata: Optional metadata dict for image properties.
-            estimated_size: Optional size tuple (H, W) if known beforehand.
-        """
+        """Add an image reference without loading data (deferred loading)."""
         self.add_image(None, file_path, metadata=metadata, lazy=True)
         if estimated_size:
             self.images[-1]['size'] = estimated_size
     
     def get_current_image(self, load_data=False, loader_callback=None):
-        """Get the currently selected image.
-        
-        If load_data=True and the image uses deferred loading, triggers on-demand
-        loading via the loader_callback. Loaded data is automatically cached for
-        subsequent accesses.
-        
-        Args:
-            load_data: If True, load data for deferred images. Default False.
-            loader_callback: Callback function to load data on-demand.
-                           Signature: loader_callback(path, metadata) -> image_data
-            
-        Returns:
-            Image info dict containing data, path, metadata, etc., or None if no image selected.
-        """
+        """Get the currently selected image with optional on-demand loading."""
         if 0 <= self.current_index < len(self.images):
-            img = self.images[self.current_index].copy()  # Return a copy to avoid direct modification
+            img = self.images[self.current_index].copy()
             
-            # Trigger on-demand loading for deferred images when accessed
+            # Trigger on-demand loading for deferred images
             if load_data and img['lazy']:
                 if loader_callback:
-                    # Try to load from cache first
-                    if self.current_index in self.data_cache:
-                        # Already in cache, retrieve it and update access time
-                        img['data'] = self.data_cache[self.current_index]
-                        self._track_cache_access(self.current_index)
-                    else:
-                        # Load data using callback
-                        try:
-                            loaded_data = loader_callback(img['path'], img['metadata'])
-                            if loaded_data is not None:
-                                # Update size if it wasn't set (store in original)
-                                if img['size'] is None and hasattr(loaded_data, 'shape'):
-                                    img['size'] = loaded_data.shape
-                                    self.images[self.current_index]['size'] = loaded_data.shape
-                                # Add to cache (NOT to img['data'] permanently)
-                                self.data_cache[self.current_index] = loaded_data
-                                self._track_cache_access(self.current_index)
-                                self._trim_cache()
-                                # Set data in returned copy
-                                img['data'] = loaded_data
-                        except Exception as e:
-                            print(f"Error loading deferred image data from {img['path']}: {e}")
+                    # Use shared cache manager's get method
+                    loaded_data = self.cache_manager.get(img['cache_key'], 
+                                                        loader_callback=lambda k: loader_callback(img['path'], img['metadata']))
+                    if loaded_data is not None:
+                        if img['size'] is None and hasattr(loaded_data, 'shape'):
+                            img['size'] = loaded_data.shape
+                            self.images[self.current_index]['size'] = loaded_data.shape
+                        img['data'] = loaded_data
+            else:
+                # Get from cache (already loaded)
+                img['data'] = self.cache_manager.get(img['cache_key'])
             
             return img
         return None
-    
-    def _track_cache_access(self, index):
-        """Track cache access for LRU eviction"""
-        # Remove if already in list (move to end)
-        if index in self.cache_access_order:
-            self.cache_access_order.remove(index)
-        # Add to end (most recently used)
-        self.cache_access_order.append(index)
-    
-    def _trim_cache(self):
-        """Keep cache size under limit by removing least recently used entries"""
-        while len(self.data_cache) > self.cache_limit:
-            if self.cache_access_order:
-                # Remove least recently used (first in list)
-                lru_index = self.cache_access_order.pop(0)
-                if lru_index in self.data_cache:
-                    del self.data_cache[lru_index]
-            else:
-                # Fallback: remove arbitrary entry if access order is empty
-                self.data_cache.pop(next(iter(self.data_cache)))
     
     def set_current_index(self, index):
         """Set the current image by index"""
@@ -478,6 +357,10 @@ class ImageSessionManager:
     def remove_image(self, index):
         """Remove an image from the session"""
         if 0 <= index < len(self.images):
+            # Remove from cache
+            cache_key = self.images[index]['cache_key']
+            self.cache_manager.remove(cache_key)
+            
             self.images.pop(index)
             if self.current_index >= len(self.images):
                 self.current_index = len(self.images) - 1
@@ -488,23 +371,15 @@ class ImageSessionManager:
     def clear_session(self):
         """Clear all images from session"""
         self.images.clear()
-        self.data_cache.clear()
-        self.cache_access_order.clear()
+        self.cache_manager.clear()
         self.current_index = -1
         self._notify_callbacks()
     
-    def clear_cache(self):
-        """Manually clear the data cache"""
-        self.data_cache.clear()
-        self.cache_access_order.clear()
-    
     def get_cache_info(self):
-        """Get information about current cache state"""
-        return {
-            'cached_images': len(self.data_cache),
-            'cache_limit': self.cache_limit,
-            'total_images': len(self.images)
-        }
+        """Get cache information from shared cache manager"""
+        info = self.cache_manager.get_cache_info()
+        info['total_images'] = len(self.images)
+        return info
     
     def get_image_list(self):
         """Get list of all images in session"""
@@ -513,6 +388,15 @@ class ImageSessionManager:
     def add_callback(self, callback):
         """Add callback for session changes"""
         self.callbacks.append(callback)
+    
+    def _on_cache_changed(self, cache_manager):
+        """Handle cache changes from shared manager"""
+        # Propagate cache changes to session callbacks
+        for callback in self.callbacks:
+            try:
+                callback(self)
+            except Exception as e:
+                print(f"Callback error: {e}")
     
     def _notify_callbacks(self):
         """Notify all callbacks of session changes"""
@@ -1173,7 +1057,15 @@ class ImageBrowserApp(BaseImageTab):
         Retrieves the current image with deferred loading support. If the image
         data hasn't been loaded yet, triggers the loader callback to fetch and
         cache it. Displays placeholder while loading is in progress.
+        
+        MEMORY EFFICIENCY:
+        - Passes image data directly to update_plot() without storing in self.image_data
+        - This prevents holding unnecessary references and allows proper garbage collection
+        - Data is only kept in the session manager's LRU cache, which enforces memory limits
+        - Explicitly triggers garbage collection when switching between images
         """
+        import gc
+        
         # Get current image, triggering on-demand loading if needed
         current_image = self.session_manager.get_current_image(
             load_data=True, 
@@ -1197,18 +1089,26 @@ class ImageBrowserApp(BaseImageTab):
             self.canvas_raw.draw()
             return
         
-        # Set the image data for the unified display system
-        self.image_data = current_image['data']
+        # Extract data and other info from current_image dict
+        # Do this before calling update_plot to minimize local references
+        image_data = current_image['data']
+        filename = current_image['filename']
+        source = current_image['source']
         
-        # Use the unified display system from base class
-        self.update_plot()
+        # Pass image data directly to update_plot() without storing in self.image_data
+        # This avoids unnecessary references and improves memory efficiency
+        self.update_plot(image_data)
         
         # Set title and update current image label
-        self.ax_raw.set_title(current_image['filename'], fontsize=10)
-        self.current_image_label.setText(f"File: {current_image['filename']} | Source: {current_image['source']}")
+        self.ax_raw.set_title(filename, fontsize=10)
+        self.current_image_label.setText(f"File: {filename} | Source: {source}")
         
         # Final canvas refresh
         self.canvas_raw.draw()
+        
+        # Explicitly trigger garbage collection to clean up evicted cached images
+        # This is important when switching between images in the session
+        gc.collect()
     
     def _lazy_load_callback(self, path, metadata):
         """Load image data on-demand when accessed.
@@ -1255,25 +1155,30 @@ class ImageBrowserApp(BaseImageTab):
             return None
 
     def _sync_to_parent(self):
-        """Sync current image to parent application and other tabs"""
-        current_image = self.session_manager.get_current_image()
-        if current_image is None:
+        """Sync current image to parent application and other tabs
+        
+        IMPORTANT: For compatibility with tabs that expect SciAnalysis objects,
+        this method loads the image data into memory (not deferred). The returned
+        image from session_manager is a copy, so we must load_data=True to get
+        the actual array content.
+        """
+        # MUST load_data=True to actually get the image data (not just the reference)
+        current_image = self.session_manager.get_current_image(
+            load_data=True,
+            loader_callback=self._lazy_load_callback
+        )
+        if current_image is None or current_image['data'] is None:
             return
         
         # Convert numpy array to SciAnalysis Data2DScattering object if needed
         try:
             image_data_obj = self._convert_to_scianalysis_format(current_image['data'], current_image['path'])
             
-            # Debug: Check what type of object we got
             print(f"DEBUG: Converted image data type: {type(image_data_obj)}")
             if hasattr(image_data_obj, 'circular_average_q_bin'):
-                print("DEBUG: Object has circular_average_q_bin method")
+                print("DEBUG: Object has SciAnalysis methods")
             else:
-                print("DEBUG: Object missing circular_average_q_bin method")
-                # If conversion failed, return the original numpy array and show warning
-                if isinstance(current_image['data'], type(image_data_obj)):
-                    print("DEBUG: Conversion returned same type - using raw numpy array")
-                    image_data_obj = current_image['data']
+                print("DEBUG: Object is numpy array (SciAnalysis not available)")
                 
         except Exception as e:
             print(f"DEBUG: Error in SciAnalysis conversion: {e}")
@@ -1287,16 +1192,24 @@ class ImageBrowserApp(BaseImageTab):
         # Trigger updates in other tabs if they exist
         for i in range(self.parent_app.tab_widget.count()):
             tab = self.parent_app.tab_widget.widget(i)
-            if hasattr(tab, 'image_data') and tab != self:
-                tab.image_data = image_data_obj
-                if hasattr(tab, 'populate_image_info'):
-                    tab.populate_image_info(image_data_obj, current_image['path'])
-                if hasattr(tab, 'update_plot'):
-                    # Only call update_plot if the object has the required methods
-                    if hasattr(image_data_obj, 'circular_average_q_bin'):
+            if tab != self:  # Skip self (Image Browser tab)
+                try:
+                    # For calibration, mask, and data reduction tabs: set self.image_data first
+                    # These tabs expect self.image_data to be set before calling update_plot()
+                    if hasattr(tab, 'image_data'):
+                        tab.image_data = image_data_obj
+                    
+                    # Call populate_image_info if available
+                    if hasattr(tab, 'populate_image_info'):
+                        tab.populate_image_info(image_data_obj, current_image['path'])
+                    
+                    # Call update_plot without parameter (uses self.image_data)
+                    # This is compatible with calibration_tab, mask_tab, data_reduction_tab
+                    if hasattr(tab, 'update_plot'):
                         tab.update_plot()
-                    else:
-                        print(f"DEBUG: Skipping update_plot for tab {i} - image_data lacks SciAnalysis methods")
+                        
+                except Exception as e:
+                    print(f"DEBUG: Error updating tab {i}: {e}")
         
         self.parent_app.show_status(f"Synced image: {current_image['filename']}")
     

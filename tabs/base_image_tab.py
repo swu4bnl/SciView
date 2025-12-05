@@ -30,6 +30,7 @@ from matplotlib.backends.backend_qt5agg import (
 # )
 from config.beamline_config import *
 from config.app_style import *
+from utils.image_utils import validate_and_prepare_image_array, get_image_info
 
 # Get constants
 HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
@@ -380,14 +381,23 @@ class BaseImageTab(QWidget):
             if hasattr(self, 'update_plot'):
                 self.update_plot()
 
-    def update_plot(self):
-        """Update plots based on current image data - THE SINGLE METHOD FOR ALL IMAGE DISPLAY"""
-        if self.image_data is None:
+    def update_plot(self, image_data=None):
+        """Update plots based on current image data - THE SINGLE METHOD FOR ALL IMAGE DISPLAY
+        
+        Args:
+            image_data: Optional image data to display. If None, uses self.image_data.
+                       Allows passing data directly without storing in self.image_data,
+                       which improves memory efficiency for on-demand loading.
+        """
+        # Use provided data or fall back to instance variable
+        display_data = image_data if image_data is not None else self.image_data
+        
+        if display_data is None:
             return
 
         # Refresh image filename display if available
-        if hasattr(self, 'filename_label') and hasattr(self.image_data, 'name'):
-            self.filename_label.setText(f"File Name: {self.image_data.name}")
+        if hasattr(self, 'filename_label') and hasattr(display_data, 'name'):
+            self.filename_label.setText(f"File Name: {display_data.name}")
 
         # Store current limits only if they are not default/unset
         raw_xlim, raw_ylim = self.ax_raw.get_xlim(), self.ax_raw.get_ylim()
@@ -407,11 +417,14 @@ class BaseImageTab(QWidget):
         display_vals = self.get_display_values()
         vmin, vmax, cmap, scale = display_vals['vmin'], display_vals['vmax'], display_vals['cmap'], display_vals['scale']
         
-        # Get the actual image data to display
-        if hasattr(self.image_data, 'data'):
-            img_array = self.image_data.data
-        else:
-            img_array = self.image_data
+        # Validate and prepare image array using utility function
+        # Handles: SciAnalysis objects, memoryview (Tiled), stacked arrays, etc.
+        img_array, is_valid, error_msg = validate_and_prepare_image_array(display_data, use_converter=True)
+        
+        if not is_valid:
+            print(f"ERROR: {error_msg}")
+            print(f"  display_data type: {type(display_data)}")
+            return
         
         # Apply display settings
         if scale == 'log':
@@ -503,22 +516,18 @@ class BaseImageTab(QWidget):
             # === IMAGE DATA ===
             info_lines.append("=== IMAGE DATA ===")
             if image_data is not None:
-                if hasattr(image_data, 'data'):
-                    shape = image_data.data.shape
-                    dtype = image_data.data.dtype
+                # Use shared utility function to extract image info (handles SciAnalysis objects & raw arrays)
+                img_info = get_image_info(image_data)
+                if img_info:
+                    shape = img_info['shape']
+                    dtype = img_info['dtype']
                     info_lines.append(f"Dimensions: {shape[1]} x {shape[0]} pixels")
                     info_lines.append(f"Data type: {dtype}")
-                    info_lines.append(f"Value range: {image_data.data.min():.2f} to {image_data.data.max():.2f}")
-                    info_lines.append(f"Mean: {image_data.data.mean():.2f}")
-                    info_lines.append(f"Std dev: {image_data.data.std():.2f}")
-                elif hasattr(image_data, 'shape'):
-                    shape = image_data.shape
-                    dtype = image_data.dtype
-                    info_lines.append(f"Dimensions: {shape[1]} x {shape[0]} pixels")
-                    info_lines.append(f"Data type: {dtype}")
-                    info_lines.append(f"Value range: {image_data.min():.2f} to {image_data.max():.2f}")
-                    info_lines.append(f"Mean: {image_data.mean():.2f}")
-                    info_lines.append(f"Std dev: {image_data.std():.2f}")
+                    info_lines.append(f"Value range: {img_info['min_value']:.2f} to {img_info['max_value']:.2f}")
+                    info_lines.append(f"Mean: {img_info['mean_value']:.2f}")
+                    info_lines.append(f"Std dev: {img_info['std_value']:.2f}")
+                else:
+                    info_lines.append("Unable to extract image information")
             else:
                 info_lines.append("No image data loaded")
             

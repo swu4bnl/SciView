@@ -6,6 +6,7 @@
 **__pycache__/
 /bak/
 /Bsub/testing/
+/doc/
 
 # Temporary and backup files
 *.md

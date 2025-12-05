@@ -204,8 +204,8 @@ class SciAnaApp(QMainWindow):
             # Clear cache if it's the Image Browser tab
             if hasattr(current_tab, 'session_manager'):
                 cache_info = current_tab.session_manager.get_cache_info()
-                current_tab.session_manager.clear_cache()
-                self.show_status(f"Cleared {cache_info['cached_images']} cached images")
+                current_tab.session_manager.clear_session()
+                self.show_status(f"Cleared {cache_info.get('cached_items', 0)} cached images")
             
             # Get the module name for reload
             module_map = {
