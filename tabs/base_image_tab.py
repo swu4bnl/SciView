@@ -199,6 +199,7 @@ class BaseImageTab(QWidget):
 
     def update_display_settings(self, **kwargs):
         """Update shared display settings and refresh all tabs"""
+        # TODO: This is not working as intended - fix later
         self.display_settings.update(kwargs)
         
         # Notify all tabs to update their displays
@@ -391,6 +392,10 @@ class BaseImageTab(QWidget):
         """
         # Use provided data or fall back to instance variable
         display_data = image_data if image_data is not None else self.image_data
+        
+        # If no local image_data, pull from parent_app (synced by Image Browser)
+        if display_data is None and hasattr(self, 'parent_app') and hasattr(self.parent_app, 'image_data'):
+            display_data = self.parent_app.image_data
         
         if display_data is None:
             return

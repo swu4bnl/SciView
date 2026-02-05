@@ -53,7 +53,7 @@ DETECTOR_CONFIGS = {
             # 'alt_mask_1': 'path/to/alternative/mask.png',
             # 'alt_mask_2': 'path/to/another/mask.png',
         },
-        'default_mask': 'dectris_gaps',  # Which mask to use by default
+        'default_mask': 'Dectris/Pilatus2M_gaps-mask.png',  # Which mask to use by default
         'calibration_file': 'caliXS.yaml',
         'pixel_size_um': 172.0,
         'default_distance_m': 5.0,
@@ -68,7 +68,7 @@ DETECTOR_CONFIGS = {
             # Add more mask options here:
             # 'alt_mask_1': 'path/to/alternative/mask.png',
         },
-        'default_mask': 'dectris_gaps',  # Which mask to use by default
+        'default_mask': 'Dectris/Pilatus800k_gaps-mask.png',  # Which mask to use by default
         'calibration_file': 'caliWS.yaml',
         'pixel_size_um': 172.0,
         'default_distance_m': 0.261,
@@ -83,7 +83,7 @@ DETECTOR_CONFIGS = {
             # Add more mask options here:
             # 'alt_mask_1': 'path/to/alternative/mask.png',
         },
-        'default_mask': 'dectris_gaps',  # Which mask to use by default
+        'default_mask': 'Dectris/Pilatus800k2_gaps-mask.png',  # Which mask to use by default
         'calibration_file': 'caliMS.yaml',
         'pixel_size_um': 172.0,
         'default_distance_m': 0.220,
@@ -275,8 +275,7 @@ def get_file_status(filename):
     return {
         'measurement_type': measurement_type,
         'mask_dir': MASK_BASE_DIR,
-        'mask_file': detector_config['mask_file'],
-        'custom_mask': detector_config['custom_mask'],
+        'mask_file': detector_config.get('default_mask'),
         'calibration_file': detector_config['calibration_file'],
         'detector_name': detector_config['name'],
         'pixel_size_um': detector_config['pixel_size_um'],

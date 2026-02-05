@@ -67,6 +67,7 @@ class SciAnaApp(QMainWindow):
         self.image_data = None
         self.image_path = None
         self.calibration = None
+        self.mask = None
         
         # Set initial window size from config
         window_size = GUI_SETTINGS['default_window_size']
@@ -116,6 +117,7 @@ class SciAnaApp(QMainWindow):
         """Update display across all tabs when display settings change"""
         for i in range(self.tab_widget.count()):
             tab = self.tab_widget.widget(i)
+            
             if hasattr(tab, 'update_plot'):
                 try:
                     tab.update_plot()
@@ -207,22 +209,29 @@ class SciAnaApp(QMainWindow):
                 current_tab.session_manager.clear_session()
                 self.show_status(f"Cleared {cache_info.get('cached_items', 0)} cached images")
             
-            # Get the module name for reload
-            module_map = {
-                "Image Browser": "tabs.image_browser_tab.ImageBrowserApp",
-                "Calibration": "tabs.calibration_tab.CalibrationApp",
-                "Mask Editing": "tabs.mask_tab.MaskApp",
-                "Data Reduction": "tabs.data_reduction_tab.DataReductionApp"
-            }
+            # Dynamic module discovery - attempt to find the tab class from the instance
+            # This makes the refresh button future-proof for new tabs
+            class_name = current_tab.__class__.__name__
+            module_name = current_tab.__class__.__module__
             
-            if tab_name not in module_map:
-                self.show_status(f"Cannot refresh {tab_name} - unknown tab type")
-                return
+            # Fallback to hardcoded map if dynamic discovery doesn't work
+            if not module_name or 'tabs.' not in module_name:
+                module_map = {
+                    "Image Browser": "tabs.image_browser_tab.ImageBrowserApp",
+                    "Calibration": "tabs.calibration_tab.CalibrationApp",
+                    "Mask Editing": "tabs.mask_tab.MaskApp",
+                    # "Data Reduction": "tabs.data_reduction_tab.DataReductionApp",
+                    "Protocol": "tabs.protocol_preview_tab.ProtocolPreviewApp"
+                }
+                
+                if tab_name not in module_map:
+                    self.show_status(f"Cannot refresh {tab_name} - unknown tab type")
+                    return
+                
+                module_path = module_map[tab_name]
+                module_name, class_name = module_path.rsplit('.', 1)
             
             # Reload the module
-            module_path = module_map[tab_name]
-            module_name, class_name = module_path.rsplit('.', 1)
-            
             import importlib
             module = importlib.import_module(module_name)
             importlib.reload(module)
@@ -308,6 +317,27 @@ def create_application():
         layout = QVBoxLayout(placeholder)
         layout.addWidget(QLabel(f"Mask Tab\\n(Import error: {e})"))
         main_window.add_tab(placeholder, "Mask Editing")
+    
+    # Protocol Preview tab
+    # Under development
+    try:
+        if SCIANALYSIS_AVAILABLE:
+            from tabs.protocol_preview_tab import ProtocolPreviewApp
+            protocol_tab = ProtocolPreviewApp(main_window)
+            main_window.add_tab(protocol_tab, "Protocol(test)")
+        else:
+            from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+            placeholder = QWidget()
+            layout = QVBoxLayout(placeholder)
+            layout.addWidget(QLabel("Protocol Tab\\n(SciAnalysis not available)"))
+            main_window.add_tab(placeholder, "Protocol")
+    except ImportError as e:
+        print(f"Warning: Could not load protocol preview tab: {e}")
+        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+        placeholder = QWidget()
+        layout = QVBoxLayout(placeholder)
+        layout.addWidget(QLabel(f"Protocol Tab\\n(Import error: {e})"))
+        main_window.add_tab(placeholder, "Protocol")
     
     return app, main_window
 

@@ -1299,7 +1299,7 @@ class ImageBrowserApp(BaseImageTab):
             tab = self.parent_app.tab_widget.widget(i)
             if tab != self:  # Skip self (Image Browser tab)
                 try:
-                    # For calibration, mask, and data reduction tabs: set self.image_data first
+                    # For calibration, mask, and protocol tabs: set self.image_data first
                     # These tabs expect self.image_data to be set before calling update_plot()
                     if hasattr(tab, 'image_data'):
                         tab.image_data = image_data_obj
@@ -1309,7 +1309,7 @@ class ImageBrowserApp(BaseImageTab):
                         tab.populate_image_info(image_data_obj, current_image['path'])
                     
                     # Call update_plot without parameter (uses self.image_data)
-                    # This is compatible with calibration_tab, mask_tab, data_reduction_tab
+                    # This is compatible with calibration_tab, mask_tab, protocol_preview_tab
                     if hasattr(tab, 'update_plot'):
                         tab.update_plot()
                         

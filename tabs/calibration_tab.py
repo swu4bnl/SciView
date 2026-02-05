@@ -764,9 +764,9 @@ class CalibrationApp(BaseImageTab):
 
         # Write to YAML using beamline-specific naming
         yaml_path = os.path.join(dir_path, file_status['calibration_file'])
-        mask_dir = file_status['mask_dir']
-        mask_file = file_status['mask_file']
-        custom_mask = file_status['custom_mask']
+        # mask_dir = file_status['mask_dir']
+        # mask_file = file_status['mask_file']
+        # custom_mask = file_status['custom_mask']
         
         with open(yaml_path, "w") as f:
             f.write(f"wavelength_A: {wavelength_A}  # X-ray wavelength in Angstroms ({energy_eV} eV)\n")
@@ -774,9 +774,9 @@ class CalibrationApp(BaseImageTab):
             f.write(f"pixel_size_um: {pixel_size_um}  # pixel size in microns\n")
             f.write(f"beam_position: {beam_position}  # beam position in pixels\n")
             f.write(f"distance: {distance}  # sample to detector distance in meters\n")
-            f.write(f"mask_dir: \"{mask_dir}\"\n")
-            f.write(f"mask_file: \"{mask_file}\"\n")
-            f.write(f"custom_mask: \"{custom_mask}\"\n")
+            # f.write(f"mask_dir: \"{mask_dir}\"\n")
+            # f.write(f"mask_file: \"{mask_file}\"\n")
+            # f.write(f"custom_mask: \"{custom_mask}\"\n")
         self.parent_app.show_status(f"Calibration parameters exported to {yaml_path}")
 
     def on_mouse_click(self, event):
