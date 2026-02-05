@@ -493,13 +493,10 @@ class CalibrationApp(BaseImageTab):
             # Update the result display
             self.ring_result_label.setText(f"Center: ({center_x:.1f}, {center_y:.1f}), Radius: {radius:.1f}")
             
-            # Update the plot to show new beam position
-            self.update_plot_calibration()
-
-            # Update status info to reflect changes
-            self.update_status_info()
+            # Auto re-calibrate after updating beam position
+            self.calibrate_and_update_status()
             
-            self.parent_app.show_status(f"Beam position updated to ({center_x:.1f}, {center_y:.1f})")
+            self.parent_app.show_status(f"Beam position updated to ({center_x:.1f}, {center_y:.1f}) - Calibration updated")
             
         except ValueError as e:
             self.ring_result_label.setText(f"Error: {str(e)}")

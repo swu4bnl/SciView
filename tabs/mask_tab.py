@@ -28,11 +28,13 @@ try:
 except ImportError:
     SCIPY_AVAILABLE = False
 
+from tools.mask_drawing_tools import BrushDrawingTool, LineDrawingTool, RectangleDrawingTool
+
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QCheckBox, QComboBox, QSpinBox, QListWidget, QListWidgetItem,
     QGroupBox, QSlider, QDoubleSpinBox, QFileDialog, QMessageBox,
-    QScrollArea, QSplitter, QButtonGroup, QRadioButton
+    QScrollArea, QSplitter, QButtonGroup, QRadioButton, QFrame, QMenu
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QIcon, QCursor
@@ -46,6 +48,10 @@ from matplotlib.backends.backend_qt5agg import (
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
+from config.app_style import (
+    AppStyle, apply_body_style, apply_sync_button_style, 
+    apply_secondary_button_style, apply_title_style, apply_info_style
+)
 from config.beamline_config import (
     DEFAULT_CALIBRATION, PHYSICAL_CONSTANTS, get_file_status,
     MASK_BASE_DIR, DETECTOR_CONFIGS
@@ -76,15 +82,30 @@ class MaskApp(BaseImageTab):
         # Layer-based mask system
         self.mask_layers: List[MaskLayer] = []
         self.combined_mask: Optional[np.ndarray] = None
+        self._preview_mask: Optional[np.ndarray] = None  # For temporary preview display
         self.combine_method = "OR"  # OR or AND
         
         # Mask editing state
         self.drawing_mode = False
         self.draw_mask_value = True  # True = mask (add), False = unmask (remove)
         self.brush_size = 5
-        self.is_dragging = False  # Track if currently dragging the brush
-        self.last_draw_point = None  # Track last point for line interpolation
         self.toolbar_image = None  # Reference to toolbar for mode management
+        
+        # Drawing tool instance
+        self.drawing_tool = BrushDrawingTool()
+        self.drawing_tool.draw_value = self.draw_mask_value
+        self.drawing_tool.brush_size = self.brush_size
+        
+        # Available drawing tools
+        self.drawing_tools = {
+            'Brush': BrushDrawingTool(),
+            'Line': LineDrawingTool(),
+            'Rectangle': RectangleDrawingTool()
+        }
+        
+        # Developer control: auto-disable drawing mode after each stroke
+        # Set to False to keep drawing mode enabled for continuous drawing
+        self.auto_disable_drawing_mode = False
         
         # Temporary files for external editing
         self.temp_files = []
@@ -142,10 +163,14 @@ class MaskApp(BaseImageTab):
         
         main_layout.addWidget(main_splitter)
 
-        # Connect matplotlib events
-        self.canvas_image.mpl_connect('motion_notify_event', self.on_mask_motion)
-        self.canvas_image.mpl_connect('button_press_event', self.on_mask_click)
-        self.canvas_image.mpl_connect('button_release_event', self.on_mask_release)
+        # Configure drawing tools and connect events
+        for tool in self.drawing_tools.values():
+            tool.configure(self.canvas_image, self.ax_image, self.parent_app, lambda: self.image_data)
+        
+        # Connect matplotlib events - delegate to tool event handlers
+        self.canvas_image.mpl_connect('motion_notify_event', self._on_canvas_motion)
+        self.canvas_image.mpl_connect('button_press_event', self._on_canvas_press)
+        self.canvas_image.mpl_connect('button_release_event', self._on_canvas_release)
 
     def _create_visualization_panel(self):
         """Create the image and mask visualization panel"""
@@ -282,6 +307,13 @@ class MaskApp(BaseImageTab):
         layout.addStretch()
         return panel
     
+    def _create_separator(self):
+        """Create a horizontal separator line"""
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        return separator
+    
     def _create_generation_panel(self):
         """Create the mask generation panel with image processing tools"""
         panel = QWidget()
@@ -368,42 +400,115 @@ class MaskApp(BaseImageTab):
         
         layout.addWidget(filter_group)
         
-
-        ###### Manual drawing controls ######
-        # Manual drawing
-        drawing_group = QGroupBox("Manual Drawing")
+        ###### Drawing Tools (Photoshop-style, Compact) ######
+        drawing_group = QGroupBox("Drawing Tools")
         drawing_layout = QVBoxLayout(drawing_group)
         drawing_layout.setSpacing(2)
+        drawing_layout.setContentsMargins(6, 6, 6, 6)
         
-        self.drawing_mode_check = QCheckBox("Enable Drawing Mode")
+        # Enable/Disable drawing mode
+        self.drawing_mode_check = QCheckBox("Enable drawing mode")
         self.drawing_mode_check.stateChanged.connect(self._toggle_drawing_mode)
         drawing_layout.addWidget(self.drawing_mode_check)
         
-        # Drawing controls in grid for better alignment
-        draw_grid = QHBoxLayout()
+        # Tool selection row
+        tool_layout = QHBoxLayout()
+        tool_layout.setSpacing(2)
+        tool_layout.setContentsMargins(0, 4, 0, 4)
+        tool_label = QLabel("Tool:")
+        apply_body_style(tool_label)
+        tool_layout.addWidget(tool_label)
         
-        # Brush size
-        draw_grid.addWidget(QLabel("Brush:"))
+        # Create button group for tool selection to ensure mutual exclusivity
+        self.tool_group = QButtonGroup()
+        self.tool_brush_radio = QRadioButton("Brush")
+        self.tool_brush_radio.setChecked(True)
+        self.tool_brush_radio.setToolTip("Freehand drawing")
+        self.tool_brush_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Brush'))
+        self.tool_group.addButton(self.tool_brush_radio, 0)
+        tool_layout.addWidget(self.tool_brush_radio)
+        
+        self.tool_line_radio = QRadioButton("Line")
+        self.tool_line_radio.setToolTip("Straight line")
+        self.tool_line_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Line'))
+        self.tool_group.addButton(self.tool_line_radio, 1)
+        tool_layout.addWidget(self.tool_line_radio)
+        
+        self.tool_rect_radio = QRadioButton("Rect")
+        self.tool_rect_radio.setToolTip("Filled rectangle")
+        self.tool_rect_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Rectangle'))
+        self.tool_group.addButton(self.tool_rect_radio, 2)
+        tool_layout.addWidget(self.tool_rect_radio)
+        
+        tool_layout.addStretch()
+        drawing_layout.addLayout(tool_layout)
+        
+        # Mode selection row (Add/Remove)
+        mode_layout = QHBoxLayout()
+        mode_layout.setSpacing(2)
+        mode_layout.setContentsMargins(0, 4, 0, 4)
+        mode_label = QLabel("Mode:")
+        apply_body_style(mode_label)
+        mode_layout.addWidget(mode_label)
+        
+        # Create button group for mode selection
+        self.mode_group = QButtonGroup()
+        self.draw_add_radio = QRadioButton("Add")
+        self.draw_add_radio.setChecked(True)
+        self.draw_add_radio.setToolTip("Add to mask")
+        self.draw_add_radio.toggled.connect(lambda checked: checked and self._update_tool_mode())
+        self.mode_group.addButton(self.draw_add_radio, 0)
+        mode_layout.addWidget(self.draw_add_radio)
+        
+        self.draw_remove_radio = QRadioButton("Remove")
+        self.draw_remove_radio.setToolTip("Remove from mask")
+        self.draw_remove_radio.toggled.connect(lambda checked: checked and self._update_tool_mode())
+        self.mode_group.addButton(self.draw_remove_radio, 1)
+        mode_layout.addWidget(self.draw_remove_radio)
+        
+        mode_layout.addStretch()
+        drawing_layout.addLayout(mode_layout)
+        
+        # Brush size control (compact)
+        brush_layout = QHBoxLayout()
+        brush_layout.setSpacing(4)
+        brush_layout.setContentsMargins(0, 4, 0, 4)
+        brush_label = QLabel("Size:")
+        apply_body_style(brush_label)
+        brush_layout.addWidget(brush_label)
+        
         self.brush_size_spin = QSpinBox()
         self.brush_size_spin.setRange(1, 50)
         self.brush_size_spin.setValue(5)
         self.brush_size_spin.setMinimumWidth(50)
-        self.brush_size_spin.setMaximumWidth(120)
-        self.brush_size_spin.valueChanged.connect(lambda v: setattr(self, 'brush_size', v))
-        draw_grid.addWidget(self.brush_size_spin)
+        self.brush_size_spin.setMaximumWidth(70)
+        self.brush_size_spin.setSuffix("px")
+        self.brush_size_spin.valueChanged.connect(lambda v: self._update_tool_brush_size(v))
+        self.brush_size_spin.setToolTip("Brush size for Brush and Line tools")
+        brush_layout.addWidget(self.brush_size_spin)
         
-        # Draw mode
-        draw_grid.addWidget(QLabel("Mode:"))
-        self.draw_add_radio = QRadioButton("Add")
-        self.draw_add_radio.setChecked(True)
-        self.draw_remove_radio = QRadioButton("Remove")
-        draw_grid.addWidget(self.draw_add_radio)
-        draw_grid.addWidget(self.draw_remove_radio)
-        draw_grid.addStretch()
-        
-        drawing_layout.addLayout(draw_grid)
+        # Slider for brush size
+        self.brush_size_slider = QSlider(Qt.Horizontal)
+        self.brush_size_slider.setRange(1, 50)
+        self.brush_size_slider.setValue(5)
+        self.brush_size_slider.setMaximumWidth(120)
+        self.brush_size_slider.setMaximumHeight(18)
+        self.brush_size_slider.sliderMoved.connect(lambda v: self.brush_size_spin.setValue(v))
+        self.brush_size_spin.valueChanged.connect(lambda v: self.brush_size_slider.blockSignals(True) or self.brush_size_slider.setValue(v) or self.brush_size_slider.blockSignals(False))
+        brush_layout.addWidget(self.brush_size_slider)
+        brush_layout.addStretch()
+        drawing_layout.addLayout(brush_layout)
         
         layout.addWidget(drawing_group)
+        
+        # Disable drawing controls initially (drawing mode is off by default)
+        self.tool_brush_radio.setEnabled(False)
+        self.tool_line_radio.setEnabled(False)
+        self.tool_rect_radio.setEnabled(False)
+        self.draw_add_radio.setEnabled(False)
+        self.draw_remove_radio.setEnabled(False)
+        self.brush_size_spin.setEnabled(False)
+        self.brush_size_slider.setEnabled(False)
         
         layout.addStretch()
         return panel
@@ -432,7 +537,7 @@ class MaskApp(BaseImageTab):
         layout.addWidget(btn_gimp)
         
         # Reload mask from file
-        btn_reload = QPushButton("Import from External Edit")
+        btn_reload = QPushButton("Import mask")
         btn_reload.clicked.connect(self._import_external_mask)
         layout.addWidget(btn_reload)
         
@@ -457,16 +562,16 @@ class MaskApp(BaseImageTab):
         layout.addWidget(btn_export_layer)
 
         # Export Combined Mask button (green)
-        btn_export_combined = QPushButton("Export Combined Mask")
+        btn_export_combined = QPushButton("Export Mask (All Layers)")
         btn_export_combined.clicked.connect(self._export_combined_mask)
-        btn_export_combined.setStyleSheet("background-color: #16C60C; color: white; font-weight: bold;")
+        apply_sync_button_style(btn_export_combined)
         layout.addWidget(btn_export_combined)
         
         # Apply mask button (placeholder for future implementation)
-        btn_apply = QPushButton("Apply Mask to Tabs")
-        btn_apply.setStyleSheet("background-color: #999999; color: white; font-weight: bold;")
-        btn_apply.clicked.connect(self._apply_mask_to_tabs)
-        layout.addWidget(btn_apply)
+        # btn_apply = QPushButton("Apply Mask to Tabs")
+        # apply_secondary_button_style(btn_apply)
+        # btn_apply.clicked.connect(self._apply_mask_to_tabs)
+        # layout.addWidget(btn_apply)
         
         layout.addStretch()
         return panel
@@ -573,9 +678,22 @@ class MaskApp(BaseImageTab):
         instrument_submenu = menu.addMenu("From Instrument Default")
         for detector_key, detector_config in DETECTOR_CONFIGS.items():
             detector_name = detector_config.get('name', detector_key)
-            action = instrument_submenu.addAction(detector_name)
-            # Use lambda with default argument to capture detector_key
-            action.triggered.connect(lambda checked=False, dk=detector_key: self._load_instrument_mask(dk))
+            
+            # Create submenu for each detector with available masks
+            detector_masks = detector_config.get('available_masks', {})
+            if detector_masks:
+                detector_submenu = instrument_submenu.addMenu(detector_name)
+                for mask_name, mask_path in detector_masks.items():
+                    action = detector_submenu.addAction(mask_name)
+                    # Use lambda with default argument to capture detector_key and mask_path
+                    action.triggered.connect(
+                        lambda checked=False, dk=detector_key, mp=mask_path: 
+                        self._load_instrument_mask(dk, mp)
+                    )
+            else:
+                # Fallback for old config format without available_masks
+                action = instrument_submenu.addAction(detector_name)
+                action.triggered.connect(lambda checked=False, dk=detector_key: self._load_instrument_mask(dk))
         
         menu.addAction("From Current Image (Threshold)", self._generate_threshold_mask)
         
@@ -755,8 +873,19 @@ class MaskApp(BaseImageTab):
     def _toggle_drawing_mode(self, state):
         """Toggle manual drawing mode"""
         self.drawing_mode = (state == Qt.Checked)
-        self.is_dragging = False  # Reset dragging state
-        self.last_draw_point = None  # Reset line interpolation
+        
+        # Reset tool state when toggling mode
+        if self.drawing_tool:
+            self.drawing_tool.reset()
+        
+        # Disable/enable all drawing controls (except the checkbox itself)
+        drawing_controls = [
+            self.tool_brush_radio, self.tool_line_radio, self.tool_rect_radio,
+            self.draw_add_radio, self.draw_remove_radio,
+            self.brush_size_spin, self.brush_size_slider
+        ]
+        for control in drawing_controls:
+            control.setEnabled(self.drawing_mode)
         
         if self.drawing_mode:
             # Create a new empty layer if none exist or if current is not editable
@@ -773,6 +902,42 @@ class MaskApp(BaseImageTab):
             # Re-enable matplotlib toolbar zoom/pan
             self._enable_matplotlib_tools()
             self.parent_app.show_status("Drawing mode disabled")
+    
+    def _set_drawing_tool(self, tool_name: str):
+        """Switch to a different drawing tool"""
+        if tool_name in self.drawing_tools:
+            self.drawing_tool = self.drawing_tools[tool_name]
+            # Sync settings with new tool
+            # Only brush and line tools use brush_size; rectangle doesn't
+            if tool_name in ['Brush', 'Line']:
+                self.drawing_tool.brush_size = self.brush_size
+                self.brush_size_spin.setEnabled(True)
+                self.brush_size_slider.setEnabled(True)
+            else:  # Rectangle
+                self.brush_size_spin.setEnabled(False)
+                self.brush_size_slider.setEnabled(False)
+            
+            self.drawing_tool.draw_value = self.draw_add_radio.isChecked()
+            self.parent_app.show_status(f"Drawing tool changed to: {tool_name}")
+    
+    def _update_tool_brush_size(self, size: int):
+        """Update brush size for Brush and Line tools only"""
+        self.brush_size = size
+        # Only update Brush and Line tools
+        if 'Brush' in self.drawing_tools:
+            self.drawing_tools['Brush'].brush_size = size
+        if 'Line' in self.drawing_tools:
+            self.drawing_tools['Line'].brush_size = size
+        # Always sync current tool
+        if self.drawing_tool.name in ['Brush', 'Line']:
+            self.drawing_tool.brush_size = size
+    
+    def _update_tool_mode(self):
+        """Update add/remove mode for all tools"""
+        is_add = self.draw_add_radio.isChecked()
+        for tool in self.drawing_tools.values():
+            tool.draw_value = is_add
+    
     
     def _disable_matplotlib_tools(self):
         """Disable matplotlib zoom/pan tools during drawing by setting mode to None"""
@@ -798,12 +963,13 @@ class MaskApp(BaseImageTab):
     
     # ===== External Editor Methods =====
     
-    def _load_instrument_mask(self, detector_key=None):
+    def _load_instrument_mask(self, detector_key=None, mask_path=None):
         """Load the instrument default mask for a specific detector
         
         Args:
             detector_key: Key from DETECTOR_CONFIGS (e.g., 'saxs', 'waxs', 'maxs')
                          If None, defaults to 'waxs' (for backward compatibility)
+            mask_path: Specific mask file path. If provided, uses this instead of default.
         """
         try:
             # Use provided detector_key or default to waxs
@@ -816,26 +982,42 @@ class MaskApp(BaseImageTab):
             
             detector_config = DETECTOR_CONFIGS[detector_key]
             detector_name = detector_config.get('name', detector_key)
-            mask_file = detector_config.get('mask_file', '')
             
-            if mask_file:
-                mask_path = os.path.join(MASK_BASE_DIR, mask_file)
-                
-                if os.path.exists(mask_path):
-                    mask_data = self._load_mask_file(mask_path)
-                    
-                    if mask_data is not None:
-                        layer = MaskLayer(mask_data, f"Instrument: {detector_name}")
-                        layer.source = "default"
-                        self.mask_layers.append(layer)
-                        
-                        self._update_layer_list()
-                        self.parent_app.show_status(f"Loaded instrument mask: {mask_file}")
-                        return
+            # Use provided mask_path or fall back to default mask_file
+            if mask_path is None:
+                # Backward compatibility: use old mask_file format if available
+                mask_file = detector_config.get('mask_file', '')
+                if mask_file:
+                    mask_path = os.path.join(MASK_BASE_DIR, mask_file)
                 else:
-                    self.parent_app.show_status(f"Mask file not found: {mask_path}")
+                    # Try to load default_mask from available_masks
+                    available_masks = detector_config.get('available_masks', {})
+                    default_mask_name = detector_config.get('default_mask', '')
+                    if default_mask_name and default_mask_name in available_masks:
+                        mask_path = os.path.join(MASK_BASE_DIR, available_masks[default_mask_name])
+                    else:
+                        self.parent_app.show_status(f"No mask configured for {detector_name}")
+                        return
             else:
-                self.parent_app.show_status(f"No mask file configured for {detector_name}")
+                # Make path absolute if relative
+                if not os.path.isabs(mask_path):
+                    mask_path = os.path.join(MASK_BASE_DIR, mask_path)
+            
+            if mask_path and os.path.exists(mask_path):
+                mask_data = self._load_mask_file(mask_path)
+                
+                if mask_data is not None:
+                    # Extract mask name from path
+                    mask_name = os.path.basename(mask_path)
+                    layer = MaskLayer(mask_data, f"Instrument: {mask_name}")
+                    layer.source = "default"
+                    self.mask_layers.append(layer)
+                    
+                    self._update_layer_list()
+                    self.parent_app.show_status(f"Loaded instrument mask: {mask_name}")
+                    return
+            else:
+                self.parent_app.show_status(f"Mask file not found: {mask_path}")
                 
         except Exception as e:
             self.parent_app.show_status(f"Error loading instrument mask: {str(e)}")
@@ -1090,89 +1272,191 @@ class MaskApp(BaseImageTab):
     
     # ===== Mouse Event Handlers =====
     
-    def on_mask_click(self, event):
-        """Handle mouse clicks for mask editing - start drag"""
-        if not event.inaxes or event.inaxes != self.ax_image:
-            return
+    def _get_valid_image_coordinates(self, event):
+        """Get valid image pixel coordinates, clamped to image bounds.
         
-        if not self.drawing_mode:
-            return
+        Handles zoom/pan states correctly by using image dimensions directly.
+        Returns None if coordinates are invalid.
+        """
+        # Check if event has valid coordinates
+        if event.xdata is None or event.ydata is None:
+            return None
         
-        # Start drawing on left click
-        if event.button == 1:  # Left click
-            self.is_dragging = True
-            self.last_draw_point = None  # Reset line interpolation for new stroke
-            # Set cursor to crosshair to indicate drawing mode
-            self.canvas_image.setCursor(QCursor(Qt.CrossCursor))
-            self._draw_on_mask(event)
+        # Check if image data is loaded
+        if self.image_data is None or self.ax_image is None:
+            return None
+        
+        # Get actual image array (handles Data2DScattering objects)
+        image_2d, is_valid, error_msg = validate_and_prepare_image_array(self.image_data)
+        if not is_valid:
+            return None
+        
+        # Get image dimensions (height, width)
+        img_height, img_width = image_2d.shape[:2]
+        
+        try:
+            # Convert to integers and clamp to valid pixel range
+            # Data coordinates from imshow already respect zoom/pan state
+            x = int(event.xdata)
+            y = int(event.ydata)
+            
+            # Clamp to image bounds
+            x = max(0, min(img_width - 1, x))
+            y = max(0, min(img_height - 1, y))
+            
+            return (x, y)
+        except (TypeError, ValueError):
+            return None
     
-    def on_mask_motion(self, event):
-        """Handle mouse motion for real-time brush drawing during drag"""
-        if not event.inaxes or event.inaxes != self.ax_image:
-            # Set normal cursor when leaving image area
-            if self.drawing_mode:
-                self.canvas_image.setCursor(QCursor(Qt.CrossCursor))
+    def _on_canvas_press(self, event):
+        """Handle canvas mouse press event - delegate to drawing tool"""
+        if not self.drawing_mode or not self.drawing_tool:
             return
         
-        # Update cursor feedback
-        if self.drawing_mode:
-            self.canvas_image.setCursor(QCursor(Qt.CrossCursor))
+        # Tool handles press event (sets is_dragging, initializes state)
+        self.drawing_tool.on_press(event)
         
-        # Draw continuously while dragging (left button is pressed)
-        # In matplotlib, button==1 means left mouse button, button is set during motion if button is held
-        if self.drawing_mode and (self.is_dragging or event.button == 1):
-            self._draw_on_mask(event)
+        # Show initial preview if tool is active
+        if self.drawing_tool.is_dragging and self.drawing_tool.is_active:
+            self._show_preview(event)
     
-    def on_mask_release(self, event):
-        """Handle mouse release - stop drag and auto-disable drawing mode"""
-        if self.is_dragging:
-            self.is_dragging = False
-            # Reset cursor
-            self.canvas_image.setCursor(QCursor(Qt.ArrowCursor))
-            # Auto-disable drawing mode to prevent unintended clicks
+    def _on_canvas_motion(self, event):
+        """Handle canvas mouse motion - delegate to tool and update visualization"""
+        if not self.drawing_mode or not self.drawing_tool:
+            return
+        
+        # Tool handles motion event (state tracking, edge detection, cursor management)
+        self.drawing_tool.on_motion(event)
+        
+        # Update visualization during drag
+        if self.drawing_tool.is_dragging and self.drawing_tool.is_active:
+            if isinstance(self.drawing_tool, BrushDrawingTool):
+                # Brush accumulates strokes on layer during motion
+                self._draw_brush_stroke(event)
+            else:
+                # Line/Rectangle show non-destructive preview
+                self._show_preview(event)
+    
+    def _on_canvas_release(self, event):
+        """Handle canvas mouse release - finalize drawing"""
+        if not self.drawing_tool or not self.drawing_tool.is_dragging:
+            return
+        
+        # Capture state before tool resets
+        was_dragging = self.drawing_tool.is_dragging
+        pointer_left = self.drawing_tool.pointer_left_canvas
+        exit_edge = self.drawing_tool.pointer_exit_edge
+        last_point = self.drawing_tool.last_draw_point
+        
+        # Tool handles release (resets state)
+        self.drawing_tool.on_release(event)
+        
+        if was_dragging and self.drawing_tool.is_active:
+            try:
+                # Get image dimensions
+                image_2d, is_valid, _ = validate_and_prepare_image_array(self.image_data)
+                if not is_valid:
+                    return
+                
+                img_height, img_width = image_2d.shape[:2]
+                
+                # Determine final endpoint
+                if pointer_left and last_point is not None:
+                    # Extend to edge/corner based on detected zone
+                    x, y = self.drawing_tool.get_endpoint_for_edge(exit_edge, last_point[1], last_point[0], img_width, img_height)
+                elif event.inaxes == self.ax_image and event.xdata is not None and event.ydata is not None:
+                    # Normal release inside canvas
+                    x = max(0, min(img_width - 1, int(event.xdata)))
+                    y = max(0, min(img_height - 1, int(event.ydata)))
+                else:
+                    return
+                
+                # Finalize non-brush tools (Line, Rectangle draw on release)
+                # Brush tools finalize immediately during motion
+                if not isinstance(self.drawing_tool, BrushDrawingTool):
+                    if not self.mask_layers:
+                        self._add_empty_layer()
+                    
+                    current_layer = self.mask_layers[-1]
+                    current_layer.data = self.drawing_tool.finalize(current_layer.data, (y, x))
+                
+                # Rebuild combined mask and update display
+                self._update_combined_mask()
+                
+            except Exception as e:
+                pass  # Finalization failed gracefully
+            finally:
+                self._preview_mask = None
+                self.drawing_tool.reset()
+        
+        # Auto-disable drawing mode if configured
+        if self.auto_disable_drawing_mode:
             self.drawing_mode = False
             self.drawing_mode_check.setChecked(False)
     
-    def _draw_on_mask(self, event):
-        """Draw on the current mask layer with line interpolation for smooth traces"""
+    def _draw_brush_stroke(self, event):
+        """Draw continuously with brush tool during drag"""
         if not self.mask_layers:
             self._add_empty_layer()
         
         try:
             x, y = int(event.xdata), int(event.ydata)
             current_layer = self.mask_layers[-1]
-            mask_value = self.draw_add_radio.isChecked()  # True = mask, False = unmask
             
-            # Interpolate between last point and current point for smooth lines
-            points_to_draw = [(x, y)]
-            if self.last_draw_point is not None:
-                last_x, last_y = self.last_draw_point
-                # Calculate distance between points
-                dx = x - last_x
-                dy = y - last_y
-                distance = np.sqrt(dx**2 + dy**2)
-                
-                # If distance is large enough, interpolate intermediate points
-                if distance > self.brush_size / 2:
-                    num_steps = max(2, int(distance / max(1, self.brush_size / 3)))
-                    interp_x = np.linspace(last_x, x, num_steps)
-                    interp_y = np.linspace(last_y, y, num_steps)
-                    points_to_draw = list(zip(interp_x, interp_y))
+            # Update tool settings
+            self.drawing_tool.brush_size = self.brush_size
+            self.drawing_tool.draw_value = self.draw_add_radio.isChecked()
             
-            # Draw at all interpolated points
-            for px, py in points_to_draw:
-                px, py = int(px), int(py)
-                # Draw circle with brush size using ogrid for efficiency
-                y_coords, x_coords = np.ogrid[:current_layer.data.shape[0], :current_layer.data.shape[1]]
-                distance = np.sqrt((x_coords - px)**2 + (y_coords - py)**2)
-                brush_mask = distance <= self.brush_size
-                current_layer.data[brush_mask] = mask_value
-            
-            # Store current point for next interpolation
-            self.last_draw_point = (x, y)
+            # Finalize on the actual layer to accumulate strokes
+            current_layer.data = self.drawing_tool.finalize(current_layer.data, (y, x))
             
             # Update combined mask and display immediately for real-time feedback
             self._update_combined_mask()
             
         except (TypeError, ValueError):
             pass  # Mouse outside valid coordinates
+    
+    def _show_preview(self, event):
+        """Show preview of what would be drawn without committing to the layer"""
+        if not self.mask_layers:
+            self._add_empty_layer()
+        
+        try:
+            x, y = int(event.xdata), int(event.ydata)
+            current_layer = self.mask_layers[-1]
+            
+            # Update tool settings
+            self.drawing_tool.brush_size = self.brush_size
+            self.drawing_tool.draw_value = self.draw_add_radio.isChecked()
+            
+            # Get preview from tool (doesn't modify original)
+            preview_data = self.drawing_tool.preview(current_layer.data, (y, x))
+            
+            # Temporarily update combined mask to show preview
+            # Rebuild with preview data
+            temp_combined = np.zeros_like(current_layer.data)
+            for layer in self.mask_layers[:-1]:  # All layers except current
+                temp_combined = np.logical_or(temp_combined, layer.data).astype(np.uint8)
+            temp_combined = np.logical_or(temp_combined, preview_data).astype(np.uint8)
+            
+            # Save original mask and temporarily set preview
+            original_mask = self.combined_mask
+            self.combined_mask = temp_combined.astype(bool)
+            
+            # Redraw with preview, then restore
+            self.update_plot()
+            
+            # Restore after a brief moment or on next event
+            # Store for restoration in next call or on release
+            self._preview_mask = temp_combined.astype(bool)
+            
+        except (TypeError, ValueError):
+            pass  # Mouse outside valid coordinates
+    
+    def _draw_on_mask(self, event):
+        """Legacy method - kept for backward compatibility
+        
+        Main drawing now happens through:
+        _on_canvas_press → _show_preview/draw → _on_canvas_release → finalize
+        """
+        pass

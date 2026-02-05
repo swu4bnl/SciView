@@ -46,8 +46,14 @@ except ImportError:
 DETECTOR_CONFIGS = {
     'saxs': {
         'name': 'Pilatus2M',
-        'mask_file': 'Dectris/Pilatus2M_gaps-mask.png',
-        'custom_mask': './Pilatus2M_current-mask.png',
+        'available_masks': {
+            'dectris_gaps': 'Dectris/Pilatus2M_gaps-mask.png',
+            'vertical_gaps': 'Dectris/Pilatus2M_vertical_gaps-mask.png',
+            # Add more mask options here:
+            # 'alt_mask_1': 'path/to/alternative/mask.png',
+            # 'alt_mask_2': 'path/to/another/mask.png',
+        },
+        'default_mask': 'dectris_gaps',  # Which mask to use by default
         'calibration_file': 'caliXS.yaml',
         'pixel_size_um': 172.0,
         'default_distance_m': 5.0,
@@ -56,8 +62,13 @@ DETECTOR_CONFIGS = {
     },
     'waxs': {
         'name': 'Pilatus800k', 
-        'mask_file': 'Dectris/Pilatus800k_gaps-mask.png',
-        'custom_mask': './Pilatus800_current-mask.png',
+        'available_masks': {
+            'dectris_gaps': 'Dectris/Pilatus800k_gaps-mask.png',
+            'vertical_gaps': 'Dectris/Pilatus800k_vertical_gaps-mask.png',
+            # Add more mask options here:
+            # 'alt_mask_1': 'path/to/alternative/mask.png',
+        },
+        'default_mask': 'dectris_gaps',  # Which mask to use by default
         'calibration_file': 'caliWS.yaml',
         'pixel_size_um': 172.0,
         'default_distance_m': 0.261,
@@ -66,8 +77,13 @@ DETECTOR_CONFIGS = {
     },
     'maxs': {
         'name': 'Pilatus800k2',
-        'mask_file': 'Dectris/Pilatus800k2_gaps-mask.png', 
-        'custom_mask': './Pilatus800k2_current-mask.png',
+        'available_masks': {
+            'dectris_gaps': 'Dectris/Pilatus800k2_gaps-mask.png',
+            'vertical_gaps': 'Dectris/Pilatus800k2_vertical_gaps-mask.png',
+            # Add more mask options here:
+            # 'alt_mask_1': 'path/to/alternative/mask.png',
+        },
+        'default_mask': 'dectris_gaps',  # Which mask to use by default
         'calibration_file': 'caliMS.yaml',
         'pixel_size_um': 172.0,
         'default_distance_m': 0.220,
@@ -129,7 +145,7 @@ EXPORT_SETTINGS = {
 # GUI LAYOUT PREFERENCES
 # =============================================================================
 GUI_SETTINGS = {
-    'default_window_size': (960, 1200),
+    'default_window_size': (960, 1080),
     'visualization_ratio': 3,  # relative to controls
     'controls_ratio': 1,
     'image_plot_ratio': 3,     # image:plot = 3:1

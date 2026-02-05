@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QListWidget, QListWidgetItem, QComboBox, QLineEdit, QSpinBox,
     QGroupBox, QTabWidget, QProgressBar, QCheckBox, QSplitter,
     QFileDialog, QMessageBox, QScrollArea, QGridLayout, QTableWidget,
-    QTableWidgetItem, QHeaderView
+    QTableWidgetItem, QHeaderView, QFrame
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QPixmap, QIcon
@@ -48,7 +48,7 @@ class ImageLoadWorker(QThread):
     tiled_manager = tiled_manager
 
     progress_updated = pyqtSignal(int, str)  # progress, status message
-    image_loaded = pyqtSignal(object, str)   # image_data, file_path
+    image_loaded = pyqtSignal(object, str, dict)   # image_data, file_path, metadata
     loading_finished = pyqtSignal()
     error_occurred = pyqtSignal(str)
     
@@ -151,7 +151,16 @@ class ImageLoadWorker(QThread):
                     if image_array is not None:
                         image_array = self._convert_image_shape(image_array)
                         pseudo_path = self.tiled_manager.create_pseudo_path(current_scan_id, detector, profile_name)
-                        self.image_loaded.emit(image_array, pseudo_path)
+                        
+                        # Prepare metadata for session tracking
+                        image_metadata = {
+                            'scan_id': current_scan_id,
+                            'detector': detector,
+                            'profile': profile_name,
+                            'tiled_metadata': metadata
+                        }
+                        
+                        self.image_loaded.emit(image_array, pseudo_path, image_metadata)
                         loaded_count += 1
                     else:
                         # Scan not found or detector missing - skip quietly
@@ -199,8 +208,16 @@ class ImageLoadWorker(QThread):
                 # Create pseudo file path for tracking with metadata
                 pseudo_path = self.tiled_manager.create_pseudo_path(scan_id, detector, profile_name)
                 
+                # Prepare metadata for session tracking
+                image_metadata = {
+                    'scan_id': scan_id,
+                    'detector': detector,
+                    'profile': profile_name,
+                    'tiled_metadata': metadata
+                }
+                
                 # Emit the loaded image with metadata
-                self.image_loaded.emit(image_array, pseudo_path)
+                self.image_loaded.emit(image_array, pseudo_path, image_metadata)
                 self.progress_updated.emit(100, f"Tiled loading complete - Scan {scan_id}")
                 
             except Exception as e:
@@ -217,7 +234,9 @@ class ImageLoadWorker(QThread):
             image_data = self._load_image_file(file_path)
             
             if image_data is not None:
-                self.image_loaded.emit(image_data, file_path)
+                # File loading doesn't have Tiled metadata
+                file_metadata = {'source': 'file'}
+                self.image_loaded.emit(image_data, file_path, file_metadata)
                 self.progress_updated.emit(100, "File loading complete")
             else:
                 self.error_occurred.emit(f"Failed to load image from {file_path}")
@@ -298,7 +317,7 @@ class ImageSessionManager:
         """
         image_info = {
             'path': file_path,
-            'filename': os.path.basename(file_path) if not file_path.startswith('tiled://') else file_path.split('/')[-1],
+            'filename': self._extract_display_filename(file_path, metadata),
             'timestamp': np.datetime64('now'),
             'metadata': metadata or {},
             'size': image_data.shape if (image_data is not None and hasattr(image_data, 'shape')) else None,
@@ -328,10 +347,11 @@ class ImageSessionManager:
         if 0 <= self.current_index < len(self.images):
             img = self.images[self.current_index].copy()
             
-            # Trigger on-demand loading for deferred images
-            if load_data and img['lazy']:
+            # Trigger on-demand loading if data is needed
+            if load_data:
                 if loader_callback:
                     # Use shared cache manager's get method
+                    # The loader_callback will be called if data is not in cache
                     loaded_data = self.cache_manager.get(img['cache_key'], 
                                                         loader_callback=lambda k: loader_callback(img['path'], img['metadata']))
                     if loaded_data is not None:
@@ -339,9 +359,12 @@ class ImageSessionManager:
                             img['size'] = loaded_data.shape
                             self.images[self.current_index]['size'] = loaded_data.shape
                         img['data'] = loaded_data
-            else:
-                # Get from cache (already loaded)
-                img['data'] = self.cache_manager.get(img['cache_key'])
+                    else:
+                        # Loader returned None (loading failed)
+                        img['data'] = None
+                else:
+                    # No loader callback provided, just try to get from cache
+                    img['data'] = self.cache_manager.get(img['cache_key'])
             
             return img
         return None
@@ -414,6 +437,22 @@ class ImageSessionManager:
             return 'file'
         else:
             return 'unknown'
+    
+    def _extract_display_filename(self, file_path, metadata=None):
+        """Extract a meaningful display filename from path and metadata.
+        
+        For Tiled images, extracts scan ID from metadata.
+        For file paths, extracts basename.
+        """
+        if file_path.startswith('tiled://') and metadata:
+            # Extract scan_id from metadata for Tiled images
+            scan_id = metadata.get('scan_id')
+            detector = metadata.get('detector', 'unknown')
+            if scan_id is not None:
+                return f"Scan {scan_id} ({detector})"
+        
+        # Default: use filename for regular files
+        return os.path.basename(file_path)
 
 
 class ImageBrowserApp(BaseImageTab):
@@ -446,6 +485,18 @@ class ImageBrowserApp(BaseImageTab):
         
         # Connect to parent app for synchronization
         self._setup_parent_sync()
+
+    def update_display_settings(self, **kwargs):
+        """Override to update display settings and refresh current image in browser
+        
+        When display settings (vmin, vmax, cmap, scale) change, we need to
+        refresh the current image being displayed in the image browser.
+        """
+        self.display_settings.update(kwargs)
+        
+        # Refresh current image with new display settings
+        if hasattr(self, '_update_display'):
+            self._update_display()
 
     def _build_ui(self):
         """Build the main user interface"""
@@ -495,16 +546,33 @@ class ImageBrowserApp(BaseImageTab):
         # Tab 1: File loading
         file_tab = self._create_file_loading_tab()
         self.loading_tabs.addTab(file_tab, "Files")
-        
-        # Tab 2: Tiled client
-        tiled_tab = self._create_tiled_loading_tab()
-        self.loading_tabs.addTab(tiled_tab, "Tiled")
-        if not self.tiled_manager.is_available():
-            self.loading_tabs.setTabEnabled(1, False)
-        
-        # Tab 3: Folder browser
+
+        # Tab 2: Folder browser
         folder_tab = self._create_folder_loading_tab()
         self.loading_tabs.addTab(folder_tab, "Folder")
+        
+        # Tab 3: Tiled client
+        tiled_tab = self._create_tiled_loading_tab()
+        self.loading_tabs.addTab(tiled_tab, "Tiled")
+        
+        # Tab 4: Tiled monitor
+        monitor_tab = self._create_tiled_monitor_tab()
+        self.loading_tabs.addTab(monitor_tab, "Tiled Monitor")
+        
+        # Disable Tiled tabs if Tiled is not available
+        if not self.tiled_manager.is_available():
+            self.loading_tabs.setTabEnabled(2, False)  # Disable Tiled tab
+            self.loading_tabs.setTabEnabled(3, False)  # Disable Tiled Monitor tab
+        
+        # Connect checkbox signals for UI control disabling
+        # When "Load all files" is checked, disable the "Max" field
+        self.load_all_checkbox.stateChanged.connect(self._update_folder_controls)
+        # When "Load single scan only" is checked, disable the "End" field
+        self.single_scan_checkbox.stateChanged.connect(self._update_tiled_controls)
+        
+        # Set initial states
+        self._update_folder_controls()
+        self._update_tiled_controls()
         
         layout.addWidget(self.loading_tabs)
         
@@ -613,25 +681,54 @@ class ImageBrowserApp(BaseImageTab):
         btn_load_tiled = QPushButton("Load from Tiled")
         btn_load_tiled.clicked.connect(self._load_from_tiled)
         layout.addWidget(btn_load_tiled)
+
+        # Connection status
+        self.tiled_status_label = QLabel("Status: Ready to connect")
+        apply_info_style(self.tiled_status_label)
+        layout.addWidget(self.tiled_status_label)
         
-        # Monitor function controls
-        monitor_layout = QHBoxLayout()
+        # Profile info display
+        self.tiled_info_label = QLabel()
+        self.tiled_info_label.setWordWrap(True)
+        apply_info_style(self.tiled_info_label)
+        self._update_profile_info()
+        layout.addWidget(self.tiled_info_label)
+        
+        layout.addStretch()
+
+        return tab
+        
+
+    def _create_tiled_monitor_tab(self):
+        """Create tiled monitor tab for live monitoring"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        # Monitor function controls - separate in a group box
+        monitor_group = QGroupBox("Live Monitor Mode")
+        monitor_layout = QVBoxLayout()
+        
         self.monitor_button = QPushButton("Start Monitor")
         self.monitor_button.setCheckable(True)
         self.monitor_button.clicked.connect(self._toggle_monitor)
         monitor_layout.addWidget(self.monitor_button)
         
+        interval_layout = QHBoxLayout()
+        interval_layout.addWidget(QLabel("Interval:"))
         self.monitor_interval_input = QSpinBox()
         self.monitor_interval_input.setRange(1, 300)
         self.monitor_interval_input.setValue(5)
         self.monitor_interval_input.setSuffix(" sec")
-        self.monitor_interval_input.setPrefix("Interval: ")
-        monitor_layout.addWidget(self.monitor_interval_input)
-        layout.addLayout(monitor_layout)
+        interval_layout.addWidget(self.monitor_interval_input)
+        interval_layout.addStretch()
+        monitor_layout.addLayout(interval_layout)
         
         self.monitor_status_label = QLabel("Monitor: Inactive")
         apply_info_style(self.monitor_status_label)
-        layout.addWidget(self.monitor_status_label)
+        monitor_layout.addWidget(self.monitor_status_label)
+        
+        monitor_group.setLayout(monitor_layout)
+        layout.addWidget(monitor_group)
         
         # Connection status
         self.tiled_status_label = QLabel("Status: Ready to connect")
@@ -775,7 +872,8 @@ class ImageBrowserApp(BaseImageTab):
         self.session_table.horizontalHeader().setStretchLastSection(True)
         self.session_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.session_table.itemSelectionChanged.connect(self._on_session_selection_changed)
-        layout.addWidget(self.session_table)
+        self.session_table.setMinimumHeight(250)
+        layout.addWidget(self.session_table, 1)
         
         # Session info
         self.session_info_label = QLabel("0 images loaded")
@@ -976,18 +1074,23 @@ class ImageBrowserApp(BaseImageTab):
         self.progress_bar.setValue(progress)
         self.loading_status_label.setText(message)
 
-    def _on_image_loaded(self, image_data, file_path):
+    def _on_image_loaded(self, image_data, file_path, metadata=None):
         """Handle successful image loading - add to session appropriately.
         
         If image_data is None, this is a deferred reference (from folder loading).
         Otherwise, this is actual loaded data from single file or Tiled loading.
+        
+        Args:
+            image_data: The loaded image data array, or None for deferred loading
+            file_path: Path or identifier for the image
+            metadata: Optional metadata dict (e.g., scan_id, detector for Tiled images)
         """
         if image_data is None:
             # This is a deferred reference - add without data
-            self.session_manager.add_image_reference(file_path)
+            self.session_manager.add_image_reference(file_path, metadata=metadata)
         else:
             # This is actual image data - add with data immediately
-            self.session_manager.add_image(image_data, file_path)
+            self.session_manager.add_image(image_data, file_path, metadata=metadata)
             # Update display for eagerly loaded images
             self._update_display()
 
@@ -1114,7 +1217,8 @@ class ImageBrowserApp(BaseImageTab):
         """Load image data on-demand when accessed.
         
         Called by the session manager when an image with deferred loading is accessed
-        for the first time. Handles loading from both file paths and Tiled data sources.
+        for the first time, or when a cached image has been evicted.
+        Handles loading from both file paths and Tiled data sources.
         Result is automatically cached by the session manager.
         
         Args:
@@ -1126,7 +1230,7 @@ class ImageBrowserApp(BaseImageTab):
         """
         try:
             if path.startswith('tiled://'):
-                # Load from tiled
+                # Load from tiled using metadata
                 scan_id = metadata.get('scan_id')
                 detector = metadata.get('detector')
                 profile = metadata.get('profile')
@@ -1143,7 +1247,8 @@ class ImageBrowserApp(BaseImageTab):
                         worker = ImageLoadWorker('file', file_path='')
                         return worker._convert_image_shape(image_array)
                     else:
-                        print(f"Failed to load tiled scan {scan_id}: {load_metadata.get('error', 'Unknown error')}")
+                        error_msg = load_metadata.get('error', 'Unknown error')
+                        print(f"Failed to load tiled scan {scan_id}: {error_msg}")
                         return None
             else:
                 # Load from file
@@ -1278,6 +1383,18 @@ class ImageBrowserApp(BaseImageTab):
         # Show summary
         if len(file_paths) > max_preview:
             self.folder_files_list.addItem(f"... and {len(file_paths) - max_preview} more files")
+
+    def _update_folder_controls(self):
+        """Update folder control states based on checkboxes"""
+        # When "Load all files" is checked, disable the "Max" field
+        is_load_all = self.load_all_checkbox.isChecked()
+        self.max_files_input.setEnabled(not is_load_all)
+
+    def _update_tiled_controls(self):
+        """Update Tiled control states based on checkboxes"""
+        # When "Load single scan only" is checked, disable the "End" field
+        is_single_scan = self.single_scan_checkbox.isChecked()
+        self.scan_id_end_input.setEnabled(not is_single_scan)
 
     def _clear_session(self):
         """Clear the session"""

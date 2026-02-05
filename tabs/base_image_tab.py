@@ -271,8 +271,8 @@ class BaseImageTab(QWidget):
         apply_info_style(self.filename_label)
         layout.addWidget(self.filename_label)
 
-        # Create matplotlib figure
-        self.fig_raw, self.ax_raw = plt.subplots(figsize=(6, 8))
+        # Create matplotlib figure at 85% zoom for better space utilization
+        self.fig_raw, self.ax_raw = plt.subplots(figsize=(5.1, 6.8))
         # Reduce margins around the image
         self.fig_raw.subplots_adjust(left=0.08, bottom=0.08, right=0.99, top=0.92)
         

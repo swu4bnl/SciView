@@ -31,7 +31,7 @@ class AppStyle:
         'shadow': 'rgba(0, 0, 0, 0.1)' # Subtle shadow
     }
     
-    # Typography - modern font stack
+    # Typography
     FONTS = {
         'title': '16px',
         'subtitle': '14px', 
@@ -40,12 +40,12 @@ class AppStyle:
         'small': '9px'
     }
     
-    # Layout dimensions - more generous spacing
+    # Layout dimensions
     LAYOUT = {
         'main_splitter_ratio': [1000, 500],  # 2:1 visualization to controls
         'viz_splitter_ratio': [400, 150],   # Image to plot ratio
         'controls_splitter_ratio': [100, 120, 180, 80],  # Calibration panels
-        'browser_controls_ratio': [180, 220],  # Image browser controls
+        'browser_controls_ratio': [240, 360],  # Image browser controls
         'splitter_handle_width': 2,  # Thinner, modern splitter
         'panel_margin': 8,
         'panel_spacing': 6,
@@ -54,7 +54,7 @@ class AppStyle:
         'input_height': 28
     }
     
-    # Widget styles - modern design
+    # Widget styles
     WIDGET_STYLES = {
         'title_label': """
             font-weight: 600;
@@ -273,6 +273,7 @@ class AppStyle:
             'subtitle_font': cls.FONTS['subtitle'],
             'body_font': cls.FONTS['body'],
             'caption_font': cls.FONTS['caption'],
+            'small': cls.FONTS['small'],
             
             # Layout
             'handle_width': cls.LAYOUT['splitter_handle_width'],
@@ -470,23 +471,7 @@ class AppStyle:
             QCheckBox {{
                 font-size: {cls.FONTS['body']};
                 spacing: 8px;
-            }}
-            
-            QCheckBox::indicator {{
-                width: 16px;
-                height: 16px;
-                border: 2px solid {cls.COLORS['border']};
-                border-radius: 3px;
-                background-color: white;
-            }}
-            
-            QCheckBox::indicator:checked {{
-                background-color: {cls.COLORS['primary']};
-                border-color: {cls.COLORS['primary']};
-            }}
-            
-            QCheckBox::indicator:hover {{
-                border-color: {cls.COLORS['border_active']};
+                color: {cls.COLORS['text_primary']};
             }}
             
             /* Apply splitter styling globally */
