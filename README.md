@@ -1,8 +1,8 @@
-# SciAnaGui — Quick start and user guide
+# SciView — Quick start and user guide
 
 What the app does
 -----------------
-SciAnaGui is a compact PyQt5 application for viewing and doing light data analysis of 2D X‑ray scattering images. It focuses on practical, repeatable tasks you need at the beamline:
+SciView is a compact PyQt5 application for viewing and doing light data analysis of 2D X‑ray scattering images. It focuses on practical, repeatable tasks you need at the beamline:
 
 - Browse and display 2D X‑ray scattering images from local files or a tiled data service.
 - Adjust calibration (beam center, distance, wavelength) and inspect 1D profiles.
