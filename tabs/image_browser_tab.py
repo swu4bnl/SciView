@@ -961,7 +961,24 @@ class ImageBrowserApp(BaseImageTab):
             self._start_loading('tiled', profile=profile, scan_range=(start_id, end_id), detector=detector)
 
     def _on_profile_changed(self):
-        """Handle profile selection change"""
+        """
+        Handle profile selection change
+        
+        Performance optimization: Load and cache raw catalog once when profile is selected
+        This avoids the one-time cost during actual data loading
+        """
+        profile_name = self.tiled_profile_combo.currentData()
+        
+        # Preload the raw catalog for this profile (one-time cost at profile selection)
+        if profile_name:
+            print(f"DEBUG: Preloading catalog for profile '{profile_name}'...")
+            catalog = self.tiled_manager.get_or_load_catalog(profile_name)
+            if catalog:
+                self.parent_app.show_status(f"✓ Catalog cached for '{profile_name}'")
+            else:
+                self.parent_app.show_status(f"⚠ Could not preload catalog for '{profile_name}'")
+        
+        # Update UI
         self._populate_detectors()
         self._update_profile_info()
     

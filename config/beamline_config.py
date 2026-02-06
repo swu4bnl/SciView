@@ -200,14 +200,14 @@ TILED_PROFILES = {
             'pilatus2m-1_image': 'SAXS',
             'pilatus800k-1_image': 'WAXS',
             'pilatus800k-2_image': 'MAXS',
-            'primary': 'Primary Detector Data'
+            # 'primary': 'Primary Detector Data'
         },
         'scan_id_range': (-999, 9999999),
         'data_access_path': ['primary', 'data', '{detector}'],
         '_note': '4D shape (1, 1, H, W) - accessed via scan.primary.data[detector]'
     },
     'cms_migration': {
-        'description': 'CMS Migration Data (3D arrays)',
+        'description': 'CMS Migration Data',
         'uri': 'http://tiled.nsls2.bnl.gov',
         'path': ['cms', 'migration'],
         'requires_login': True,
@@ -215,12 +215,29 @@ TILED_PROFILES = {
             'pilatus2m-1_image': 'SAXS',
             'pilatus800k-1_image': 'WAXS',
             'pilatus800k-2_image': 'MAXS',
-            'primary': 'Primary Detector Data'
+            # 'primary': 'Primary Detector Data'
         },
         'scan_id_range': (-999, 9999999),
         'data_access_path': ['primary', '{detector}'],
         '_note': '3D shape (1, H, W) - accessed via scan.primary[detector]'
     },
+
+    'cms_old': {
+        'description': 'CMS Old Data(pre-datasecurity)',
+        'uri': 'http://tiled.nsls2.bnl.gov',
+        'path': ['cms', 'raw'],
+        'requires_login': True,
+        'default_detectors': {
+            'pilatus2M_image': 'SAXS',
+            'pilatus800_image': 'WAXS',
+            'pilatus8002_image': 'MAXS',
+            # 'primary': 'Primary Detector Data'
+        },
+        'scan_id_range': (-999, 9999999),
+        'data_access_path': ['primary', 'data', '{detector}'],
+        '_note': '4D shape (1, 1, H, W) - accessed via scan.primary.data[detector]'
+    },
+
     'nsls2_general': {
         'description': 'NSLS-II General (test)',
         'uri': 'http://tiled.nsls2.bnl.gov',

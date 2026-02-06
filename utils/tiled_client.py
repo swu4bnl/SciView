@@ -14,9 +14,11 @@ from typing import Optional, Dict, Any, Tuple, List
 # Try to import tiled for beamline data access
 try:
     from tiled.client import from_uri
+    from tiled.queries import Key
     TILED_AVAILABLE = True
 except ImportError:
     TILED_AVAILABLE = False
+    Key = None
     print("Warning: Tiled not available - tiled operations disabled")
 
 # Import configuration
@@ -31,11 +33,14 @@ class TiledClientManager:
     - Persistent authenticated connections
     - Configuration-driven defaults
     - Beamline-agnostic interface
+    - Catalog caching for performance (one-time load cost)
+    - Scan ID to UID translation using Key queries
     - Error handling and validation
     """
     
     def __init__(self):
         self._clients = {}  # Cache for authenticated clients: {profile_name: client}
+        self._catalogs = {}  # Cache for raw catalogs: {profile_name: catalog}
         self._current_profile = None
         
     def is_available(self) -> bool:
@@ -121,15 +126,117 @@ class TiledClientManager:
             print(f"Failed to connect to tiled server {profile_name}: {e}")
             return None
     
-    def load_image_data(self, scan_id: int, detector: Optional[str] = None, 
-                       profile_name: Optional[str] = None) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
+    def get_or_load_catalog(self, profile_name: Optional[str] = None) -> Optional[Any]:
         """
-        Load image data from tiled server
+        Get or load raw catalog for a profile (cached, one-time cost)
+        
+        This is a performance optimization: instead of navigating catalog path
+        every time, we cache it once when user selects a profile from dropdown.
+        
+        Args:
+            profile_name: Tiled profile to use, uses default if None
+            
+        Returns:
+            Catalog object or None if failed
+        """
+        if not TILED_AVAILABLE:
+            return None
+        
+        # Use default profile if none specified
+        if profile_name is None:
+            profile_name, _ = get_default_tiled_settings()
+            if profile_name is None:
+                return None
+        
+        # Check if already cached
+        if profile_name in self._catalogs:
+            return self._catalogs[profile_name]
+        
+        # Get client
+        client = self.get_or_create_client(profile_name)
+        if client is None:
+            return None
+        
+        try:
+            # Get profile configuration
+            profile = TILED_PROFILES[profile_name]
+            
+            # Navigate to the correct catalog path (this is the one-time cost)
+            catalog = client
+            for path_segment in profile['path']:
+                catalog = catalog[path_segment]
+            
+            # Cache the catalog for reuse
+            self._catalogs[profile_name] = catalog
+            print(f"DEBUG: [get_or_load_catalog] Loaded and cached catalog for profile '{profile_name}'")
+            
+            return catalog
+            
+        except Exception as e:
+            print(f"Error loading catalog for profile {profile_name}: {e}")
+            return None
+    
+    def scanid_to_uid(self, scan_id: int, profile_name: Optional[str] = None) -> Optional[str]:
+        """
+        Translate scan_id to uid using Key queries for fast metadata search
+        
+        This uses tiled's Key query interface instead of iterating through
+        the catalog, which is much faster on large catalogs.
+        
+        Args:
+            scan_id: Scan ID to look up
+            profile_name: Tiled profile to use, uses default if None
+            
+        Returns:
+            UID string or None if not found
+        """
+        if not TILED_AVAILABLE or Key is None:
+            return None
+        
+        # Get catalog
+        catalog = self.get_or_load_catalog(profile_name)
+        if catalog is None:
+            print(f"Error: Cannot load catalog for profile '{profile_name}'")
+            return None
+        
+        try:
+            # Use Key query to find scan by scan_id
+            # Key("scan_id") targets the start.scan_id field
+            result = catalog.search(Key("scan_id") == scan_id)
+            
+            # Get first (and should be only) result
+            run = result.values().first()
+            if run is None:
+                print(f"Debug: Scan ID {scan_id} not found in catalog")
+                return None
+            
+            # Extract UID from metadata
+            uid = run.metadata.get("start", {}).get("uid")
+            if uid:
+                print(f"DEBUG: [scanid_to_uid] Scan {scan_id} -> UID {uid[:8]}...")
+            
+            return uid
+            
+        except Exception as e:
+            print(f"Error translating scan_id {scan_id} to uid: {e}")
+            return None
+    
+    
+    def load_image_data(self, scan_id: int, detector: Optional[str] = None, 
+                       profile_name: Optional[str] = None, use_uid_lookup: bool = True) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
+        """
+        Load image data from tiled server with performance optimization
+        
+        Performance strategy:
+        1. One-time cost: get_or_load_catalog() caches raw catalog per profile
+        2. Use Key queries to translate scan_id to uid (fast metadata search)
+        3. Then access data via uid path
         
         Args:
             scan_id: Scan ID to load
             detector: Detector name, uses default if None
             profile_name: Tiled profile to use, uses default if None
+            use_uid_lookup: If True, use Key queries for fast metadata lookup (default: True)
             
         Returns:
             Tuple of (image_array, metadata) or (None, error_info)
@@ -150,24 +257,23 @@ class TiledClientManager:
             if detector is None:
                 return None, {'error': 'No default detector configured'}
         
-        # Get client
-        client = self.get_or_create_client(profile_name)
-        if client is None:
-            return None, {'error': f'Failed to connect to tiled server: {profile_name}'}
-        
         try:
-            # Get profile configuration
-            profile = TILED_PROFILES[profile_name]
+            # Strategy 1: Try UID-based lookup (optimized path)
+            if use_uid_lookup and TILED_AVAILABLE and Key is not None:
+                uid = self.scanid_to_uid(scan_id, profile_name)
+                if uid:
+                    return self._load_image_by_uid(uid, detector, profile_name)
             
-            # Navigate to the correct catalog path
-            catalog = client
-            for path_segment in profile['path']:
-                catalog = catalog[path_segment]
+            # Strategy 2: Fallback to scan_id-based lookup (uses cached catalog)
+            print(f"DEBUG: [load_image_data] Falling back to scan_id lookup for scan {scan_id}")
+            catalog = self.get_or_load_catalog(profile_name)
+            if catalog is None:
+                return None, {'error': f'Failed to load catalog for profile: {profile_name}'}
             
-            # Get scan data
+            # Get scan data by ID (leverages cached catalog)
             if scan_id not in catalog:
-                available_scans = list(catalog.keys())[:10]  # Show first 10 for debugging
-                return None, {'error': f'Scan ID {scan_id} not found. Recent scans: {available_scans}'}
+                available_scans = list(catalog.keys())[:10]
+                return None, {'error': f'Scan ID {scan_id} not found. Recent: {available_scans}'}
             
             scan_data = catalog[scan_id]
             
@@ -180,11 +286,12 @@ class TiledClientManager:
                 'time': start_doc.get('time', 0),
                 'profile': profile_name,
                 'plan_name': start_doc.get('plan_name', 'unknown'),
-                'uri': profile['uri'],
-                'path': profile['path']
+                'uri': TILED_PROFILES[profile_name]['uri'],
+                'path': TILED_PROFILES[profile_name]['path']
             }
             
             # Load image data based on profile structure
+            profile = TILED_PROFILES[profile_name]
             image_array = self._extract_image_data(scan_data, detector, profile)
             
             if image_array is None:
@@ -194,6 +301,64 @@ class TiledClientManager:
             
         except Exception as e:
             return None, {'error': f'Tiled loading error: {str(e)}'}
+    
+    def _load_image_by_uid(self, uid: str, detector: str, profile_name: str) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
+        """
+        Load image data using UID (optimized path)
+        
+        Args:
+            uid: Unique ID of the scan
+            detector: Detector name
+            profile_name: Tiled profile name
+            
+        Returns:
+            Tuple of (image_array, metadata) or (None, error_info)
+        """
+        try:
+            client = self.get_or_create_client(profile_name)
+            if client is None:
+                return None, {'error': f'Failed to connect to tiled server: {profile_name}'}
+            
+            profile = TILED_PROFILES[profile_name]
+            
+            # Access run via uid directly: client[f"path/to/run/{uid}/primary"]
+            run = client
+            
+            # Navigate to the path with uid
+            for path_segment in profile['path']:
+                run = run[path_segment]
+            
+            # Access the specific run by uid
+            run = run[uid]
+            
+            # Get start document for metadata
+            start_doc = run.start
+            scan_id = start_doc.get("scan_id")
+            
+            metadata = {
+                'scan_id': scan_id,
+                'detector': detector,
+                'uid': uid,
+                'time': start_doc.get('time', 0),
+                'profile': profile_name,
+                'plan_name': start_doc.get('plan_name', 'unknown'),
+                'uri': profile['uri'],
+                'path': profile['path'],
+                'lookup_method': 'uid'
+            }
+            
+            # Load image data
+            image_array = self._extract_image_data(run, detector, profile)
+            
+            if image_array is None:
+                return None, {'error': f'Failed to extract image data for detector: {detector}'}
+            
+            print(f"DEBUG: [_load_image_by_uid] Successfully loaded via UID lookup")
+            return image_array, metadata
+            
+        except Exception as e:
+            print(f"Error loading image by UID {uid[:8]}...: {e}")
+            return None, {'error': f'UID-based loading failed: {str(e)}'}
     
     def _extract_image_data(self, scan_data, detector: str, profile: Dict[str, Any]) -> Optional[np.ndarray]:
         """
