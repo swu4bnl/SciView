@@ -203,22 +203,26 @@ TILED_PROFILES = {
             'primary': 'Primary Detector Data'
         },
         'scan_id_range': (-999, 9999999),
-        'data_structure': 'h.primary.data[detector_name].read()'
+        'data_access_path': ['primary', 'data', '{detector}'],
+        '_note': '4D shape (1, 1, H, W) - accessed via scan.primary.data[detector]'
     },
-    'cms_processed': {
-        'description': 'Processed Data (test)',
+    'cms_migration': {
+        'description': 'CMS Migration Data (3D arrays)',
         'uri': 'http://tiled.nsls2.bnl.gov',
-        'path': ['cms', 'processed'],
+        'path': ['cms', 'migration'],
         'requires_login': True,
         'default_detectors': {
-            'primary': 'Processed Primary Data',
-            'reduced': 'Reduced Data'
+            'pilatus2m-1_image': 'SAXS',
+            'pilatus800k-1_image': 'WAXS',
+            'pilatus800k-2_image': 'MAXS',
+            'primary': 'Primary Detector Data'
         },
         'scan_id_range': (-999, 9999999),
-        'data_structure': 'standard'
+        'data_access_path': ['primary', '{detector}'],
+        '_note': '3D shape (1, H, W) - accessed via scan.primary[detector]'
     },
     'nsls2_general': {
-        'description': 'NSLS-II General(test)',
+        'description': 'NSLS-II General (test)',
         'uri': 'http://tiled.nsls2.bnl.gov',
         'path': [],
         'requires_login': True,
@@ -227,7 +231,8 @@ TILED_PROFILES = {
             'detector': 'Generic Detector'
         },
         'scan_id_range': (-999, 9999999),
-        'data_structure': 'standard'
+        'data_access_path': ['{detector}'],
+        '_note': 'Standard tiled structure - accessed via scan[detector]'
     }
 }
 

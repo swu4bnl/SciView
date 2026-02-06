@@ -196,44 +196,78 @@ class TiledClientManager:
             return None, {'error': f'Tiled loading error: {str(e)}'}
     
     def _extract_image_data(self, scan_data, detector: str, profile: Dict[str, Any]) -> Optional[np.ndarray]:
-        """Extract image data from scan based on profile structure"""
+        """
+        Extract image data from scan by navigating data_access_path from config.
+        
+        The data_access_path is a list of keys/attributes to navigate, with {detector}
+        as a placeholder for the detector name:
+        
+        Examples:
+        - cms/raw:        ['primary', 'data', '{detector}'] -> scan.primary.data[detector]
+        - cms/migration:  ['primary', '{detector}']         -> scan.primary[detector]
+        - standard tiled: ['{detector}']                    -> scan[detector]
+        
+        Args:
+            scan_data: Root scan object from tiled
+            detector: Detector name to substitute for {detector} placeholder
+            profile: Profile configuration containing 'data_access_path'
+            
+        Returns:
+            numpy.ndarray or None: Image array, or None if extraction failed
+        """
         try:
-            if profile.get('data_structure') == 'h.primary.data[detector_name].read()':
-                # Specific data structure: h.primary.data['detector_name'].read()
-                if not hasattr(scan_data, 'primary'):
-                    print("Error: No primary data stream found")
-                    return None
+            # Get data access path from profile (falls back to standard if not specified)
+            data_access_path = profile.get('data_access_path', ['{detector}'])
+            
+            # Replace {detector} placeholder in path
+            resolved_path = [p.replace('{detector}', detector) for p in data_access_path]
+            
+            # Navigate through the path
+            current_obj = scan_data
+            for i, segment in enumerate(resolved_path):
+                # Get available keys for error reporting
+                available = []
+                if hasattr(current_obj, 'keys'):
+                    try:
+                        available = list(current_obj.keys())
+                    except:
+                        available = []
                 
-                primary_data = scan_data.primary
-                if not hasattr(primary_data, 'data'):
-                    print("Error: No data found in primary stream")
-                    return None
+                # Try dict-like access first (for primary.data[detector])
+                try:
+                    if segment in current_obj:
+                        current_obj = current_obj[segment]
+                        continue
+                except (TypeError, KeyError):
+                    pass
                 
-                if detector not in primary_data.data:
-                    available_detectors = list(primary_data.data.keys())
-                    print(f"Error: Detector '{detector}' not found. Available: {available_detectors}")
-                    return None
-                
-                image_array = primary_data.data[detector].read()
-                
-            else:
-                # Standard tiled structure
-                if detector in scan_data:
-                    detector_data = scan_data[detector]
-                    if hasattr(detector_data, 'read'):
-                        image_array = detector_data.read()
-                    else:
-                        print(f"Error: Cannot read data from detector: {detector}")
-                        return None
+                # Then try attribute access (for scan.primary)
+                if hasattr(current_obj, segment):
+                    current_obj = getattr(current_obj, segment)
                 else:
-                    available_streams = list(scan_data.keys()) if hasattr(scan_data, 'keys') else []
-                    print(f"Error: Detector '{detector}' not found. Available: {available_streams}")
+                    # Build readable path for error message
+                    path_so_far = '.'.join(resolved_path[:i]) if i > 0 else 'root'
+                    print(f"Error: Cannot access '{segment}' in path {data_access_path}")
+                    print(f"  Path so far: {path_so_far}")
+                    print(f"  Available at this level: {available}")
                     return None
             
+            # Extract the data by calling .read() if available
+            if hasattr(current_obj, 'read'):
+                image_array = current_obj.read()
+            else:
+                # If it's already a numpy array
+                image_array = current_obj
+            
+            # Log successful extraction
+            path_str = '/'.join(resolved_path)
+            print(f"DEBUG: [_extract_image_data] Path '{path_str}' -> shape={image_array.shape}, dtype={image_array.dtype}")
             return image_array
             
         except Exception as e:
-            print(f"Error extracting image data: {e}")
+            print(f"Error extracting image data from path '{profile.get('data_access_path', 'unknown')}': {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def get_available_detectors(self, profile_name: Optional[str] = None) -> List[str]:
