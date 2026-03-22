@@ -50,6 +50,9 @@ class CalibrationApp(BaseImageTab):
         # Load standards database
         self.standards_db = self._load_standards_db()
         self.selected_standard = None
+
+        # Store 1D profile data for export
+        self._profile_data = None
         
         # Build UI
         self._build_ui()
@@ -140,7 +143,12 @@ class CalibrationApp(BaseImageTab):
         self.scale_combo.currentTextChanged.connect(self.update_plot_calibration)
         self.scale_combo.setMaximumWidth(80)  # Limit width
         title_layout.addWidget(self.scale_combo)
-        
+
+        btn_export_1d = QPushButton("Export 1D")
+        btn_export_1d.setMaximumWidth(80)
+        btn_export_1d.clicked.connect(self.export_1d_profiles)
+        title_layout.addWidget(btn_export_1d)
+
         layout.addLayout(title_layout)
 
         # Create matplotlib plot with tighter margins
@@ -666,13 +674,24 @@ class CalibrationApp(BaseImageTab):
             except Exception as e:
                 # If Q-space analysis fails, clear the plot and show error
                 print(f"Warning: Q-space analysis failed: {e}")
+                self._profile_data = None
                 self._clear_1d_plots()
                 return
         else:
             # SciAnalysis not available - clear plots and show message
+            self._profile_data = None
             self._clear_1d_plots()
             return
-            
+
+        # Store profile data for export
+        self._profile_data = {
+            'Circular Avg': circ,
+            'Horizontal 0deg': hor_1,
+            'Horizontal 180deg': hor_2,
+            'Vertical 90deg': ver_1,
+            'Vertical 270deg': ver_2,
+        }
+
         # Update 1D plot with real data
         self._draw_1d_plots(circ, hor_1, hor_2, ver_1, ver_2, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
     
@@ -778,6 +797,46 @@ class CalibrationApp(BaseImageTab):
             # f.write(f"mask_file: \"{mask_file}\"\n")
             # f.write(f"custom_mask: \"{custom_mask}\"\n")
         self.parent_app.show_status(f"Calibration parameters exported to {yaml_path}")
+
+    def export_1d_profiles(self):
+        """Export 1D profile curves to a CSV file"""
+        if self._profile_data is None:
+            self.parent_app.show_status("No 1D profile data available to export. Load an image and calibrate first.")
+            return
+
+        # Build default filename from current image
+        default_name = "1d_profiles.csv"
+        if hasattr(self.parent_app, 'get_image_path') and self.parent_app.get_image_path():
+            base = os.path.splitext(os.path.basename(self.parent_app.get_image_path()))[0]
+            default_name = f"{base}_1d_profiles.csv"
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export 1D Profiles", default_name,
+            "CSV files (*.csv);;Text files (*.txt);;All files (*)"
+        )
+        if not file_path:
+            return
+
+        # Interpolate all curves onto a common Q grid (the circular average grid)
+        profiles = self._profile_data
+        q_ref = profiles['Circular Avg'].x
+        header_cols = ['Q_inv_Angstrom']
+        columns = [q_ref]
+
+        for name, profile in profiles.items():
+            if np.array_equal(profile.x, q_ref):
+                columns.append(profile.y)
+            else:
+                columns.append(np.interp(q_ref, profile.x, profile.y))
+            header_cols.append(name.replace(' ', '_'))
+
+        data = np.column_stack(columns)
+
+        # Write CSV
+        header = ', '.join(header_cols)
+        np.savetxt(file_path, data, delimiter=', ', header=header, comments='# ')
+
+        self.parent_app.show_status(f"1D profiles exported to {file_path}")
 
     def on_mouse_click(self, event):
         """Handle mouse clicks on the raw image for ring center calculation"""
