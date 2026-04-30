@@ -43,6 +43,18 @@ from utils.tiled_client import tiled_manager
 from utils.image_utils import ImageShapeConverter, ImageCacheManager
 
 
+# Compatibility shim for older SciAnalysis code paths that still reference
+# deprecated NumPy aliases removed in NumPy 2.x.
+if not hasattr(np, "float"):
+    np.float = float
+if not hasattr(np, "int"):
+    np.int = int
+if not hasattr(np, "bool"):
+    np.bool = bool
+if not hasattr(np, "complex"):
+    np.complex = complex
+
+
 class ImageLoadWorker(QThread):
     """Background worker for loading images without blocking UI"""
     tiled_manager = tiled_manager

@@ -4,13 +4,19 @@
 
 # Build and cache directories  
 **__pycache__/
+/.pytest_cache/
+/.ruff_cache/
+/.mypy_cache/
 /bak/
 /Bsub/testing/
 /doc/
 
 # Temporary and backup files
-*.md
 *.bak
 *.dev
 test*
 *debug*
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml

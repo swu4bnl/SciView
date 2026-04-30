@@ -16,10 +16,11 @@ try:
     from tiled.client import from_uri
     from tiled.queries import Key
     TILED_AVAILABLE = True
+    TILED_IMPORT_ERROR = None
 except ImportError:
     TILED_AVAILABLE = False
     Key = None
-    print("Warning: Tiled not available - tiled operations disabled")
+    TILED_IMPORT_ERROR = "Tiled not available - tiled operations disabled"
 
 # Import configuration
 from config.beamline_config import TILED_PROFILES, get_default_tiled_settings

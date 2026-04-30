@@ -7,6 +7,18 @@ Designed for easy adaptation to different beamlines and analysis workflows.
 
 import sys
 import os
+import numpy as np
+
+# Compatibility shim for older SciAnalysis code paths that still reference
+# deprecated NumPy aliases removed in NumPy 2.x.
+if not hasattr(np, "float"):
+    np.float = float
+if not hasattr(np, "int"):
+    np.int = int
+if not hasattr(np, "bool"):
+    np.bool = bool
+if not hasattr(np, "complex"):
+    np.complex = complex
 
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

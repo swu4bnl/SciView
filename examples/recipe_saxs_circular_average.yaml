@@ -1,0 +1,25 @@
+name: cms_saxs_circular_average
+operation: circular_average
+description: "Default CMS SAXS circular average recipe."
+
+inputs:
+  detector: saxs
+  role: raw
+
+calibration:
+  source: profile_default
+
+mask:
+  source: user_selected
+
+outputs:
+  subdir: saxs/analysis/circular_average
+  formats:
+    - dat
+    - png
+    - npz
+
+parameters:
+  save_plots: true
+  ylog: true
+  q_range: null

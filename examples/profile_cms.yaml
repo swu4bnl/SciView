@@ -1,0 +1,43 @@
+name: CMS
+description: "CMS beamline profile for SciView. This is a profile, not core logic."
+
+detectors:
+  - name: saxs
+    aliases: ["SAXS"]
+    default_calibration: "caliSAXS.yaml"
+
+  - name: waxs
+    aliases: ["WAXS"]
+    default_calibration: "caliWAXS.yaml"
+
+workspace_layout:
+  image_roots:
+    - detector: saxs
+      role: raw
+      path: "{experiment_root}/saxs/raw"
+
+    - detector: saxs
+      role: stitched
+      path: "{experiment_root}/saxs/stitched"
+
+    - detector: waxs
+      role: raw
+      path: "{experiment_root}/waxs/raw"
+
+    - detector: waxs
+      role: stitched
+      path: "{experiment_root}/waxs/stitched"
+
+  analysis_roots:
+    - detector: saxs
+      path: "{experiment_root}/saxs/analysis"
+
+    - detector: waxs
+      path: "{experiment_root}/waxs/analysis"
+
+recipes:
+  - recipes/saxs_circular_average.yaml
+  - recipes/waxs_circular_average.yaml
+  - recipes/q_image.yaml
+
+filename_patterns: []
