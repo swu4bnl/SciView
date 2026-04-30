@@ -26,6 +26,7 @@ class ImageService:
         if suffix == ".npy":
             return np.asarray(np.load(path))
         if suffix in {".tif", ".tiff", ".png", ".jpg", ".jpeg"}:
-            return np.asarray(Image.open(path))
+            with Image.open(path) as img:
+                return np.asarray(img)
 
         raise ValueError(f"Unsupported image format for array load: {suffix}")
