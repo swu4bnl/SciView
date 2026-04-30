@@ -9,16 +9,28 @@ import sys
 import os
 import numpy as np
 
+
+def _ensure_numpy_compat_aliases():
+    """Apply NumPy 2.x compatibility aliases once for legacy SciAnalysis code."""
+    if getattr(np, "_scianalysis_numpy_compat_applied", False):
+        return
+
+    for alias, target in {
+        "float": float,
+        "int": int,
+        "bool": bool,
+        "complex": complex,
+    }.items():
+        if not hasattr(np, alias):
+            setattr(np, alias, target)
+
+    np._scianalysis_numpy_compat_applied = True
+
+
 # Compatibility shim for older SciAnalysis code paths that still reference
-# deprecated NumPy aliases removed in NumPy 2.x.
-if not hasattr(np, "float"):
-    np.float = float
-if not hasattr(np, "int"):
-    np.int = int
-if not hasattr(np, "bool"):
-    np.bool = bool
-if not hasattr(np, "complex"):
-    np.complex = complex
+# deprecated NumPy aliases removed in NumPy 2.x. Keep this centralized here
+# so it runs once early during app startup.
+_ensure_numpy_compat_aliases()
 
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
