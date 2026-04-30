@@ -3,15 +3,35 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 from typing import Sequence
 
 
 def launch_stable() -> None:
     """Start the current stable Qt application."""
 
-    from main import main as stable_main
+    candidate_modules = (
+        "sciview.stable_app.main",
+        "main",
+    )
 
-    stable_main()
+    for module_name in candidate_modules:
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            continue
+
+        stable_main = getattr(module, "main", None)
+        if callable(stable_main):
+            stable_main()
+            return
+
+    raise ImportError(
+        "Could not locate the stable Qt entry point. Expected a callable "
+        "`main()` in `sciview.stable_app.main` for installed usage, or in "
+        "the legacy repository-root `main` module when running from a "
+        "source checkout."
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> None:
