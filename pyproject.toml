@@ -19,9 +19,6 @@ dev = [
     "pytest>=8.0",
 ]
 
-[project.scripts]
-sciview-stable = "sciview.launchers:launch_stable"
-
 [tool.setuptools]
 package-dir = {"" = "src"}
 
