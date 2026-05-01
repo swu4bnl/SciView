@@ -58,6 +58,8 @@ from config.beamline_config import (
 )
 from config.app_style import *
 from utils.image_utils import validate_and_prepare_image_array, ImageShapeConverter
+from sciview.masking.io import export_mask_file as backend_export_mask_file
+from sciview.masking.io import load_mask_file as backend_load_mask_file
 
 
 class MaskLayer:
@@ -1043,34 +1045,7 @@ class MaskApp(BaseImageTab):
     def _load_mask_file(self, file_path: str) -> Optional[np.ndarray]:
         """Load mask data from various file formats"""
         try:
-            if file_path.endswith('.npy'):
-                data = np.load(file_path)
-            elif file_path.endswith('.xcf'):
-                # GIMP XCF format - try to extract first layer
-                try:
-                    from PIL import Image
-                    img = Image.open(file_path)
-                    data = np.array(img)
-                except:
-                    self.parent_app.show_status("Cannot read XCF directly. Export from GIMP as PNG/TIFF first.")
-                    return None
-            else:
-                # Try to load as image
-                from PIL import Image
-                img = Image.open(file_path)
-                data = np.array(img)
-            
-            # Convert to boolean mask
-            # Convention: 0 or False = masked, non-zero or True = unmasked
-            if data.dtype == bool:
-                return data
-            elif data.ndim > 2:
-                # Handle RGB/RGBA - use first channel or convert to grayscale
-                data = data[:, :, 0]
-            
-            # Convert to boolean (0 = masked)
-            return data == 0
-            
+            return backend_load_mask_file(file_path)
         except Exception as e:
             self.parent_app.show_status(f"Error loading mask file: {str(e)}")
             return None
@@ -1208,20 +1183,11 @@ class MaskApp(BaseImageTab):
                 elif 'TIFF' in filter_text:
                     file_path += '.tif'
             
-            # Export based on file extension
-            if file_path.lower().endswith('.npy'):
-                np.save(file_path, mask_data)
-                self.parent_app.show_status(f"✓ Mask exported (numpy): {os.path.basename(file_path)}")
-                
+            written_path = backend_export_mask_file(mask_data, file_path)
+            if str(written_path).lower().endswith('.npy'):
+                self.parent_app.show_status(f"✓ Mask exported (numpy): {os.path.basename(str(written_path))}")
             else:
-                # Export as image (True=0/black=masked, False=255/white=unmasked)
-                # Convert bool to uint8: True → 0, False → 255
-                from PIL import Image
-                img_array = (np.invert(mask_data).astype(np.uint8) * 255)
-                img = Image.fromarray(img_array, mode='L')  # 'L' = grayscale 8-bit
-                img.save(file_path, quality=95)
-                
-                self.parent_app.show_status(f"✓ Mask exported (image): {os.path.basename(file_path)}")
+                self.parent_app.show_status(f"✓ Mask exported (image): {os.path.basename(str(written_path))}")
             
         except Exception as e:
             import traceback

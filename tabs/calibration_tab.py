@@ -30,6 +30,7 @@ from config.beamline_config import (
 )
 from config.app_style import *
 from tools.ring_center import RingCenterCalculator
+from sciview.calibration.io import build_calibration_payload, write_calibration_yaml
 
 # Get constants
 HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
@@ -753,9 +754,8 @@ class CalibrationApp(BaseImageTab):
         
         # Gather parameters
         wavelength_A = self.spin_wl_ang.value()
-        energy_eV = HC_E / wavelength_A
         pixel_size_um = self.spin_pixel.value()
-        beam_position = [self.spin_x.value(), self.spin_y.value()]
+        beam_position = (self.spin_x.value(), self.spin_y.value())
         distance = self.spin_dist.value()
         if self.image_data is not None:
             image_size = list(self.image_data.data.shape[::-1])
@@ -764,20 +764,16 @@ class CalibrationApp(BaseImageTab):
 
         # Write to YAML using beamline-specific naming
         yaml_path = os.path.join(dir_path, file_status['calibration_file'])
-        # mask_dir = file_status['mask_dir']
-        # mask_file = file_status['mask_file']
-        # custom_mask = file_status['custom_mask']
-        
-        with open(yaml_path, "w") as f:
-            f.write(f"wavelength_A: {wavelength_A}  # X-ray wavelength in Angstroms ({energy_eV} eV)\n")
-            f.write(f"image_size: {image_size}  # [horizontal, vertical] in pixels\n")
-            f.write(f"pixel_size_um: {pixel_size_um}  # pixel size in microns\n")
-            f.write(f"beam_position: {beam_position}  # beam position in pixels\n")
-            f.write(f"distance: {distance}  # sample to detector distance in meters\n")
-            # f.write(f"mask_dir: \"{mask_dir}\"\n")
-            # f.write(f"mask_file: \"{mask_file}\"\n")
-            # f.write(f"custom_mask: \"{custom_mask}\"\n")
-        self.parent_app.show_status(f"Calibration parameters exported to {yaml_path}")
+        payload = build_calibration_payload(
+            wavelength_A=wavelength_A,
+            pixel_size_um=pixel_size_um,
+            beam_position=beam_position,
+            distance_m=distance,
+            image_size=image_size,
+            hc_over_e_eV_A=HC_E,
+        )
+        written_path = write_calibration_yaml(payload, yaml_path)
+        self.parent_app.show_status(f"Calibration parameters exported to {written_path}")
 
     def on_mouse_click(self, event):
         """Handle mouse clicks on the raw image for ring center calculation"""

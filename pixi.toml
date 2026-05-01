@@ -1,0 +1,20 @@
+[workspace]
+authors = ["wsy94 <wsy94@temple.edu>"]
+channels = ["conda-forge"]
+name = "SciView"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[tasks]
+stable = { cmd = "python -m sciview.launchers stable", env = { PYTHONPATH = "src" } }
+
+[dependencies]
+python = "3.12.*"
+pytest = ">=9.0.3,<10"
+pyyaml = ">=6.0.3,<7"
+pillow = ">=12.2.0,<13"
+numpy = ">=2.4.3,<3"
+pyqt = ">=5.15.11,<6"
+matplotlib = ">=3.10.9,<4"
+scipy = ">=1.17.1,<2"
+scitoolsscianalysis = ">=2.6.6,<3"
