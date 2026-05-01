@@ -1,89 +1,107 @@
-# SciView — Quick start and user guide
+# SciView
 
-What the app does
------------------
-SciView is a compact PyQt5 application for viewing and doing light data analysis of 2D X‑ray scattering images. It focuses on practical, repeatable tasks you need at the beamline:
+SciView is a PyQt5 application for interactive 2D X-ray scattering data inspection and analysis. It is designed for beamline workflows where users need fast image loading, calibration, mask editing, and data reduction protocol preview (under development) in one desktop interface.
 
-- Browse and display 2D X‑ray scattering images from local files or a tiled data service.
-- Adjust calibration (beam center, distance, wavelength) and inspect 1D profiles.
-- Create and edit layered masks with an interactive paint tool.
-- Run small analysis tasks (under development).
+## Core capabilities
 
-The codebase is structured to keep instrument-specific settings in configuration files so the same software can be reused across beamlines.
+- Image browsing from local files and tiled data services.
+- Calibration editing for beam center, detector distance, wavelength, and related parameters.
+- Layered mask creation and editing with interactive drawing tools.
+- Protocol preview workflows for SciAnalysis-driven processing (under development).
 
-Where things are
------------------------------
-- `main.py` — start the GUI
-- `config/` — beamline configuration and UI styling
-- `tabs/` — UI components (Image Browser, Calibration, Mask Editor, Data Reduction)
-- `tools/` — numerical and analysis routines
-- `utils/` — shared helpers (image utilities, tiled client, cache manager)
-- `standards/` — diffraction standard values used for overlays
+## Application structure
 
-Quick setup
---------------------
-1. The app expects PyQt5 and common scientific Python packages. If you don’t have that, create a local venv:
+- [main.py](main.py): application entry point and tab orchestration.
+- [config/](config): beamline configuration and UI style definitions.
+- [tabs/](tabs): main GUI modules (Image Browser, Calibration, Mask, Protocol).
+- [utils/](utils): shared runtime services (tiled client, resource monitoring, image utilities).
+- [tools/](tools): analysis and interaction helper logic.
+- [src/sciview/](src/sciview): backend package modules and launcher interface.
+- [standards/](standards): diffraction standards used by calibration workflows.
+
+## Core dependencies
+
+The application depends on a scientific Python stack and the following key project dependencies:
+
+- SciAnalysis: https://github.com/CFN-softbio/SciAnalysis
+- tiled: https://github.com/bluesky/tiled
+- PyQt5: https://pypi.org/project/PyQt5/
+- NumPy: https://numpy.org/
+- SciPy: https://scipy.org/
+- Matplotlib: https://matplotlib.org/
+- Pillow: https://python-pillow.org/
+- PyYAML: https://pyyaml.org/
+
+Dependency definitions are managed in [pixi.toml](pixi.toml) and [pyproject.toml](pyproject.toml).
+
+## Quick start
+
+### Recommended (pixi)
+
+Run once from the repository root:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install PyQt5 numpy matplotlib pillow
+./scripts/bootstrap_env.sh
 ```
 
-2. Install SciAnalysis (https://github.com/CFN-softbio/SciAnalysis).
+Then launch by platform:
 
-2. (Optional) Install `tiled` if you want to load images from a tiled data service.
+- Linux: `./Launch-SciView-linux.sh`
+- macOS: `./Launch-SciView-macOS.command`
+- Windows: `Launch-SciView-win64.cmd`
 
-3. Run the app from the repository root:
+The platform launchers configure the environment and start the application using the standard pixi task.
+
+### Alternative (local venv)
+
+If pixi is unavailable, use the fallback bootstrap mode:
 
 ```bash
-python main.py
+./scripts/bootstrap_env.sh --mode venv
 ```
 
-Basic user workflows
---------------------
+Then start manually:
 
-Image Browser
-- Load a single file, a folder, or use a tiled profile if configured.
-- The session manager tracks loaded images so you can step through and export session lists.
-- You can sync the current image to other tabs (Calibration, Mask, Data Reduction) with the "Use This Image" button.
+```bash
+PYTHONPATH=src ./.venv/bin/python main.py
+```
 
-Calibration
-- Use the Calibration tab to edit beam center, sample-to-detector distance, and wavelength.
-- You can use a simple ring-center finding tool to help locate the beam center.
-- 1D profiles and common standard overlays are available for quick checks to inspect data quality.
+## User workflow overview
 
-Mask Editor
-- Masks are layer-based: create layers, paint (add/remove), toggle visibility, combine, and export.
-- You can also load instrument default masks, generate threshold-based masks, and edit masks in GIMP.
+### Image Browser
 
-Data Reduction (under development)
-- For common batch-like data reduction workflows.
+- Load single images, folders, or tiled scans.
+- Navigate image sessions and sync selected images to other tabs by clicking "Use This Image".
 
-Configuration
--------------
-Edit `config/beamline_config.py` to adapt to your instrument. Important keys:
-- `DETECTOR_CONFIGS` — known detectors and defaults
-- `DEFAULT_CALIBRATION` — starting calibration values
-- `FILE_PATTERNS` — file naming patterns to recognize
-- `SCIANALYSIS_PATH` — optional path if SciAnalysis is required
+### Calibration
 
-Troubleshooting and tips
-------------------------
-- If the GUI won’t start: ensure PyQt5 is installed or use your facility’s environment loader.
-- SciAnalysis features are required. If missing, some calibration and reduction features will be limited; set `SCIANALYSIS_PATH` if needed.
-- This app attempts to convert various image input types (NumPy arrays, memoryviews, SciAnalysis objects) for display. If you encounter unsupported formats, consider adding conversion helpers in `utils/image_utils.py`.
-- For large image collections prefer tiled profiles or a machine with enough memory; the app includes basic caching helpers but is not an image database.
+- Edit geometry and wavelength parameters.
+- Use ring-center tools and profile overlays for validation.
 
-Contributing and development notes
----------------------------------
-- Keep scientific code in `tools/` and UI code in `tabs/`.
-- Use `utils/` for shared helpers (image conversion, caching, tiled client).
-- Change beamline defaults in `config/beamline_config.py` rather than editing core code.
+### Mask Editing
 
-For developer notes and tests, see `dev/` and `testscript/`.
+- Build masks with multiple layers and drawing tools.
+- Import, combine, and export mask artifacts.
 
-License and contact
--------------------
-This repository is maintained by the project owner. For licensing or deployment questions, open an issue or contact the repository maintainer.
+### Protocol Preview (under development)
+
+- Configure and run protocol previews using SciAnalysis-compatible data flow.
+
+## Configuration
+
+Beamline-specific behavior is centralized in [config/beamline_config.py](config/beamline_config.py). This includes detector defaults, calibration defaults, file pattern handling, and tiled profile integration.
+
+## Troubleshooting
+
+- If startup fails, run [scripts/bootstrap_env.sh](scripts/bootstrap_env.sh) again to refresh the environment.
+- If tiled access fails, verify connectivity and profile settings in [config/beamline_config.py](config/beamline_config.py).
+- If SciAnalysis operations fail, verify package availability in the active environment and confirm SciAnalysis import paths.
+
+## Development notes
+
+- Keep UI logic in [tabs/](tabs) and reusable processing logic in [tools/](tools) or [src/sciview/](src/sciview).
+- Keep shared utilities in [utils/](utils).
+- Update beamline defaults in [config/beamline_config.py](config/beamline_config.py) rather than hardcoding values in tabs.
+
+For additional implementation details, see [dev/](dev) and [doc/](doc).
 

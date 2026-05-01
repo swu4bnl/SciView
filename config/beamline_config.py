@@ -6,6 +6,14 @@ modified when transferring the software to different beamlines.
 """
 
 import os
+import sys
+
+# Add src/ to path if not already present (for sciview imports)
+_config_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(_config_dir)
+_src_path = os.path.join(_project_root, 'src')
+if _src_path not in sys.path:
+    sys.path.insert(0, _src_path)
 
 from sciview.profiles.cms_profile import (
     BEAMLINE_ID,

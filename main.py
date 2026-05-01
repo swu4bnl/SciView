@@ -32,8 +32,10 @@ def _ensure_numpy_compat_aliases():
 # so it runs once early during app startup.
 _ensure_numpy_compat_aliases()
 
-# Add current directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add current directory and src/ to path for imports
+app_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, app_dir)
+sys.path.insert(0, os.path.join(app_dir, 'src'))
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QLabel, 

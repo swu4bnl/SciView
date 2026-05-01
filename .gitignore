@@ -10,6 +10,8 @@
 /bak/
 /Bsub/testing/
 /doc/
+/.github/
+/dev/
 
 # Temporary and backup files
 *.bak

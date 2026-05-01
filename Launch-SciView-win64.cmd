@@ -15,4 +15,11 @@ if %errorlevel% == 0 (
     exit /b 1
 )
 
-"%PIXI%" run python -m sciview.launchers stable
+"%PIXI%" install
+if errorlevel 1 (
+    echo ERROR: Failed to configure the pixi environment.
+    pause
+    exit /b 1
+)
+
+"%PIXI%" run launch-app

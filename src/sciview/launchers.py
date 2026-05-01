@@ -1,4 +1,4 @@
-"""Launch entry points for the stable Qt interface."""
+"""Launch entry points for the SciView Qt application."""
 
 from __future__ import annotations
 
@@ -7,27 +7,29 @@ import importlib
 from typing import Sequence
 
 
-def launch_stable() -> None:
-    """Start the current stable Qt application."""
+def launch_app() -> None:
+    """Start the SciView Qt application."""
 
     candidate_modules = (
-        "sciview.stable_app.main",
-        "main",
+        ("sciview.stable_app.main", True),
+        ("main", False),
     )
 
-    for module_name in candidate_modules:
+    for module_name, allow_missing_module in candidate_modules:
         try:
             module = importlib.import_module(module_name)
         except ImportError:
-            continue
+            if allow_missing_module:
+                continue
+            raise
 
-        stable_main = getattr(module, "main", None)
-        if callable(stable_main):
-            stable_main()
+        app_main = getattr(module, "main", None)
+        if callable(app_main):
+            app_main()
             return
 
     raise ImportError(
-        "Could not locate the stable Qt entry point. Expected a callable "
+        "Could not locate the SciView Qt entry point. Expected a callable "
         "`main()` in `sciview.stable_app.main` for installed usage, or in "
         "the legacy repository-root `main` module when running from a "
         "source checkout."
@@ -35,20 +37,22 @@ def launch_stable() -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """Run a named SciView interface launcher."""
+    """Run a named SciView launcher."""
 
     parser = argparse.ArgumentParser(prog="python -m sciview.launchers")
     parser.add_argument(
-        "interface",
+        "launcher",
         nargs="?",
-        choices=["stable"],
-        default="stable",
-        help="Interface to launch.",
+        default="app",
+        help="Launcher to run.",
     )
     args = parser.parse_args(argv)
 
-    if args.interface == "stable":
-        launch_stable()
+    if args.launcher in {"app", "stable"}:
+        launch_app()
+        return
+
+    parser.error(f"unknown launcher: {args.launcher}")
 
 
 if __name__ == "__main__":
