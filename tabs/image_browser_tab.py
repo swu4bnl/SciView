@@ -123,7 +123,8 @@ class ImageLoadWorker(QThread):
     def _load_from_tiled(self):
         """Load images from tiled client using scan ID (single or range)"""
         if not self.tiled_manager.is_available():
-            self.error_occurred.emit("Tiled client is not available")
+            import_error = self.tiled_manager.get_import_error() or "unknown import error"
+            self.error_occurred.emit(f"Tiled client is not available: {import_error}")
             return
         
         # Use configuration-based defaults from the manager
@@ -573,8 +574,11 @@ class ImageBrowserApp(BaseImageTab):
         
         # Disable Tiled tabs if Tiled is not available
         if not self.tiled_manager.is_available():
+            tiled_error = self.tiled_manager.get_import_error() or "unknown import error"
             self.loading_tabs.setTabEnabled(2, False)  # Disable Tiled tab
             self.loading_tabs.setTabEnabled(3, False)  # Disable Tiled Monitor tab
+            self.loading_tabs.setTabToolTip(2, f"Unavailable: {tiled_error}")
+            self.loading_tabs.setTabToolTip(3, f"Unavailable: {tiled_error}")
         
         # Connect checkbox signals for UI control disabling
         # When "Load all files" is checked, disable the "Max" field
@@ -603,6 +607,9 @@ class ImageBrowserApp(BaseImageTab):
         
         # Status label
         self.loading_status_label = QLabel("Ready to load images")
+        if not self.tiled_manager.is_available():
+            tiled_error = self.tiled_manager.get_import_error() or "unknown import error"
+            self.loading_status_label.setText(f"Tiled unavailable: {tiled_error}")
         apply_info_style(self.loading_status_label)
         layout.addWidget(self.loading_status_label)
         

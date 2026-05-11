@@ -11,16 +11,33 @@ import sys
 import numpy as np
 from typing import Optional, Dict, Any, Tuple, List
 
+# Compatibility shim for environments with older typing_extensions.
+try:
+    import typing_extensions as _typing_extensions
+except Exception:
+    _typing_extensions = None
+
+if _typing_extensions is not None and not hasattr(_typing_extensions, "Sentinel"):
+    class _CompatSentinel:
+        def __init__(self, name: str, module_name: Optional[str] = None):
+            self._name = name
+            self._module_name = module_name
+
+        def __repr__(self) -> str:
+            return self._name
+
+    _typing_extensions.Sentinel = _CompatSentinel
+
 # Try to import tiled for beamline data access
 try:
     from tiled.client import from_uri
     from tiled.queries import Key
     TILED_AVAILABLE = True
     TILED_IMPORT_ERROR = None
-except ImportError:
+except ImportError as exc:
     TILED_AVAILABLE = False
     Key = None
-    TILED_IMPORT_ERROR = "Tiled not available - tiled operations disabled"
+    TILED_IMPORT_ERROR = f"Tiled import failed: {exc}"
 
 # Import configuration
 from config.beamline_config import TILED_PROFILES, get_default_tiled_settings
@@ -47,6 +64,10 @@ class TiledClientManager:
     def is_available(self) -> bool:
         """Check if tiled is available for use"""
         return TILED_AVAILABLE
+
+    def get_import_error(self) -> Optional[str]:
+        """Get the tiled import error message when tiled is unavailable."""
+        return TILED_IMPORT_ERROR
     
     def get_profiles(self) -> Dict[str, Dict[str, Any]]:
         """Get all available tiled profiles from configuration"""
