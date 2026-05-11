@@ -205,8 +205,8 @@ class TiledClientManager:
             # Key("scan_id") targets the start.scan_id field
             result = catalog.search(Key("scan_id") == scan_id)
             
-            # Get first (and should be only) result
-            run = result.values().first()
+            # Get last (newest) result
+            run = result.values().last()
             if run is None:
                 print(f"Debug: Scan ID {scan_id} not found in catalog")
                 return None

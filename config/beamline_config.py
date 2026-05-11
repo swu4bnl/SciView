@@ -119,7 +119,7 @@ IMAGE_BROWSER_SETTINGS = {
     'default_folder_patterns': ['*.tif', '*.tiff', '*.h5', '*saxs*.tif', '*waxs*.tif'],
     'max_recent_files': 10,
     'default_max_files': 500,
-    'default_scan_id': 2181336  # Generic default scan ID for tiled loading
+    'default_scan_id': 2334820  # Generic default scan ID for tiled loading
 }
 
 # Tiled profiles now come from the backend CMS profile module.
