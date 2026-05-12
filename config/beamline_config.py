@@ -98,7 +98,8 @@ EXPORT_SETTINGS = {
 # GUI LAYOUT PREFERENCES
 # =============================================================================
 GUI_SETTINGS = {
-    'default_window_size': (960, 1080),
+    'default_window_size': (1200, 900),
+    'minimum_window_size': (1024, 768),
     'visualization_ratio': 3,  # relative to controls
     'controls_ratio': 1,
     'image_plot_ratio': 3,     # image:plot = 3:1

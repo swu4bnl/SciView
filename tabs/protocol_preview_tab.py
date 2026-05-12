@@ -149,7 +149,7 @@ class ProtocolPreviewApp(BaseImageTab):
         main_splitter.addWidget(self.controls_tabs)
         
         # Set initial sizes (3:1 ratio for viz:controls)
-        setup_splitter_layout(main_splitter, [3, 1])
+        setup_splitter_layout(main_splitter, AppStyle.get_layout_ratios()['main_splitter_ratio'])
         
         main_layout.addWidget(main_splitter)
     

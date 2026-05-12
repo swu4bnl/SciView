@@ -98,6 +98,11 @@ class SciAnaApp(QMainWindow):
         # Set initial window size from config
         window_size = GUI_SETTINGS['default_window_size']
         self.resize(*window_size)
+
+        # Keep app usable on small displays by enforcing configurable minimums
+        min_window_size = GUI_SETTINGS.get('minimum_window_size')
+        if min_window_size:
+            self.setMinimumSize(*min_window_size)
         
         # Setup resource monitoring
         self._setup_resource_monitor()

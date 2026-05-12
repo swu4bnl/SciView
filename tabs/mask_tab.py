@@ -154,8 +154,8 @@ class MaskApp(BaseImageTab):
         action_panel = self._create_action_panel()
         controls_splitter.addWidget(action_panel)
         
-        # Set initial sizes for control panels
-        mask_control_ratios = [100, 150, 120, 100, 100]  # Custom ratios for mask tab
+        # Set initial sizes for control panels from centralized style config
+        mask_control_ratios = AppStyle.get_layout_ratios()['mask_controls_ratio']
         setup_splitter_layout(controls_splitter, mask_control_ratios)
         
         main_splitter.addWidget(controls_splitter)

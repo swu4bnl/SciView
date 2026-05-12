@@ -42,10 +42,11 @@ class AppStyle:
     
     # Layout dimensions
     LAYOUT = {
-        'main_splitter_ratio': [1000, 500],  # 2:1 visualization to controls
-        'viz_splitter_ratio': [400, 150],   # Image to plot ratio
-        'controls_splitter_ratio': [100, 120, 180, 80],  # Calibration panels
-        'browser_controls_ratio': [240, 360],  # Image browser controls
+        'main_splitter_ratio': [2, 1],  # 2:1 visualization to controls
+        'viz_splitter_ratio': [4, 1],   # Image to plot ratio
+        'controls_splitter_ratio': [1, 1, 2, 1],  # Calibration panels
+        'browser_controls_ratio': [2, 1],  # Image browser controls
+        'mask_controls_ratio': [10, 15, 12, 10, 10],
         'splitter_handle_width': 2,  # Thinner, modern splitter
         'panel_margin': 8,
         'panel_spacing': 6,
@@ -532,6 +533,26 @@ def apply_group_box_style(widget):
     widget.setStyleSheet(AppStyle.format_style('group_box'))
 
 def setup_splitter_layout(splitter, ratios):
-    """Setup splitter with consistent ratios and styling"""
-    splitter.setSizes(ratios)
+    """Setup splitter with consistent ratios and responsive stretch behavior."""
+
+    # Normalize user-provided ratios to positive integer stretch factors.
+    normalized = []
+    for ratio in ratios:
+        try:
+            value = float(ratio)
+        except (TypeError, ValueError):
+            value = 1.0
+
+        if value <= 0:
+            value = 1.0
+
+        normalized.append(value)
+
+    factors = [max(1, int(round(value * 100))) for value in normalized]
+
+    # Apply both initial size hint and stretch factors for resize behavior.
+    splitter.setSizes(factors)
+    for index, factor in enumerate(factors):
+        splitter.setStretchFactor(index, factor)
+
     splitter.setHandleWidth(AppStyle.LAYOUT['splitter_handle_width'])
