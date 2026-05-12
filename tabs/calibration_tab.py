@@ -12,7 +12,7 @@ import importlib.util
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QFileDialog
+    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout
 )
 from PyQt5.QtCore import Qt
 
@@ -31,7 +31,7 @@ from config.beamline_config import (
 from config.app_style import *
 from tools.ring_center import RingCenterCalculator
 from sciview.calibration.io import build_calibration_payload, write_calibration_yaml
-from utils.file_dialog_state import dialog_select_directory
+from utils.file_dialog_state import dialog_select_directory, dialog_save_file
 
 # Get constants
 HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
@@ -811,10 +811,14 @@ class CalibrationApp(BaseImageTab):
             base = os.path.splitext(os.path.basename(self.parent_app.get_image_path()))[0]
             default_name = f"{base}_1d_profiles.csv"
 
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Export 1D Profiles", default_name,
-            "CSV files (*.csv);;Text files (*.txt);;All files (*)"
+        file_path, _ = dialog_save_file(
+            self,
+            "Export 1D Profiles",
+            default_name,
+            "CSV files (*.csv);;Text files (*.txt);;All files (*)",
+            key="profile_export",
         )
+
         if not file_path:
             return
 
