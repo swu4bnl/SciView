@@ -824,7 +824,8 @@ class CalibrationApp(BaseImageTab):
         columns = [q_ref]
 
         for name, profile in profiles.items():
-            if np.array_equal(profile.x, q_ref):
+            # Use a tolerant float comparison to avoid unnecessary interpolation
+            if profile.x.shape == q_ref.shape and np.allclose(profile.x, q_ref, rtol=1e-8, atol=1e-10):
                 columns.append(profile.y)
             else:
                 columns.append(np.interp(q_ref, profile.x, profile.y))
@@ -832,9 +833,9 @@ class CalibrationApp(BaseImageTab):
 
         data = np.column_stack(columns)
 
-        # Write CSV
-        header = ', '.join(header_cols)
-        np.savetxt(file_path, data, delimiter=', ', header=header, comments='# ')
+        # Write CSV using a standard single-character comma delimiter
+        header = ','.join(header_cols)
+        np.savetxt(file_path, data, delimiter=',', header=header, comments='# ')
 
         self.parent_app.show_status(f"1D profiles exported to {file_path}")
 
