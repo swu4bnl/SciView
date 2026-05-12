@@ -41,6 +41,12 @@ from utils.tiled_client import tiled_manager
 
 # Import shared utilities
 from utils.image_utils import ImageShapeConverter, ImageCacheManager
+from utils.file_dialog_state import (
+    dialog_open_file,
+    dialog_open_files,
+    dialog_save_file,
+    dialog_select_directory,
+)
 
 
 # Compatibility shim for older SciAnalysis code paths that still reference
@@ -917,8 +923,8 @@ class ImageBrowserApp(BaseImageTab):
     # Loading Methods
     def _load_single_file(self):
         """Load a single image file"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Load Image", "", SUPPORTED_FORMATS['image_files']
+        file_path, _ = dialog_open_file(
+            self, "Load Image", SUPPORTED_FORMATS['image_files'], key="image_open"
         )
         
         if file_path:
@@ -931,8 +937,8 @@ class ImageBrowserApp(BaseImageTab):
         This approach is memory-efficient for large file batches. Data is loaded
         on-demand when the user navigates to each image.
         """
-        file_paths, _ = QFileDialog.getOpenFileNames(
-            self, "Load Images", "", SUPPORTED_FORMATS['image_files']
+        file_paths, _ = dialog_open_files(
+            self, "Load Images", SUPPORTED_FORMATS['image_files'], key="image_open"
         )
         
         if file_paths:
@@ -1392,7 +1398,7 @@ class ImageBrowserApp(BaseImageTab):
     # Utility methods
     def _browse_folder(self):
         """Browse for folder"""
-        folder = QFileDialog.getExistingDirectory(self, "Select Folder")
+        folder = dialog_select_directory(self, "Select Folder", key="folder_select")
         if folder:
             self.folder_path_input.setText(folder)
 
@@ -1446,7 +1452,13 @@ class ImageBrowserApp(BaseImageTab):
             QMessageBox.information(self, "No Data", "No images in session to export")
             return
         
-        file_path, _ = QFileDialog.getSaveFileName(self, "Export Session List", "", "Text Files (*.txt)")
+        file_path, _ = dialog_save_file(
+            self,
+            "Export Session List",
+            "session_list.txt",
+            "Text Files (*.txt)",
+            key="session_export",
+        )
         if file_path:
             with open(file_path, 'w') as f:
                 for img in self.session_manager.images:

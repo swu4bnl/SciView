@@ -60,6 +60,7 @@ from config.app_style import *
 from utils.image_utils import validate_and_prepare_image_array, ImageShapeConverter
 from sciview.masking.io import export_mask_file as backend_export_mask_file
 from sciview.masking.io import load_mask_file as backend_load_mask_file
+from utils.file_dialog_state import dialog_open_file, dialog_save_file
 
 
 class MaskLayer:
@@ -1026,9 +1027,11 @@ class MaskApp(BaseImageTab):
     
     def _load_custom_mask(self):
         """Load a custom mask file"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Load Mask File", "", 
-            "Mask Files (*.npy *.tif *.tiff *.png *.xcf);;All Files (*)"
+        file_path, _ = dialog_open_file(
+            self,
+            "Load Mask File",
+            "Mask Files (*.npy *.tif *.tiff *.png *.xcf);;All Files (*)",
+            key="mask_open",
         )
         
         if file_path:
@@ -1121,9 +1124,11 @@ class MaskApp(BaseImageTab):
     
     def _import_external_mask(self):
         """Import mask edited in external application"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Import External Mask", "", 
-            "Image Files (*.png *.tif *.tiff);;All Files (*)"
+        file_path, _ = dialog_open_file(
+            self,
+            "Import External Mask",
+            "Image Files (*.png *.tif *.tiff);;All Files (*)",
+            key="mask_open",
         )
         
         if file_path:
@@ -1164,9 +1169,12 @@ class MaskApp(BaseImageTab):
         - .npy: Saves as numpy array (preserves boolean type)
         - .png/.tif: Converts to 8-bit image (True=255/white, False=0/black)
         """
-        file_path, filter_text = QFileDialog.getSaveFileName(
-            self, "Export Mask", default_name, 
-            "PNG Files (*.png);;NumPy Files (*.npy);;TIFF Files (*.tif);;All Files (*)"
+        file_path, filter_text = dialog_save_file(
+            self,
+            "Export Mask",
+            default_name,
+            "PNG Files (*.png);;NumPy Files (*.npy);;TIFF Files (*.tif);;All Files (*)",
+            key="mask_save",
         )
         
         if not file_path:

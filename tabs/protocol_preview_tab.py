@@ -35,6 +35,7 @@ from config.beamline_config import (
 )
 from config.app_style import *
 from utils.image_utils import validate_and_prepare_image_array
+from utils.file_dialog_state import dialog_open_file, dialog_save_file
 
 # Try to import SciAnalysis
 if SCIANALYSIS_AVAILABLE:
@@ -566,11 +567,11 @@ class ProtocolPreviewApp(BaseImageTab):
     
     def _load_calibration_file(self):
         """Load calibration file and store in parent_app for shared access"""
-        from PyQt5.QtWidgets import QFileDialog
-        
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Load Calibration File", "",
-            "YAML Files (*.yaml *.yml);;All Files (*)"
+        file_path, _ = dialog_open_file(
+            self,
+            "Load Calibration File",
+            "YAML Files (*.yaml *.yml);;All Files (*)",
+            key="calibration_open",
         )
         
         if file_path:
@@ -630,11 +631,11 @@ class ProtocolPreviewApp(BaseImageTab):
     
     def _load_mask_file(self):
         """Load mask file and store in parent_app for shared access"""
-        from PyQt5.QtWidgets import QFileDialog
-        
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Load Mask File", "",
-            "Mask Files (*.png *.tif *.tiff *.xcf *.yaml);;All Files (*)"
+        file_path, _ = dialog_open_file(
+            self,
+            "Load Mask File",
+            "Mask Files (*.png *.tif *.tiff *.xcf *.yaml);;All Files (*)",
+            key="mask_open",
         )
         
         if file_path:
@@ -1193,8 +1194,12 @@ class ProtocolPreviewApp(BaseImageTab):
             ext = "yaml"
             filter_str = "YAML Files (*.yaml *.yml)"
         
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Export Workflow", f"workflow.{ext}", filter_str
+        file_path, _ = dialog_save_file(
+            self,
+            "Export Workflow",
+            f"workflow.{ext}",
+            filter_str,
+            key="workflow_export",
         )
         
         if file_path:

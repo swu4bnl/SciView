@@ -31,6 +31,7 @@ from config.beamline_config import (
 from config.app_style import *
 from tools.ring_center import RingCenterCalculator
 from sciview.calibration.io import build_calibration_payload, write_calibration_yaml
+from utils.file_dialog_state import dialog_select_directory
 
 # Get constants
 HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
@@ -744,7 +745,11 @@ class CalibrationApp(BaseImageTab):
     def export_calibration(self):
         """Export current calibration parameters to a YAML file"""
         # Prompt for directory
-        dir_path = QFileDialog.getExistingDirectory(self, "Select Directory to Export Calibration")
+        dir_path = dialog_select_directory(
+            self,
+            "Select Directory to Export Calibration",
+            key="calibration_export",
+        )
         if not dir_path:
             return
         

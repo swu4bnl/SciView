@@ -66,6 +66,7 @@ if SCIANALYSIS_AVAILABLE:
     from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
 from utils.calibration_utils import calibration_manager
 from utils.resource_monitor import get_resource_monitor
+from utils.file_dialog_state import dialog_open_file
 
 
 class SciAnaApp(QMainWindow):
@@ -171,9 +172,7 @@ class SciAnaApp(QMainWindow):
             self.show_status("Error: SciAnalysis not available")
             return None, None
             
-        from PyQt5.QtWidgets import QFileDialog
-        
-        path, _ = QFileDialog.getOpenFileName(self, "Open Image File", "", file_filters)
+        path, _ = dialog_open_file(self, "Open Image File", file_filters, key="image_open")
         if not path:
             return None, None
             
