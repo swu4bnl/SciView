@@ -222,9 +222,14 @@ class TiledClientManager:
             return None
         
         try:
+            # print(f"[DEBUG] catalog type: {type(catalog)}")
+            # print(f"[DEBUG] catalog dir: {dir(catalog)}")
+            # print(f"[DEBUG] Attempting catalog.search(Key('scan_id') == {scan_id})")
             # Use Key query to find scan by scan_id
             # Key("scan_id") targets the start.scan_id field
             result = catalog.search(Key("scan_id") == scan_id)
+            # print(f"[DEBUG] result type: {type(result)}")
+            # print(f"[DEBUG] result dir: {dir(result)}")
             
             # Get last (newest) result
             run = result.values().last()
@@ -240,6 +245,7 @@ class TiledClientManager:
             return uid
             
         except Exception as e:
+            print(f"[DEBUG] Exception in scanid_to_uid: {e}")
             print(f"Error translating scan_id {scan_id} to uid: {e}")
             return None
     

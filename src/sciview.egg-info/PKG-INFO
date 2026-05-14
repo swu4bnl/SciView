@@ -1,0 +1,125 @@
+Metadata-Version: 2.4
+Name: sciview
+Version: 0.1.0
+Summary: Backend-first architecture foundation for SciView
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.26
+Requires-Dist: Pillow>=10.0
+Requires-Dist: PyQt5>=5.15
+Requires-Dist: PyYAML>=6.0
+Requires-Dist: matplotlib>=3.8
+Requires-Dist: psutil>=7.1
+Requires-Dist: scipy>=1.11
+Requires-Dist: scitoolsscianalysis>=2.6.6
+Requires-Dist: tiled<0.2,>=0.1
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+
+# SciView
+
+SciView is a PyQt5 application for interactive 2D X-ray scattering data inspection and analysis. It is designed for beamline workflows where users need fast image loading, calibration, mask editing, and data reduction protocol preview (under development) in one desktop interface.
+
+## Core capabilities
+
+- Image browsing from local files and tiled data services.
+- Calibration editing for beam center, detector distance, wavelength, and related parameters.
+- Layered mask creation and editing with interactive drawing tools.
+- Protocol preview workflows for SciAnalysis-driven processing (under development).
+
+## Application structure
+
+- [main.py](main.py): application entry point and tab orchestration.
+- [config/](config): beamline configuration and UI style definitions.
+- [tabs/](tabs): main GUI modules (Image Browser, Calibration, Mask, Protocol).
+- [utils/](utils): shared runtime services (tiled client, resource monitoring, image utilities).
+- [tools/](tools): analysis and interaction helper logic.
+- [src/sciview/](src/sciview): backend package modules and launcher interface.
+- [standards/](standards): diffraction standards used by calibration workflows.
+
+## Core dependencies
+
+The application depends on a scientific Python stack and the following key project dependencies:
+
+- SciAnalysis: https://github.com/CFN-softbio/SciAnalysis
+- tiled: https://github.com/bluesky/tiled
+- PyQt5: https://pypi.org/project/PyQt5/
+- NumPy: https://numpy.org/
+- SciPy: https://scipy.org/
+- Matplotlib: https://matplotlib.org/
+- Pillow: https://python-pillow.org/
+- PyYAML: https://pyyaml.org/
+
+Dependency definitions are managed in [pixi.toml](pixi.toml) and [pyproject.toml](pyproject.toml).
+
+## Quick start
+
+### Recommended (pixi)
+
+Run once from the repository root:
+
+```bash
+./scripts/bootstrap_env.sh
+```
+
+Then launch by platform:
+
+- Linux: `./Launch-SciView-linux.sh`
+- macOS: `./Launch-SciView-macOS.command`
+- Windows: `Launch-SciView-win64.cmd`
+
+The platform launchers configure the environment and start the application using the standard pixi task.
+
+### Alternative (local venv)
+
+If pixi is unavailable, use the fallback bootstrap mode:
+
+```bash
+./scripts/bootstrap_env.sh --mode venv
+```
+
+Then start manually:
+
+```bash
+PYTHONPATH=src ./.venv/bin/python main.py
+```
+
+## User workflow overview
+
+### Image Browser
+
+- Load single images, folders, or tiled scans.
+- Navigate image sessions and sync selected images to other tabs by clicking "Use This Image".
+
+### Calibration
+
+- Edit geometry and wavelength parameters.
+- Use ring-center tools and profile overlays for validation.
+
+### Mask Editing
+
+- Build masks with multiple layers and drawing tools.
+- Import, combine, and export mask artifacts.
+
+### Protocol Preview (under development)
+
+- Configure and run protocol previews using SciAnalysis-compatible data flow.
+
+## Configuration
+
+Beamline-specific behavior is centralized in [config/beamline_config.py](config/beamline_config.py). This includes detector defaults, calibration defaults, file pattern handling, and tiled profile integration.
+
+## Troubleshooting
+
+- If startup fails, run [scripts/bootstrap_env.sh](scripts/bootstrap_env.sh) again to refresh the environment.
+- If tiled access fails, verify connectivity and profile settings in [config/beamline_config.py](config/beamline_config.py).
+- If SciAnalysis operations fail, verify package availability in the active environment and confirm SciAnalysis import paths.
+
+## Development notes
+
+- Keep UI logic in [tabs/](tabs) and reusable processing logic in [tools/](tools) or [src/sciview/](src/sciview).
+- Keep shared utilities in [utils/](utils).
+- Update beamline defaults in [config/beamline_config.py](config/beamline_config.py) rather than hardcoding values in tabs.
+
+For additional implementation details, see [dev/](dev) and [doc/](doc).
+

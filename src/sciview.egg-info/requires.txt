@@ -1,0 +1,12 @@
+numpy>=1.26
+Pillow>=10.0
+PyQt5>=5.15
+PyYAML>=6.0
+matplotlib>=3.8
+psutil>=7.1
+scipy>=1.11
+scitoolsscianalysis>=2.6.6
+tiled<0.2,>=0.1
+
+[dev]
+pytest>=8.0

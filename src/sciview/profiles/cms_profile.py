@@ -76,7 +76,7 @@ _LEGACY_DETECTOR_CONFIGS: dict[str, dict[str, Any]] = {
 TILED_PROFILES: dict[str, dict[str, Any]] = {
     "cms_raw": {
         "description": "CMS Raw Data",
-        "uri": "http://tiled.nsls2.bnl.gov",
+        "uri": "http://tiled.nsls2.bnl.gov/api/v1",
         "path": ["cms", "raw"],
         "requires_login": True,
         "default_detectors": {
@@ -90,7 +90,7 @@ TILED_PROFILES: dict[str, dict[str, Any]] = {
     },
     "cms_migration": {
         "description": "CMS Migration Data",
-        "uri": "http://tiled.nsls2.bnl.gov",
+        "uri": "http://tiled.nsls2.bnl.gov/api/v1",
         "path": ["cms", "migration"],
         "requires_login": True,
         "default_detectors": {
@@ -104,7 +104,7 @@ TILED_PROFILES: dict[str, dict[str, Any]] = {
     },
     "cms_old": {
         "description": "CMS Old Data(pre-datasecurity)",
-        "uri": "http://tiled.nsls2.bnl.gov",
+        "uri": "http://tiled.nsls2.bnl.gov/api/v1",
         "path": ["cms", "raw"],
         "requires_login": True,
         "default_detectors": {
@@ -118,7 +118,7 @@ TILED_PROFILES: dict[str, dict[str, Any]] = {
     },
     "nsls2_general": {
         "description": "NSLS-II General (test)",
-        "uri": "http://tiled.nsls2.bnl.gov",
+        "uri": "http://tiled.nsls2.bnl.gov/api/v1",
         "path": [],
         "requires_login": True,
         "default_detectors": {
