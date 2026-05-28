@@ -313,6 +313,19 @@ def create_application():
         layout = QVBoxLayout(placeholder)
         layout.addWidget(QLabel(f"Image Browser Tab\\n(Import error: {e})"))
         main_window.add_tab(placeholder, "Image Browser")
+
+    # Tiled Browser tab (metadata-first browsing and Tiled scan preview)
+    try:
+        from tabs.tiled_browser_tab import TiledBrowserTab
+        tiled_browser_tab = TiledBrowserTab(main_window)
+        main_window.add_tab(tiled_browser_tab, "Tiled Browser")
+    except ImportError as e:
+        print(f"Warning: Could not load tiled browser tab: {e}")
+        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+        placeholder = QWidget()
+        layout = QVBoxLayout(placeholder)
+        layout.addWidget(QLabel(f"Tiled Browser Tab\\n(Import error: {e})"))
+        main_window.add_tab(placeholder, "Tiled Browser")
     
     # Calibration tab
     try:

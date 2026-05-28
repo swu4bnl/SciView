@@ -18,6 +18,12 @@
 *.dev
 test*
 *debug*
+tests/
+tests/*
+/docs/internal/
+/docs/private/
+/docs/TOMORROW_CHECKLIST.md
+/docs/AI_CODING_WORKFLOW.md
 
 # pixi environments
 .pixi/*

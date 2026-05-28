@@ -86,6 +86,37 @@ TILED_PROFILES: dict[str, dict[str, Any]] = {
         },
         "scan_id_range": (-999, 9999999),
         "data_access_path": ["primary", "data", "{detector}"],
+        "timeout": {"connect_s": 5.0, "read_s": 120.0},
+        "search": {
+            "required_fields": {
+                "cycle": "start.cycle",
+                "proposal_id": "start.proposal.proposal_id",
+            },
+            "optional_fields": {
+                "measure_type": "start.measure_type",
+            },
+            "local_filters": {
+                "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
+                "experiment_alias_directory": [
+                    "start.experiment_alias_directory",
+                    "start.experiment_alias",
+                    "start.project_name",
+                ],
+            },
+            "defaults": {"measure_type": "measure"},
+            "summary_fields": {
+                "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
+                "measure_type": ["start.measure_type", "start.measurement_type"],
+                "sample_savename": ["start.sample_savename", "start.sample_save_name"],
+                "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
+                "cycle": ["start.cycle"],
+                "experiment_alias": [
+                    "start.experiment_alias_directory",
+                    "start.experiment_alias",
+                    "start.project_name",
+                ],
+            },
+        },
         "_note": "4D shape (1, 1, H, W) - accessed via scan.primary.data[detector]",
     },
     "cms_migration": {
@@ -100,6 +131,37 @@ TILED_PROFILES: dict[str, dict[str, Any]] = {
         },
         "scan_id_range": (-999, 9999999),
         "data_access_path": ["primary", "{detector}"],
+        "timeout": {"connect_s": 5.0, "read_s": 120.0},
+        "search": {
+            "required_fields": {
+                "cycle": "start.cycle",
+                "proposal_id": "start.proposal.proposal_id",
+            },
+            "optional_fields": {
+                "measure_type": "start.measure_type",
+            },
+            "local_filters": {
+                "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
+                "experiment_alias_directory": [
+                    "start.experiment_alias_directory",
+                    "start.experiment_alias",
+                    "start.project_name",
+                ],
+            },
+            "defaults": {"measure_type": "measure"},
+            "summary_fields": {
+                "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
+                "measure_type": ["start.measure_type", "start.measurement_type"],
+                "sample_savename": ["start.sample_savename", "start.sample_save_name"],
+                "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
+                "cycle": ["start.cycle"],
+                "experiment_alias": [
+                    "start.experiment_alias_directory",
+                    "start.experiment_alias",
+                    "start.project_name",
+                ],
+            },
+        },
         "_note": "3D shape (1, H, W) - accessed via scan.primary[detector]",
     },
     "cms_old": {
@@ -114,6 +176,37 @@ TILED_PROFILES: dict[str, dict[str, Any]] = {
         },
         "scan_id_range": (-999, 9999999),
         "data_access_path": ["primary", "data", "{detector}"],
+        "timeout": {"connect_s": 5.0, "read_s": 120.0},
+        "search": {
+            "required_fields": {
+                "cycle": "start.cycle",
+                "proposal_id": "start.proposal.proposal_id",
+            },
+            "optional_fields": {
+                "measure_type": "start.measure_type",
+            },
+            "local_filters": {
+                "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
+                "experiment_alias_directory": [
+                    "start.experiment_alias_directory",
+                    "start.experiment_alias",
+                    "start.project_name",
+                ],
+            },
+            "defaults": {"measure_type": "measure"},
+            "summary_fields": {
+                "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
+                "measure_type": ["start.measure_type", "start.measurement_type"],
+                "sample_savename": ["start.sample_savename", "start.sample_save_name"],
+                "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
+                "cycle": ["start.cycle"],
+                "experiment_alias": [
+                    "start.experiment_alias_directory",
+                    "start.experiment_alias",
+                    "start.project_name",
+                ],
+            },
+        },
         "_note": "4D shape (1, 1, H, W) - accessed via scan.primary.data[detector]",
     },
     "nsls2_general": {
@@ -127,6 +220,37 @@ TILED_PROFILES: dict[str, dict[str, Any]] = {
         },
         "scan_id_range": (-999, 9999999),
         "data_access_path": ["{detector}"],
+        "timeout": {"connect_s": 5.0, "read_s": 120.0},
+        "search": {
+            "required_fields": {
+                "cycle": "start.cycle",
+                "proposal_id": "start.proposal.proposal_id",
+            },
+            "optional_fields": {
+                "measure_type": "start.measure_type",
+            },
+            "local_filters": {
+                "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
+                "experiment_alias_directory": [
+                    "start.experiment_alias_directory",
+                    "start.experiment_alias",
+                    "start.project_name",
+                ],
+            },
+            "defaults": {"measure_type": "measure"},
+            "summary_fields": {
+                "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
+                "measure_type": ["start.measure_type", "start.measurement_type"],
+                "sample_savename": ["start.sample_savename", "start.sample_save_name"],
+                "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
+                "cycle": ["start.cycle"],
+                "experiment_alias": [
+                    "start.experiment_alias_directory",
+                    "start.experiment_alias",
+                    "start.project_name",
+                ],
+            },
+        },
         "_note": "Standard tiled structure - accessed via scan[detector]",
     },
 }

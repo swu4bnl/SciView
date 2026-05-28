@@ -22,7 +22,8 @@ SciView is a PyQt5 application for interactive 2D X-ray scattering data inspecti
 
 ## Core capabilities
 
-- Image browsing from local files and tiled data services.
+- Image browsing from local files and Tiled data services.
+- Tiled Browser workflow for proposal/cycle search, detector selection, image preview, metadata display, and series playback.
 - Calibration editing for beam center, detector distance, wavelength, and related parameters.
 - Layered mask creation and editing with interactive drawing tools.
 - Protocol preview workflows for SciAnalysis-driven processing (under development).
@@ -31,7 +32,7 @@ SciView is a PyQt5 application for interactive 2D X-ray scattering data inspecti
 
 - [main.py](main.py): application entry point and tab orchestration.
 - [config/](config): beamline configuration and UI style definitions.
-- [tabs/](tabs): main GUI modules (Image Browser, Calibration, Mask, Protocol).
+- [tabs/](tabs): main GUI modules (Image Browser, Tiled Browser, Calibration, Mask, Protocol).
 - [utils/](utils): shared runtime services (tiled client, resource monitoring, image utilities).
 - [tools/](tools): analysis and interaction helper logic.
 - [src/sciview/](src/sciview): backend package modules and launcher interface.
@@ -88,8 +89,16 @@ PYTHONPATH=src ./.venv/bin/python main.py
 
 ### Image Browser
 
-- Load single images, folders, or tiled scans.
+- Load single images and folders.
 - Navigate image sessions and sync selected images to other tabs by clicking "Use This Image".
+
+### Tiled Browser
+
+- Log in to a configured Tiled service and choose a catalog profile.
+- Search by cycle and proposal ID using profile-configured metadata mappings.
+- Apply optional filters such as `measure_type`, `sample_savename`, and experiment alias directory.
+- Select a detector, load image plus metadata on demand, and preview stacked image frames with the frame slider.
+- Use "Use This Image" to sync the selected Tiled frame to the rest of the application.
 
 ### Calibration
 
@@ -107,19 +116,20 @@ PYTHONPATH=src ./.venv/bin/python main.py
 
 ## Configuration
 
-Beamline-specific behavior is centralized in [config/beamline_config.py](config/beamline_config.py). This includes detector defaults, calibration defaults, file pattern handling, and tiled profile integration.
+Beamline-specific behavior is centralized in [config/beamline_config.py](config/beamline_config.py) and profile modules under [src/sciview/profiles/](src/sciview/profiles). This includes detector defaults, calibration defaults, file pattern handling, Tiled profile integration, metadata field mappings, and Tiled timeout settings.
 
 ## Troubleshooting
 
 - If startup fails, run [scripts/bootstrap_env.sh](scripts/bootstrap_env.sh) again to refresh the environment.
-- If tiled access fails, verify connectivity and profile settings in [config/beamline_config.py](config/beamline_config.py).
+- If Tiled access fails, verify connectivity, login state, and profile settings in [config/beamline_config.py](config/beamline_config.py) and [src/sciview/profiles/](src/sciview/profiles).
 - If SciAnalysis operations fail, verify package availability in the active environment and confirm SciAnalysis import paths.
 
 ## Development notes
 
 - Keep UI logic in [tabs/](tabs) and reusable processing logic in [tools/](tools) or [src/sciview/](src/sciview).
 - Keep shared utilities in [utils/](utils).
-- Update beamline defaults in [config/beamline_config.py](config/beamline_config.py) rather than hardcoding values in tabs.
+- Update beamline defaults and Tiled metadata mappings in profile/config modules rather than hardcoding values in tabs.
+- Release builds do not include repository test code; keep validation fixtures and smoke checks outside the public GitHub tree.
 
-For additional implementation details, see [dev/](dev) and [doc/](doc).
+For additional implementation details, see [docs/](docs).
 

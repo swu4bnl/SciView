@@ -26,12 +26,4 @@ src/sciview/profiles/__init__.py
 src/sciview/profiles/cms_profile.py
 src/sciview/sources/__init__.py
 src/sciview/sources/filesystem_source.py
-tests/test_calibration_io.py
-tests/test_cms_profile.py
-tests/test_data_models.py
-tests/test_filesystem_source.py
-tests/test_image_service.py
-tests/test_mask_io.py
-tests/test_processing_recipes.py
-tests/test_scianalysis_adapter.py
-tests/test_workspace_controller.py
+src/sciview/sources/tiled_source.py

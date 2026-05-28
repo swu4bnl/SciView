@@ -32,6 +32,7 @@ if _typing_extensions is not None and not hasattr(_typing_extensions, "Sentinel"
 try:
     from tiled.client import from_uri
     from tiled.queries import Key
+    import httpx
     TILED_AVAILABLE = True
     TILED_IMPORT_ERROR = None
 except ImportError as exc:
@@ -127,8 +128,17 @@ class TiledClientManager:
         profile = TILED_PROFILES[profile_name]
         
         try:
-            # Connect to tiled server
-            client = from_uri(profile['uri'])
+            # Connect to tiled server with a short connect timeout and a longer
+            # read timeout so failed services do not make the GUI look frozen.
+            timeout_config = profile.get("timeout", {})
+            if timeout_config and "httpx" in sys.modules:
+                timeout = httpx.Timeout(
+                    float(timeout_config.get("connect_s", 5.0)),
+                    read=float(timeout_config.get("read_s", 120.0)),
+                )
+                client = from_uri(profile['uri'], timeout=timeout)
+            else:
+                client = from_uri(profile['uri'])
             
             # Login if required
             if profile.get('requires_login', False):
@@ -426,23 +436,37 @@ class TiledClientManager:
                     except:
                         available = []
                 
-                # Try dict-like access first (for primary.data[detector])
-                try:
-                    if segment in current_obj:
-                        current_obj = current_obj[segment]
-                        continue
-                except (TypeError, KeyError):
-                    pass
-                
-                # Then try attribute access (for scan.primary)
-                if hasattr(current_obj, segment):
-                    current_obj = getattr(current_obj, segment)
-                else:
-                    # Build readable path for error message
+                matched = False
+                candidate_segments = self._detector_segment_candidates(
+                    segment,
+                    detector,
+                    available,
+                    profile,
+                    is_detector_segment="{detector}" in data_access_path[i],
+                )
+                for candidate in candidate_segments:
+                    # Try dict-like access first (for primary.data[detector])
+                    try:
+                        if candidate in current_obj:
+                            current_obj = current_obj[candidate]
+                            matched = True
+                            break
+                    except (TypeError, KeyError):
+                        pass
+
+                    # Then try attribute access (for scan.primary)
+                    if hasattr(current_obj, candidate):
+                        current_obj = getattr(current_obj, candidate)
+                        matched = True
+                        break
+
+                if not matched:
                     path_so_far = '.'.join(resolved_path[:i]) if i > 0 else 'root'
                     print(f"Error: Cannot access '{segment}' in path {data_access_path}")
                     print(f"  Path so far: {path_so_far}")
                     print(f"  Available at this level: {available}")
+                    if candidate_segments != [segment]:
+                        print(f"  Tried detector aliases: {candidate_segments}")
                     return None
             
             # Extract the data by calling .read() if available
@@ -462,6 +486,39 @@ class TiledClientManager:
             import traceback
             traceback.print_exc()
             return None
+
+    def _detector_segment_candidates(
+        self,
+        segment: str,
+        detector: str,
+        available: List[str],
+        profile: Dict[str, Any],
+        *,
+        is_detector_segment: bool,
+    ) -> List[str]:
+        """Return possible data-field names for detector metadata aliases."""
+        candidates = [segment]
+        if not is_detector_segment:
+            return candidates
+
+        if not segment.endswith("_image"):
+            candidates.append(f"{segment}_image")
+        else:
+            candidates.append(segment[:-6])
+
+        for configured in profile.get("default_detectors", {}).keys():
+            if configured == segment or configured.startswith(f"{segment}_"):
+                candidates.append(configured)
+
+        for available_key in available:
+            if available_key == segment or available_key.startswith(f"{segment}_"):
+                candidates.append(available_key)
+
+        deduped = []
+        for candidate in candidates:
+            if candidate and candidate not in deduped:
+                deduped.append(candidate)
+        return deduped
     
     def get_available_detectors(self, profile_name: Optional[str] = None) -> List[str]:
         """Get list of available detectors for a profile"""
