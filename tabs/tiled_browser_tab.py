@@ -28,7 +28,12 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from config.app_style import apply_info_style, apply_subtitle_style, apply_sync_button_style, apply_title_style
+from sciview.interfaces.theme.app_style import (
+    apply_info_style,
+    apply_subtitle_style,
+    apply_sync_button_style,
+    apply_title_style,
+)
 from sciview.interfaces.services.image_service import ImageService
 from sciview.sources.tiled_source import TiledScanSummary
 from tabs.base_image_tab import BaseImageTab
@@ -166,7 +171,7 @@ class TiledBrowserTab(BaseImageTab):
 
         self.metadata_text = QTextEdit()
         self.metadata_text.setReadOnly(True)
-        self.metadata_text.setMaximumHeight(190)
+        self.metadata_text.setMaximumHeight(100)
         apply_info_style(self.metadata_text)
         viewer_layout.addWidget(self.metadata_text)
 
@@ -178,7 +183,7 @@ class TiledBrowserTab(BaseImageTab):
 
         splitter.addWidget(controls)
         splitter.addWidget(viewer)
-        splitter.setSizes([600, 900])
+        splitter.setSizes([1, 3])
 
     def _create_connection_group(self) -> QWidget:
         group = QGroupBox("1) Connection")

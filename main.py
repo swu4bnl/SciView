@@ -43,30 +43,22 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer
 
-# Import configuration
-from config.beamline_config import (
-    SCIANALYSIS_PATH, GUI_SETTINGS, BEAMLINE_NAME
-)
-from config.app_style import AppStyle
+# Import configuration from package modules.
+from sciview.interfaces.theme.app_style import AppStyle, apply_info_style
+from sciview.profiles.cms_profile import BEAMLINE_NAME, DEFAULT_CALIBRATION
+from sciview.settings.app_settings import GUI_SETTINGS, SCIANALYSIS_AVAILABLE, SCIANALYSIS_PATH
 
 # Ensure SciAnalysis is on the path
 if SCIANALYSIS_PATH not in sys.path:
     sys.path.append(SCIANALYSIS_PATH)
 
-# Import configuration including SciAnalysis availability
-from config.beamline_config import (
-    get_file_status, DEFAULT_CALIBRATION, BEAMLINE_NAME, GUI_SETTINGS, 
-    SCIANALYSIS_AVAILABLE
-)
-from config.app_style import *
-
 # Import SciAnalysis dependencies only if available  
 if SCIANALYSIS_AVAILABLE:
     from SciAnalysis.XSAnalysis.Data import Data2DScattering
     from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
-from utils.calibration_utils import calibration_manager
-from utils.resource_monitor import get_resource_monitor
-from utils.file_dialog_state import dialog_open_file
+from sciview.interfaces.stable_qt.utils.calibration_utils import calibration_manager
+from sciview.interfaces.stable_qt.utils.resource_monitor import get_resource_monitor
+from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file
 
 
 class SciAnaApp(QMainWindow):
@@ -250,7 +242,7 @@ class SciAnaApp(QMainWindow):
                     "Image Browser": "tabs.image_browser_tab.ImageBrowserApp",
                     "Calibration": "tabs.calibration_tab.CalibrationApp",
                     "Mask Editing": "tabs.mask_tab.MaskApp",
-                    # "Data Reduction": "tabs.data_reduction_tab.DataReductionApp",
+                    # Data Reduction tab archived in archive/legacy_unused.
                     "Protocol": "tabs.protocol_preview_tab.ProtocolPreviewApp"
                 }
                 

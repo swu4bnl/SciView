@@ -12,7 +12,7 @@ from typing import Optional, Tuple, Callable
 from PyQt5.QtGui import QCursor
 from PyQt5.QtCore import Qt
 
-from utils.image_utils import validate_and_prepare_image_array
+from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
 
 
 class DrawingTool(ABC):

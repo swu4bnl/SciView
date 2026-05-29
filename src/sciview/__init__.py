@@ -5,6 +5,7 @@ __all__ = [
     "data",
     "sources",
     "profiles",
+    "settings",
     "processing",
     "calibration",
     "masking",

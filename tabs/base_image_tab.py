@@ -24,13 +24,11 @@ from matplotlib.backends.backend_qt5agg import (
     NavigationToolbar2QT as NavigationToolbar
 )
 
-# Import configuration
-# from config.beamline_config import (
-#     DEFAULT_CALIBRATION, PHYSICAL_CONSTANTS, get_file_status
-# )
-from config.beamline_config import *
-from config.app_style import *
-from utils.image_utils import validate_and_prepare_image_array, get_image_info
+# Import configuration from package modules.
+from sciview.interfaces.theme.app_style import *
+from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_detector_config, get_file_status as get_profile_file_status
+from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
+from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, get_image_info
 
 # Get constants
 HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
@@ -101,8 +99,7 @@ class BaseImageTab(QWidget):
             
         try:
             from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
-            from config.beamline_config import get_detector_config
-            
+
             detector_config = get_detector_config(measurement_type or 'waxs')
             
             # Use existing calibration if available, or create new one
@@ -148,11 +145,10 @@ class BaseImageTab(QWidget):
         
         try:
             from SciAnalysis.XSAnalysis.Data import Data2DScattering
-            from config.beamline_config import get_file_status
-            
+
             # Detect measurement type and get appropriate configuration
             filename = os.path.basename(file_path)
-            file_status = get_file_status(filename)
+            file_status = get_profile_file_status(filename, mask_dir=MASK_BASE_DIR)
             measurement_type = file_status['measurement_type']
             print(f"Creating Data2DScattering for {measurement_type}")
             
@@ -368,10 +364,10 @@ class BaseImageTab(QWidget):
             self._reset_canvas_views()
             
             # Get file status for mask and export settings
-            file_status = get_file_status(os.path.basename(path))
+            file_status = get_profile_file_status(os.path.basename(path), mask_dir=MASK_BASE_DIR)
             self.export_cali_path = file_status['calibration_file']
             self.mask_path = file_status['mask_file']
-            self.custom_mask_path = file_status['custom_mask']
+            self.custom_mask_path = file_status.get('custom_mask')
             self.mask_dir = file_status['mask_dir']
             self.measurement_type = file_status['measurement_type']
             

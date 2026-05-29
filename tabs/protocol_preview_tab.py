@@ -30,12 +30,11 @@ from matplotlib.backends.backend_qt5agg import (
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
-from config.beamline_config import (
-    DEFAULT_CALIBRATION, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE, SCIANALYSIS_PATH
-)
-from config.app_style import *
-from utils.image_utils import validate_and_prepare_image_array
-from utils.file_dialog_state import dialog_open_file, dialog_save_file
+from sciview.interfaces.theme.app_style import *
+from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
+from sciview.settings.app_settings import PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE, SCIANALYSIS_PATH
+from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
+from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
 
 # Try to import SciAnalysis
 if SCIANALYSIS_AVAILABLE:

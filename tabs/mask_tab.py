@@ -28,7 +28,11 @@ try:
 except ImportError:
     SCIPY_AVAILABLE = False
 
-from tools.mask_drawing_tools import BrushDrawingTool, LineDrawingTool, RectangleDrawingTool
+from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
+    BrushDrawingTool,
+    LineDrawingTool,
+    RectangleDrawingTool,
+)
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
@@ -48,19 +52,13 @@ from matplotlib.backends.backend_qt5agg import (
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
-from config.app_style import (
-    AppStyle, apply_body_style, apply_sync_button_style, 
-    apply_secondary_button_style, apply_title_style, apply_info_style
-)
-from config.beamline_config import (
-    DEFAULT_CALIBRATION, PHYSICAL_CONSTANTS, get_file_status,
-    MASK_BASE_DIR, DETECTOR_CONFIGS
-)
-from config.app_style import *
-from utils.image_utils import validate_and_prepare_image_array, ImageShapeConverter
+from sciview.interfaces.theme.app_style import *
+from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, DETECTOR_CONFIGS, get_file_status as get_profile_file_status
+from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS
+from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, ImageShapeConverter
 from sciview.masking.io import export_mask_file as backend_export_mask_file
 from sciview.masking.io import load_mask_file as backend_load_mask_file
-from utils.file_dialog_state import dialog_open_file, dialog_save_file
+from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
 
 
 class MaskLayer:
@@ -586,7 +584,7 @@ class MaskApp(BaseImageTab):
         TODO: This is a placeholder for now. Future implementation should:
         1. Store the combined mask in a shared location (parent_app)
         2. Update calibration_tab to use apply_mask=True in circular_average_q_bin()
-        3. Update data_reduction_tab to use the mask in analysis
+        3. Update the future data reduction workflow to use the mask in analysis
         """
         if self.combined_mask is None:
             self.parent_app.show_status("No mask to apply - create or load a mask first")

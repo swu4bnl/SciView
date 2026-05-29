@@ -8,7 +8,6 @@ calibration interface for detector geometry and beam parameters.
 import os
 import sys
 import numpy as np
-import importlib.util
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
@@ -25,13 +24,13 @@ from matplotlib.backends.backend_qt5agg import (
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
-from config.beamline_config import (
-    DEFAULT_CALIBRATION, PHYSICAL_CONSTANTS, get_file_status
-)
-from config.app_style import *
-from tools.ring_center import RingCenterCalculator
+from sciview.interfaces.theme.app_style import *
+from sciview.calibration.standards_db import STANDARDS
+from sciview.interfaces.stable_qt.tools.ring_center import RingCenterCalculator
+from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_select_directory, dialog_save_file
+from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_file_status as get_profile_file_status
+from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS
 from sciview.calibration.io import build_calibration_payload, write_calibration_yaml
-from utils.file_dialog_state import dialog_select_directory, dialog_save_file
 
 # Get constants
 HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
@@ -374,11 +373,7 @@ class CalibrationApp(BaseImageTab):
 
     def _load_standards_db(self):
         """Load standards database"""
-        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "standards", "standards_db.py")
-        spec = importlib.util.spec_from_file_location("standards_db", db_path)
-        standards_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(standards_module)
-        return getattr(standards_module, "STANDARDS", {})
+        return dict(STANDARDS)
 
     def _add_beam_center_crosshair(self, ax):
         """Hook to add crosshair at beam center position"""
@@ -774,7 +769,7 @@ class CalibrationApp(BaseImageTab):
         
         # Get beamline-specific file status and naming
         filename = os.path.basename(self.parent_app.get_image_path()) if hasattr(self.parent_app, 'get_image_path') and self.parent_app.get_image_path() else ""
-        file_status = get_file_status(filename)
+        file_status = get_profile_file_status(filename, mask_dir=MASK_BASE_DIR)
         
         # Gather parameters
         wavelength_A = self.spin_wl_ang.value()
