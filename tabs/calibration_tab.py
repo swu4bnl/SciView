@@ -54,6 +54,7 @@ class CalibrationApp(BaseImageTab):
 
         # Store 1D profile data for export
         self._profile_data = None
+        self._last_profile_signature = None
         
         # Build UI
         self._build_ui()
@@ -695,6 +696,7 @@ class CalibrationApp(BaseImageTab):
     def _clear_1d_plots(self):
         """Clear 1D plots when SciAnalysis is not available or analysis fails"""
         self.ax_plot.clear()
+        self._last_profile_signature = None
         self.ax_plot.text(0.5, 0.5, 'No Q-space analysis available\n\nRequires:\n• Valid image data\n• SciAnalysis library\n• Proper calibration parameters', 
                          transform=self.ax_plot.transAxes, 
                          ha='center', va='center', 
@@ -738,9 +740,23 @@ class CalibrationApp(BaseImageTab):
         elif ps == 'loglog':
             self.ax_plot.set_xscale('log')
             self.ax_plot.set_yscale('log')
+
+        circ_x = np.asarray(circ.x)
+        circ_y = np.asarray(circ.y)
+        finite_x = circ_x[np.isfinite(circ_x)]
+        finite_y = circ_y[np.isfinite(circ_y)]
+        profile_signature = (
+            ps,
+            int(circ_x.size),
+            float(np.min(finite_x)) if finite_x.size else None,
+            float(np.max(finite_x)) if finite_x.size else None,
+            float(np.min(finite_y)) if finite_y.size else None,
+            float(np.max(finite_y)) if finite_y.size else None,
+        )
+        signature_changed = profile_signature != self._last_profile_signature
         
         # Restore limits only if they were meaningful and scale hasn't changed
-        if plot_xlim_valid and plot_ylim_valid:
+        if plot_xlim_valid and plot_ylim_valid and not signature_changed:
             try:
                 if ps in ['logx', 'loglog'] and plot_xlim[0] <= 0:
                     pass  # Log scale incompatible with stored limits
@@ -755,6 +771,7 @@ class CalibrationApp(BaseImageTab):
         # Ensure plot fills the canvas with custom tight margins
         self.fig_plot.subplots_adjust(left=0.05, bottom=0.10, right=0.99, top=0.99)
         self.canvas_plot.draw()
+        self._last_profile_signature = profile_signature
 
     def export_calibration(self):
         """Export current calibration parameters to a YAML file"""

@@ -46,6 +46,11 @@ class AppStyle:
         'viz_splitter_ratio': [4, 1],   # Image to plot ratio
         'controls_splitter_ratio': [1, 1, 2, 1],  # Calibration panels
         'browser_controls_ratio': [2, 1],  # Image browser controls
+        'tiled_main_splitter_ratio': [2, 3],  # Tiled controls to preview ratio
+        'tiled_controls_min_width': 280,
+        'tiled_controls_max_width': 460,
+        'tiled_metadata_max_height': 72,
+        'tiled_results_column_widths': [70, 100, 150, 95, 85, 120, 60, 145],
         'mask_controls_ratio': [10, 15, 12, 10, 10],
         'splitter_handle_width': 2,  # Thinner, modern splitter
         'panel_margin': 8,

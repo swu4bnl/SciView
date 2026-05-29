@@ -21,17 +21,21 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QSlider,
     QSplitter,
+    QHeaderView,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
+    QSizePolicy,
 )
 
 from sciview.interfaces.theme.app_style import (
+    AppStyle,
     apply_info_style,
     apply_subtitle_style,
     apply_sync_button_style,
+    setup_splitter_layout,
     apply_title_style,
 )
 from sciview.interfaces.services.image_service import ImageService
@@ -145,9 +149,15 @@ class TiledBrowserTab(BaseImageTab):
     def _build_ui(self) -> None:
         root = QHBoxLayout(self)
         splitter = QSplitter(Qt.Horizontal)
+        self._main_splitter = splitter
         root.addWidget(splitter)
+        layout_cfg = AppStyle.get_layout_ratios()
 
         controls = QWidget()
+        self._controls_panel = controls
+        controls.setMinimumWidth(layout_cfg['tiled_controls_min_width'])
+        controls.setMaximumWidth(layout_cfg['tiled_controls_max_width'])
+        controls.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         controls_layout = QVBoxLayout(controls)
         title = QLabel("Tiled Browser")
         apply_title_style(title)
@@ -158,6 +168,7 @@ class TiledBrowserTab(BaseImageTab):
         controls_layout.addWidget(self._create_playback_group())
 
         viewer = QWidget()
+        viewer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         viewer_layout = QVBoxLayout(viewer)
         subtitle = QLabel("Preview")
         apply_subtitle_style(subtitle)
@@ -171,7 +182,7 @@ class TiledBrowserTab(BaseImageTab):
 
         self.metadata_text = QTextEdit()
         self.metadata_text.setReadOnly(True)
-        self.metadata_text.setMaximumHeight(100)
+        self.metadata_text.setMaximumHeight(layout_cfg['tiled_metadata_max_height'])
         apply_info_style(self.metadata_text)
         viewer_layout.addWidget(self.metadata_text)
 
@@ -183,7 +194,28 @@ class TiledBrowserTab(BaseImageTab):
 
         splitter.addWidget(controls)
         splitter.addWidget(viewer)
-        splitter.setSizes([1, 3])
+        setup_splitter_layout(splitter, layout_cfg['tiled_main_splitter_ratio'])
+        QTimer.singleShot(0, self._apply_tiled_splitter_ratio)
+
+    def _apply_tiled_splitter_ratio(self) -> None:
+        """Apply configured splitter ratio once widget geometry is finalized."""
+        if not hasattr(self, '_main_splitter') or not hasattr(self, '_controls_panel'):
+            return
+
+        layout_cfg = AppStyle.get_layout_ratios()
+        ratio = layout_cfg['tiled_main_splitter_ratio']
+        if not ratio or len(ratio) < 2:
+            return
+
+        total = max(self._main_splitter.width(), self.width(), 1)
+        ratio_sum = ratio[0] + ratio[1]
+        desired_left = int(total * (ratio[0] / ratio_sum))
+
+        left_min = self._controls_panel.minimumWidth()
+        left_max = self._controls_panel.maximumWidth()
+        left = max(left_min, min(desired_left, left_max))
+        right = max(1, total - left)
+        self._main_splitter.setSizes([left, right])
 
     def _create_connection_group(self) -> QWidget:
         group = QGroupBox("1) Connection")
@@ -264,6 +296,13 @@ class TiledBrowserTab(BaseImageTab):
         self.scan_table.setSelectionMode(QTableWidget.SingleSelection)
         self.scan_table.itemSelectionChanged.connect(self._on_scan_selected)
         self.scan_table.cellClicked.connect(self._on_scan_clicked)
+        self.scan_table.setMinimumWidth(0)
+        header = self.scan_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setStretchLastSection(True)
+        column_widths = AppStyle.get_layout_ratios()['tiled_results_column_widths']
+        for column, width in enumerate(column_widths):
+            self.scan_table.setColumnWidth(column, width)
         layout.addWidget(self.scan_table)
 
         row = QHBoxLayout()
@@ -472,7 +511,6 @@ class TiledBrowserTab(BaseImageTab):
             detector_combo.addItems(scan.detectors)
             detector_combo.activated.connect(self._on_row_detector_activated)
             self.scan_table.setCellWidget(row_index, 1, detector_combo)
-        self.scan_table.resizeColumnsToContents()
 
     def _on_scan_selected(self) -> None:
         selected = self.scan_table.selectionModel().selectedRows()

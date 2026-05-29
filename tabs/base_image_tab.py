@@ -69,6 +69,26 @@ class BaseImageTab(QWidget):
         # Display hooks for tab-specific extensions
         self.pre_display_hooks = []
         self.post_display_hooks = []
+        self._last_image_shape = None
+
+    def _sanitize_log_limits(self, img_array, vmin, vmax):
+        """Return safe positive limits for log display or (None, None) if unavailable."""
+        finite_positive = img_array[np.isfinite(img_array) & (img_array > 0)]
+        if finite_positive.size == 0:
+            return None, None
+
+        min_positive = float(np.min(finite_positive))
+        max_positive = float(np.max(finite_positive))
+
+        safe_vmin = float(vmin) if vmin is not None and vmin > 0 else min_positive
+        safe_vmax = float(vmax) if vmax is not None and vmax > safe_vmin else max_positive
+
+        if safe_vmax <= safe_vmin:
+            safe_vmax = max_positive
+        if safe_vmax <= safe_vmin:
+            safe_vmax = safe_vmin * 10.0
+
+        return safe_vmin, safe_vmax
 
     def _init_calibration(self):
         """Initialize calibration object"""
@@ -426,18 +446,24 @@ class BaseImageTab(QWidget):
             print(f"ERROR: {error_msg}")
             print(f"  display_data type: {type(display_data)}")
             return
+
+        current_shape = tuple(img_array.shape)
+        image_shape_changed = self._last_image_shape is not None and self._last_image_shape != current_shape
         
         # Apply display settings
         if scale == 'log':
-            norm = LogNorm(vmin=vmin, vmax=vmax) if vmin and vmax else LogNorm()
-            self.ax_raw.imshow(img_array, origin='upper', cmap=cmap, norm=norm)
+            safe_vmin, safe_vmax = self._sanitize_log_limits(img_array, vmin, vmax)
+            if safe_vmin is not None and safe_vmax is not None:
+                self.ax_raw.imshow(img_array, origin='upper', cmap=cmap, norm=LogNorm(vmin=safe_vmin, vmax=safe_vmax))
+            else:
+                self.ax_raw.imshow(img_array, origin='upper', cmap=cmap)
         else:
             self.ax_raw.imshow(img_array, origin='upper', cmap=cmap, vmin=vmin, vmax=vmax)
         
         # Restore limits only if they were meaningful
-        if raw_xlim_valid:
+        if raw_xlim_valid and not image_shape_changed:
             self.ax_raw.set_xlim(raw_xlim)
-        if raw_ylim_valid:
+        if raw_ylim_valid and not image_shape_changed:
             self.ax_raw.set_ylim(raw_ylim)
 
         # Call post-display hooks for tab-specific customizations
@@ -447,6 +473,7 @@ class BaseImageTab(QWidget):
         # Update raw image canvas with custom tight margins
         self.fig_raw.subplots_adjust(left=0.05, bottom=0.05, right=0.99, top=0.99)
         self.canvas_raw.draw()
+        self._last_image_shape = current_shape
 
     def _reset_canvas_views(self):
         """Reset canvas views to default when loading new image"""
@@ -456,6 +483,7 @@ class BaseImageTab(QWidget):
                 self.ax_raw.clear()
                 self.ax_raw.set_xlim(None, None)  # Auto-scale
                 self.ax_raw.set_ylim(None, None)  # Auto-scale
+                self._last_image_shape = None
                 if hasattr(self, 'canvas_raw'):
                     self.canvas_raw.draw()
             
