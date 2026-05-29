@@ -12,7 +12,32 @@ from typing import Optional, Tuple, Callable
 from PyQt5.QtGui import QCursor
 from PyQt5.QtCore import Qt
 
+from sciview.masking.operations import watershed_fill_mask
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
+
+
+def _draw_disk(mask_layer: np.ndarray, center_row: int, center_col: int, radius: int, draw_value: bool) -> None:
+    """Draw a filled disk into a boolean mask layer."""
+    height, width = mask_layer.shape
+    safe_radius = max(1, int(radius))
+    y_coords, x_coords = np.ogrid[-safe_radius : safe_radius + 1, -safe_radius : safe_radius + 1]
+    mask_circle = (x_coords**2 + y_coords**2 <= safe_radius**2)
+
+    y_min = max(0, center_row - safe_radius)
+    y_max = min(height, center_row + safe_radius + 1)
+    x_min = max(0, center_col - safe_radius)
+    x_max = min(width, center_col + safe_radius + 1)
+
+    circle_y_min = y_min - (center_row - safe_radius)
+    circle_y_max = circle_y_min + (y_max - y_min)
+    circle_x_min = x_min - (center_col - safe_radius)
+    circle_x_max = circle_x_min + (x_max - x_min)
+
+    valid_circle = mask_circle[circle_y_min:circle_y_max, circle_x_min:circle_x_max]
+    if draw_value:
+        mask_layer[y_min:y_max, x_min:x_max][valid_circle] = 1
+    else:
+        mask_layer[y_min:y_max, x_min:x_max][valid_circle] = 0
 
 
 class DrawingTool(ABC):
@@ -325,28 +350,7 @@ class BrushDrawingTool(DrawingTool):
     
     def _draw_circle(self, mask_layer: np.ndarray, center_row: int, center_col: int, radius: int):
         """Draw a circle on the mask layer"""
-        height, width = mask_layer.shape
-        y_coords, x_coords = np.ogrid[-radius:radius+1, -radius:radius+1]
-        mask_circle = (x_coords**2 + y_coords**2 <= radius**2)
-        
-        # Clamp to image bounds
-        y_min = max(0, center_row - radius)
-        y_max = min(height, center_row + radius + 1)
-        x_min = max(0, center_col - radius)
-        x_max = min(width, center_col + radius + 1)
-        
-        # Calculate the valid region in the circle
-        circle_y_min = y_min - (center_row - radius)
-        circle_y_max = circle_y_min + (y_max - y_min)
-        circle_x_min = x_min - (center_col - radius)
-        circle_x_max = circle_x_min + (x_max - x_min)
-        
-        valid_circle = mask_circle[circle_y_min:circle_y_max, circle_x_min:circle_x_max]
-        
-        if self.draw_value:
-            mask_layer[y_min:y_max, x_min:x_max][valid_circle] = 1
-        else:
-            mask_layer[y_min:y_max, x_min:x_max][valid_circle] = 0
+        _draw_disk(mask_layer, center_row, center_col, radius, self.draw_value)
     
     def reset(self):
         """Reset brush state"""
@@ -400,28 +404,7 @@ class LineDrawingTool(DrawingTool):
     
     def _draw_circle(self, mask_layer: np.ndarray, center_row: int, center_col: int, radius: int):
         """Draw a circle on the mask layer"""
-        height, width = mask_layer.shape
-        y_coords, x_coords = np.ogrid[-radius:radius+1, -radius:radius+1]
-        mask_circle = (x_coords**2 + y_coords**2 <= radius**2)
-        
-        # Clamp to image bounds
-        y_min = max(0, center_row - radius)
-        y_max = min(height, center_row + radius + 1)
-        x_min = max(0, center_col - radius)
-        x_max = min(width, center_col + radius + 1)
-        
-        # Calculate the valid region in the circle
-        circle_y_min = y_min - (center_row - radius)
-        circle_y_max = circle_y_min + (y_max - y_min)
-        circle_x_min = x_min - (center_col - radius)
-        circle_x_max = circle_x_min + (x_max - x_min)
-        
-        valid_circle = mask_circle[circle_y_min:circle_y_max, circle_x_min:circle_x_max]
-        
-        if self.draw_value:
-            mask_layer[y_min:y_max, x_min:x_max][valid_circle] = 1
-        else:
-            mask_layer[y_min:y_max, x_min:x_max][valid_circle] = 0
+        _draw_disk(mask_layer, center_row, center_col, radius, self.draw_value)
     
     @staticmethod
     def _bresenham_line(x0: int, y0: int, x1: int, y1: int):
@@ -513,3 +496,88 @@ class RectangleDrawingTool(DrawingTool):
         """Reset rectangle state"""
         super().reset()
         self.start_point = None
+
+
+class CircleDrawingTool(DrawingTool):
+    """Filled circle drawing tool using press as center and drag as radius."""
+
+    def __init__(self):
+        super().__init__("Circle")
+        self.start_point = None
+
+    def start(self, point: Tuple[int, int]):
+        self.is_active = True
+        self.start_point = point
+
+    def preview(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
+        if self.start_point is None or current_point is None:
+            return mask_layer
+        preview = mask_layer.copy()
+        return self._draw_circle(preview, self.start_point, current_point)
+
+    def finalize(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
+        if self.start_point is None or current_point is None:
+            return mask_layer
+        result = self._draw_circle(mask_layer, self.start_point, current_point)
+        self.reset()
+        return result
+
+    def _draw_circle(self, mask_layer: np.ndarray, start: Tuple[int, int], end: Tuple[int, int]) -> np.ndarray:
+        center_row, center_col = start
+        end_row, end_col = end
+        radius = int(round(np.hypot(end_row - center_row, end_col - center_col)))
+        _draw_disk(mask_layer, center_row, center_col, max(1, radius), self.draw_value)
+        return mask_layer
+
+    def reset(self):
+        super().reset()
+        self.start_point = None
+
+
+class WatershedFillTool(DrawingTool):
+    """Seeded fill tool that grows a region until image edges stop it."""
+
+    def __init__(self):
+        super().__init__("Watershed Fill")
+        self.seed_point = None
+
+    def start(self, point: Tuple[int, int]):
+        self.is_active = True
+        self.seed_point = point
+
+    def preview(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
+        if self.seed_point is None:
+            return mask_layer
+        preview = mask_layer.copy()
+        return self._apply_fill(preview, self.seed_point)
+
+    def finalize(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
+        if self.seed_point is None:
+            return mask_layer
+        result = self._apply_fill(mask_layer, self.seed_point)
+        self.reset()
+        return result
+
+    def _apply_fill(self, mask_layer: np.ndarray, seed_point: Tuple[int, int]) -> np.ndarray:
+        if not self.get_image_data:
+            return mask_layer
+
+        image_data = self.get_image_data()
+        image_2d, is_valid, _ = validate_and_prepare_image_array(image_data)
+        if not is_valid:
+            return mask_layer
+
+        fill_mask = watershed_fill_mask(
+            image_2d,
+            seed_point=seed_point,
+            seed_radius=max(1, int(self.brush_size // 2)),
+        )
+        if self.draw_value:
+            mask_layer[fill_mask] = 1
+        else:
+            mask_layer[fill_mask] = 0
+        return mask_layer
+
+    def reset(self):
+        super().reset()
+        self.seed_point = None

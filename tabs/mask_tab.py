@@ -30,8 +30,10 @@ except ImportError:
 
 from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
     BrushDrawingTool,
+    CircleDrawingTool,
     LineDrawingTool,
     RectangleDrawingTool,
+    WatershedFillTool,
 )
 
 from PyQt5.QtWidgets import (
@@ -58,6 +60,7 @@ from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, ImageShapeConverter
 from sciview.masking.io import export_mask_file as backend_export_mask_file
 from sciview.masking.io import load_mask_file as backend_load_mask_file
+from sciview.masking.operations import close_mask_holes, dilate_mask, erode_mask, sobel_edge_mask
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
 
 
@@ -101,7 +104,9 @@ class MaskApp(BaseImageTab):
         self.drawing_tools = {
             'Brush': BrushDrawingTool(),
             'Line': LineDrawingTool(),
-            'Rectangle': RectangleDrawingTool()
+            'Rectangle': RectangleDrawingTool(),
+            'Circle': CircleDrawingTool(),
+            'Watershed Fill': WatershedFillTool(),
         }
         
         # Developer control: auto-disable drawing mode after each stroke
@@ -378,24 +383,42 @@ class MaskApp(BaseImageTab):
         # Type control
         filter_grid.addWidget(QLabel("Type:"))
         self.filter_type_combo = QComboBox()
-        self.filter_type_combo.addItems(["Median", "Gaussian", "Edge Detection"])
+        self.filter_type_combo.addItems([
+            "Remove Speckles (Erode)",
+            "Expand Regions (Dilate)",
+            "Close Small Holes",
+            "Sobel Edge Mask",
+        ])
         self.filter_type_combo.setMinimumWidth(100)
         filter_grid.addWidget(self.filter_type_combo)
         filter_grid.addStretch()
         
         # Size control
-        filter_grid.addWidget(QLabel("Size:"))
+        filter_grid.addWidget(QLabel("Radius:"))
         self.filter_size_spin = QDoubleSpinBox()
         self.filter_size_spin.setRange(1, 21)
         self.filter_size_spin.setValue(3)
         self.filter_size_spin.setDecimals(0)
-        self.filter_size_spin.setSingleStep(2)
+        self.filter_size_spin.setSingleStep(1)
         self.filter_size_spin.setMinimumWidth(100)
         filter_grid.addWidget(self.filter_size_spin)
+
+        filter_grid.addWidget(QLabel("Edge %:"))
+        self.filter_percentile_spin = QDoubleSpinBox()
+        self.filter_percentile_spin.setRange(50, 99.9)
+        self.filter_percentile_spin.setValue(92.0)
+        self.filter_percentile_spin.setDecimals(1)
+        self.filter_percentile_spin.setMinimumWidth(90)
+        filter_grid.addWidget(self.filter_percentile_spin)
         
         filter_layout.addLayout(filter_grid)
+
+        filter_info = QLabel("Applies to the selected mask layer. Sobel uses the current image; morphology edits the active mask directly.")
+        filter_info.setWordWrap(True)
+        apply_info_style(filter_info)
+        filter_layout.addWidget(filter_info)
         
-        btn_gen_filter = QPushButton("Generate Filter Mask")
+        btn_gen_filter = QPushButton("Apply Filter to Active Layer")
         btn_gen_filter.clicked.connect(self._generate_filter_mask)
         filter_layout.addWidget(btn_gen_filter)
         
@@ -440,6 +463,18 @@ class MaskApp(BaseImageTab):
         self.tool_rect_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Rectangle'))
         self.tool_group.addButton(self.tool_rect_radio, 2)
         tool_layout.addWidget(self.tool_rect_radio)
+
+        self.tool_circle_radio = QRadioButton("Circle")
+        self.tool_circle_radio.setToolTip("Filled circle from center and radius")
+        self.tool_circle_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Circle'))
+        self.tool_group.addButton(self.tool_circle_radio, 3)
+        tool_layout.addWidget(self.tool_circle_radio)
+
+        self.tool_fill_radio = QRadioButton("Smart Fill")
+        self.tool_fill_radio.setToolTip("Seeded watershed-style fill constrained by image edges")
+        self.tool_fill_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Watershed Fill'))
+        self.tool_group.addButton(self.tool_fill_radio, 4)
+        tool_layout.addWidget(self.tool_fill_radio)
         
         tool_layout.addStretch()
         drawing_layout.addLayout(tool_layout)
@@ -506,6 +541,8 @@ class MaskApp(BaseImageTab):
         self.tool_brush_radio.setEnabled(False)
         self.tool_line_radio.setEnabled(False)
         self.tool_rect_radio.setEnabled(False)
+        self.tool_circle_radio.setEnabled(False)
+        self.tool_fill_radio.setEnabled(False)
         self.draw_add_radio.setEnabled(False)
         self.draw_remove_radio.setEnabled(False)
         self.brush_size_spin.setEnabled(False)
@@ -666,6 +703,32 @@ class MaskApp(BaseImageTab):
         """Handle layer selection"""
         if row >= 0:
             self.parent_app.show_status(f"Selected layer: {self.mask_layers[row].name}")
+
+    def _get_active_layer_index(self, create_if_missing: bool = False) -> Optional[int]:
+        """Return the currently editable layer index, creating one if requested."""
+        current_row = self.layer_list.currentRow()
+        if 0 <= current_row < len(self.mask_layers):
+            return current_row
+
+        if self.mask_layers:
+            fallback = len(self.mask_layers) - 1
+            self.layer_list.setCurrentRow(fallback)
+            return fallback
+
+        if create_if_missing:
+            self._add_empty_layer()
+            current_row = self.layer_list.currentRow()
+            if 0 <= current_row < len(self.mask_layers):
+                return current_row
+
+        return None
+
+    def _get_active_layer(self, create_if_missing: bool = False) -> Optional[MaskLayer]:
+        """Return the current editable layer object."""
+        layer_index = self._get_active_layer_index(create_if_missing=create_if_missing)
+        if layer_index is None:
+            return None
+        return self.mask_layers[layer_index]
     
     def _add_layer_menu(self):
         """Show menu for adding a new layer"""
@@ -718,6 +781,7 @@ class MaskApp(BaseImageTab):
             self.mask_layers.append(layer)
             
             self._update_layer_list()
+            self.layer_list.setCurrentRow(len(self.mask_layers) - 1)
             self.parent_app.show_status("Added empty layer")
             
         except Exception as e:
@@ -832,44 +896,38 @@ class MaskApp(BaseImageTab):
             self.parent_app.show_status(f"Error generating threshold mask: {str(e)}")
     
     def _generate_filter_mask(self):
-        """Generate a mask based on image filtering"""
-        # Validate and prepare image
-        image_2d, is_valid, error_msg = validate_and_prepare_image_array(self.image_data)
-        
-        if not is_valid:
-            self.parent_app.show_status(error_msg or "Load an image first. Use 'Sync to Other Tabs' in Image Browser.")
-            return
-        
+        """Apply a useful filter to the active mask layer."""
         try:
-            from scipy import ndimage
-            
+            active_layer = self._get_active_layer(create_if_missing=True)
+            if active_layer is None:
+                self.parent_app.show_status("Select or create a mask layer first")
+                return
+
             filter_type = self.filter_type_combo.currentText()
-            filter_size = self.filter_size_spin.value()
-            
-            # Apply filter
-            if filter_type == "Median":
-                filtered = ndimage.median_filter(image_2d, size=filter_size)
-                mask = np.abs(image_2d - filtered) > (np.std(image_2d) * 0.5)
-            elif filter_type == "Gaussian":
-                filtered = ndimage.gaussian_filter(image_2d, sigma=filter_size)
-                mask = np.abs(image_2d - filtered) > (np.std(image_2d) * 0.5)
-            else:  # Edge Detection
-                edges = ndimage.sobel(image_2d)
-                threshold = np.percentile(edges, 90)
-                mask = edges > threshold
-            
-            # Create new layer
-            layer = MaskLayer(mask, f"Filter ({filter_type})")
-            layer.source = "generated"
-            self.mask_layers.append(layer)
-            
-            self._update_layer_list()
-            self.parent_app.show_status(f"Generated filter mask: {filter_type}")
-            
-        except ImportError:
-            self.parent_app.show_status("scipy is required for filtering. Install with: pip install scipy")
+            filter_radius = int(self.filter_size_spin.value())
+
+            if filter_type == "Remove Speckles (Erode)":
+                active_layer.data = erode_mask(active_layer.data, radius=filter_radius)
+            elif filter_type == "Expand Regions (Dilate)":
+                active_layer.data = dilate_mask(active_layer.data, radius=filter_radius)
+            elif filter_type == "Close Small Holes":
+                active_layer.data = close_mask_holes(active_layer.data, radius=filter_radius)
+            else:
+                image_2d, is_valid, error_msg = validate_and_prepare_image_array(self.image_data)
+                if not is_valid:
+                    self.parent_app.show_status(error_msg or "Load an image first. Use 'Sync to Other Tabs' in Image Browser.")
+                    return
+                active_layer.data = sobel_edge_mask(
+                    image_2d,
+                    percentile=self.filter_percentile_spin.value(),
+                    smooth_sigma=max(0.0, filter_radius / 3.0),
+                )
+
+            active_layer.source = "generated"
+            self._update_combined_mask()
+            self.parent_app.show_status(f"Applied filter to active layer: {filter_type}")
         except Exception as e:
-            self.parent_app.show_status(f"Error generating filter mask: {str(e)}")
+            self.parent_app.show_status(f"Error applying filter: {str(e)}")
     
     def _toggle_drawing_mode(self, state):
         """Toggle manual drawing mode"""
@@ -882,6 +940,7 @@ class MaskApp(BaseImageTab):
         # Disable/enable all drawing controls (except the checkbox itself)
         drawing_controls = [
             self.tool_brush_radio, self.tool_line_radio, self.tool_rect_radio,
+            self.tool_circle_radio, self.tool_fill_radio,
             self.draw_add_radio, self.draw_remove_radio,
             self.brush_size_spin, self.brush_size_slider
         ]
@@ -909,12 +968,12 @@ class MaskApp(BaseImageTab):
         if tool_name in self.drawing_tools:
             self.drawing_tool = self.drawing_tools[tool_name]
             # Sync settings with new tool
-            # Only brush and line tools use brush_size; rectangle doesn't
-            if tool_name in ['Brush', 'Line']:
+            # Brush/line/watershed use size control; shape tools don't.
+            if tool_name in ['Brush', 'Line', 'Watershed Fill']:
                 self.drawing_tool.brush_size = self.brush_size
                 self.brush_size_spin.setEnabled(True)
                 self.brush_size_slider.setEnabled(True)
-            else:  # Rectangle
+            else:
                 self.brush_size_spin.setEnabled(False)
                 self.brush_size_slider.setEnabled(False)
             
@@ -922,15 +981,12 @@ class MaskApp(BaseImageTab):
             self.parent_app.show_status(f"Drawing tool changed to: {tool_name}")
     
     def _update_tool_brush_size(self, size: int):
-        """Update brush size for Brush and Line tools only"""
+        """Update shared size controls for brush-like drawing tools."""
         self.brush_size = size
-        # Only update Brush and Line tools
-        if 'Brush' in self.drawing_tools:
-            self.drawing_tools['Brush'].brush_size = size
-        if 'Line' in self.drawing_tools:
-            self.drawing_tools['Line'].brush_size = size
-        # Always sync current tool
-        if self.drawing_tool.name in ['Brush', 'Line']:
+        for tool_name in ['Brush', 'Line', 'Watershed Fill']:
+            if tool_name in self.drawing_tools:
+                self.drawing_tools[tool_name].brush_size = size
+        if self.drawing_tool.name in ['Brush', 'Line', 'Watershed Fill']:
             self.drawing_tool.brush_size = size
     
     def _update_tool_mode(self):
@@ -1346,10 +1402,9 @@ class MaskApp(BaseImageTab):
                 # Finalize non-brush tools (Line, Rectangle draw on release)
                 # Brush tools finalize immediately during motion
                 if not isinstance(self.drawing_tool, BrushDrawingTool):
-                    if not self.mask_layers:
-                        self._add_empty_layer()
-                    
-                    current_layer = self.mask_layers[-1]
+                    current_layer = self._get_active_layer(create_if_missing=True)
+                    if current_layer is None:
+                        return
                     current_layer.data = self.drawing_tool.finalize(current_layer.data, (y, x))
                 
                 # Rebuild combined mask and update display
@@ -1368,12 +1423,11 @@ class MaskApp(BaseImageTab):
     
     def _draw_brush_stroke(self, event):
         """Draw continuously with brush tool during drag"""
-        if not self.mask_layers:
-            self._add_empty_layer()
-        
         try:
             x, y = int(event.xdata), int(event.ydata)
-            current_layer = self.mask_layers[-1]
+            current_layer = self._get_active_layer(create_if_missing=True)
+            if current_layer is None:
+                return
             
             # Update tool settings
             self.drawing_tool.brush_size = self.brush_size
@@ -1390,12 +1444,12 @@ class MaskApp(BaseImageTab):
     
     def _show_preview(self, event):
         """Show preview of what would be drawn without committing to the layer"""
-        if not self.mask_layers:
-            self._add_empty_layer()
-        
         try:
             x, y = int(event.xdata), int(event.ydata)
-            current_layer = self.mask_layers[-1]
+            layer_index = self._get_active_layer_index(create_if_missing=True)
+            if layer_index is None:
+                return
+            current_layer = self.mask_layers[layer_index]
             
             # Update tool settings
             self.drawing_tool.brush_size = self.brush_size
@@ -1406,13 +1460,28 @@ class MaskApp(BaseImageTab):
             
             # Temporarily update combined mask to show preview
             # Rebuild with preview data
-            temp_combined = np.zeros_like(current_layer.data)
-            for layer in self.mask_layers[:-1]:  # All layers except current
-                temp_combined = np.logical_or(temp_combined, layer.data).astype(np.uint8)
-            temp_combined = np.logical_or(temp_combined, preview_data).astype(np.uint8)
+            temp_combined = None
+            visible_layers = [layer for layer in self.mask_layers if layer.visible]
+            if not visible_layers:
+                temp_combined = preview_data.astype(bool)
+            elif self.combine_method == "OR":
+                temp_combined = np.zeros_like(current_layer.data, dtype=bool)
+                for idx, layer in enumerate(self.mask_layers):
+                    if not layer.visible:
+                        continue
+                    layer_data = preview_data if idx == layer_index else layer.data
+                    temp_combined = np.logical_or(temp_combined, layer_data)
+            else:
+                temp_combined = None
+                for idx, layer in enumerate(self.mask_layers):
+                    if not layer.visible:
+                        continue
+                    layer_data = preview_data if idx == layer_index else layer.data
+                    temp_combined = layer_data.astype(bool) if temp_combined is None else np.logical_and(temp_combined, layer_data)
+                if temp_combined is None:
+                    temp_combined = preview_data.astype(bool)
             
             # Save original mask and temporarily set preview
-            original_mask = self.combined_mask
             self.combined_mask = temp_combined.astype(bool)
             
             # Redraw with preview, then restore
