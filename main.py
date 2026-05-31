@@ -49,7 +49,7 @@ from sciview.profiles.cms_profile import BEAMLINE_NAME, DEFAULT_CALIBRATION
 from sciview.settings.app_settings import GUI_SETTINGS, SCIANALYSIS_AVAILABLE, SCIANALYSIS_PATH
 
 # Ensure SciAnalysis is on the path
-if SCIANALYSIS_PATH not in sys.path:
+if SCIANALYSIS_PATH and SCIANALYSIS_PATH not in sys.path:
     sys.path.append(SCIANALYSIS_PATH)
 
 # Import SciAnalysis dependencies only if available  
@@ -96,6 +96,7 @@ class SciAnaApp(QMainWindow):
         self.image_path = None
         self.calibration = None
         self.mask = None
+        self.shared_info_text = None
         
         # Set initial window size from config
         window_size = GUI_SETTINGS['default_window_size']
@@ -144,6 +145,19 @@ class SciAnaApp(QMainWindow):
         if propagate:
             self.sync_tabs_from_shared(source_tab=source_tab)
 
+    def publish_shared_info_text(self, info_text, source_tab=None):
+        """Publish image information text to dedicated info consumers."""
+        self.shared_info_text = info_text
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            if tab == source_tab:
+                continue
+            if hasattr(tab, 'set_shared_info_text'):
+                try:
+                    tab.set_shared_info_text(info_text)
+                except Exception as e:
+                    print(f"DEBUG: Error syncing shared info for tab {i}: {e}")
+
     def get_shared_calibration(self, fallback_image_data=None):
         """Return shared calibration, with optional image calibration fallback."""
         if self.calibration is not None:
@@ -175,6 +189,12 @@ class SciAnaApp(QMainWindow):
                     tab.populate_image_info(self.image_data, self.image_path)
                 except Exception as e:
                     print(f"DEBUG: Error syncing image info for tab {i}: {e}")
+
+            if hasattr(tab, 'set_shared_info_text') and self.shared_info_text:
+                try:
+                    tab.set_shared_info_text(self.shared_info_text)
+                except Exception as e:
+                    print(f"DEBUG: Error restoring shared info for tab {i}: {e}")
 
             if hasattr(tab, 'update_plot'):
                 try:
@@ -405,6 +425,16 @@ def create_application():
         print(f"Warning: Could not load reduction tab: {e}")
         placeholder = _build_placeholder_tab(f"Reduction Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Reduction")
+
+    # Info tab
+    try:
+        from tabs.info_tab import InfoTab
+        info_tab = InfoTab(main_window)
+        main_window.add_tab(info_tab, "Info")
+    except ImportError as e:
+        print(f"Warning: Could not load info tab: {e}")
+        placeholder = _build_placeholder_tab(f"Info Tab\\n(Import error: {e})")
+        main_window.add_tab(placeholder, "Info")
     
     return app, main_window
 

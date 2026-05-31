@@ -20,7 +20,7 @@ ANGLE_CONVENTION = {
 }
 
 OVERLAY_STYLE = {
-    "mask": {"color": "#3b82f6", "alpha": 0.50},
+    "mask": {"color": "#ef4444", "alpha": 0.50},
     "circular": {"edge": "#f59e0b", "edge_soft": "#fbbf24"},
     "sector": {"color": "#ec4899", "alpha": 0.50, "edge": "#db2777"},
     "line_q": {"color": "#10b981", "alpha": 0.50, "center": "#14b8a6", "bounds": "#2dd4bf"},

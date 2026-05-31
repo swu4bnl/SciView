@@ -138,10 +138,6 @@ class MaskApp(BaseImageTab):
         # Right side: Controls area with vertical splitter for each panel
         controls_splitter = QSplitter(Qt.Vertical)
         
-        # Image information panel (inherited from base class)
-        image_info_panel = self._create_image_info_panel()
-        controls_splitter.addWidget(image_info_panel)
-        
         # Layer management panel
         layer_panel = self._create_layer_panel()
         controls_splitter.addWidget(layer_panel)
@@ -159,7 +155,7 @@ class MaskApp(BaseImageTab):
         controls_splitter.addWidget(action_panel)
         
         # Set initial sizes for control panels from centralized style config
-        mask_control_ratios = AppStyle.get_layout_ratios()['mask_controls_ratio']
+        mask_control_ratios = AppStyle.get_layout_ratios()['mask_controls_ratio'][1:]
         setup_splitter_layout(controls_splitter, mask_control_ratios)
         
         main_splitter.addWidget(controls_splitter)

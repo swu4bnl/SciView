@@ -11,7 +11,7 @@ import numpy as np
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout
+    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox
 )
 from PyQt5.QtCore import Qt
 
@@ -89,24 +89,21 @@ class CalibrationApp(BaseImageTab):
         # Right side: Controls area with vertical splitter for each panel
         controls_splitter = QSplitter(Qt.Vertical)
         
-        # Image information panel
-        image_info_panel = self._create_image_info_panel()
-        controls_splitter.addWidget(image_info_panel)
-        
-        # Calibration parameters panel
-        calibration_panel = self._create_calibration_panel()
-        controls_splitter.addWidget(calibration_panel)
-        
         # Ring center calculation panel
         ring_center_panel = self._create_ring_center_panel()
         controls_splitter.addWidget(ring_center_panel)
+
+        # Calibration parameters panel
+        calibration_panel = self._create_calibration_panel()
+        controls_splitter.addWidget(calibration_panel)
         
         # Standards reference panel
         standards_panel = self._create_standards_panel()
         controls_splitter.addWidget(standards_panel)
         
-        # Set initial sizes for control panels (adjust based on content)
-        setup_splitter_layout(controls_splitter, AppStyle.get_layout_ratios()['controls_splitter_ratio'])
+        # Set initial sizes for control panels with ring workflow first.
+        control_ratios = [2, 1, 1]
+        setup_splitter_layout(controls_splitter, control_ratios)
         
         main_splitter.addWidget(controls_splitter)
 
@@ -181,13 +178,13 @@ class CalibrationApp(BaseImageTab):
         
         # Parameter spinboxes using config defaults
         calibration_params = [
-            ("spin_x", ("Beam Center X", 0, 2000, DEFAULT_CALIBRATION['beam_center_x'], 1)),
-            ("spin_y", ("Beam Center Y", 0, 2000, DEFAULT_CALIBRATION['beam_center_y'], 1)),
+            ("spin_x", ("Beam Center X", -1024, 4096, DEFAULT_CALIBRATION['beam_center_x'], 1)),
+            ("spin_y", ("Beam Center Y", -1024, 4096, DEFAULT_CALIBRATION['beam_center_y'], 1)),
             ("spin_orient", ("Detector Orient (°)", -180, 180, DEFAULT_CALIBRATION['detector_orient_deg'], 1)),
             ("spin_tilt", ("Detector Tilt (°)", -180, 180, DEFAULT_CALIBRATION['detector_tilt_deg'], 1)),
             ("spin_phi", ("Detector Phi (°)", -180, 180, DEFAULT_CALIBRATION['detector_phi_deg'], 1)),
-            ("spin_dist", ("Distance (m)", 0.1, 15, DEFAULT_CALIBRATION['distance_m'], 0.001)),
-            ("spin_pixel", ("Pixel Size (µm)", 50, 500, DEFAULT_CALIBRATION['pixel_size_um'], 0.1)),
+            ("spin_dist", ("Distance (m)", 0.001, 200, DEFAULT_CALIBRATION['distance_m'], 0.001)),
+            ("spin_pixel", ("Pixel Size (µm)", 0, 5000, DEFAULT_CALIBRATION['pixel_size_um'], 0.1)),
         ]
         
         for attr, params in calibration_params:
@@ -222,7 +219,9 @@ class CalibrationApp(BaseImageTab):
         btns_layout.addWidget(btn_cal)
         btn_export = QPushButton("Export")
         btn_export.clicked.connect(self.export_calibration)
+        # btn_export.setMaximumWidth(90)
         btns_layout.addWidget(btn_export)
+        # apply_primary_button_style(btn_export)
         layout.addLayout(btns_layout)
         
         layout.addStretch()
@@ -240,7 +239,7 @@ class CalibrationApp(BaseImageTab):
         layout.addWidget(title)
         
         # Instructions
-        instructions_label = QLabel("Enter (x, y) from the same ring.\nPoints 1-3 are required, 4-10 are optional.")
+        instructions_label = QLabel("Pick points on one ring. 3+ points required.")
         instructions_label.setWordWrap(True)
         instructions_label.setStyleSheet("font-size: 11px; color: #666;")
         layout.addWidget(instructions_label)
@@ -249,7 +248,7 @@ class CalibrationApp(BaseImageTab):
         from PyQt5.QtWidgets import QScrollArea
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setMaximumHeight(180)  # Limit height to show ~6-7 points
+        scroll_area.setMaximumHeight(280)  # Show more points with current compact design
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         
@@ -312,14 +311,26 @@ class CalibrationApp(BaseImageTab):
         self.ring_result_label.setWordWrap(True)
         apply_info_style(self.ring_result_label)
         layout.addWidget(self.ring_result_label)
-        
-        # Update beam position button
-        update_beam_button = QPushButton("Update Beam Position")
-        update_beam_button.clicked.connect(self.update_beam_from_ring)
-        layout.addWidget(update_beam_button)
+
+        # Right-click assist controls
+        snap_window_row = QHBoxLayout()
+        self.snap_to_max_check = QCheckBox("Local Maximum")
+        self.snap_to_max_check.setChecked(True)
+        snap_window_row.addWidget(self.snap_to_max_check)
+        snap_window_row.addWidget(QLabel("Window"))
+        self.snap_window_spin = QSpinBox()
+        self.snap_window_spin.setRange(3, 15)
+        self.snap_window_spin.setSingleStep(2)
+        self.snap_window_spin.setValue(5)
+        self.snap_window_spin.setToolTip("Odd-size local search window (3-15 pixels)")
+        self.snap_window_spin.setMaximumWidth(70)
+        snap_window_row.addWidget(self.snap_window_spin)
+        snap_window_row.addWidget(QLabel("px"))
+        snap_window_row.addStretch()
+        layout.addLayout(snap_window_row)
         
         # Click instruction
-        click_instruction = QLabel("Tip: Right-click on the image to fill coordinates")
+        click_instruction = QLabel("Right-click to fill next point.")
         click_instruction.setWordWrap(True)
         apply_info_style(click_instruction)
         layout.addWidget(click_instruction)
@@ -420,10 +431,20 @@ class CalibrationApp(BaseImageTab):
             
             # Store the calculated center
             self.calculated_ring_center = (ux, uy)
+
+            # Apply calculated center directly to beam position controls.
+            self.spin_x.setValue(ux)
+            self.spin_y.setValue(uy)
+            self.calibrate_and_update_status()
             
             # Update result display
             fit_method = "exact (3 pts)" if len(points) == 3 else "least-squares fit"
-            self.ring_result_label.setText(f"Ring center: ({ux:.2f}, {uy:.2f}) \n Radius: {radius:.2f} pixels \n Used {len(points)} points ({fit_method})")
+            self.ring_result_label.setText(
+                f"Ring center: ({ux:.2f}, {uy:.2f})\n"
+                f"Radius: {radius:.2f} pixels\n"
+                f"Used {len(points)} points ({fit_method})\n"
+                "Beam center auto-updated"
+            )
             
             # Mark points and center on the raw image
             if hasattr(self, 'ax_raw') and self.image_data is not None:
@@ -451,7 +472,7 @@ class CalibrationApp(BaseImageTab):
                 
                 self.canvas_raw.draw()
             
-            self.parent_app.show_status(f"Ring center calculated: ({ux:.2f}, {uy:.2f}) using {len(points)} points")
+            self.parent_app.show_status(f"Ring center calculated and applied: ({ux:.2f}, {uy:.2f}) using {len(points)} points")
             
             # Update status info to show ring center calculation
             self.update_status_info()
@@ -464,51 +485,8 @@ class CalibrationApp(BaseImageTab):
             self.parent_app.show_status(f"Unexpected error: {str(e)}")
 
     def update_beam_from_ring(self):
-        """Update beam position from calculated ring center"""
-        try:
-            # Get coordinates from input fields, skipping empty points
-            points = []
-            for x_input, y_input in self.ring_center_inputs:
-                x_val = x_input.value()
-                y_val = y_input.value()
-                if x_val != 0 or y_val != 0:  # Skip zero points
-                    points.append((x_val, y_val))
-            
-            if len(points) < 3:
-                self.ring_result_label.setText("Error: Need at least 3 points")
-                return
-            
-            # Calculate ring center using the enhanced calculator
-            result = self.ring_calculator.calculate_center(points)
-            if result is None:
-                self.ring_result_label.setText("Error: Cannot calculate center")
-                return
-                
-            center_x, center_y, radius = result
-            
-            # Validate the result
-            if not (np.isfinite(center_x) and np.isfinite(center_y) and np.isfinite(radius)):
-                self.ring_result_label.setText("Error: Invalid calculation result")
-                return
-            
-            # Update the beam position spin boxes
-            self.spin_x.setValue(center_x)
-            self.spin_y.setValue(center_y)
-            self.spin_y.setValue(center_y)
-            
-            # Update the result display
-            self.ring_result_label.setText(f"Center: ({center_x:.1f}, {center_y:.1f}), Radius: {radius:.1f}")
-            
-            # Auto re-calibrate after updating beam position
-            self.calibrate_and_update_status()
-            
-            self.parent_app.show_status(f"Beam position updated to ({center_x:.1f}, {center_y:.1f}) - Calibration updated")
-            
-        except ValueError as e:
-            self.ring_result_label.setText(f"Error: {str(e)}")
-        except Exception as e:
-            self.ring_result_label.setText(f"Calculation error: {str(e)}")
-            print(f"Ring center calculation error: {e}")
+        """Legacy compatibility wrapper for old button callback paths."""
+        self.calculate_ring_center()
 
     def clear_ring_points(self):
         """Clear all ring coordinate inputs and markers"""
@@ -527,7 +505,7 @@ class CalibrationApp(BaseImageTab):
             if hasattr(self, 'canvas_raw'):
                 self.canvas_raw.draw()
         
-        self.ring_result_label.setText("Enter coordinates on a ring and click 'Calculate Ring Center'")
+        self.ring_result_label.setText("Enter coordinates on a ring and click 'Calculate'")
         self.current_point_index = 0
         self.parent_app.show_status("Ring coordinate inputs cleared")
 
@@ -869,14 +847,20 @@ class CalibrationApp(BaseImageTab):
         if event.button == 3:  # Right click for coordinate selection (left click reserved for zoom/pan)
             x, y = event.xdata, event.ydata
             if x is not None and y is not None:
+                display_x, display_y = x, y
+                if getattr(self, 'snap_to_max_check', None) is not None and self.snap_to_max_check.isChecked():
+                    snapped = self._snap_to_local_max(x, y, half_window=self._get_snap_window_half_size())
+                    if snapped is not None:
+                        display_x, display_y = snapped
+
                 # Fill the next available coordinate field (cycles through 10 points)
                 x_input, y_input = self.ring_center_inputs[self.current_point_index]
-                x_input.setValue(x)
-                y_input.setValue(y)
+                x_input.setValue(display_x)
+                y_input.setValue(display_y)
                 
                 # Visual feedback - add yellow marker
                 if hasattr(self, 'ax_raw'):
-                    temp_point = self.ax_raw.scatter([x], [y], c='yellow', s=100, marker='o', alpha=0.7)
+                    temp_point = self.ax_raw.scatter([display_x], [display_y], c='yellow', s=100, marker='o', alpha=0.7)
                     
                     # Add to temp markers list
                     if not hasattr(self, 'temp_markers'):
@@ -900,6 +884,54 @@ class CalibrationApp(BaseImageTab):
                     self.parent_app.show_status("All 10 points filled. Click 'Calculate Ring Center' or continue right-clicking to replace points.")
                 else:
                     self.parent_app.show_status(f"Point {self.current_point_index} filled. Right-click for point {self.current_point_index + 1}.")
+
+    def _get_image_array_for_click_tools(self):
+        """Return a 2D image array for click-assist features, if available."""
+        if self.image_data is None:
+            return None
+        data_array = self.image_data.data if hasattr(self.image_data, 'data') else self.image_data
+        if not isinstance(data_array, np.ndarray):
+            return None
+        if data_array.ndim != 2:
+            return None
+        return data_array
+
+    def _get_snap_window_half_size(self):
+        """Return half-window size from the odd snap window value."""
+        window_size = 5
+        if hasattr(self, 'snap_window_spin') and self.snap_window_spin is not None:
+            window_size = int(self.snap_window_spin.value())
+        if window_size % 2 == 0:
+            window_size += 1
+        window_size = max(3, min(15, window_size))
+        return window_size // 2
+
+    def _snap_to_local_max(self, x, y, half_window=2):
+        """Snap click coordinate to brightest finite pixel inside a local window."""
+        image_array = self._get_image_array_for_click_tools()
+        if image_array is None:
+            return None
+
+        height, width = image_array.shape
+        px = int(round(x))
+        py = int(round(y))
+        if px < 0 or py < 0 or px >= width or py >= height:
+            return None
+
+        x0 = max(0, px - half_window)
+        x1 = min(width, px + half_window + 1)
+        y0 = max(0, py - half_window)
+        y1 = min(height, py + half_window + 1)
+        window = image_array[y0:y1, x0:x1]
+
+        finite_mask = np.isfinite(window)
+        if not np.any(finite_mask):
+            return None
+
+        window_for_argmax = np.where(finite_mask, window, -np.inf)
+        max_index_flat = int(np.argmax(window_for_argmax))
+        local_y, local_x = np.unravel_index(max_index_flat, window.shape)
+        return float(x0 + local_x), float(y0 + local_y)
 
     def keyPressEvent(self, event):
         """Handle key press events"""

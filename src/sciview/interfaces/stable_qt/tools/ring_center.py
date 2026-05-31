@@ -14,6 +14,8 @@ class RingCenterCalculator:
     
     def __init__(self):
         self.tolerance = 1e-10
+        # Accept noisier manual picks from GUI workflows.
+        self.max_relative_radius_std = 0.20
         
     def calculate_center(self, points: List[Tuple[float, float]]) -> Optional[Tuple[float, float, float]]:
         """
@@ -103,7 +105,7 @@ class RingCenterCalculator:
         std_radius = np.std(distances)
         relative_std = std_radius / radius if radius > 0 else float('inf')
         
-        if relative_std > 0.1:  # 10% threshold
+        if relative_std > self.max_relative_radius_std:
             raise ValueError(f"Poor circle fit: radius variation {relative_std*100:.1f}%")
         
         return cx, cy, radius

@@ -71,6 +71,11 @@ class BaseImageTab(QWidget):
         self.post_display_hooks = []
         self._last_image_shape = None
 
+    def _set_image_info_text(self, text):
+        """Update image info text when an info widget is available."""
+        if hasattr(self, 'image_info_text') and self.image_info_text is not None:
+            self.image_info_text.setPlainText(text)
+
     def _sanitize_log_limits(self, img_array, vmin, vmax):
         """Return safe positive limits for log display or (None, None) if unavailable."""
         finite_positive = img_array[np.isfinite(img_array) & (img_array > 0)]
@@ -374,7 +379,7 @@ class BaseImageTab(QWidget):
         initial_text += "• Detector configuration\n"
         initial_text += "• Calibration status\n"
         initial_text += "• Processing parameters"
-        self.image_info_text.setPlainText(initial_text)
+        self._set_image_info_text(initial_text)
 
     def load_image(self):
         """Load image using shared application method"""
@@ -595,13 +600,21 @@ class BaseImageTab(QWidget):
             self._add_tab_specific_status(info_lines)
             
             # Set the text in the info panel
-            self.image_info_text.setPlainText('\n'.join(info_lines))
+            info_text = '\n'.join(info_lines)
+            self.info_lines = info_lines
+            self._set_image_info_text(info_text)
+
+            if hasattr(self.parent_app, 'publish_shared_info_text'):
+                self.parent_app.publish_shared_info_text(info_text, source_tab=self)
             
         except Exception as e:
             error_info = f"Error loading image info: {str(e)}\n\n"
             error_info += f"Exception type: {type(e).__name__}\n"
             error_info += f"Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            self.image_info_text.setPlainText(error_info)
+            self._set_image_info_text(error_info)
+
+            if hasattr(self.parent_app, 'publish_shared_info_text'):
+                self.parent_app.publish_shared_info_text(error_info, source_tab=self)
 
     def _add_tab_specific_status(self, info_lines):
         """Override this method in subclasses to add tab-specific status information"""
@@ -623,7 +636,10 @@ class BaseImageTab(QWidget):
             info_text += "• Current calibration parameters\n"
             info_text += "• Processing status\n"
             info_text += "• Beamline configuration status"
-            self.image_info_text.setPlainText(info_text)
+            self._set_image_info_text(info_text)
+
+            if hasattr(self.parent_app, 'publish_shared_info_text'):
+                self.parent_app.publish_shared_info_text(info_text, source_tab=self)
 
     def on_mouse_move(self, event):
         """Handle mouse movement over plots (common functionality)"""

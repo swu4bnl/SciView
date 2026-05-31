@@ -86,7 +86,6 @@ class ReductionTab(BaseImageTab):
         right_layout.setContentsMargins(2, 2, 2, 2)
         right_layout.setSpacing(6)
         right_layout.addWidget(self._create_controls_panel())
-        right_layout.addWidget(self._create_image_info_panel())
         main_splitter.addWidget(right_panel)
 
         main_splitter.setSizes([980, 420])
@@ -113,7 +112,7 @@ class ReductionTab(BaseImageTab):
         title_row.addWidget(self.plot_scale_combo)
         layout.addLayout(title_row)
 
-        self.result_summary = QLabel("No reduction has been run yet")
+        self.result_summary = QLabel("No preview yet")
         apply_info_style(self.result_summary)
         layout.addWidget(self.result_summary)
 
@@ -149,15 +148,15 @@ class ReductionTab(BaseImageTab):
         layout.setContentsMargins(2, 2, 2, 2)
         layout.setSpacing(6)
 
-        title = QLabel("Reduction Controls")
+        title = QLabel("Controls")
         apply_title_style(title)
         layout.addWidget(title)
 
-        source_group = QGroupBox("Calibration and Mask Source")
+        source_group = QGroupBox("Sources")
         source_layout = QFormLayout(source_group)
 
         self.calibration_source_combo = QComboBox()
-        self.calibration_source_combo.addItems(["Shared calibration", "Custom profile"])
+        self.calibration_source_combo.addItems(["From calibration tab", "Custom profile"])
         cal_row_widget = QWidget()
         cal_btn_row = QHBoxLayout(cal_row_widget)
         cal_btn_row.setContentsMargins(0, 0, 0, 0)
@@ -169,7 +168,7 @@ class ReductionTab(BaseImageTab):
         source_layout.addRow("Calibration", cal_row_widget)
 
         self.mask_source_combo = QComboBox()
-        self.mask_source_combo.addItems(["Shared mask", "Custom mask", "No mask"])
+        self.mask_source_combo.addItems(["From mask tab", "Custom mask", "No mask"])
         mask_row_widget = QWidget()
         mask_btn_row = QHBoxLayout(mask_row_widget)
         mask_btn_row.setContentsMargins(0, 0, 0, 0)
@@ -180,11 +179,11 @@ class ReductionTab(BaseImageTab):
         mask_btn_row.addWidget(self.load_mask_button)
         source_layout.addRow("Mask", mask_row_widget)
 
-        self.calibration_status_label = QLabel("Calibration: shared")
+        self.calibration_status_label = QLabel("Calibration: from calibration tab")
         apply_info_style(self.calibration_status_label)
         source_layout.addRow(self.calibration_status_label)
 
-        self.mask_status_label = QLabel("Mask: shared")
+        self.mask_status_label = QLabel("Mask: from mask tab")
         apply_info_style(self.mask_status_label)
         source_layout.addRow(self.mask_status_label)
 
@@ -195,17 +194,17 @@ class ReductionTab(BaseImageTab):
         common_layout.setLabelAlignment(Qt.AlignRight)
 
         self.operation_combo = QComboBox()
-        self.operation_combo.addItems(["Circular average", "Sector average", "Line profile"])
+        self.operation_combo.addItems(["Circular Average", "Sector Average", "Line I(q) at Chi", "Line I(chi) at Q"])
         common_layout.addRow("Operation", self.operation_combo)
 
-        self.auto_update_check = QCheckBox("Auto update preview")
+        self.auto_update_check = QCheckBox("Auto preview")
         self.auto_update_check.setChecked(True)
         common_layout.addRow(self.auto_update_check)
 
         self.bins_spin = self._make_int_spin(8, 4096, 256)
-        common_layout.addRow("Bins / samples", self.bins_spin)
+        common_layout.addRow("Bins", self.bins_spin)
 
-        self.auto_qrange_check = QCheckBox("Auto q range")
+        self.auto_qrange_check = QCheckBox("Auto q-range")
         self.auto_qrange_check.setChecked(True)
         common_layout.addRow(self.auto_qrange_check)
 
@@ -218,7 +217,7 @@ class ReductionTab(BaseImageTab):
 
         self.circular_group = QGroupBox("Circular average")
         circular_layout = QFormLayout(self.circular_group)
-        self.circular_hint = QLabel("Uses global q max")
+        self.circular_hint = QLabel("Uses q max")
         apply_info_style(self.circular_hint)
         circular_layout.addRow(self.circular_hint)
         layout.addWidget(self.circular_group)
@@ -227,30 +226,17 @@ class ReductionTab(BaseImageTab):
         sector_layout = QFormLayout(self.sector_group)
         self.sector_start_spin = self._make_double_spin(0.0, 360.0, 0.0, step=1.0, decimals=1)
         self.sector_end_spin = self._make_double_spin(0.0, 360.0, 30.0, step=1.0, decimals=1)
-        self.sector_hint = QLabel("Uses global q max. Display chi: 0 deg=right, +90 deg=up")
+        self.sector_hint = QLabel("Uses q max")
         apply_info_style(self.sector_hint)
         sector_layout.addRow(self.sector_hint)
         sector_layout.addRow("Angle start", self.sector_start_spin)
         sector_layout.addRow("Angle end", self.sector_end_spin)
         layout.addWidget(self.sector_group)
 
-        self.line_group = QGroupBox("Line profile")
+        self.line_group = QGroupBox("Line Profile")
         line_layout = QFormLayout(self.line_group)
 
-        self.line_mode_combo = QComboBox()
-        self.line_mode_combo.addItems([
-            "I(q) along line",
-            "I(chi) at q",
-        ])
-        self.line_mode_combo.setToolTip(
-            "I(q) along line: integrate a radial stripe at azimuthal angle chi0 → result is I(q) vs q.\n"
-            "chi axis follows SciAnalysis profile output convention.\n"
-            "dq: half-width of the stripe in Å⁻¹ (q-space, not pixels).\n\n"
-            "I(chi) at q: integrate a ring at radius q0 ± dq → result is I(chi) vs azimuthal angle."
-        )
-        line_layout.addRow("Line mode", self.line_mode_combo)
-
-        self.line_value_label = QLabel("(uses line geometry)")
+        self.line_value_label = QLabel("Reference")
         apply_info_style(self.line_value_label)
         line_layout.addRow(self.line_value_label)
 
@@ -260,19 +246,19 @@ class ReductionTab(BaseImageTab):
         self.line_chi0_spin = self._make_double_spin(-180.0, 180.0, 0.0, step=1.0, decimals=2)
         self.line_dq_spin = self._make_double_spin(0.0001, 100.0, 0.01, step=0.001, decimals=4)
         self.line_dq_label = QLabel("Half-width dq (1/\u00c5)")
-        line_layout.addRow("Azimuthal angle chi0 (\u00b0)", self.line_chi0_spin)
-        self.line_chi0_hint = QLabel("Display chi: 0 deg=right, +90 deg=up; converted for SciAnalysis")
+        line_layout.addRow("chi0 (\u00b0)", self.line_chi0_spin)
+        self.line_chi0_hint = QLabel("chi: 0 right, +90 up")
         apply_info_style(self.line_chi0_hint)
         line_layout.addRow(self.line_chi0_hint)
         line_layout.addRow(self.line_dq_label, self.line_dq_spin)
         layout.addWidget(self.line_group)
 
         button_row = QHBoxLayout()
-        self.preview_button = QPushButton("Run preview")
+        self.preview_button = QPushButton("Preview")
         self.preview_button.clicked.connect(self.refresh_preview)
-        self.export_button = QPushButton("Export 1D data")
+        self.export_button = QPushButton("Export Data")
         self.export_button.clicked.connect(self.export_result)
-        self.export_recipe_button = QPushButton("Export recipe")
+        self.export_recipe_button = QPushButton("Export Recipe")
         self.export_recipe_button.clicked.connect(self.export_recipe)
         button_row.addWidget(self.preview_button)
         button_row.addWidget(self.export_button)
@@ -293,7 +279,6 @@ class ReductionTab(BaseImageTab):
             self.q_max_spin,
             self.sector_start_spin,
             self.sector_end_spin,
-            self.line_mode_combo,
             self.line_value_spin,
             self.line_chi0_spin,
             self.line_dq_spin,
@@ -307,14 +292,13 @@ class ReductionTab(BaseImageTab):
 
         self.calibration_source_combo.currentTextChanged.connect(self._on_source_changed)
         self.mask_source_combo.currentTextChanged.connect(self._on_source_changed)
-        self.line_mode_combo.currentTextChanged.connect(self._on_line_mode_changed)
 
         self._on_operation_changed(self.operation_combo.currentText())
-        self._on_line_mode_changed(self.line_mode_combo.currentText())
+        self._on_line_mode_changed()
         self._refresh_source_status()
         return panel
 
-    def _on_line_mode_changed(self, _text: str):
+    def _on_line_mode_changed(self, _text: str | None = None):
         mode = self._selected_line_mode()
         is_line_geom = mode == "q"
         self.line_chi0_spin.setVisible(is_line_geom)
@@ -322,10 +306,7 @@ class ReductionTab(BaseImageTab):
         self.line_value_spin.setEnabled(not is_line_geom)
 
         if mode == "q":
-            self.line_value_label.setText(
-                "ROI = full radial stripe at angle chi0,\n"
-                "half-width \u00b1dq (\u00c5\u207b\u00b9). Result: I(q) vs q."
-            )
+            self.line_value_label.setText("Reference")
             self.line_dq_label.setText("Half-width dq (1/\u00c5)")
         elif mode == "angle":
             self.line_value_label.setText("Reference: q0 (1/\u00c5)")
@@ -338,9 +319,9 @@ class ReductionTab(BaseImageTab):
 
     def _selected_line_mode(self):
         return {
-            "I(q) along line": "q",
-            "I(chi) at q": "angle",
-        }[self.line_mode_combo.currentText()]
+            "Line I(q)": "q",
+            "Line I(chi)": "angle",
+        }.get(self.operation_combo.currentText(), "q")
 
     def _use_mask_enabled(self):
         return self.mask_source_combo.currentText() != "No mask"
@@ -565,16 +546,16 @@ class ReductionTab(BaseImageTab):
         if self.calibration_source_combo.currentText() == "Custom profile":
             cal_text = f"Calibration: custom ({self._custom_calibration_label})"
         elif shared_cal is None:
-            cal_text = "Calibration: shared (not loaded)"
+            cal_text = "Calibration: from calibration tab (not loaded)"
         else:
-            cal_text = "Calibration: shared"
+            cal_text = "Calibration: from calibration tab"
 
         if self.mask_source_combo.currentText() == "No mask":
             mask_text = "Mask: disabled"
         elif self.mask_source_combo.currentText() == "Custom mask":
             mask_text = f"Mask: custom ({self._custom_mask_label})"
         else:
-            mask_text = "Mask: shared" if mask is not None else "Mask: shared (not loaded)"
+            mask_text = "Mask: from mask tab" if mask is not None else "Mask: from mask tab (not loaded)"
 
         self.calibration_status_label.setText(cal_text)
         self.mask_status_label.setText(mask_text)
@@ -584,6 +565,7 @@ class ReductionTab(BaseImageTab):
         self.circular_group.setVisible(operation == "circular_average")
         self.sector_group.setVisible(operation == "sector_average")
         self.line_group.setVisible(operation == "line_profile")
+        self._on_line_mode_changed()
         self._on_parameters_changed()
 
     def _on_parameters_changed(self, *args):
@@ -597,9 +579,10 @@ class ReductionTab(BaseImageTab):
     def _selected_operation(self):
         text = self.operation_combo.currentText()
         return {
-            "Circular average": "circular_average",
-            "Sector average": "sector_average",
-            "Line profile": "line_profile",
+            "Circular Average": "circular_average",
+            "Sector Average": "sector_average",
+            "Line I(q) at Chi": "line_profile",
+            "Line I(chi) at Q": "line_profile",
         }[text]
 
     def _get_image_array(self):
@@ -680,8 +663,8 @@ class ReductionTab(BaseImageTab):
     def refresh_preview(self):
         request = self._build_request()
         if request is None:
-            self.result_summary.setText("No image loaded. Select an image in Image Browser, then run preview.")
-            self._update_preview_plot(None, message="No image loaded. Select an image in Image Browser.")
+            self.result_summary.setText("No image loaded")
+            self._update_preview_plot(None, message="No image loaded")
             return
 
         try:
@@ -711,7 +694,7 @@ class ReductionTab(BaseImageTab):
             self.ax_plot.text(
                 0.5,
                 0.5,
-                message or "No reduction preview available\n\nLoad an image and choose a reduction mode.",
+                message or "No preview\n\nLoad an image and select an operation.",
                 transform=self.ax_plot.transAxes,
                 ha="center",
                 va="center",
@@ -746,7 +729,7 @@ class ReductionTab(BaseImageTab):
 
     def export_result(self):
         if self._current_result is None:
-            self.parent_app.show_status("Run a reduction first before exporting")
+            self.parent_app.show_status("Run preview before export")
             return
 
         default_name = "reduction.csv"
