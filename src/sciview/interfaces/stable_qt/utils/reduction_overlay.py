@@ -56,7 +56,7 @@ def chi_to_screen_vector(chi_deg: float, calibration: Any | None = None) -> tupl
 
 
 def chi_convention_text(calibration: Any | None = None) -> str:
-    return "chi: 0 deg=right, +90 deg=up; converted for SciAnalysis"
+    return "chi: 0 right, +90 up"
 
 
 def _angle_delta_deg(a: np.ndarray, b_deg: float) -> np.ndarray:

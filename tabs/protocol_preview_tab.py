@@ -39,8 +39,6 @@ from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_fil
 # Try to import SciAnalysis
 if SCIANALYSIS_AVAILABLE:
     try:
-        if SCIANALYSIS_PATH and SCIANALYSIS_PATH not in sys.path:
-            sys.path.insert(0, SCIANALYSIS_PATH)
         from SciAnalysis.XSAnalysis.Data import Data2DScattering
         from SciAnalysis.XSAnalysis.Protocols import (
             thumbnails, circular_average, q_image
@@ -1230,8 +1228,17 @@ class ProtocolPreviewApp(BaseImageTab):
 
         if SCIANALYSIS_PATH:
             lines[3:3] = [
+                "import os",
                 "import sys",
-                f"sys.path.insert(0, '{SCIANALYSIS_PATH}')",
+                "from pathlib import Path",
+                "scianalysis_path = os.getenv('SCIVIEW_SCIANALYSIS_PATH', '').strip()",
+                "if scianalysis_path:",
+                "    candidate = Path(scianalysis_path).expanduser()",
+                "    if candidate.is_dir():",
+                "        if (candidate / 'SciAnalysis').is_dir():",
+                "            sys.path.insert(0, str(candidate))",
+                "        elif candidate.name == 'SciAnalysis':",
+                "            sys.path.insert(0, str(candidate.parent))",
                 "",
             ]
         

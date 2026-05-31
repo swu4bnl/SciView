@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import os
 from typing import Sequence
 
 
@@ -41,12 +42,28 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     parser = argparse.ArgumentParser(prog="python -m sciview.launchers")
     parser.add_argument(
+        "--scianalysis-source",
+        choices=("auto", "pixi", "local", "custom"),
+        default=None,
+        help="Select the SciAnalysis source to use.",
+    )
+    parser.add_argument(
+        "--scianalysis-path",
+        default=None,
+        help="Path to a local or custom SciAnalysis checkout.",
+    )
+    parser.add_argument(
         "launcher",
         nargs="?",
         default="app",
         help="Launcher to run.",
     )
     args = parser.parse_args(argv)
+
+    if args.scianalysis_source is not None:
+        os.environ["SCIVIEW_SCIANALYSIS_SOURCE"] = args.scianalysis_source
+    if args.scianalysis_path is not None:
+        os.environ["SCIVIEW_SCIANALYSIS_PATH"] = args.scianalysis_path
 
     if args.launcher in {"app", "stable"}:
         launch_app()

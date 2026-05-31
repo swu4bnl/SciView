@@ -319,8 +319,8 @@ class ReductionTab(BaseImageTab):
 
     def _selected_line_mode(self):
         return {
-            "Line I(q)": "q",
-            "Line I(chi)": "angle",
+            "Line I(q) at Chi": "q",
+            "Line I(chi) at Q": "angle",
         }.get(self.operation_combo.currentText(), "q")
 
     def _use_mask_enabled(self):
@@ -606,14 +606,23 @@ class ReductionTab(BaseImageTab):
         if mask is None:
             return None
 
+        from_scianalysis_mask = hasattr(mask, "data") and not isinstance(mask, np.ndarray)
         if hasattr(mask, "data") and not isinstance(mask, np.ndarray):
             mask = mask.data
 
-        array = np.asarray(mask).astype(bool)
+        array_raw = np.asarray(mask)
+        if array_raw.dtype == bool:
+            array = array_raw
+        elif from_scianalysis_mask:
+            # SciAnalysis masks use 1 for valid pixels and 0 for masked pixels.
+            array = array_raw <= 0
+        else:
+            array = array_raw.astype(bool)
+
         if array.shape != shape:
             self.parent_app.show_status("Mask shape does not match the active image; ignoring mask for preview")
             return None
-        return array
+        return np.asarray(array, dtype=bool)
 
     def _sync_geometry_controls(self, image_shape: tuple[int, int]):
         self._last_control_shape = image_shape

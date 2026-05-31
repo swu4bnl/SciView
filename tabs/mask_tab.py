@@ -1040,33 +1040,93 @@ class MaskApp(BaseImageTab):
             
             detector_config = DETECTOR_CONFIGS[detector_key]
             detector_name = detector_config.get('name', detector_key)
+
+            def _normalize_rel_path(path_like: str | Path | None) -> Path | None:
+                if not path_like:
+                    return None
+                text = str(path_like).strip()
+                if not text:
+                    return None
+                # Accept both POSIX and Windows separators from config values.
+                return Path(text.replace('\\', '/'))
+
+            def _candidate_mask_roots() -> list[Path]:
+                roots: list[Path] = []
+
+                if MASK_BASE_DIR:
+                    roots.append(Path(MASK_BASE_DIR))
+
+                if getattr(self.parent_app, 'image_path', None):
+                    roots.append(Path(self.parent_app.image_path).expanduser().resolve().parent)
+
+                # Common local layouts for development or packaged installs.
+                roots.append(Path.cwd())
+                roots.append(Path.cwd() / 'masks')
+                roots.append(Path.cwd() / 'SciAnalysis' / 'XSAnalysis' / 'masks')
+                roots.append(Path.cwd() / 'XSAnalysis' / 'masks')
+
+                # Keep order while removing duplicates.
+                seen: set[str] = set()
+                unique_roots: list[Path] = []
+                for root in roots:
+                    key = str(root)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    unique_roots.append(root)
+                return unique_roots
+
+            def _resolve_mask_path(path_like: str | Path | None) -> tuple[Path | None, list[Path]]:
+                rel = _normalize_rel_path(path_like)
+                checked: list[Path] = []
+                if rel is None:
+                    return None, checked
+
+                candidate = Path(rel).expanduser()
+                if candidate.is_absolute():
+                    checked.append(candidate)
+                    return (candidate if candidate.exists() else None), checked
+
+                for root in _candidate_mask_roots():
+                    trial = root / rel
+                    checked.append(trial)
+                    if trial.exists():
+                        return trial, checked
+
+                # Last chance: as-provided relative to current working directory.
+                checked.append(candidate)
+                if candidate.exists():
+                    return candidate, checked
+
+                return None, checked
             
             # Use provided mask_path or fall back to default mask_file
             if mask_path is None:
                 # Backward compatibility: use old mask_file format if available
                 mask_file = detector_config.get('mask_file', '')
                 if mask_file:
-                    mask_path = os.path.join(MASK_BASE_DIR, mask_file)
+                    mask_path = mask_file
                 else:
                     # Try to load default_mask from available_masks
                     available_masks = detector_config.get('available_masks', {})
                     default_mask_name = detector_config.get('default_mask', '')
                     if default_mask_name and default_mask_name in available_masks:
-                        mask_path = os.path.join(MASK_BASE_DIR, available_masks[default_mask_name])
+                        mask_path = available_masks[default_mask_name]
+                    elif default_mask_name:
+                        # New profile format stores the relative file path directly.
+                        mask_path = default_mask_name
                     else:
                         self.parent_app.show_status(f"No mask configured for {detector_name}")
                         return
-            else:
-                # Make path absolute if relative
-                if not os.path.isabs(mask_path):
-                    mask_path = os.path.join(MASK_BASE_DIR, mask_path)
-            
-            if mask_path and os.path.exists(mask_path):
-                mask_data = self._load_mask_file(mask_path)
+
+            resolved_mask_path, checked_paths = _resolve_mask_path(mask_path)
+
+            if resolved_mask_path is not None:
+                mask_data = self._load_mask_file(str(resolved_mask_path))
                 
                 if mask_data is not None:
                     # Extract mask name from path
-                    mask_name = os.path.basename(mask_path)
+                    mask_name = resolved_mask_path.name
                     layer = MaskLayer(mask_data, f"Instrument: {mask_name}")
                     layer.source = "default"
                     self.mask_layers.append(layer)
@@ -1075,7 +1135,12 @@ class MaskApp(BaseImageTab):
                     self.parent_app.show_status(f"Loaded instrument mask: {mask_name}")
                     return
             else:
-                self.parent_app.show_status(f"Mask file not found: {mask_path}")
+                checked_preview = '; '.join(str(path) for path in checked_paths[:3])
+                if len(checked_paths) > 3:
+                    checked_preview += '; ...'
+                self.parent_app.show_status(
+                    f"Mask file not found: {mask_path}. Checked: {checked_preview}"
+                )
                 
         except Exception as e:
             self.parent_app.show_status(f"Error loading instrument mask: {str(e)}")

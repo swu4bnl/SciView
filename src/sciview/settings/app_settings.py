@@ -4,15 +4,29 @@ from __future__ import annotations
 
 import os
 import sys
+import importlib
 from pathlib import Path
+
+from .scianalysis_source import (
+    SciAnalysisSourceConfig,
+    prepare_scianalysis_source,
+    resolve_scianalysis_source,
+)
+
+
+_SCIANALYSIS_SOURCE = resolve_scianalysis_source()
+prepare_scianalysis_source(_SCIANALYSIS_SOURCE)
+
+SCIANALYSIS_SOURCE_MODE = _SCIANALYSIS_SOURCE.mode
+SCIANALYSIS_SOURCE_ROOT = str(_SCIANALYSIS_SOURCE.root) if _SCIANALYSIS_SOURCE.root is not None else ""
+SCIANALYSIS_PATH = str(_SCIANALYSIS_SOURCE.import_path) if _SCIANALYSIS_SOURCE.import_path is not None else ""
 
 
 def _resolve_scianalysis_package_dir() -> Path | None:
     """Return installed SciAnalysis package directory when available."""
     try:
-        import SciAnalysis  # type: ignore
-
-        package_file = getattr(SciAnalysis, "__file__", None)
+        scianalysis_module = importlib.import_module("SciAnalysis")
+        package_file = getattr(scianalysis_module, "__file__", None)
         if package_file:
             return Path(package_file).resolve().parent
     except Exception:
@@ -20,25 +34,15 @@ def _resolve_scianalysis_package_dir() -> Path | None:
     return None
 
 
-def _resolve_scianalysis_path(package_dir: Path | None) -> str:
-    """Return optional legacy import path for SciAnalysis when needed."""
-    env_path = os.getenv("SCIANA_PATH", "").strip()
-    if package_dir is not None:
-        # Parent path that contains the SciAnalysis package.
-        return str(package_dir.parent)
-    return env_path
-
-
-def _resolve_mask_base_dir(package_dir: Path | None, scianalysis_path: str) -> str:
-    """Resolve masks directory from installed package first, then legacy paths."""
+def _resolve_mask_base_dir(package_dir: Path | None, source: SciAnalysisSourceConfig) -> str:
+    """Resolve masks directory from installed package first, then source checkout paths."""
     candidates: list[Path] = []
     if package_dir is not None:
         candidates.append(package_dir / "XSAnalysis" / "masks")
 
-    if scianalysis_path:
-        legacy_root = Path(scianalysis_path)
-        candidates.append(legacy_root / "SciAnalysis" / "XSAnalysis" / "masks")
-        candidates.append(legacy_root / "XSAnalysis" / "masks")
+    if source.root is not None:
+        candidates.append(source.root / "SciAnalysis" / "XSAnalysis" / "masks")
+        candidates.append(source.root / "XSAnalysis" / "masks")
 
     for path in candidates:
         if path.exists():
@@ -48,23 +52,22 @@ def _resolve_mask_base_dir(package_dir: Path | None, scianalysis_path: str) -> s
 
 
 _SCIANALYSIS_PACKAGE_DIR = _resolve_scianalysis_package_dir()
-SCIANALYSIS_PATH = _resolve_scianalysis_path(_SCIANALYSIS_PACKAGE_DIR)
 
 # Mask directory within SciAnalysis.
-MASK_BASE_DIR = _resolve_mask_base_dir(_SCIANALYSIS_PACKAGE_DIR, SCIANALYSIS_PATH)
+MASK_BASE_DIR = _resolve_mask_base_dir(_SCIANALYSIS_PACKAGE_DIR, _SCIANALYSIS_SOURCE)
 
 # SciAnalysis availability check.
 # First try the package-installed version, then fall back to the
 # optional beamline file-system path if configured.
 try:
-    from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv  # noqa: F401
+    importlib.import_module("SciAnalysis.XSAnalysis.DataRQconv")  # noqa: F401
 
     SCIANALYSIS_AVAILABLE = True
 except ImportError:
     try:
         if SCIANALYSIS_PATH and SCIANALYSIS_PATH not in sys.path:
             sys.path.insert(0, SCIANALYSIS_PATH)
-        from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv  # noqa: F401
+        importlib.import_module("SciAnalysis.XSAnalysis.DataRQconv")  # noqa: F401
 
         SCIANALYSIS_AVAILABLE = True
     except ImportError:

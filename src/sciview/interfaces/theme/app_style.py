@@ -5,12 +5,50 @@ Centralized styling configuration for the SciAnalysis GUI application.
 This module provides consistent styling across all tabs and components.
 """
 
+from pathlib import Path
+
 from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QIcon
 
 
 class AppStyle:
     """Global application styling configuration"""
+
+    ASSETS_RELATIVE_DIR = Path("src/sciview/interfaces/theme/assets")
+
+    TAB_UI = {
+        'icon_size': 18,
+        'min_width': 112,
+        'min_height': 34,
+        'padding_vertical': 5,
+        'padding_horizontal': 10,
+        'font_size': 12,
+    }
+
+    CORNER_BUTTON_UI = {
+        'icon_size': 20,
+        'button_width': 36,
+        'button_height': 30,
+        'spacing': 4,
+    }
+
+    CORNER_ICON_FILES = {
+        'refresh': 'refresh.png',
+        'app_update': 'app_update.png',
+        'sci_update': 'sci_update.png',
+    }
+
+    TAB_ICON_FILES = {
+        'image_browser': 'tab_image_browser.png',
+        'tiled_browser': 'tab_tiled_browser.png',
+        'calibration': 'tab_calibration.png',
+        'mask_editing': 'tab_mask_editing.png',
+        'reduction': 'tab_reduction.png',
+        'transform': 'tab_transform.png',
+        'batch': 'tab_batch.png',
+        'info': 'tab_info.png',
+    }
     
     # Modern color scheme - inspired by VS Code Dark and Material Design
     COLORS = {
@@ -485,6 +523,44 @@ class AppStyle:
         """
         
         app.setStyleSheet(global_style)
+
+    @classmethod
+    def tab_widget_stylesheet(cls):
+        """Return stylesheet for top-level tab sizing and typography."""
+        return (
+            "QTabBar::tab { "
+            f"min-width: {cls.TAB_UI['min_width']}px; "
+            f"min-height: {cls.TAB_UI['min_height']}px; "
+            f"padding: {cls.TAB_UI['padding_vertical']}px {cls.TAB_UI['padding_horizontal']}px; "
+            f"font-size: {cls.TAB_UI['font_size']}px; "
+            "}"
+        )
+
+    @classmethod
+    def tab_icon_size(cls):
+        """Return standard tab icon size."""
+        return QSize(cls.TAB_UI['icon_size'], cls.TAB_UI['icon_size'])
+
+    @classmethod
+    def corner_button_icon_size(cls):
+        """Return standard corner-button icon size."""
+        return QSize(cls.CORNER_BUTTON_UI['icon_size'], cls.CORNER_BUTTON_UI['icon_size'])
+
+    @classmethod
+    def corner_button_size(cls):
+        """Return standard corner-button size."""
+        return QSize(cls.CORNER_BUTTON_UI['button_width'], cls.CORNER_BUTTON_UI['button_height'])
+
+    @classmethod
+    def icon_directory(cls, workspace_root: Path) -> Path:
+        """Return absolute icon directory for this workspace."""
+        return workspace_root / cls.ASSETS_RELATIVE_DIR
+
+    @classmethod
+    def load_icon(cls, workspace_root: Path, filename: str) -> QIcon:
+        """Load a themed icon file if available, else return an empty icon."""
+        path = cls.icon_directory(workspace_root) / filename
+        return QIcon(str(path)) if path.exists() else QIcon()
 
     @classmethod 
     def get_layout_ratios(cls):
