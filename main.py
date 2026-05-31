@@ -9,6 +9,7 @@ import sys
 import os
 import subprocess
 import shutil
+import tempfile
 from pathlib import Path
 import numpy as np
 
@@ -143,6 +144,7 @@ class SciAnaApp(QMainWindow):
         self._update_timer = QTimer(self)
         self._update_timer.timeout.connect(self._poll_update_process)
         self._update_output = b""
+        self._update_output_file = None
         self._update_running_message = ""
         self._update_success_message = ""
         self._update_failure_prefix = "Update failed"
@@ -451,6 +453,7 @@ class SciAnaApp(QMainWindow):
 
         self._set_update_ui_enabled(False)
         self._update_output = b""
+        self._update_output_file = tempfile.TemporaryFile()
         self._update_running_message = running_message
         self._update_success_message = success_message
         self._update_failure_prefix = failure_prefix
@@ -459,13 +462,16 @@ class SciAnaApp(QMainWindow):
         try:
             self._update_process = subprocess.Popen(
                 command,
-                stdout=subprocess.PIPE,
+                stdout=self._update_output_file,
                 stderr=subprocess.STDOUT,
                 cwd=str(self._workspace_root),
             )
             self._update_timer.start(1000)
         except Exception as exc:
             self._update_process = None
+            if self._update_output_file is not None:
+                self._update_output_file.close()
+                self._update_output_file = None
             self._set_update_ui_enabled(True)
             self.show_status(f"Failed to start update: {exc}")
 
@@ -593,9 +599,19 @@ class SciAnaApp(QMainWindow):
             return
 
         try:
-            output, _ = process.communicate(timeout=5)
+            process.wait(timeout=5)
         except Exception:
-            output = b""
+            pass
+
+        output_file = self._update_output_file
+        self._update_output_file = None
+        output = b""
+        if output_file is not None:
+            try:
+                output_file.seek(0)
+                output = output_file.read()
+            finally:
+                output_file.close()
 
         if output:
             self._update_output += output
