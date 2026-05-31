@@ -318,18 +318,6 @@ class TransformBackend:
                                 "bins_q": request.bins_q,
                             },
                         ),
-                        (
-                            "remesh_q_bin",
-                            {
-                                "bins": request.bins_q,
-                            },
-                        ),
-                        (
-                            "q_image",
-                            {
-                                "bins": request.bins_q,
-                            },
-                        ),
                     ],
                 )
             except ValueError:
