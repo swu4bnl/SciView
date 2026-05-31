@@ -205,8 +205,12 @@ def validate_and_prepare_image_array(image_data, use_converter=True):
     
     # Step 4: Handle dimensionality
     if extracted_data.ndim == 2:
-        # Already 2D - ready to display
-        return extracted_data, True, ""
+        # Always normalize to ndarray so downstream code can rely on NumPy APIs.
+        try:
+            normalized = np.asarray(extracted_data)
+        except Exception as e:
+            return None, False, f"Failed to convert 2D data to ndarray: {e}"
+        return normalized, True, ""
     
     elif extracted_data.ndim > 2:
         # Multi-dimensional array (3D, 4D, 5D from stacked images, tiled, time series, etc.)

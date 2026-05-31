@@ -30,18 +30,16 @@ from matplotlib.backends.backend_qt5agg import (
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
-from config.beamline_config import (
-    DEFAULT_CALIBRATION, PHYSICAL_CONSTANTS, get_file_status, SUPPORTED_FORMATS,
-    SCIANALYSIS_AVAILABLE
-)
-from config.app_style import *
+from sciview.interfaces.theme.app_style import *
+from sciview.profiles.cms_profile import get_default_tiled_settings
+from sciview.settings.app_settings import IMAGE_BROWSER_SETTINGS, SUPPORTED_FORMATS
 
 # Import centralized tiled client manager
-from utils.tiled_client import tiled_manager
+from sciview.sources.tiled_client import tiled_manager
 
 # Import shared utilities
-from utils.image_utils import ImageShapeConverter, ImageCacheManager
-from utils.file_dialog_state import (
+from sciview.interfaces.stable_qt.utils.image_utils import ImageShapeConverter, ImageCacheManager
+from sciview.interfaces.stable_qt.utils.file_dialog_state import (
     dialog_open_file,
     dialog_open_files,
     dialog_save_file,
@@ -679,7 +677,6 @@ class ImageBrowserApp(BaseImageTab):
         self.scan_id_start_input.setRange(-9999999, 9999999)
         self.scan_id_start_input.setPrefix("Start: ")
         # Use configuration-based default instead of hardcoded value
-        from config.beamline_config import IMAGE_BROWSER_SETTINGS
         self.scan_id_start_input.setValue(IMAGE_BROWSER_SETTINGS['default_scan_id'])
         scan_id_layout.addWidget(self.scan_id_start_input)
         
@@ -960,7 +957,6 @@ class ImageBrowserApp(BaseImageTab):
         """Load image(s) from tiled client - single or range"""
         current_data = self.tiled_profile_combo.currentData()
         # Use config-based default instead of hardcoded
-        from config.beamline_config import get_default_tiled_settings
         default_profile, _ = get_default_tiled_settings()
         profile = current_data if current_data else default_profile
         detector = self.detector_combo.currentText()
@@ -1011,7 +1007,6 @@ class ImageBrowserApp(BaseImageTab):
         """Populate detector list based on selected profile"""
         current_data = self.tiled_profile_combo.currentData()
         # Use config-based default instead of hardcoded
-        from config.beamline_config import get_default_tiled_settings
         default_profile, _ = get_default_tiled_settings()
         profile_name = current_data if current_data else default_profile
         
@@ -1027,7 +1022,6 @@ class ImageBrowserApp(BaseImageTab):
         """Update profile information display"""
         current_data = self.tiled_profile_combo.currentData()
         # Use config-based default instead of hardcoded
-        from config.beamline_config import get_default_tiled_settings
         default_profile, _ = get_default_tiled_settings()
         profile_name = current_data if current_data else default_profile
         
@@ -1332,31 +1326,17 @@ class ImageBrowserApp(BaseImageTab):
             # Fall back to raw numpy array
             image_data_obj = current_image['data']
         
-        # Update parent app state
-        self.parent_app.image_data = image_data_obj
-        self.parent_app.image_path = current_image['path']
-        
-        # Trigger updates in other tabs if they exist
-        for i in range(self.parent_app.tab_widget.count()):
-            tab = self.parent_app.tab_widget.widget(i)
-            if tab != self:  # Skip self (Image Browser tab)
-                try:
-                    # For calibration, mask, and protocol tabs: set self.image_data first
-                    # These tabs expect self.image_data to be set before calling update_plot()
-                    if hasattr(tab, 'image_data'):
-                        tab.image_data = image_data_obj
-                    
-                    # Call populate_image_info if available
-                    if hasattr(tab, 'populate_image_info'):
-                        tab.populate_image_info(image_data_obj, current_image['path'])
-                    
-                    # Call update_plot without parameter (uses self.image_data)
-                    # This is compatible with calibration_tab, mask_tab, protocol_preview_tab
-                    if hasattr(tab, 'update_plot'):
-                        tab.update_plot()
-                        
-                except Exception as e:
-                    print(f"DEBUG: Error updating tab {i}: {e}")
+        # Publish via centralized shared-state API.
+        if hasattr(self.parent_app, 'publish_shared_image'):
+            self.parent_app.publish_shared_image(
+                image_data_obj,
+                image_path=current_image['path'],
+                source_tab=self,
+            )
+        else:
+            # Legacy fallback path.
+            self.parent_app.image_data = image_data_obj
+            self.parent_app.image_path = current_image['path']
         
         self.parent_app.show_status(f"Synced image: {current_image['filename']}")
     
@@ -1531,7 +1511,6 @@ class ImageBrowserApp(BaseImageTab):
         
         try:
             current_data = self.tiled_profile_combo.currentData()
-            from config.beamline_config import get_default_tiled_settings
             default_profile, _ = get_default_tiled_settings()
             profile = current_data if current_data else default_profile
             detector = self.detector_combo.currentText()

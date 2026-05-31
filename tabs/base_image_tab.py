@@ -24,13 +24,11 @@ from matplotlib.backends.backend_qt5agg import (
     NavigationToolbar2QT as NavigationToolbar
 )
 
-# Import configuration
-# from config.beamline_config import (
-#     DEFAULT_CALIBRATION, PHYSICAL_CONSTANTS, get_file_status
-# )
-from config.beamline_config import *
-from config.app_style import *
-from utils.image_utils import validate_and_prepare_image_array, get_image_info
+# Import configuration from package modules.
+from sciview.interfaces.theme.app_style import *
+from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_detector_config, get_file_status as get_profile_file_status
+from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
+from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, get_image_info
 
 # Get constants
 HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
@@ -71,6 +69,31 @@ class BaseImageTab(QWidget):
         # Display hooks for tab-specific extensions
         self.pre_display_hooks = []
         self.post_display_hooks = []
+        self._last_image_shape = None
+
+    def _set_image_info_text(self, text):
+        """Update image info text when an info widget is available."""
+        if hasattr(self, 'image_info_text') and self.image_info_text is not None:
+            self.image_info_text.setPlainText(text)
+
+    def _sanitize_log_limits(self, img_array, vmin, vmax):
+        """Return safe positive limits for log display or (None, None) if unavailable."""
+        finite_positive = img_array[np.isfinite(img_array) & (img_array > 0)]
+        if finite_positive.size == 0:
+            return None, None
+
+        min_positive = float(np.min(finite_positive))
+        max_positive = float(np.max(finite_positive))
+
+        safe_vmin = float(vmin) if vmin is not None and vmin > 0 else min_positive
+        safe_vmax = float(vmax) if vmax is not None and vmax > safe_vmin else max_positive
+
+        if safe_vmax <= safe_vmin:
+            safe_vmax = max_positive
+        if safe_vmax <= safe_vmin:
+            safe_vmax = safe_vmin * 10.0
+
+        return safe_vmin, safe_vmax
 
     def _init_calibration(self):
         """Initialize calibration object"""
@@ -80,6 +103,16 @@ class BaseImageTab(QWidget):
                 self.calibration = CalibrationRQconv(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
                 self.calibration.set_pixel_size(pixel_size_um=DEFAULT_CALIBRATION['pixel_size_um'])
                 self.calibration.set_distance(DEFAULT_CALIBRATION['distance_m'])
+                self.calibration.set_beam_position(
+                    DEFAULT_CALIBRATION['beam_center_x'],
+                    DEFAULT_CALIBRATION['beam_center_y'],
+                )
+                if hasattr(self.calibration, 'set_angles'):
+                    self.calibration.set_angles(
+                        det_orient=DEFAULT_CALIBRATION['detector_orient_deg'],
+                        det_tilt=DEFAULT_CALIBRATION['detector_tilt_deg'],
+                        det_phi=DEFAULT_CALIBRATION['detector_phi_deg'],
+                    )
             except Exception as e:
                 print(f"Warning: Failed to initialize SciAnalysis calibration: {e}")
                 self.calibration = None
@@ -101,8 +134,7 @@ class BaseImageTab(QWidget):
             
         try:
             from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
-            from config.beamline_config import get_detector_config
-            
+
             detector_config = get_detector_config(measurement_type or 'waxs')
             
             # Use existing calibration if available, or create new one
@@ -148,11 +180,10 @@ class BaseImageTab(QWidget):
         
         try:
             from SciAnalysis.XSAnalysis.Data import Data2DScattering
-            from config.beamline_config import get_file_status
-            
+
             # Detect measurement type and get appropriate configuration
             filename = os.path.basename(file_path)
-            file_status = get_file_status(filename)
+            file_status = get_profile_file_status(filename, mask_dir=MASK_BASE_DIR)
             measurement_type = file_status['measurement_type']
             print(f"Creating Data2DScattering for {measurement_type}")
             
@@ -348,7 +379,7 @@ class BaseImageTab(QWidget):
         initial_text += "• Detector configuration\n"
         initial_text += "• Calibration status\n"
         initial_text += "• Processing parameters"
-        self.image_info_text.setPlainText(initial_text)
+        self._set_image_info_text(initial_text)
 
     def load_image(self):
         """Load image using shared application method"""
@@ -368,10 +399,10 @@ class BaseImageTab(QWidget):
             self._reset_canvas_views()
             
             # Get file status for mask and export settings
-            file_status = get_file_status(os.path.basename(path))
+            file_status = get_profile_file_status(os.path.basename(path), mask_dir=MASK_BASE_DIR)
             self.export_cali_path = file_status['calibration_file']
             self.mask_path = file_status['mask_file']
-            self.custom_mask_path = file_status['custom_mask']
+            self.custom_mask_path = file_status.get('custom_mask')
             self.mask_dir = file_status['mask_dir']
             self.measurement_type = file_status['measurement_type']
             
@@ -430,18 +461,24 @@ class BaseImageTab(QWidget):
             print(f"ERROR: {error_msg}")
             print(f"  display_data type: {type(display_data)}")
             return
+
+        current_shape = tuple(img_array.shape)
+        image_shape_changed = self._last_image_shape is not None and self._last_image_shape != current_shape
         
         # Apply display settings
         if scale == 'log':
-            norm = LogNorm(vmin=vmin, vmax=vmax) if vmin and vmax else LogNorm()
-            self.ax_raw.imshow(img_array, origin='upper', cmap=cmap, norm=norm)
+            safe_vmin, safe_vmax = self._sanitize_log_limits(img_array, vmin, vmax)
+            if safe_vmin is not None and safe_vmax is not None:
+                self.ax_raw.imshow(img_array, origin='upper', cmap=cmap, norm=LogNorm(vmin=safe_vmin, vmax=safe_vmax))
+            else:
+                self.ax_raw.imshow(img_array, origin='upper', cmap=cmap)
         else:
             self.ax_raw.imshow(img_array, origin='upper', cmap=cmap, vmin=vmin, vmax=vmax)
         
         # Restore limits only if they were meaningful
-        if raw_xlim_valid:
+        if raw_xlim_valid and not image_shape_changed:
             self.ax_raw.set_xlim(raw_xlim)
-        if raw_ylim_valid:
+        if raw_ylim_valid and not image_shape_changed:
             self.ax_raw.set_ylim(raw_ylim)
 
         # Call post-display hooks for tab-specific customizations
@@ -451,6 +488,7 @@ class BaseImageTab(QWidget):
         # Update raw image canvas with custom tight margins
         self.fig_raw.subplots_adjust(left=0.05, bottom=0.05, right=0.99, top=0.99)
         self.canvas_raw.draw()
+        self._last_image_shape = current_shape
 
     def _reset_canvas_views(self):
         """Reset canvas views to default when loading new image"""
@@ -460,6 +498,7 @@ class BaseImageTab(QWidget):
                 self.ax_raw.clear()
                 self.ax_raw.set_xlim(None, None)  # Auto-scale
                 self.ax_raw.set_ylim(None, None)  # Auto-scale
+                self._last_image_shape = None
                 if hasattr(self, 'canvas_raw'):
                     self.canvas_raw.draw()
             
@@ -561,13 +600,21 @@ class BaseImageTab(QWidget):
             self._add_tab_specific_status(info_lines)
             
             # Set the text in the info panel
-            self.image_info_text.setPlainText('\n'.join(info_lines))
+            info_text = '\n'.join(info_lines)
+            self.info_lines = info_lines
+            self._set_image_info_text(info_text)
+
+            if hasattr(self.parent_app, 'publish_shared_info_text'):
+                self.parent_app.publish_shared_info_text(info_text, source_tab=self)
             
         except Exception as e:
             error_info = f"Error loading image info: {str(e)}\n\n"
             error_info += f"Exception type: {type(e).__name__}\n"
             error_info += f"Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            self.image_info_text.setPlainText(error_info)
+            self._set_image_info_text(error_info)
+
+            if hasattr(self.parent_app, 'publish_shared_info_text'):
+                self.parent_app.publish_shared_info_text(error_info, source_tab=self)
 
     def _add_tab_specific_status(self, info_lines):
         """Override this method in subclasses to add tab-specific status information"""
@@ -589,7 +636,10 @@ class BaseImageTab(QWidget):
             info_text += "• Current calibration parameters\n"
             info_text += "• Processing status\n"
             info_text += "• Beamline configuration status"
-            self.image_info_text.setPlainText(info_text)
+            self._set_image_info_text(info_text)
+
+            if hasattr(self.parent_app, 'publish_shared_info_text'):
+                self.parent_app.publish_shared_info_text(info_text, source_tab=self)
 
     def on_mouse_move(self, event):
         """Handle mouse movement over plots (common functionality)"""

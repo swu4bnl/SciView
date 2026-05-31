@@ -36,6 +36,6 @@ workspace_layout:
       path: "{experiment_root}/waxs/analysis"
 
 recipes:
-  - examples/recipe_saxs_circular_average.yaml
+  - recipe_saxs_circular_average.yaml
 
 filename_patterns: []

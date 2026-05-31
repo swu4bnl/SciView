@@ -164,95 +164,95 @@ TILED_PROFILES: dict[str, dict[str, Any]] = {
         },
         "_note": "3D shape (1, H, W) - accessed via scan.primary[detector]",
     },
-    "cms_old": {
-        "description": "CMS Old Data(pre-datasecurity)",
-        "uri": "http://tiled.nsls2.bnl.gov/api/v1",
-        "path": ["cms", "raw"],
-        "requires_login": True,
-        "default_detectors": {
-            "pilatus2M_image": "SAXS",
-            "pilatus800_image": "WAXS",
-            "pilatus8002_image": "MAXS",
-        },
-        "scan_id_range": (-999, 9999999),
-        "data_access_path": ["primary", "data", "{detector}"],
-        "timeout": {"connect_s": 5.0, "read_s": 120.0},
-        "search": {
-            "required_fields": {
-                "cycle": "start.cycle",
-                "proposal_id": "start.proposal.proposal_id",
-            },
-            "optional_fields": {
-                "measure_type": "start.measure_type",
-            },
-            "local_filters": {
-                "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
-                "experiment_alias_directory": [
-                    "start.experiment_alias_directory",
-                    "start.experiment_alias",
-                    "start.project_name",
-                ],
-            },
-            "defaults": {"measure_type": "measure"},
-            "summary_fields": {
-                "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
-                "measure_type": ["start.measure_type", "start.measurement_type"],
-                "sample_savename": ["start.sample_savename", "start.sample_save_name"],
-                "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
-                "cycle": ["start.cycle"],
-                "experiment_alias": [
-                    "start.experiment_alias_directory",
-                    "start.experiment_alias",
-                    "start.project_name",
-                ],
-            },
-        },
-        "_note": "4D shape (1, 1, H, W) - accessed via scan.primary.data[detector]",
-    },
-    "nsls2_general": {
-        "description": "NSLS-II General (test)",
-        "uri": "http://tiled.nsls2.bnl.gov/api/v1",
-        "path": [],
-        "requires_login": True,
-        "default_detectors": {
-            "primary": "Primary Detector",
-            "detector": "Generic Detector",
-        },
-        "scan_id_range": (-999, 9999999),
-        "data_access_path": ["{detector}"],
-        "timeout": {"connect_s": 5.0, "read_s": 120.0},
-        "search": {
-            "required_fields": {
-                "cycle": "start.cycle",
-                "proposal_id": "start.proposal.proposal_id",
-            },
-            "optional_fields": {
-                "measure_type": "start.measure_type",
-            },
-            "local_filters": {
-                "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
-                "experiment_alias_directory": [
-                    "start.experiment_alias_directory",
-                    "start.experiment_alias",
-                    "start.project_name",
-                ],
-            },
-            "defaults": {"measure_type": "measure"},
-            "summary_fields": {
-                "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
-                "measure_type": ["start.measure_type", "start.measurement_type"],
-                "sample_savename": ["start.sample_savename", "start.sample_save_name"],
-                "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
-                "cycle": ["start.cycle"],
-                "experiment_alias": [
-                    "start.experiment_alias_directory",
-                    "start.experiment_alias",
-                    "start.project_name",
-                ],
-            },
-        },
-        "_note": "Standard tiled structure - accessed via scan[detector]",
-    },
+    # "cms_old": {
+    #     "description": "CMS Old Data(pre-datasecurity)",
+    #     "uri": "http://tiled.nsls2.bnl.gov/api/v1",
+    #     "path": ["cms", "raw"],
+    #     "requires_login": True,
+    #     "default_detectors": {
+    #         "pilatus2M_image": "SAXS",
+    #         "pilatus800_image": "WAXS",
+    #         "pilatus8002_image": "MAXS",
+    #     },
+    #     "scan_id_range": (-999, 9999999),
+    #     "data_access_path": ["primary", "data", "{detector}"],
+    #     "timeout": {"connect_s": 5.0, "read_s": 120.0},
+    #     "search": {
+    #         "required_fields": {
+    #             "cycle": "start.cycle",
+    #             "proposal_id": "start.proposal.proposal_id",
+    #         },
+    #         "optional_fields": {
+    #             "measure_type": "start.measure_type",
+    #         },
+    #         "local_filters": {
+    #             "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
+    #             "experiment_alias_directory": [
+    #                 "start.experiment_alias_directory",
+    #                 "start.experiment_alias",
+    #                 "start.project_name",
+    #             ],
+    #         },
+    #         "defaults": {"measure_type": "measure"},
+    #         "summary_fields": {
+    #             "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
+    #             "measure_type": ["start.measure_type", "start.measurement_type"],
+    #             "sample_savename": ["start.sample_savename", "start.sample_save_name"],
+    #             "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
+    #             "cycle": ["start.cycle"],
+    #             "experiment_alias": [
+    #                 "start.experiment_alias_directory",
+    #                 "start.experiment_alias",
+    #                 "start.project_name",
+    #             ],
+    #         },
+    #     },
+    #     "_note": "4D shape (1, 1, H, W) - accessed via scan.primary.data[detector]",
+    # },
+    # "nsls2_general": {
+    #     "description": "NSLS-II General (test)",
+    #     "uri": "http://tiled.nsls2.bnl.gov/api/v1",
+    #     "path": [],
+    #     "requires_login": True,
+    #     "default_detectors": {
+    #         "primary": "Primary Detector",
+    #         "detector": "Generic Detector",
+    #     },
+    #     "scan_id_range": (-999, 9999999),
+    #     "data_access_path": ["{detector}"],
+    #     "timeout": {"connect_s": 5.0, "read_s": 120.0},
+    #     "search": {
+    #         "required_fields": {
+    #             "cycle": "start.cycle",
+    #             "proposal_id": "start.proposal.proposal_id",
+    #         },
+    #         "optional_fields": {
+    #             "measure_type": "start.measure_type",
+    #         },
+    #         "local_filters": {
+    #             "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
+    #             "experiment_alias_directory": [
+    #                 "start.experiment_alias_directory",
+    #                 "start.experiment_alias",
+    #                 "start.project_name",
+    #             ],
+    #         },
+    #         "defaults": {"measure_type": "measure"},
+    #         "summary_fields": {
+    #             "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
+    #             "measure_type": ["start.measure_type", "start.measurement_type"],
+    #             "sample_savename": ["start.sample_savename", "start.sample_save_name"],
+    #             "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
+    #             "cycle": ["start.cycle"],
+    #             "experiment_alias": [
+    #                 "start.experiment_alias_directory",
+    #                 "start.experiment_alias",
+    #                 "start.project_name",
+    #             ],
+    #         },
+        # },
+        # "_note": "Standard tiled structure - accessed via scan[detector]",
+    # },
 }
 
 
@@ -279,7 +279,19 @@ def _repo_root() -> Path:
 
 
 def _default_profile_path() -> Path:
-    return _repo_root() / "examples" / "profile_cms.yaml"
+    return Path(__file__).resolve().parent / "data" / "profile_cms.yaml"
+
+
+def _resolve_recipe_paths(recipes: list[str], profile_path: Path) -> list[str]:
+    resolved: list[str] = []
+    base_dir = profile_path.parent
+    for recipe in recipes:
+        recipe_path = Path(recipe)
+        if recipe_path.is_absolute():
+            resolved.append(str(recipe_path))
+            continue
+        resolved.append(str((base_dir / recipe_path).resolve()))
+    return resolved
 
 
 def _merge_detector_configs(profile_detectors: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -307,12 +319,13 @@ def load_cms_profile(profile_path: str | Path | None = None) -> CmsProfile:
     path = Path(profile_path) if profile_path is not None else _default_profile_path()
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     detectors = list(payload.get("detectors", []))
+    recipes = [str(recipe) for recipe in payload.get("recipes", [])]
     return CmsProfile(
         name=str(payload.get("name", "CMS")),
         description=str(payload.get("description", "")),
         detectors=detectors,
         workspace_layout=dict(payload.get("workspace_layout", {})),
-        recipes=[str(recipe) for recipe in payload.get("recipes", [])],
+        recipes=_resolve_recipe_paths(recipes, path),
         filename_patterns=[str(pattern) for pattern in payload.get("filename_patterns", [])],
         detector_configs=_merge_detector_configs(detectors),
         default_calibration=dict(DEFAULT_CALIBRATION),

@@ -20,10 +20,7 @@ test*
 *debug*
 tests/
 tests/*
-/docs/internal/
-/docs/private/
-/docs/TOMORROW_CHECKLIST.md
-/docs/AI_CODING_WORKFLOW.md
+/docs/*.md
 
 # pixi environments
 .pixi/*

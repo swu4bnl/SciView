@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 
 from sciview.data.models import ImageRef
-from utils.tiled_client import tiled_manager
+from sciview.sources.tiled_client import tiled_manager
 
 
 @dataclass(slots=True)

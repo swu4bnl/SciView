@@ -13,12 +13,12 @@ SciView is a PyQt5 application for interactive 2D X-ray scattering data inspecti
 ## Application structure
 
 - [main.py](main.py): application entry point and tab orchestration.
-- [config/](config): beamline configuration and UI style definitions.
+- [src/sciview/settings/](src/sciview/settings): application runtime settings.
+- [src/sciview/interfaces/theme/](src/sciview/interfaces/theme): UI style definitions.
+- [src/sciview/interfaces/stable_qt/](src/sciview/interfaces/stable_qt): Qt-specific tools and utility modules used by tabs.
 - [tabs/](tabs): main GUI modules (Image Browser, Tiled Browser, Calibration, Mask, Protocol).
-- [utils/](utils): shared runtime services (tiled client, resource monitoring, image utilities).
-- [tools/](tools): analysis and interaction helper logic.
 - [src/sciview/](src/sciview): backend package modules and launcher interface.
-- [standards/](standards): diffraction standards used by calibration workflows.
+- [src/sciview/calibration/](src/sciview/calibration): calibration I/O and diffraction standards.
 
 ## Core dependencies
 
@@ -98,19 +98,20 @@ PYTHONPATH=src ./.venv/bin/python main.py
 
 ## Configuration
 
-Beamline-specific behavior is centralized in [config/beamline_config.py](config/beamline_config.py) and profile modules under [src/sciview/profiles/](src/sciview/profiles). This includes detector defaults, calibration defaults, file pattern handling, Tiled profile integration, metadata field mappings, and Tiled timeout settings.
+Beamline-specific behavior is centralized in [src/sciview/profiles/](src/sciview/profiles) and application runtime settings under [src/sciview/settings/](src/sciview/settings). This includes detector defaults, calibration defaults, file pattern handling, Tiled profile integration, metadata field mappings, and Tiled timeout settings.
 
 ## Troubleshooting
 
 - If startup fails, run [scripts/bootstrap_env.sh](scripts/bootstrap_env.sh) again to refresh the environment.
-- If Tiled access fails, verify connectivity, login state, and profile settings in [config/beamline_config.py](config/beamline_config.py) and [src/sciview/profiles/](src/sciview/profiles).
+- If Tiled access fails, verify connectivity, login state, and profile settings in [src/sciview/profiles/](src/sciview/profiles) and [src/sciview/settings/app_settings.py](src/sciview/settings/app_settings.py).
 - If SciAnalysis operations fail, verify package availability in the active environment and confirm SciAnalysis import paths.
+- If reduction overlays or angular line cuts do not match what is shown on screen, check [docs/ANGLE_CONVENTION_GUIDE.md](docs/ANGLE_CONVENTION_GUIDE.md) before patching angle offsets.
 
 ## Development notes
 
-- Keep UI logic in [tabs/](tabs) and reusable processing logic in [tools/](tools) or [src/sciview/](src/sciview).
-- Keep shared utilities in [utils/](utils).
-- Update beamline defaults and Tiled metadata mappings in profile/config modules rather than hardcoding values in tabs.
+- Keep UI logic in [tabs/](tabs) and reusable processing logic in [src/sciview/interfaces/stable_qt/](src/sciview/interfaces/stable_qt) or [src/sciview/](src/sciview).
+- Keep shared utilities in [src/sciview/interfaces/stable_qt/utils/](src/sciview/interfaces/stable_qt/utils) and [src/sciview/sources/](src/sciview/sources).
+- Update beamline defaults and Tiled metadata mappings in profile/settings modules rather than hardcoding values in tabs.
 - Use local tests and smoke checks during development, but keep test scripts and private fixtures outside the public release tree.
 
 For additional implementation details, see [docs/](docs).
