@@ -23,3 +23,9 @@ try:
 except ImportError:
     # Handle missing dependencies gracefully
     MaskApp = None
+
+try:
+    from .reduction_tab import ReductionTab
+except ImportError:
+    # Handle missing dependencies gracefully
+    ReductionTab = None

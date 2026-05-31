@@ -105,6 +105,7 @@ Beamline-specific behavior is centralized in [src/sciview/profiles/](src/sciview
 - If startup fails, run [scripts/bootstrap_env.sh](scripts/bootstrap_env.sh) again to refresh the environment.
 - If Tiled access fails, verify connectivity, login state, and profile settings in [src/sciview/profiles/](src/sciview/profiles) and [src/sciview/settings/app_settings.py](src/sciview/settings/app_settings.py).
 - If SciAnalysis operations fail, verify package availability in the active environment and confirm SciAnalysis import paths.
+- If reduction overlays or angular line cuts do not match what is shown on screen, check [docs/ANGLE_CONVENTION_GUIDE.md](docs/ANGLE_CONVENTION_GUIDE.md) before patching angle offsets.
 
 ## Development notes
 

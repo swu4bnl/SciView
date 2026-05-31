@@ -1326,31 +1326,17 @@ class ImageBrowserApp(BaseImageTab):
             # Fall back to raw numpy array
             image_data_obj = current_image['data']
         
-        # Update parent app state
-        self.parent_app.image_data = image_data_obj
-        self.parent_app.image_path = current_image['path']
-        
-        # Trigger updates in other tabs if they exist
-        for i in range(self.parent_app.tab_widget.count()):
-            tab = self.parent_app.tab_widget.widget(i)
-            if tab != self:  # Skip self (Image Browser tab)
-                try:
-                    # For calibration, mask, and protocol tabs: set self.image_data first
-                    # These tabs expect self.image_data to be set before calling update_plot()
-                    if hasattr(tab, 'image_data'):
-                        tab.image_data = image_data_obj
-                    
-                    # Call populate_image_info if available
-                    if hasattr(tab, 'populate_image_info'):
-                        tab.populate_image_info(image_data_obj, current_image['path'])
-                    
-                    # Call update_plot without parameter (uses self.image_data)
-                    # This is compatible with calibration_tab, mask_tab, protocol_preview_tab
-                    if hasattr(tab, 'update_plot'):
-                        tab.update_plot()
-                        
-                except Exception as e:
-                    print(f"DEBUG: Error updating tab {i}: {e}")
+        # Publish via centralized shared-state API.
+        if hasattr(self.parent_app, 'publish_shared_image'):
+            self.parent_app.publish_shared_image(
+                image_data_obj,
+                image_path=current_image['path'],
+                source_tab=self,
+            )
+        else:
+            # Legacy fallback path.
+            self.parent_app.image_data = image_data_obj
+            self.parent_app.image_path = current_image['path']
         
         self.parent_app.show_status(f"Synced image: {current_image['filename']}")
     

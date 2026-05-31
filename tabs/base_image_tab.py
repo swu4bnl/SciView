@@ -98,6 +98,16 @@ class BaseImageTab(QWidget):
                 self.calibration = CalibrationRQconv(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
                 self.calibration.set_pixel_size(pixel_size_um=DEFAULT_CALIBRATION['pixel_size_um'])
                 self.calibration.set_distance(DEFAULT_CALIBRATION['distance_m'])
+                self.calibration.set_beam_position(
+                    DEFAULT_CALIBRATION['beam_center_x'],
+                    DEFAULT_CALIBRATION['beam_center_y'],
+                )
+                if hasattr(self.calibration, 'set_angles'):
+                    self.calibration.set_angles(
+                        det_orient=DEFAULT_CALIBRATION['detector_orient_deg'],
+                        det_tilt=DEFAULT_CALIBRATION['detector_tilt_deg'],
+                        det_phi=DEFAULT_CALIBRATION['detector_phi_deg'],
+                    )
             except Exception as e:
                 print(f"Warning: Failed to initialize SciAnalysis calibration: {e}")
                 self.calibration = None

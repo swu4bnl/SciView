@@ -835,6 +835,8 @@ class MaskApp(BaseImageTab):
         
         if not visible_layers:
             self.combined_mask = None
+            if hasattr(self.parent_app, 'publish_shared_mask'):
+                self.parent_app.publish_shared_mask(None, source_tab=self)
             self.combined_stats_label.setText("No visible layers")
             self.update_plot()
             self.update_status_info()
@@ -845,6 +847,9 @@ class MaskApp(BaseImageTab):
             self.combined_mask = np.logical_or.reduce(visible_layers)
         else:  # AND
             self.combined_mask = np.logical_and.reduce(visible_layers)
+
+        if hasattr(self.parent_app, 'publish_shared_mask'):
+            self.parent_app.publish_shared_mask(self.combined_mask.copy(), source_tab=self)
         
         # Update statistics
         masked_pixels = np.sum(self.combined_mask)

@@ -642,6 +642,10 @@ class CalibrationApp(BaseImageTab):
 
             self.image_data.calibration.clear_maps()
 
+            # Publish updated calibration so other tabs consume the same object.
+            if hasattr(self.parent_app, 'publish_shared_calibration'):
+                self.parent_app.publish_shared_calibration(self.image_data.calibration, source_tab=self)
+
 
             # cal = self.calibration
             # cal.set_beam_position(self.spin_x.value(), self.spin_y.value())

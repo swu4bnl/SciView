@@ -38,8 +38,8 @@ sys.path.insert(0, app_dir)
 sys.path.insert(0, os.path.join(app_dir, 'src'))
 
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QTabWidget, QLabel, 
-    QPushButton, QWidget, QHBoxLayout, QVBoxLayout
+    QApplication, QMainWindow, QTabWidget, QLabel,
+    QPushButton
 )
 from PyQt5.QtCore import Qt, QTimer
 
@@ -56,9 +56,18 @@ if SCIANALYSIS_PATH not in sys.path:
 if SCIANALYSIS_AVAILABLE:
     from SciAnalysis.XSAnalysis.Data import Data2DScattering
     from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
-from sciview.interfaces.stable_qt.utils.calibration_utils import calibration_manager
 from sciview.interfaces.stable_qt.utils.resource_monitor import get_resource_monitor
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file
+
+
+def _build_placeholder_tab(message):
+    """Create a small placeholder widget when a tab module is unavailable."""
+    from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+
+    placeholder = QWidget()
+    layout = QVBoxLayout(placeholder)
+    layout.addWidget(QLabel(message))
+    return placeholder
 
 
 class SciAnaApp(QMainWindow):
@@ -66,7 +75,7 @@ class SciAnaApp(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"SciAnalysis GUI - {BEAMLINE_NAME}")
+        self.setWindowTitle(f"SciView - {BEAMLINE_NAME}")
         self.status = self.statusBar()
         
         # Tab widget
@@ -109,6 +118,69 @@ class SciAnaApp(QMainWindow):
     def add_tab(self, widget, name):
         """Add a tab to the main interface"""
         self.tab_widget.addTab(widget, name)
+
+    def publish_shared_image(self, image_data, image_path=None, source_tab=None):
+        """Publish active image into shared app state and propagate to tabs."""
+        self.image_data = image_data
+        if image_path is not None:
+            self.image_path = image_path
+
+        # Prefer the image-attached calibration as canonical when available.
+        image_calibration = getattr(image_data, "calibration", None)
+        if image_calibration is not None:
+            self.calibration = image_calibration
+
+        self.sync_tabs_from_shared(source_tab=source_tab)
+
+    def publish_shared_calibration(self, calibration, source_tab=None, propagate=True):
+        """Publish calibration so all tabs can consume a single shared object."""
+        self.calibration = calibration
+        if propagate:
+            self.sync_tabs_from_shared(source_tab=source_tab)
+
+    def publish_shared_mask(self, mask, source_tab=None, propagate=True):
+        """Publish mask so all tabs can consume a single shared object."""
+        self.mask = mask
+        if propagate:
+            self.sync_tabs_from_shared(source_tab=source_tab)
+
+    def get_shared_calibration(self, fallback_image_data=None):
+        """Return shared calibration, with optional image calibration fallback."""
+        if self.calibration is not None:
+            return self.calibration
+        if fallback_image_data is not None:
+            return getattr(fallback_image_data, "calibration", None)
+        return None
+
+    def get_shared_mask(self):
+        """Return shared mask object used by analysis tabs."""
+        return self.mask
+
+    def sync_tabs_from_shared(self, source_tab=None):
+        """Push shared state into tabs and request redraws."""
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            if tab == source_tab:
+                continue
+
+            if hasattr(tab, 'image_data'):
+                tab.image_data = self.image_data
+
+            if (
+                hasattr(tab, 'populate_image_info')
+                and hasattr(tab, 'image_info_text')
+                and self.image_data is not None
+            ):
+                try:
+                    tab.populate_image_info(self.image_data, self.image_path)
+                except Exception as e:
+                    print(f"DEBUG: Error syncing image info for tab {i}: {e}")
+
+            if hasattr(tab, 'update_plot'):
+                try:
+                    tab.update_plot()
+                except Exception as e:
+                    print(f"DEBUG: Error syncing plot for tab {i}: {e}")
 
     def show_status(self, msg):
         """Display status message"""
@@ -177,10 +249,9 @@ class SciAnaApp(QMainWindow):
             
             image_data = Data2DScattering(path, calibration=calibration)
             
-            # Store in application state
-            self.image_data = image_data
-            self.image_path = path
-            self.calibration = calibration
+            # Store and propagate shared state
+            self.publish_shared_image(image_data, image_path=path)
+            self.publish_shared_calibration(calibration)
             
             # Update calibration with image size
             h, w = image_data.data.shape
@@ -197,21 +268,9 @@ class SciAnaApp(QMainWindow):
             print(f"Error loading image: {e}")
             return None, None
     
-    def get_image_data(self):
-        """Get the currently loaded image data"""
-        return self.image_data
-    
     def get_image_path(self):
         """Get the currently loaded image path"""
         return self.image_path
-    
-    def get_calibration(self):
-        """Get the current calibration object"""
-        return self.calibration
-    
-    def set_calibration(self, calibration):
-        """Update the current calibration object"""
-        self.calibration = calibration
     
     def _refresh_current_tab(self):
         """Refresh the current tab by reloading its module and recreating it"""
@@ -242,8 +301,7 @@ class SciAnaApp(QMainWindow):
                     "Image Browser": "tabs.image_browser_tab.ImageBrowserApp",
                     "Calibration": "tabs.calibration_tab.CalibrationApp",
                     "Mask Editing": "tabs.mask_tab.MaskApp",
-                    # Data Reduction tab archived in archive/legacy_unused.
-                    "Protocol": "tabs.protocol_preview_tab.ProtocolPreviewApp"
+                    "Reduction": "tabs.reduction_tab.ReductionTab"
                 }
                 
                 if tab_name not in module_map:
@@ -300,10 +358,7 @@ def create_application():
         main_window.add_tab(image_browser_tab, "Image Browser")
     except ImportError as e:
         print(f"Warning: Could not load image browser tab: {e}")
-        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
-        placeholder = QWidget()
-        layout = QVBoxLayout(placeholder)
-        layout.addWidget(QLabel(f"Image Browser Tab\\n(Import error: {e})"))
+        placeholder = _build_placeholder_tab(f"Image Browser Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Image Browser")
 
     # Tiled Browser tab (metadata-first browsing and Tiled scan preview)
@@ -313,10 +368,7 @@ def create_application():
         main_window.add_tab(tiled_browser_tab, "Tiled Browser")
     except ImportError as e:
         print(f"Warning: Could not load tiled browser tab: {e}")
-        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
-        placeholder = QWidget()
-        layout = QVBoxLayout(placeholder)
-        layout.addWidget(QLabel(f"Tiled Browser Tab\\n(Import error: {e})"))
+        placeholder = _build_placeholder_tab(f"Tiled Browser Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Tiled Browser")
     
     # Calibration tab
@@ -326,18 +378,12 @@ def create_application():
             calibration_tab = CalibrationApp(main_window)
             main_window.add_tab(calibration_tab, "Calibration")
         else:
-            from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
-            placeholder = QWidget()
-            layout = QVBoxLayout(placeholder)
-            layout.addWidget(QLabel("Calibration Tab\\n(SciAnalysis not available)"))
+            placeholder = _build_placeholder_tab("Calibration Tab\\n(SciAnalysis not available)")
             main_window.add_tab(placeholder, "Calibration")
     
     except ImportError as e:
         print(f"Warning: Could not load calibration tab: {e}")
-        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
-        placeholder = QWidget()
-        layout = QVBoxLayout(placeholder)
-        layout.addWidget(QLabel(f"Calibration Tab\\n(Import error: {e})"))
+        placeholder = _build_placeholder_tab(f"Calibration Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Calibration")
     
     # Mask editing tab
@@ -347,32 +393,18 @@ def create_application():
         main_window.add_tab(mask_tab, "Mask Editing")
     except ImportError as e:
         print(f"Warning: Could not load mask tab: {e}")
-        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
-        placeholder = QWidget()
-        layout = QVBoxLayout(placeholder)
-        layout.addWidget(QLabel(f"Mask Tab\\n(Import error: {e})"))
+        placeholder = _build_placeholder_tab(f"Mask Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Mask Editing")
-    
-    # Protocol Preview tab
-    # Under development
+
+    # Reduction tab
     try:
-        if SCIANALYSIS_AVAILABLE:
-            from tabs.protocol_preview_tab import ProtocolPreviewApp
-            protocol_tab = ProtocolPreviewApp(main_window)
-            main_window.add_tab(protocol_tab, "Protocol(test)")
-        else:
-            from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
-            placeholder = QWidget()
-            layout = QVBoxLayout(placeholder)
-            layout.addWidget(QLabel("Protocol Tab\\n(SciAnalysis not available)"))
-            main_window.add_tab(placeholder, "Protocol")
+        from tabs.reduction_tab import ReductionTab
+        reduction_tab = ReductionTab(main_window)
+        main_window.add_tab(reduction_tab, "Reduction")
     except ImportError as e:
-        print(f"Warning: Could not load protocol preview tab: {e}")
-        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
-        placeholder = QWidget()
-        layout = QVBoxLayout(placeholder)
-        layout.addWidget(QLabel(f"Protocol Tab\\n(Import error: {e})"))
-        main_window.add_tab(placeholder, "Protocol")
+        print(f"Warning: Could not load reduction tab: {e}")
+        placeholder = _build_placeholder_tab(f"Reduction Tab\\n(Import error: {e})")
+        main_window.add_tab(placeholder, "Reduction")
     
     return app, main_window
 
