@@ -67,12 +67,14 @@ class ImageLoadWorker(QThread):
     image_loaded = pyqtSignal(object, str, dict)   # image_data, file_path, metadata
     loading_finished = pyqtSignal()
     error_occurred = pyqtSignal(str)
-    
+    retry_detected = pyqtSignal(int, str)   # attempt number, message
+
     def __init__(self, load_method, **kwargs):
         super().__init__()
         self.load_method = load_method
         self.kwargs = kwargs
         self.is_cancelled = False
+        self._chunk_total = 0   # tracks total chunks for current single-scan load
     
     def run(self):
         """Execute the loading operation in background"""
@@ -91,6 +93,34 @@ class ImageLoadWorker(QThread):
     def cancel(self):
         """Cancel the loading operation"""
         self.is_cancelled = True
+
+    # ------------------------------------------------------------------
+    # Tiled progress / retry callbacks (called from worker thread)
+    # ------------------------------------------------------------------
+
+    def _tiled_chunk_callback(self, chunks_done: int, total_chunks: int) -> None:
+        """Called by TiledClientManager after each chunk download.
+
+        Maps chunk progress (0..total) onto the 10-90 % range of the
+        progress bar that is used for single-scan loads so the bar
+        advances visibly as tiles arrive.
+        """
+        self._chunk_total = total_chunks
+        if total_chunks <= 1:
+            pct = 50 if chunks_done == 0 else 80
+        else:
+            pct = 10 + int(chunks_done / total_chunks * 70)
+
+        label = (
+            f"Reading tile {chunks_done}/{total_chunks}…"
+            if total_chunks > 1
+            else "Reading image data…"
+        )
+        self.progress_updated.emit(pct, label)
+
+    def _tiled_retry_callback(self, attempt: int, message: str) -> None:
+        """Called by TiledClientManager when the HTTP client retries a request."""
+        self.retry_detected.emit(attempt, message)
     
     def _load_from_folder(self):
         """Load images from folder with pattern matching using deferred loading.
@@ -138,7 +168,12 @@ class ImageLoadWorker(QThread):
         scan_id = self.kwargs.get('scan_id')
         scan_range = self.kwargs.get('scan_range')  # Tuple (start, end) if loading range
         detector = self.kwargs.get('detector', default_detector)
-        
+        show_progress = self.kwargs.get('show_progress', True)
+
+        # Build callback references (None when progress reporting is disabled)
+        progress_cb = self._tiled_chunk_callback if show_progress else None
+        retry_cb = self._tiled_retry_callback if show_progress else None
+
         # Determine if loading single scan or range
         if scan_range is not None:
             # Load multiple scans in range
@@ -162,7 +197,9 @@ class ImageLoadWorker(QThread):
                     image_array, metadata = self.tiled_manager.load_image_data(
                         scan_id=current_scan_id,
                         detector=detector,
-                        profile_name=profile_name
+                        profile_name=profile_name,
+                        progress_callback=progress_cb,
+                        retry_callback=retry_cb,
                     )
                     
                     if image_array is not None:
@@ -199,11 +236,14 @@ class ImageLoadWorker(QThread):
             try:
                 self.progress_updated.emit(10, f"Connecting to tiled server: {profile_name}")
                 
-                # Use centralized tiled manager for loading
+                # Use centralized tiled manager for loading; pass progress/retry
+                # callbacks so the bar advances as tiles arrive.
                 image_array, metadata = self.tiled_manager.load_image_data(
                     scan_id=scan_id,
                     detector=detector,
-                    profile_name=profile_name
+                    profile_name=profile_name,
+                    progress_callback=progress_cb,
+                    retry_callback=retry_cb,
                 )
                 
                 if image_array is None:
@@ -215,12 +255,10 @@ class ImageLoadWorker(QThread):
                         self.error_occurred.emit(error_msg)
                     return
                 
-                self.progress_updated.emit(80, "Reading image data...")
+                self.progress_updated.emit(90, "Processing image data...")
                 
                 # Convert image shape for display compatibility
                 image_array = self._convert_image_shape(image_array)
-                
-                self.progress_updated.emit(90, "Processing image data...")
                 
                 # Create pseudo file path for tracking with metadata
                 pseudo_path = self.tiled_manager.create_pseudo_path(scan_id, detector, profile_name)
@@ -608,7 +646,13 @@ class ImageBrowserApp(BaseImageTab):
         self.cancel_load_button.setMaximumWidth(80)
         progress_layout.addWidget(self.cancel_load_button)
         layout.addLayout(progress_layout)
-        
+
+        # Retry indicator – shown only while a tiled retry is in progress
+        self.retry_label = QLabel()
+        self.retry_label.setVisible(False)
+        apply_info_style(self.retry_label)
+        layout.addWidget(self.retry_label)
+
         # Status label
         self.loading_status_label = QLabel("Ready to load images")
         if not self.tiled_manager.is_available():
@@ -1085,13 +1129,22 @@ class ImageBrowserApp(BaseImageTab):
         # Enter batch loading mode for folder and tiled range operations
         if method in ['folder', 'tiled'] and 'scan_range' in kwargs:
             self.is_batch_loading = True
-        
+
+        # Propagate the show_tiled_progress preference into tiled kwargs
+        if method == 'tiled':
+            kwargs.setdefault(
+                'show_progress',
+                IMAGE_BROWSER_SETTINGS.get('show_tiled_progress', True),
+            )
+
         self.load_worker = ImageLoadWorker(method, **kwargs)
         self.load_worker.progress_updated.connect(self._on_loading_progress)
         self.load_worker.image_loaded.connect(self._on_image_loaded)
         self.load_worker.loading_finished.connect(self._on_loading_finished)
         self.load_worker.error_occurred.connect(self._on_loading_error)
-        
+        self.load_worker.retry_detected.connect(self._on_retry_detected)
+
+        self.retry_label.setVisible(False)
         self.progress_bar.setVisible(True)
         self.cancel_load_button.setVisible(True)
         self.progress_bar.setValue(0)
@@ -1130,10 +1183,16 @@ class ImageBrowserApp(BaseImageTab):
             # Update display for eagerly loaded images
             self._update_display()
 
+    def _on_retry_detected(self, attempt: int, message: str) -> None:
+        """Show a transient retry indicator when the tiled HTTP client retries."""
+        self.retry_label.setText(f"⟳ (attempt {attempt}) {message}")
+        self.retry_label.setVisible(True)
+
     def _on_loading_finished(self):
         """Handle loading completion"""
         self.progress_bar.setVisible(False)
         self.cancel_load_button.setVisible(False)
+        self.retry_label.setVisible(False)
         self.loading_status_label.setText("Loading complete")
         
         # End batch loading mode and trigger display update for final state
@@ -1145,6 +1204,7 @@ class ImageBrowserApp(BaseImageTab):
         """Handle loading errors"""
         self.progress_bar.setVisible(False)
         self.cancel_load_button.setVisible(False)
+        self.retry_label.setVisible(False)
         self.loading_status_label.setText(f"Error: {error_message}")
         QMessageBox.warning(self, "Loading Error", error_message)
 
