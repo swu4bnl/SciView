@@ -196,16 +196,17 @@ class TiledClientManager:
             return
 
         try:
-            retry_count = [0]
+            retry_count = 0
             _retry_statuses = {429, 500, 502, 503, 504}
 
-            def _on_response(response):  # pylint: disable=unused-argument
+            def _on_response(response):
+                nonlocal retry_count
                 if getattr(response, "status_code", None) in _retry_statuses:
-                    retry_count[0] += 1
+                    retry_count += 1
                     retry_callback(
-                        retry_count[0],
+                        retry_count,
                         f"Server returned {response.status_code} – retrying "
-                        f"(attempt {retry_count[0]})",
+                        f"(attempt {retry_count})",
                     )
 
             hooks = getattr(http_client, "event_hooks", None)
@@ -686,7 +687,8 @@ class TiledClientManager:
             progress_callback(done + 1, total)
 
         if result is None:
-            # Fallback: no chunks iterated (shouldn't happen)
+            # chunk_indices was empty (every dimension has zero chunks).
+            # Fall back to a full read so callers always receive an array.
             result = array_client.read()
         return result
 

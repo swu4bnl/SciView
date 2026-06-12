@@ -74,8 +74,7 @@ class ImageLoadWorker(QThread):
         self.load_method = load_method
         self.kwargs = kwargs
         self.is_cancelled = False
-        self._chunk_total = 0   # tracks total chunks for current single-scan load
-    
+
     def run(self):
         """Execute the loading operation in background"""
         try:
@@ -105,11 +104,10 @@ class ImageLoadWorker(QThread):
         progress bar that is used for single-scan loads so the bar
         advances visibly as tiles arrive.
         """
-        self._chunk_total = total_chunks
-        if total_chunks <= 1:
-            pct = 50 if chunks_done == 0 else 80
-        else:
+        if total_chunks > 1:
             pct = 10 + int(chunks_done / total_chunks * 70)
+        else:
+            pct = 50 if chunks_done == 0 else 80
 
         label = (
             f"Reading tile {chunks_done}/{total_chunks}…"
