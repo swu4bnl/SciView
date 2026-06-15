@@ -9,7 +9,7 @@ tiled servers in a beamline-agnostic way.
 import os
 import sys
 import numpy as np
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Any, Tuple, List, Callable
 
 # Compatibility shim for environments with older typing_extensions.
 try:
@@ -260,8 +260,14 @@ class TiledClientManager:
             return None
     
     
-    def load_image_data(self, scan_id: int, detector: Optional[str] = None, 
-                       profile_name: Optional[str] = None, use_uid_lookup: bool = True) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
+    def load_image_data(
+        self,
+        scan_id: int,
+        detector: Optional[str] = None,
+        profile_name: Optional[str] = None,
+        use_uid_lookup: bool = True,
+        progress_callback: Optional[Callable[[int, Any], None]] = None,
+    ) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
         """
         Load image data from tiled server with performance optimization
         
@@ -275,6 +281,7 @@ class TiledClientManager:
             detector: Detector name, uses default if None
             profile_name: Tiled profile to use, uses default if None
             use_uid_lookup: If True, use Key queries for fast metadata lookup (default: True)
+            progress_callback: Optional callback receiving progress updates
             
         Returns:
             Tuple of (image_array, metadata) or (None, error_info)
@@ -300,7 +307,7 @@ class TiledClientManager:
             if use_uid_lookup and TILED_AVAILABLE and Key is not None:
                 uid = self.scanid_to_uid(scan_id, profile_name)
                 if uid:
-                    return self._load_image_by_uid(uid, detector, profile_name)
+                    return self._load_image_by_uid(uid, detector, profile_name, progress_callback=progress_callback)
             
             # Strategy 2: Fallback to scan_id-based lookup (uses cached catalog)
             print(f"DEBUG: [load_image_data] Falling back to scan_id lookup for scan {scan_id}")
@@ -330,7 +337,7 @@ class TiledClientManager:
             
             # Load image data based on profile structure
             profile = TILED_PROFILES[profile_name]
-            image_array = self._extract_image_data(scan_data, detector, profile)
+            image_array = self._extract_image_data(scan_data, detector, profile, progress_callback=progress_callback)
             
             if image_array is None:
                 return None, {'error': f'Failed to extract image data for detector: {detector}'}
@@ -340,7 +347,13 @@ class TiledClientManager:
         except Exception as e:
             return None, {'error': f'Tiled loading error: {str(e)}'}
     
-    def _load_image_by_uid(self, uid: str, detector: str, profile_name: str) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
+    def _load_image_by_uid(
+        self,
+        uid: str,
+        detector: str,
+        profile_name: str,
+        progress_callback: Optional[Callable[[int, Any], None]] = None,
+    ) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
         """
         Load image data using UID (optimized path)
         
@@ -386,7 +399,7 @@ class TiledClientManager:
             }
             
             # Load image data
-            image_array = self._extract_image_data(run, detector, profile)
+            image_array = self._extract_image_data(run, detector, profile, progress_callback=progress_callback)
             
             if image_array is None:
                 return None, {'error': f'Failed to extract image data for detector: {detector}'}
@@ -398,7 +411,13 @@ class TiledClientManager:
             print(f"Error loading image by UID {uid[:8]}...: {e}")
             return None, {'error': f'UID-based loading failed: {str(e)}'}
     
-    def _extract_image_data(self, scan_data, detector: str, profile: Dict[str, Any]) -> Optional[np.ndarray]:
+    def _extract_image_data(
+        self,
+        scan_data,
+        detector: str,
+        profile: Dict[str, Any],
+        progress_callback: Optional[Callable[[int, Any], None]] = None,
+    ) -> Optional[np.ndarray]:
         """
         Extract image data from scan by navigating data_access_path from config.
         
@@ -471,10 +490,11 @@ class TiledClientManager:
             
             # Extract the data by calling .read() if available
             if hasattr(current_obj, 'read'):
-                image_array = current_obj.read()
+                image_array = self._read_with_progress(current_obj, progress_callback)
             else:
                 # If it's already a numpy array
                 image_array = current_obj
+                self._emit_progress_update(progress_callback, 1, 1)
             
             # Log successful extraction
             path_str = '/'.join(resolved_path)
@@ -486,6 +506,35 @@ class TiledClientManager:
             import traceback
             traceback.print_exc()
             return None
+
+    def _read_with_progress(
+        self,
+        data_source,
+        progress_callback: Optional[Callable[[int, Any], None]] = None,
+    ):
+        """Read a tiled data source while emitting progress updates."""
+        self._emit_progress_update(progress_callback, 0, 1)
+        image_array = data_source.read()
+        self._emit_progress_update(progress_callback, 1, 1)
+        return image_array
+
+    def _emit_progress_update(
+        self,
+        progress_callback: Optional[Callable[[int, Any], None]],
+        chunks_done: int,
+        total_chunks: int,
+    ) -> None:
+        """Emit progress with a string status, with compatibility fallback."""
+        if progress_callback is None:
+            return
+
+        try:
+            progress_callback(chunks_done, f"{chunks_done}/{total_chunks}")
+        except TypeError:
+            try:
+                progress_callback(chunks_done, total_chunks)
+            except TypeError:
+                pass
 
     def _detector_segment_candidates(
         self,
