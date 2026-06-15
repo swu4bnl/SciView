@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QSlider,
     QSplitter,
@@ -45,6 +46,8 @@ from tabs.base_image_tab import BaseImageTab
 
 class _OperationWorker(QObject):
     finished = pyqtSignal(int, object, object)
+    progress_updated = pyqtSignal(int, int)
+    retry_detected = pyqtSignal(int, str)
 
     def __init__(self, token: int, action: Callable):
         super().__init__()
@@ -99,11 +102,62 @@ class TiledBrowserTab(BaseImageTab):
         self.cancel_button.setEnabled(False)
         self._active_thread = None
         self._active_worker = None
+        self.load_progress_bar.setVisible(False)
+        self.load_retry_label.setVisible(False)
 
     def _run_background(self, message: str, action: Callable, on_success: Callable) -> None:
         token = self._begin_operation(message)
         thread = QThread(self)
         worker = _OperationWorker(token, action)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(lambda done_token, result, error: self._handle_background_result(
+            done_token,
+            result,
+            error,
+            on_success,
+            thread,
+            worker,
+        ))
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        self._active_thread = thread
+        self._active_worker = worker
+        thread.start()
+
+    def _run_background_ex(
+        self,
+        message: str,
+        action_factory: Callable,
+        on_success: Callable,
+        *,
+        on_progress: Callable | None = None,
+        on_retry: Callable | None = None,
+    ) -> None:
+        """Like _run_background but injects progress/retry callbacks into the action.
+
+        *action_factory* is called as ``action_factory(progress_cb, retry_cb)`` where
+        each argument is either the corresponding signal emitter or ``None``.
+        """
+        token = self._begin_operation(message)
+        thread = QThread(self)
+
+        # Use mutable boxes so the action closure can capture the signal emitters
+        # that are only available after the worker is created.
+        prog_emit_box: list = [None]
+        retry_emit_box: list = [None]
+
+        def action():
+            return action_factory(prog_emit_box[0], retry_emit_box[0])
+
+        worker = _OperationWorker(token, action)
+        if on_progress:
+            worker.progress_updated.connect(on_progress)
+            prog_emit_box[0] = worker.progress_updated.emit
+        if on_retry:
+            worker.retry_detected.connect(on_retry)
+            retry_emit_box[0] = worker.retry_detected.emit
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(lambda done_token, result, error: self._handle_background_result(
@@ -311,6 +365,16 @@ class TiledBrowserTab(BaseImageTab):
         self.load_button.clicked.connect(self._load_selected_scan)
         row.addWidget(self.load_button)
         layout.addLayout(row)
+
+        self.load_progress_bar = QProgressBar()
+        self.load_progress_bar.setVisible(False)
+        layout.addWidget(self.load_progress_bar)
+
+        self.load_retry_label = QLabel()
+        self.load_retry_label.setVisible(False)
+        apply_info_style(self.load_retry_label)
+        layout.addWidget(self.load_retry_label)
+
         return group
 
     def _create_playback_group(self) -> QWidget:
@@ -573,12 +637,15 @@ class TiledBrowserTab(BaseImageTab):
         if not detector:
             QMessageBox.warning(self, "Missing detector", "No detector is available for this scan")
             return
-        def do_load():
+
+        def do_load(progress_cb, retry_cb):
             image_array = self.image_service.tiled_load_array(
                 profile_name=profile,
                 scan_id=scan.scan_id,
                 detector=detector,
                 uid=scan.uid,
+                progress_callback=progress_cb,
+                retry_callback=retry_cb,
             )
             image_ref = self.image_service.tiled_load_ref(
                 profile_name=profile,
@@ -588,7 +655,33 @@ class TiledBrowserTab(BaseImageTab):
             )
             return scan, detector, image_array, image_ref
 
-        self._run_background(f"Loading scan {scan.scan_id} detector {detector}...", do_load, self._apply_loaded_image)
+        self.load_progress_bar.setValue(0)
+        self.load_progress_bar.setVisible(True)
+        self.load_retry_label.setVisible(False)
+        self._run_background_ex(
+            f"Loading scan {scan.scan_id} detector {detector}...",
+            do_load,
+            self._apply_loaded_image,
+            on_progress=self._on_load_progress,
+            on_retry=self._on_load_retry,
+        )
+
+    def _on_load_progress(self, chunks_done: int, total_chunks: int) -> None:
+        """Update the progress bar as tiled chunks are downloaded.
+
+        The bar reserves the first 10% for connection overhead and the last 10%
+        for post-processing, mapping chunk progress onto the middle 80% range.
+        """
+        if total_chunks > 0:
+            pct = 10 + int((chunks_done / total_chunks) * 80)
+        else:
+            pct = 50  # indeterminate: show mid-point while total is unknown
+        self.load_progress_bar.setValue(pct)
+
+    def _on_load_retry(self, attempt: int, message: str) -> None:
+        """Show a transient retry indicator when the HTTP client retries a request."""
+        self.load_retry_label.setText(f"⟳ (attempt {attempt}) {message}")
+        self.load_retry_label.setVisible(True)
 
     def _apply_loaded_image(self, payload) -> None:
         scan, detector, image_array, image_ref = payload

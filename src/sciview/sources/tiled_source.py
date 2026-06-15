@@ -431,11 +431,31 @@ def tiled_run_metadata(profile_name: str, scan_id: int) -> dict[str, Any]:
     return _metadata(run) if run is not None else {}
 
 
-def tiled_load_array(profile_name: str, scan_id: int, detector: str, uid: str | None = None) -> np.ndarray:
+def tiled_load_array(
+    profile_name: str,
+    scan_id: int,
+    detector: str,
+    uid: str | None = None,
+    *,
+    progress_callback=None,
+    retry_callback=None,
+) -> np.ndarray:
     if uid:
-        array, metadata = tiled_manager._load_image_by_uid(uid, detector, profile_name)
+        array, metadata = tiled_manager._load_image_by_uid(
+            uid,
+            detector,
+            profile_name,
+            progress_callback=progress_callback,
+            retry_callback=retry_callback,
+        )
     else:
-        array, metadata = tiled_manager.load_image_data(scan_id, detector, profile_name)
+        array, metadata = tiled_manager.load_image_data(
+            scan_id,
+            detector,
+            profile_name,
+            progress_callback=progress_callback,
+            retry_callback=retry_callback,
+        )
     if array is None:
         raise RuntimeError(metadata.get("error", f"Could not load scan {scan_id}"))
     arr = np.asarray(array)

@@ -6,10 +6,11 @@ It handles authentication, connection persistence, and data loading from beamlin
 tiled servers in a beamline-agnostic way.
 """
 
+import itertools
 import os
 import sys
 import numpy as np
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Callable, Optional, Dict, Any, Tuple, List
 
 # Compatibility shim for environments with older typing_extensions.
 try:
@@ -157,6 +158,62 @@ class TiledClientManager:
         except Exception as e:
             print(f"Failed to connect to tiled server {profile_name}: {e}")
             return None
+
+    @staticmethod
+    def _add_retry_hooks_to_client(client, retry_callback: Optional[Callable]) -> None:
+        """Attach an httpx response event hook to report server-side retries.
+
+        Tiled clients expose the underlying httpx client through their context
+        object.  When the server returns a retriable HTTP status (429, 5xx) we
+        call *retry_callback(attempt, message)* so callers can surface a retry
+        indicator in the UI.
+
+        The hook is registered on the live client object so it applies to every
+        request made after this call.  If the tiled/httpx client does not expose
+        the expected attributes, the function silently returns without modifying
+        anything.
+        """
+        if not retry_callback or not TILED_AVAILABLE:
+            return
+
+        # Tiled wraps httpx; the underlying sync client is usually available via
+        # client.context.http_client or client.http_client.
+        http_client = None
+        for attr_path in (
+            ("context", "http_client"),
+            ("http_client",),
+        ):
+            obj = client
+            try:
+                for attr in attr_path:
+                    obj = getattr(obj, attr)
+                http_client = obj
+                break
+            except AttributeError:
+                continue
+
+        if http_client is None:
+            return
+
+        try:
+            retry_count = 0
+            _retry_statuses = {429, 500, 502, 503, 504}
+
+            def _on_response(response):
+                nonlocal retry_count
+                if getattr(response, "status_code", None) in _retry_statuses:
+                    retry_count += 1
+                    retry_callback(
+                        retry_count,
+                        f"Server returned {response.status_code} – retrying "
+                        f"(attempt {retry_count})",
+                    )
+
+            hooks = getattr(http_client, "event_hooks", None)
+            if isinstance(hooks, dict):
+                hooks.setdefault("response", []).append(_on_response)
+        except Exception:  # pragma: no cover – best-effort
+            pass
     
     def get_or_load_catalog(self, profile_name: Optional[str] = None) -> Optional[Any]:
         """
@@ -260,22 +317,35 @@ class TiledClientManager:
             return None
     
     
-    def load_image_data(self, scan_id: int, detector: Optional[str] = None, 
-                       profile_name: Optional[str] = None, use_uid_lookup: bool = True) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
+    def load_image_data(  # pylint: disable=too-many-arguments,too-many-branches,too-many-return-statements,too-many-positional-arguments,too-many-locals
+        self,
+        scan_id: int,
+        detector: Optional[str] = None,
+        profile_name: Optional[str] = None,
+        use_uid_lookup: bool = True,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        retry_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
         """
         Load image data from tiled server with performance optimization
-        
+
         Performance strategy:
         1. One-time cost: get_or_load_catalog() caches raw catalog per profile
         2. Use Key queries to translate scan_id to uid (fast metadata search)
         3. Then access data via uid path
-        
+
         Args:
             scan_id: Scan ID to load
             detector: Detector name, uses default if None
             profile_name: Tiled profile to use, uses default if None
-            use_uid_lookup: If True, use Key queries for fast metadata lookup (default: True)
-            
+            use_uid_lookup: If True, use Key queries for fast metadata lookup
+            progress_callback: Optional ``(chunks_done, total_chunks)`` callable
+                called after each chunk download.  When the array has only one
+                chunk the callback is invoked with ``(0, 1)`` before the read
+                and ``(1, 1)`` after.
+            retry_callback: Optional ``(attempt, message)`` callable invoked
+                each time the HTTP client encounters a retriable server error.
+
         Returns:
             Tuple of (image_array, metadata) or (None, error_info)
         """
@@ -300,7 +370,11 @@ class TiledClientManager:
             if use_uid_lookup and TILED_AVAILABLE and Key is not None:
                 uid = self.scanid_to_uid(scan_id, profile_name)
                 if uid:
-                    return self._load_image_by_uid(uid, detector, profile_name)
+                    return self._load_image_by_uid(
+                        uid, detector, profile_name,
+                        progress_callback=progress_callback,
+                        retry_callback=retry_callback,
+                    )
             
             # Strategy 2: Fallback to scan_id-based lookup (uses cached catalog)
             print(f"DEBUG: [load_image_data] Falling back to scan_id lookup for scan {scan_id}")
@@ -328,9 +402,16 @@ class TiledClientManager:
                 'path': TILED_PROFILES[profile_name]['path']
             }
             
-            # Load image data based on profile structure
+            # Load image data based on profile structure; attach retry hooks first.
+            client = self.get_or_create_client(profile_name)
+            if client is not None:
+                self._add_retry_hooks_to_client(client, retry_callback)
+
             profile = TILED_PROFILES[profile_name]
-            image_array = self._extract_image_data(scan_data, detector, profile)
+            image_array = self._extract_image_data(
+                scan_data, detector, profile,
+                progress_callback=progress_callback,
+            )
             
             if image_array is None:
                 return None, {'error': f'Failed to extract image data for detector: {detector}'}
@@ -340,15 +421,24 @@ class TiledClientManager:
         except Exception as e:
             return None, {'error': f'Tiled loading error: {str(e)}'}
     
-    def _load_image_by_uid(self, uid: str, detector: str, profile_name: str) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
+    def _load_image_by_uid(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        uid: str,
+        detector: str,
+        profile_name: str,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        retry_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
         """
         Load image data using UID (optimized path)
-        
+
         Args:
             uid: Unique ID of the scan
             detector: Detector name
             profile_name: Tiled profile name
-            
+            progress_callback: Optional ``(chunks_done, total_chunks)`` callable.
+            retry_callback: Optional ``(attempt, message)`` callable.
+
         Returns:
             Tuple of (image_array, metadata) or (None, error_info)
         """
@@ -356,7 +446,10 @@ class TiledClientManager:
             client = self.get_or_create_client(profile_name)
             if client is None:
                 return None, {'error': f'Failed to connect to tiled server: {profile_name}'}
-            
+
+            # Attach retry event hooks to the underlying httpx client.
+            self._add_retry_hooks_to_client(client, retry_callback)
+
             profile = TILED_PROFILES[profile_name]
             
             # Access run via uid directly: client[f"path/to/run/{uid}/primary"]
@@ -386,7 +479,10 @@ class TiledClientManager:
             }
             
             # Load image data
-            image_array = self._extract_image_data(run, detector, profile)
+            image_array = self._extract_image_data(
+                run, detector, profile,
+                progress_callback=progress_callback,
+            )
             
             if image_array is None:
                 return None, {'error': f'Failed to extract image data for detector: {detector}'}
@@ -398,23 +494,31 @@ class TiledClientManager:
             print(f"Error loading image by UID {uid[:8]}...: {e}")
             return None, {'error': f'UID-based loading failed: {str(e)}'}
     
-    def _extract_image_data(self, scan_data, detector: str, profile: Dict[str, Any]) -> Optional[np.ndarray]:
+    def _extract_image_data(  # pylint: disable=too-many-branches
+        self,
+        scan_data,
+        detector: str,
+        profile: Dict[str, Any],
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+    ) -> Optional[np.ndarray]:
         """
         Extract image data from scan by navigating data_access_path from config.
-        
-        The data_access_path is a list of keys/attributes to navigate, with {detector}
-        as a placeholder for the detector name:
-        
+
+        The data_access_path is a list of keys/attributes to navigate, with
+        {detector} as a placeholder for the detector name:
+
         Examples:
         - cms/raw:        ['primary', 'data', '{detector}'] -> scan.primary.data[detector]
         - cms/migration:  ['primary', '{detector}']         -> scan.primary[detector]
         - standard tiled: ['{detector}']                    -> scan[detector]
-        
+
         Args:
             scan_data: Root scan object from tiled
             detector: Detector name to substitute for {detector} placeholder
             profile: Profile configuration containing 'data_access_path'
-            
+            progress_callback: Optional ``(chunks_done, total_chunks)`` callable
+                called as chunks are downloaded.
+
         Returns:
             numpy.ndarray or None: Image array, or None if extraction failed
         """
@@ -471,9 +575,11 @@ class TiledClientManager:
             
             # Extract the data by calling .read() if available
             if hasattr(current_obj, 'read'):
-                image_array = current_obj.read()
+                image_array = self._read_with_progress(current_obj, progress_callback)
             else:
                 # If it's already a numpy array
+                if progress_callback:
+                    progress_callback(1, 1)
                 image_array = current_obj
             
             # Log successful extraction
@@ -486,6 +592,105 @@ class TiledClientManager:
             import traceback
             traceback.print_exc()
             return None
+
+    def _read_with_progress(
+        self,
+        array_client,
+        progress_callback: Optional[Callable[[int, int], None]],
+    ) -> np.ndarray:
+        """Download a tiled array with optional per-chunk progress reporting.
+
+        If *array_client* exposes a ``chunks`` attribute (tuple of tuples
+        representing the chunk structure of the underlying storage, as produced
+        by dask/zarr/tiled), each chunk is downloaded individually so that
+        *progress_callback* can be called after every completed chunk.
+
+        When no chunk information is available, or when the data fits in a
+        single chunk, the array is downloaded in one request and the callback
+        is called with ``(1, 1)`` at completion.
+
+        Args:
+            array_client: Tiled array client supporting ``.read()`` and
+                optionally ``.chunks``.
+            progress_callback: Optional ``(chunks_done, total_chunks)``
+                callable.  Receives ``(0, total)`` before the first chunk and
+                ``(n, total)`` after each chunk.
+
+        Returns:
+            numpy.ndarray with the full array data.
+        """
+        chunks = getattr(array_client, 'chunks', None)
+        if chunks and progress_callback:
+            total = 1
+            for dim_chunks in chunks:
+                total *= len(dim_chunks)
+            if total > 1:
+                return self._read_chunks_with_progress(
+                    array_client, chunks, total, progress_callback
+                )
+
+        # Single read (one chunk or no chunk info)
+        if progress_callback:
+            progress_callback(0, 1)
+        result = array_client.read()
+        if progress_callback:
+            progress_callback(1, 1)
+        return result
+
+    @staticmethod
+    def _read_chunks_with_progress(  # pylint: disable=too-many-locals
+        array_client,
+        chunks: tuple,
+        total: int,
+        progress_callback: Callable[[int, int], None],
+    ) -> np.ndarray:
+        """Read a multi-chunk tiled array slice-by-slice with progress updates.
+
+        Args:
+            array_client: Tiled array client.
+            chunks: Tuple of tuples describing chunk sizes per dimension
+                (matches dask convention).
+            total: Pre-computed total number of chunks.
+            progress_callback: ``(chunks_done, total_chunks)`` callable.
+
+        Returns:
+            Reassembled numpy.ndarray.
+        """
+        ndim = len(chunks)
+        chunk_indices = list(
+            itertools.product(*[range(len(c)) for c in chunks])
+        )
+
+        # Compute cumulative offsets for each dimension
+        offsets = []
+        for dim_chunks in chunks:
+            cum = [0]
+            for size in dim_chunks:
+                cum.append(cum[-1] + size)
+            offsets.append(cum)
+
+        full_shape = tuple(offsets[dim][-1] for dim in range(ndim))
+
+        # Allocate output; dtype discovered on first chunk
+        result = None
+        progress_callback(0, total)
+
+        for done, idx in enumerate(chunk_indices):
+            slices = tuple(
+                slice(offsets[dim][k], offsets[dim][k + 1])
+                for dim, k in enumerate(idx)
+            )
+            chunk_data = array_client[slices].read()
+            if result is None:
+                result = np.empty(full_shape, dtype=chunk_data.dtype)
+            result[slices] = chunk_data
+            progress_callback(done + 1, total)
+
+        if result is None:
+            # chunk_indices was empty (every dimension has zero chunks).
+            # Fall back to a full read so callers always receive an array.
+            result = array_client.read()
+        return result
 
     def _detector_segment_candidates(
         self,
