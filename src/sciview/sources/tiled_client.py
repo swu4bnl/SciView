@@ -493,6 +493,7 @@ class TiledClientManager:
                 image_array = self._read_with_progress(current_obj, progress_callback)
             else:
                 # If it's already a numpy array
+                self._emit_progress_update(progress_callback, 0, 1)
                 image_array = current_obj
                 self._emit_progress_update(progress_callback, 1, 1)
             
@@ -512,7 +513,16 @@ class TiledClientManager:
         data_source,
         progress_callback: Optional[Callable[[int, Any], None]] = None,
     ):
-        """Read a tiled data source while emitting progress updates."""
+        """
+        Read from a tiled-like source while emitting optional progress updates.
+
+        Args:
+            data_source: Object with a ``read()`` method.
+            progress_callback: Optional callback for progress notifications.
+
+        Returns:
+            Result of ``data_source.read()``.
+        """
         self._emit_progress_update(progress_callback, 0, 1)
         image_array = data_source.read()
         self._emit_progress_update(progress_callback, 1, 1)
@@ -524,7 +534,13 @@ class TiledClientManager:
         chunks_done: int,
         total_chunks: int,
     ) -> None:
-        """Emit progress with a string status, with compatibility fallback."""
+        """
+        Emit progress in either ``(int, str)`` or legacy ``(int, int)`` format.
+
+        The callback is first called with ``(chunks_done, "done/total")`` for
+        Qt signal slots expecting ``(int, str)``. If that raises ``TypeError``,
+        the legacy ``(chunks_done, total_chunks)`` form is attempted.
+        """
         if progress_callback is None:
             return
 
