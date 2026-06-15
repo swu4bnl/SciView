@@ -46,7 +46,7 @@ from tabs.base_image_tab import BaseImageTab
 
 class _OperationWorker(QObject):
     finished = pyqtSignal(int, object, object)
-    progress_updated = pyqtSignal(int, str)
+    progress_updated = pyqtSignal(int, int)
     retry_detected = pyqtSignal(int, str)
 
     def __init__(self, token: int, action: Callable):
