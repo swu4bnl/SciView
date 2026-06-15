@@ -44,6 +44,8 @@ except ImportError as exc:
 # Import configuration
 from sciview.profiles.cms_profile import TILED_PROFILES, get_default_tiled_settings
 
+ProgressCallback = Callable[[int, int | str], None]
+
 
 class TiledClientManager:
     """
@@ -323,7 +325,7 @@ class TiledClientManager:
         detector: Optional[str] = None,
         profile_name: Optional[str] = None,
         use_uid_lookup: bool = True,
-        progress_callback: Optional[Callable[[int, Any], None]] = None,
+        progress_callback: Optional[ProgressCallback] = None,
         retry_callback: Optional[Callable[[int, str], None]] = None,
     ) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
         """
@@ -425,7 +427,7 @@ class TiledClientManager:
         uid: str,
         detector: str,
         profile_name: str,
-        progress_callback: Optional[Callable[[int, Any], None]] = None,
+        progress_callback: Optional[ProgressCallback] = None,
         retry_callback: Optional[Callable[[int, str], None]] = None,
     ) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
         """
@@ -498,7 +500,7 @@ class TiledClientManager:
         scan_data,
         detector: str,
         profile: Dict[str, Any],
-        progress_callback: Optional[Callable[[int, Any], None]] = None,
+        progress_callback: Optional[ProgressCallback] = None,
     ) -> Optional[np.ndarray]:
         """
         Extract image data from scan by navigating data_access_path from config.
@@ -577,8 +579,8 @@ class TiledClientManager:
             else:
                 # If it's already a numpy array
                 self._emit_progress_update(progress_callback, 0, 1)
-                self._emit_progress_update(progress_callback, 1, 1)
                 image_array = current_obj
+                self._emit_progress_update(progress_callback, 1, 1)
             
             # Log successful extraction
             path_str = '/'.join(resolved_path)
@@ -594,7 +596,7 @@ class TiledClientManager:
     def _read_with_progress(
         self,
         array_client,
-        progress_callback: Optional[Callable[[int, Any], None]],
+        progress_callback: Optional[ProgressCallback],
     ) -> np.ndarray:
         """Download a tiled array with optional per-chunk progress reporting.
 
@@ -633,7 +635,7 @@ class TiledClientManager:
 
     @staticmethod
     def _emit_progress_update(
-        progress_callback: Optional[Callable[[int, Any], None]],
+        progress_callback: Optional[ProgressCallback],
         chunks_done: int,
         total_chunks: int,
     ) -> None:
@@ -654,7 +656,7 @@ class TiledClientManager:
         array_client,
         chunks: tuple,
         total: int,
-        progress_callback: Callable[[int, Any], None],
+        progress_callback: ProgressCallback,
     ) -> np.ndarray:
         """Read a multi-chunk tiled array slice-by-slice with progress updates.
 
@@ -685,7 +687,8 @@ class TiledClientManager:
 
         # Allocate output; dtype discovered on first chunk
         result = None
-        TiledClientManager._emit_progress_update(progress_callback, 0, total)
+        progress_total = max(total, 1)
+        TiledClientManager._emit_progress_update(progress_callback, 0, progress_total)
 
         for done, idx in enumerate(chunk_indices):
             slices = tuple(
@@ -696,12 +699,13 @@ class TiledClientManager:
             if result is None:
                 result = np.empty(full_shape, dtype=chunk_data.dtype)
             result[slices] = chunk_data
-            TiledClientManager._emit_progress_update(progress_callback, done + 1, total)
+            TiledClientManager._emit_progress_update(progress_callback, done + 1, progress_total)
 
         if result is None:
             # chunk_indices was empty (every dimension has zero chunks).
             # Fall back to a full read so callers always receive an array.
             result = array_client.read()
+            TiledClientManager._emit_progress_update(progress_callback, 1, progress_total)
         return result
 
     def _detector_segment_candidates(
