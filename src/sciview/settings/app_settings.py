@@ -110,4 +110,5 @@ IMAGE_BROWSER_SETTINGS = {
     "max_recent_files": 10,
     "default_max_files": 500,
     "default_scan_id": 2334820,
+    "show_tiled_progress": True,   # Set False to disable per-chunk progress bar and retry label
 }

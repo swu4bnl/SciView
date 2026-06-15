@@ -85,8 +85,17 @@ class ImageService:
         scan_id: int,
         detector: str,
         uid: str | None = None,
+        progress_callback=None,
+        retry_callback=None,
     ) -> np.ndarray:
-        return tiled_source.tiled_load_array(profile_name, scan_id, detector, uid=uid)
+        return tiled_source.tiled_load_array(
+            profile_name,
+            scan_id,
+            detector,
+            uid=uid,
+            progress_callback=progress_callback,
+            retry_callback=retry_callback,
+        )
 
     def tiled_load_ref(
         self,
