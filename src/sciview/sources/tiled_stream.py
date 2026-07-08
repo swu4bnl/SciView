@@ -62,6 +62,7 @@ class TiledLiveMonitor:
 
         self._catalog = catalog
         try:
+            self._preflight_subscription(catalog)
             subscription = catalog.subscribe()
             subscription.child_created.add_callback(self._on_child_created)
             subscription.start_in_thread()
@@ -74,6 +75,37 @@ class TiledLiveMonitor:
         self._catalog_subscription = subscription
         self._running = True
         self._emit(TiledLiveEvent(profile_name=self.profile_name, event_type="started"))
+
+    def _preflight_subscription(self, catalog: Any) -> None:
+        """Verify the WebSocket handshake before starting Tiled's thread.
+
+        Tiled's ``start_in_thread`` returns before the WebSocket handshake
+        completes.  If the server rejects the stream, the exception otherwise
+        lands in Tiled's background thread and bypasses SciView error handling.
+        Newer/alternate Tiled clients may not expose the private hooks used
+        here; in that case we skip the preflight and fall back to normal start.
+        """
+
+        subscription = catalog.subscribe()
+        connect = getattr(subscription, "_connect", None)
+        websocket = getattr(subscription, "_websocket", None)
+        if not callable(connect) or websocket is None:
+            return
+
+        try:
+            connect()
+        except Exception as exc:
+            raise RuntimeError(
+                f"Tiled live stream connection failed for profile '{self.profile_name}': {exc}"
+            ) from exc
+        finally:
+            raw_websocket = getattr(websocket, "_websocket", None)
+            close = getattr(websocket, "close", None)
+            if raw_websocket is not None and callable(close):
+                try:
+                    close()
+                except Exception:
+                    pass
 
     def stop(self) -> None:
         """Stop all active live subscriptions."""

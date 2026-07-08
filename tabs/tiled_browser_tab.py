@@ -9,7 +9,6 @@ from typing import Callable
 import numpy as np
 from PyQt5.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
-    QCheckBox,
     QApplication,
     QComboBox,
     QFormLayout,
@@ -531,7 +530,12 @@ class TiledBrowserTab(BaseImageTab):
         if not self.image_service.tiled_is_available():
             msg = self.image_service.tiled_import_error() or "Tiled unavailable"
             self.auth_status_label.setText(f"Status: unavailable ({msg})")
-            for widget in (self.auth_button, self.refresh_button, self.run_search_button, self.run_scan_id_button):
+            for widget in (
+                self.auth_button,
+                self.refresh_button,
+                self.run_search_button,
+                self.run_scan_id_button,
+            ):
                 widget.setEnabled(False)
             self.parent_app.show_status(f"Tiled browser disabled: {msg}")
             return
