@@ -33,6 +33,23 @@ class AppStyle:
         'spacing': 4,
     }
 
+    TOOLBAR_BUTTON_UI = {
+        'symbol_width': 36,
+        'symbol_height': 34,
+        'text_min_width': 64,
+        'text_height': 34,
+        'symbol_font_size': '20px',
+        'text_font_size': '11px',
+        'font_weight': 400,
+        'padding_horizontal': 8,
+    }
+
+    FORM_UI = {
+        'section_label_width': 58,
+        'field_label_width': 48,
+        'input_min_width': 92,
+    }
+
     CORNER_ICON_FILES = {
         'refresh': 'refresh.png',
         'app_update': 'app_update.png',
@@ -88,14 +105,18 @@ class AppStyle:
         'tiled_controls_min_width': 280,
         'tiled_controls_max_width': 460,
         'tiled_metadata_max_height': 72,
+        'tiled_results_min_height': 260,
         'tiled_results_column_widths': [70, 100, 150, 95, 85, 120, 60, 145],
         'mask_controls_ratio': [10, 15, 12, 10, 10],
         'splitter_handle_width': 2,  # Thinner, modern splitter
         'panel_margin': 8,
         'panel_spacing': 6,
+        'toolbar_spacing': 6,
         'border_radius': 2,
         'button_height': 32,
-        'input_height': 28
+        'input_height': 28,
+        'image_browser_current_label_max_height': 30,
+        'image_browser_sync_button_height': 60,
     }
     
     # Widget styles
@@ -285,6 +306,64 @@ class AppStyle:
             QSplitter::handle:pressed {{
                 background-color: {primary};
             }}
+        """,
+
+        'toolbar_symbol_button': """
+            QPushButton {{
+                background-color: {surface};
+                color: {text_primary};
+                font-size: {toolbar_symbol_font_size};
+                font-weight: {toolbar_font_weight};
+                padding: 0;
+                border: 1px solid {border};
+                border-radius: {border_radius}px;
+            }}
+            QPushButton:hover {{
+                background-color: {surface_alt};
+                border-color: {border_active};
+            }}
+            QPushButton:pressed {{
+                background-color: {border};
+            }}
+            QPushButton:checked {{
+                background-color: {border_active};
+                color: white;
+                border-color: {border_active};
+            }}
+            QPushButton:disabled {{
+                background-color: {surface_alt};
+                color: {text_muted};
+                border-color: {border};
+            }}
+        """,
+
+        'toolbar_text_button': """
+            QPushButton {{
+                background-color: {surface};
+                color: {text_primary};
+                font-size: {toolbar_text_font_size};
+                font-weight: {toolbar_font_weight};
+                padding: 0 {toolbar_padding_horizontal}px;
+                border: 1px solid {border};
+                border-radius: {border_radius}px;
+            }}
+            QPushButton:hover {{
+                background-color: {surface_alt};
+                border-color: {border_active};
+            }}
+            QPushButton:pressed {{
+                background-color: {border};
+            }}
+            QPushButton:checked {{
+                background-color: {border_active};
+                color: white;
+                border-color: {border_active};
+            }}
+            QPushButton:disabled {{
+                background-color: {surface_alt};
+                color: {text_muted};
+                border-color: {border};
+            }}
         """
     }
 
@@ -324,6 +403,12 @@ class AppStyle:
             'border_radius': cls.LAYOUT['border_radius'],
             'button_height': cls.LAYOUT['button_height'],
             'input_height': cls.LAYOUT['input_height'],
+
+            # Toolbar controls
+            'toolbar_symbol_font_size': cls.TOOLBAR_BUTTON_UI['symbol_font_size'],
+            'toolbar_text_font_size': cls.TOOLBAR_BUTTON_UI['text_font_size'],
+            'toolbar_font_weight': cls.TOOLBAR_BUTTON_UI['font_weight'],
+            'toolbar_padding_horizontal': cls.TOOLBAR_BUTTON_UI['padding_horizontal'],
             
             # Any extra variables
             **extra_vars
@@ -552,6 +637,21 @@ class AppStyle:
         return QSize(cls.CORNER_BUTTON_UI['button_width'], cls.CORNER_BUTTON_UI['button_height'])
 
     @classmethod
+    def toolbar_symbol_button_size(cls):
+        """Return standard square toolbar-symbol button size."""
+        return QSize(cls.TOOLBAR_BUTTON_UI['symbol_width'], cls.TOOLBAR_BUTTON_UI['symbol_height'])
+
+    @classmethod
+    def toolbar_text_button_height(cls):
+        """Return standard toolbar text-button height."""
+        return cls.TOOLBAR_BUTTON_UI['text_height']
+
+    @classmethod
+    def toolbar_text_button_min_width(cls):
+        """Return standard minimum width for toolbar text buttons."""
+        return cls.TOOLBAR_BUTTON_UI['text_min_width']
+
+    @classmethod
     def icon_directory(cls, workspace_root: Path) -> Path:
         """Return absolute icon directory for this workspace."""
         return workspace_root / cls.ASSETS_RELATIVE_DIR
@@ -604,6 +704,17 @@ def apply_secondary_button_style(widget):
 def apply_sync_button_style(widget):
     """Apply sync button style to a widget"""
     widget.setStyleSheet(AppStyle.format_style('sync_button'))
+
+def apply_toolbar_symbol_button_style(widget):
+    """Apply standard style and size to a symbol-only toolbar button."""
+    widget.setFixedSize(AppStyle.toolbar_symbol_button_size())
+    widget.setStyleSheet(AppStyle.format_style('toolbar_symbol_button'))
+
+def apply_toolbar_text_button_style(widget):
+    """Apply standard style and size to a compact text toolbar button."""
+    widget.setMinimumWidth(AppStyle.toolbar_text_button_min_width())
+    widget.setFixedHeight(AppStyle.toolbar_text_button_height())
+    widget.setStyleSheet(AppStyle.format_style('toolbar_text_button'))
 
 def apply_input_style(widget):
     """Apply input field style to a widget"""

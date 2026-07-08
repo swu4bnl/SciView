@@ -640,53 +640,38 @@ class ImageBrowserApp(BaseImageTab):
         layout.addWidget(self.folder_files_list, 1)
 
         controls_layout = QHBoxLayout()
-        controls_layout.setSpacing(8)
-        toolbar_button_style = """
-            QPushButton {
-                font-size: 18px;
-                font-weight: 600;
-                min-width: 40px;
-                max-width: 40px;
-                min-height: 34px;
-                max-height: 34px;
-                padding: 0;
-            }
-            QPushButton:checked {
-                background-color: #2f7d95;
-                color: white;
-            }
-        """
+        controls_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
 
         self.add_all_folder_button = QPushButton("+")
         self.add_all_folder_button.setToolTip("Add all visible folder images to the session")
-        self.add_all_folder_button.setStyleSheet(toolbar_button_style)
+        apply_toolbar_symbol_button_style(self.add_all_folder_button)
         self.add_all_folder_button.clicked.connect(self._load_from_folder)
         controls_layout.addWidget(self.add_all_folder_button)
 
         self.folder_play_button = QPushButton("▶")
         self.folder_play_button.setToolTip("Play through the visible folder images")
-        self.folder_play_button.setStyleSheet(toolbar_button_style)
+        apply_toolbar_symbol_button_style(self.folder_play_button)
         self.folder_play_button.setCheckable(True)
         self.folder_play_button.clicked.connect(self._toggle_folder_playback)
         controls_layout.addWidget(self.folder_play_button)
 
         self.folder_stop_button = QPushButton("■")
         self.folder_stop_button.setToolTip("Stop playback")
-        self.folder_stop_button.setStyleSheet(toolbar_button_style)
+        apply_toolbar_symbol_button_style(self.folder_stop_button)
         self.folder_stop_button.clicked.connect(self._stop_folder_playback)
         controls_layout.addWidget(self.folder_stop_button)
 
         self.folder_loop_button = QPushButton("∞")
         self.folder_loop_button.setToolTip("Loop playback")
         self.folder_loop_button.setCheckable(True)
-        self.folder_loop_button.setStyleSheet(toolbar_button_style)
+        apply_toolbar_symbol_button_style(self.folder_loop_button)
         controls_layout.addWidget(self.folder_loop_button)
 
         self.folder_auto_refresh_button = QPushButton("⟳")
         self.folder_auto_refresh_button.setToolTip("Refresh the folder list automatically when new images appear")
         self.folder_auto_refresh_button.setCheckable(True)
         self.folder_auto_refresh_button.setChecked(True)
-        self.folder_auto_refresh_button.setStyleSheet(toolbar_button_style)
+        apply_toolbar_symbol_button_style(self.folder_auto_refresh_button)
         self.folder_auto_refresh_button.toggled.connect(self._update_folder_auto_refresh)
         controls_layout.addWidget(self.folder_auto_refresh_button)
         controls_layout.addStretch()
@@ -727,7 +712,7 @@ class ImageBrowserApp(BaseImageTab):
         # Current image info
         self.current_image_label = QLabel("No image loaded")
         apply_info_style(self.current_image_label)
-        self.current_image_label.setMaximumHeight(30)
+        self.current_image_label.setMaximumHeight(AppStyle.LAYOUT['image_browser_current_label_max_height'])
         layout.addWidget(self.current_image_label)
         
         # Use the base class image panel
@@ -739,7 +724,7 @@ class ImageBrowserApp(BaseImageTab):
         self.sync_button = QPushButton("Use This Image")
         self.sync_button.setToolTip("Send current image to other tabs in the main application")
         apply_sync_button_style(self.sync_button)
-        self.sync_button.setFixedHeight(60)
+        self.sync_button.setFixedHeight(AppStyle.LAYOUT['image_browser_sync_button_height'])
         self.sync_button.clicked.connect(self._sync_to_parent)
         self.sync_button.setEnabled(False)
         layout.addWidget(self.sync_button)

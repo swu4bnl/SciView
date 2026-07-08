@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -39,6 +40,8 @@ from sciview.interfaces.theme.app_style import (
     apply_sync_button_style,
     setup_splitter_layout,
     apply_title_style,
+    apply_toolbar_symbol_button_style,
+    apply_toolbar_text_button_style,
 )
 from sciview.interfaces.services.image_service import ImageService
 from sciview.settings.app_settings import IMAGE_BROWSER_SETTINGS
@@ -277,79 +280,136 @@ class TiledBrowserTab(BaseImageTab):
 
     def _create_connection_group(self) -> QWidget:
         group = QGroupBox("1) Connection")
-        layout = QFormLayout(group)
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
+        layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
+        group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
+        row = QHBoxLayout()
+        row.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
+        row.addWidget(QLabel("catalog"))
         self.catalog_combo = QComboBox()
         self.catalog_combo.currentIndexChanged.connect(self._on_catalog_changed)
-        layout.addRow("Catalog:", self.catalog_combo)
+        row.addWidget(self.catalog_combo, 1)
 
-        self.auth_status_label = QLabel("Status: Unknown")
-        apply_info_style(self.auth_status_label)
-        layout.addRow(self.auth_status_label)
-
-        buttons = QHBoxLayout()
-        self.auth_button = QPushButton("Log In")
+        self.auth_button = QPushButton("Login")
+        self.auth_button.setToolTip("Log in or refresh Tiled authentication")
+        apply_toolbar_text_button_style(self.auth_button)
         self.auth_button.clicked.connect(self._handle_login)
-        buttons.addWidget(self.auth_button)
+        row.addWidget(self.auth_button)
 
-        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button = QPushButton("↻")
+        self.refresh_button.setToolTip("Refresh connection status")
+        apply_toolbar_symbol_button_style(self.refresh_button)
         self.refresh_button.clicked.connect(self._refresh_auth_state)
-        buttons.addWidget(self.refresh_button)
-        layout.addRow(buttons)
+        row.addWidget(self.refresh_button)
+        layout.addLayout(row)
+
+        self.auth_status_label = QLabel("Status: unknown")
+        apply_info_style(self.auth_status_label)
+        layout.addWidget(self.auth_status_label)
         return group
 
     def _create_search_group(self) -> QWidget:
         group = QGroupBox("2) Search")
         layout = QVBoxLayout(group)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
+        layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
+        group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
-        scan_id_filters = QFormLayout()
-        scan_id_row = QHBoxLayout()
+        search_grid = QGridLayout()
+        search_grid.setHorizontalSpacing(AppStyle.LAYOUT['toolbar_spacing'])
+        search_grid.setVerticalSpacing(AppStyle.LAYOUT['panel_spacing'])
+        label_width = AppStyle.FORM_UI['section_label_width']
+        field_label_width = AppStyle.FORM_UI['field_label_width']
+        input_min_width = AppStyle.FORM_UI['input_min_width']
+
+        scan_id_label = QLabel("Scan ID")
+        scan_id_label.setFixedWidth(label_width)
+        search_grid.addWidget(scan_id_label, 0, 0)
+
+        start_label = QLabel("Start")
+        start_label.setFixedWidth(field_label_width)
+        search_grid.addWidget(start_label, 0, 1)
         self.scan_id_start_input = QSpinBox()
         self.scan_id_start_input.setRange(-9999999, 9999999)
-        self.scan_id_start_input.setPrefix("Start ")
         self.scan_id_start_input.setValue(IMAGE_BROWSER_SETTINGS['default_scan_id'])
-        scan_id_row.addWidget(self.scan_id_start_input)
+        self.scan_id_start_input.setMinimumWidth(input_min_width)
+        search_grid.addWidget(self.scan_id_start_input, 0, 2)
 
+        end_label = QLabel("End")
+        end_label.setFixedWidth(field_label_width)
+        search_grid.addWidget(end_label, 0, 3)
         self.scan_id_end_input = QSpinBox()
         self.scan_id_end_input.setRange(-9999999, 9999999)
-        self.scan_id_end_input.setPrefix("End ")
         self.scan_id_end_input.setValue(IMAGE_BROWSER_SETTINGS['default_scan_id'])
-        scan_id_row.addWidget(self.scan_id_end_input)
-        scan_id_filters.addRow("scan_id:", scan_id_row)
-        layout.addLayout(scan_id_filters)
+        self.scan_id_end_input.setMinimumWidth(input_min_width)
+        search_grid.addWidget(self.scan_id_end_input, 0, 4)
 
-        self.run_scan_id_button = QPushButton("Load Scan ID Range")
+        self.run_scan_id_button = QPushButton("⌕")
+        self.run_scan_id_button.setToolTip("Find scans by scan ID or scan ID range")
+        apply_toolbar_symbol_button_style(self.run_scan_id_button)
         self.run_scan_id_button.clicked.connect(self._search_scan_ids)
-        layout.addWidget(self.run_scan_id_button)
+        search_grid.addWidget(self.run_scan_id_button, 0, 5)
 
-        filters = QFormLayout()
+        cycle_label = QLabel("Cycle")
+        cycle_label.setFixedWidth(label_width)
+        search_grid.addWidget(cycle_label, 1, 0)
         self.cycle_combo = QComboBox()
         self.cycle_combo.setEditable(True)
         self.cycle_combo.addItems(["2026-2", "2026-1", "2025-3", "2025-2", "2025-1"])
-        filters.addRow("Cycle:", self.cycle_combo)
+        self.cycle_combo.setMinimumWidth(input_min_width)
+        search_grid.addWidget(self.cycle_combo, 1, 1, 1, 2)
 
+        proposal_label = QLabel("Proposal")
+        proposal_label.setFixedWidth(field_label_width)
+        search_grid.addWidget(proposal_label, 1, 3)
         self.proposal_input = QLineEdit()
         self.proposal_input.setPlaceholderText("320406")
-        filters.addRow("Proposal ID:", self.proposal_input)
+        self.proposal_input.setMinimumWidth(input_min_width)
+        search_grid.addWidget(self.proposal_input, 1, 4)
+
+        self.run_search_button = QPushButton("⌕")
+        self.run_search_button.setToolTip("Find scans by cycle and proposal metadata")
+        apply_toolbar_symbol_button_style(self.run_search_button)
+        self.run_search_button.clicked.connect(self._search_scans)
+        search_grid.addWidget(self.run_search_button, 1, 5)
+        search_grid.setColumnStretch(2, 1)
+        search_grid.setColumnStretch(4, 1)
+        layout.addLayout(search_grid)
+
+        self.advanced_filters_widget = QWidget()
+        advanced_filters = QFormLayout(self.advanced_filters_widget)
+        advanced_filters.setContentsMargins(0, 0, 0, 0)
 
         self.measure_type_input = QLineEdit("measure")
         self.measure_type_input.setPlaceholderText("measure")
-        filters.addRow("measure_type:", self.measure_type_input)
+        advanced_filters.addRow("measure_type:", self.measure_type_input)
 
         self.sample_savename_input = QLineEdit()
         self.sample_savename_input.setPlaceholderText("AgBH* or re:^AgBH")
-        filters.addRow("sample_savename:", self.sample_savename_input)
+        advanced_filters.addRow("sample_savename:", self.sample_savename_input)
 
         self.alias_input = QLineEdit()
         self.alias_input.setPlaceholderText("experiment_alias_directory")
-        filters.addRow("alias directory:", self.alias_input)
-        layout.addLayout(filters)
+        advanced_filters.addRow("alias directory:", self.alias_input)
+        self.advanced_filters_widget.setVisible(False)
+        layout.addWidget(self.advanced_filters_widget)
 
-        self.run_search_button = QPushButton("Load Matching Entries")
-        self.run_search_button.clicked.connect(self._search_scans)
-        layout.addWidget(self.run_search_button)
+        metadata_buttons = QHBoxLayout()
+        metadata_buttons.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
+        self.more_filters_button = QPushButton("Filters")
+        self.more_filters_button.setCheckable(True)
+        apply_toolbar_text_button_style(self.more_filters_button)
+        self.more_filters_button.toggled.connect(self.advanced_filters_widget.setVisible)
+        self.more_filters_button.toggled.connect(
+            lambda checked: self.more_filters_button.setText("Hide Filters" if checked else "Filters")
+        )
+        metadata_buttons.addWidget(self.more_filters_button)
+        metadata_buttons.addStretch()
+        layout.addLayout(metadata_buttons)
 
-        self.search_status_label = QLabel("Enter scan IDs, or use cycle/proposal metadata filters")
+        self.search_status_label = QLabel("Find by scan ID range, or by cycle + proposal")
         apply_info_style(self.search_status_label)
         layout.addWidget(self.search_status_label)
         return group
@@ -375,6 +435,7 @@ class TiledBrowserTab(BaseImageTab):
         self.scan_table.itemSelectionChanged.connect(self._on_scan_selected)
         self.scan_table.cellClicked.connect(self._on_scan_clicked)
         self.scan_table.setMinimumWidth(0)
+        self.scan_table.setMinimumHeight(AppStyle.LAYOUT['tiled_results_min_height'])
         header = self.scan_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
         header.setStretchLastSection(True)
@@ -384,7 +445,9 @@ class TiledBrowserTab(BaseImageTab):
         layout.addWidget(self.scan_table)
 
         row = QHBoxLayout()
-        self.load_button = QPushButton("Load Image + Metadata")
+        self.load_button = QPushButton("Load")
+        self.load_button.setToolTip("Load selected image and metadata")
+        apply_toolbar_text_button_style(self.load_button)
         self.load_button.setEnabled(False)
         self.load_button.clicked.connect(self._load_selected_scan)
         row.addWidget(self.load_button)
@@ -410,28 +473,41 @@ class TiledBrowserTab(BaseImageTab):
         layout.addWidget(self.series_slider)
 
         controls = QHBoxLayout()
-        self.prev_button = QPushButton("Prev")
+        controls.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
+        self.prev_button = QPushButton("◀")
+        self.prev_button.setToolTip("Previous scan")
+        apply_toolbar_symbol_button_style(self.prev_button)
         self.prev_button.clicked.connect(self._select_previous)
         controls.addWidget(self.prev_button)
 
-        self.play_button = QPushButton("Play")
+        self.play_button = QPushButton("▶")
+        self.play_button.setToolTip("Play scan series")
+        apply_toolbar_symbol_button_style(self.play_button)
         self.play_button.setCheckable(True)
         self.play_button.clicked.connect(self._toggle_playback)
         controls.addWidget(self.play_button)
 
-        self.stop_button = QPushButton("Stop")
+        self.stop_button = QPushButton("■")
+        self.stop_button.setToolTip("Stop playback")
+        apply_toolbar_symbol_button_style(self.stop_button)
         self.stop_button.clicked.connect(self._stop_playback)
         controls.addWidget(self.stop_button)
 
-        self.next_button = QPushButton("Next")
+        self.next_button = QPushButton("▶")
+        self.next_button.setToolTip("Next scan")
+        apply_toolbar_symbol_button_style(self.next_button)
         self.next_button.clicked.connect(self._select_next)
         controls.addWidget(self.next_button)
 
-        self.loop_checkbox = QCheckBox("Loop")
-        self.loop_checkbox.setChecked(False)
-        controls.addWidget(self.loop_checkbox)
+        self.loop_button = QPushButton("∞")
+        self.loop_button.setToolTip("Loop playback")
+        self.loop_button.setCheckable(True)
+        apply_toolbar_symbol_button_style(self.loop_button)
+        controls.addWidget(self.loop_button)
 
-        self.cancel_button = QPushButton("Cancel Action")
+        self.cancel_button = QPushButton("✕")
+        self.cancel_button.setToolTip("Cancel current Tiled action")
+        apply_toolbar_symbol_button_style(self.cancel_button)
         self.cancel_button.setEnabled(False)
         self.cancel_button.clicked.connect(self._cancel_operation)
         controls.addWidget(self.cancel_button)
@@ -486,11 +562,11 @@ class TiledBrowserTab(BaseImageTab):
         if state.authenticated:
             user = state.username or "cached session"
             self.auth_status_label.setText(f"Status: logged in ({user})")
-            self.auth_button.setText("Re-Authenticate")
+            self.auth_button.setText("Reauth")
         else:
             suffix = f": {state.error}" if state.error else ""
             self.auth_status_label.setText(f"Status: not logged in{suffix}")
-            self.auth_button.setText("Log In")
+            self.auth_button.setText("Login")
 
     def _handle_login(self) -> None:
         profile = self._active_profile()
@@ -803,7 +879,7 @@ class TiledBrowserTab(BaseImageTab):
             self.play_button.setChecked(False)
             return
         if self.play_button.isChecked():
-            self.play_button.setText("Pause")
+            self.play_button.setText("⏸")
             self.play_timer.start(500)
         else:
             self._stop_playback()
@@ -811,7 +887,7 @@ class TiledBrowserTab(BaseImageTab):
     def _stop_playback(self) -> None:
         self.play_timer.stop()
         self.play_button.setChecked(False)
-        self.play_button.setText("Play")
+        self.play_button.setText("▶")
 
     def _advance_playback(self) -> None:
         if not self.scan_rows:
@@ -819,7 +895,7 @@ class TiledBrowserTab(BaseImageTab):
             return
         next_row = self.series_slider.value() + 1
         if next_row >= len(self.scan_rows):
-            if not self.loop_checkbox.isChecked():
+            if not self.loop_button.isChecked():
                 self._stop_playback()
                 return
             next_row = 0
