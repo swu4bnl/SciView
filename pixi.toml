@@ -1,5 +1,5 @@
 [workspace]
-authors = ["wsy94 <wsy94@temple.edu>"]
+authors = ["swu4bnl <swu4@bnl.gov>"]
 channels = ["conda-forge"]
 name = "SciView"
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
