@@ -426,6 +426,35 @@ def tiled_search_by_filters(
     return _result_from_scans(scans, scanned_ids=available_count, query_description=query_description)
 
 
+def tiled_search_by_scan_ids(
+    *,
+    profile_name: str,
+    start_scan_id: int,
+    end_scan_id: int | None = None,
+) -> TiledSearchResult:
+    """Search a Tiled catalog by scan ID or inclusive scan ID range."""
+
+    if end_scan_id is None:
+        end_scan_id = start_scan_id
+    if start_scan_id > end_scan_id:
+        raise ValueError("Start scan ID must be <= end scan ID")
+
+    scans: list[TiledScanSummary] = []
+    scanned_ids = end_scan_id - start_scan_id + 1
+    for scan_id in range(start_scan_id, end_scan_id + 1):
+        run = _run_for_scan_id(profile_name, scan_id)
+        if run is None:
+            continue
+        scans.append(_summary_from_run(run, fallback_scan_id=scan_id, profile_name=profile_name))
+
+    scans.sort(key=lambda item: item.scan_id if item.scan_id is not None else -1)
+    if start_scan_id == end_scan_id:
+        query_description = f"scan_id={start_scan_id}"
+    else:
+        query_description = f"scan_id={start_scan_id}-{end_scan_id}"
+    return _result_from_scans(scans, scanned_ids=scanned_ids, query_description=query_description)
+
+
 def tiled_run_metadata(profile_name: str, scan_id: int) -> dict[str, Any]:
     run = _run_for_scan_id(profile_name, scan_id)
     return _metadata(run) if run is not None else {}

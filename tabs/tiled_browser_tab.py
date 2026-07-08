@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSlider,
+    QSpinBox,
     QSplitter,
     QHeaderView,
     QTableWidget,
@@ -40,6 +41,7 @@ from sciview.interfaces.theme.app_style import (
     apply_title_style,
 )
 from sciview.interfaces.services.image_service import ImageService
+from sciview.settings.app_settings import IMAGE_BROWSER_SETTINGS
 from sciview.sources.tiled_source import TiledScanSummary
 from tabs.base_image_tab import BaseImageTab
 
@@ -89,6 +91,7 @@ class TiledBrowserTab(BaseImageTab):
         self.parent_app.show_status(message)
         self.search_status_label.setText(message)
         self.run_search_button.setEnabled(False)
+        self.run_scan_id_button.setEnabled(False)
         self.load_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -98,6 +101,7 @@ class TiledBrowserTab(BaseImageTab):
         while QApplication.overrideCursor() is not None:
             QApplication.restoreOverrideCursor()
         self.run_search_button.setEnabled(True)
+        self.run_scan_id_button.setEnabled(True)
         self.load_button.setEnabled(self._selected_row() is not None)
         self.cancel_button.setEnabled(False)
         self._active_thread = None
@@ -295,8 +299,28 @@ class TiledBrowserTab(BaseImageTab):
         return group
 
     def _create_search_group(self) -> QWidget:
-        group = QGroupBox("2) Cycle + Proposal")
+        group = QGroupBox("2) Search")
         layout = QVBoxLayout(group)
+
+        scan_id_filters = QFormLayout()
+        scan_id_row = QHBoxLayout()
+        self.scan_id_start_input = QSpinBox()
+        self.scan_id_start_input.setRange(-9999999, 9999999)
+        self.scan_id_start_input.setPrefix("Start ")
+        self.scan_id_start_input.setValue(IMAGE_BROWSER_SETTINGS['default_scan_id'])
+        scan_id_row.addWidget(self.scan_id_start_input)
+
+        self.scan_id_end_input = QSpinBox()
+        self.scan_id_end_input.setRange(-9999999, 9999999)
+        self.scan_id_end_input.setPrefix("End ")
+        self.scan_id_end_input.setValue(IMAGE_BROWSER_SETTINGS['default_scan_id'])
+        scan_id_row.addWidget(self.scan_id_end_input)
+        scan_id_filters.addRow("scan_id:", scan_id_row)
+        layout.addLayout(scan_id_filters)
+
+        self.run_scan_id_button = QPushButton("Load Scan ID Range")
+        self.run_scan_id_button.clicked.connect(self._search_scan_ids)
+        layout.addWidget(self.run_scan_id_button)
 
         filters = QFormLayout()
         self.cycle_combo = QComboBox()
@@ -325,7 +349,7 @@ class TiledBrowserTab(BaseImageTab):
         self.run_search_button.clicked.connect(self._search_scans)
         layout.addWidget(self.run_search_button)
 
-        self.search_status_label = QLabel("Enter cycle and proposal ID, then load matching entries")
+        self.search_status_label = QLabel("Enter scan IDs, or use cycle/proposal metadata filters")
         apply_info_style(self.search_status_label)
         layout.addWidget(self.search_status_label)
         return group
@@ -431,7 +455,7 @@ class TiledBrowserTab(BaseImageTab):
         if not self.image_service.tiled_is_available():
             msg = self.image_service.tiled_import_error() or "Tiled unavailable"
             self.auth_status_label.setText(f"Status: unavailable ({msg})")
-            for widget in (self.auth_button, self.refresh_button, self.run_search_button):
+            for widget in (self.auth_button, self.refresh_button, self.run_search_button, self.run_scan_id_button):
                 widget.setEnabled(False)
             self.parent_app.show_status(f"Tiled browser disabled: {msg}")
             return
@@ -531,6 +555,30 @@ class TiledBrowserTab(BaseImageTab):
             )
 
         self._run_background(f"Searching Tiled for cycle {cycle}, proposal {proposal_id}...", do_search, self._apply_search_result)
+
+    def _search_scan_ids(self) -> None:
+        profile = self._active_profile()
+        if profile is None:
+            return
+
+        start_scan_id = self.scan_id_start_input.value()
+        end_scan_id = self.scan_id_end_input.value()
+        if start_scan_id > end_scan_id:
+            QMessageBox.warning(self, "Invalid Range", "Start scan ID must be <= end scan ID")
+            return
+
+        def do_search():
+            return self.image_service.tiled_search_by_scan_ids(
+                profile_name=profile,
+                start_scan_id=start_scan_id,
+                end_scan_id=end_scan_id,
+            )
+
+        if start_scan_id == end_scan_id:
+            message = f"Searching Tiled for scan_id {start_scan_id}..."
+        else:
+            message = f"Searching Tiled for scan_id {start_scan_id}-{end_scan_id}..."
+        self._run_background(message, do_search, self._apply_search_result)
 
     def _apply_search_result(self, result) -> None:
         self.scan_rows = list(result.scans)

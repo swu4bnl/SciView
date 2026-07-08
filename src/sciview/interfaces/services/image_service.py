@@ -75,6 +75,19 @@ class ImageService:
             use_profile_defaults=use_profile_defaults,
         )
 
+    def tiled_search_by_scan_ids(
+        self,
+        *,
+        profile_name: str,
+        start_scan_id: int,
+        end_scan_id: int | None = None,
+    ) -> tiled_source.TiledSearchResult:
+        return tiled_source.tiled_search_by_scan_ids(
+            profile_name=profile_name,
+            start_scan_id=start_scan_id,
+            end_scan_id=end_scan_id,
+        )
+
     def tiled_run_metadata(self, profile_name: str, scan_id: int) -> dict:
         return tiled_source.tiled_run_metadata(profile_name, scan_id)
 
