@@ -10,6 +10,7 @@ from PIL import Image
 from sciview.data.models import Dataset, ImageRef
 from sciview.sources.filesystem_source import open_dataset, resolve_local_path, scan_directory
 from sciview.sources import tiled_source
+from sciview.sources.tiled_stream import TiledLiveMonitor, create_tiled_live_monitor
 
 
 class ImageService:
@@ -119,3 +120,6 @@ class ImageService:
         uid: str | None = None,
     ) -> ImageRef:
         return tiled_source.tiled_load_ref(profile_name, scan_id, detector, uid=uid)
+
+    def create_tiled_live_monitor(self, *, profile_name: str) -> TiledLiveMonitor:
+        return create_tiled_live_monitor(profile_name)
