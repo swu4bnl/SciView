@@ -45,6 +45,7 @@ from sciview.interfaces.theme.app_style import (
 from sciview.interfaces.services.image_service import ImageService
 from sciview.settings.app_settings import IMAGE_BROWSER_SETTINGS
 from sciview.sources.tiled_source import TiledScanSummary
+from sciview.sources.tiled_stream import TiledLiveEvent, TiledLiveMonitor
 from tabs.base_image_tab import BaseImageTab
 
 
@@ -65,12 +66,18 @@ class _OperationWorker(QObject):
             self.finished.emit(self.token, None, exc)
 
 
+class _LiveEventBridge(QObject):
+    event_received = pyqtSignal(object)
+
+
 class TiledBrowserTab(BaseImageTab):
     """Browse Tiled scans through backend service APIs."""
 
     def __init__(self, parent_app):
         super().__init__(parent_app)
         self.image_service = ImageService()
+        self.live_auto_load_delay_ms = int(IMAGE_BROWSER_SETTINGS.get("tiled_live_auto_load_delay_ms", 2500))
+        self.live_auto_load_max_attempts = int(IMAGE_BROWSER_SETTINGS.get("tiled_live_auto_load_max_attempts", 5))
         self.scan_rows: list[TiledScanSummary] = []
         self.current_scan: TiledScanSummary | None = None
         self.current_image_array = None
@@ -80,6 +87,10 @@ class TiledBrowserTab(BaseImageTab):
         self._operation_token = 0
         self._active_thread: QThread | None = None
         self._active_worker: _OperationWorker | None = None
+        self._live_monitor: TiledLiveMonitor | None = None
+        self._live_auto_load_attempts: dict[str, int] = {}
+        self._live_event_bridge = _LiveEventBridge(self)
+        self._live_event_bridge.event_received.connect(self._handle_live_event)
 
         self.play_timer = QTimer(self)
         self.play_timer.timeout.connect(self._advance_playback)
@@ -111,7 +122,14 @@ class TiledBrowserTab(BaseImageTab):
         self.load_progress_bar.setVisible(False)
         self.load_retry_label.setVisible(False)
 
-    def _run_background(self, message: str, action: Callable, on_success: Callable) -> None:
+    def _run_background(
+        self,
+        message: str,
+        action: Callable,
+        on_success: Callable,
+        *,
+        on_error: Callable | None = None,
+    ) -> None:
         token = self._begin_operation(message)
         thread = QThread(self)
         worker = _OperationWorker(token, action)
@@ -124,6 +142,7 @@ class TiledBrowserTab(BaseImageTab):
             on_success,
             thread,
             worker,
+            on_error,
         ))
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
@@ -140,6 +159,7 @@ class TiledBrowserTab(BaseImageTab):
         *,
         on_progress: Callable | None = None,
         on_retry: Callable | None = None,
+        on_error: Callable | None = None,
     ) -> None:
         """Like _run_background but injects progress/retry callbacks into the action.
 
@@ -173,6 +193,7 @@ class TiledBrowserTab(BaseImageTab):
             on_success,
             thread,
             worker,
+            on_error,
         ))
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
@@ -189,12 +210,18 @@ class TiledBrowserTab(BaseImageTab):
         on_success: Callable,
         thread: QThread,
         worker: _OperationWorker,
+        on_error: Callable | None = None,
     ) -> None:
         del thread, worker
         if token != self._operation_token:
+            if isinstance(result, TiledLiveMonitor):
+                result.stop()
             return
         self._finish_operation()
         if error is not None:
+            if on_error is not None:
+                on_error(error)
+                return
             QMessageBox.warning(self, "Tiled operation failed", str(error))
             return
         on_success(result)
@@ -224,6 +251,7 @@ class TiledBrowserTab(BaseImageTab):
         controls_layout.addWidget(title)
         controls_layout.addWidget(self._create_connection_group())
         controls_layout.addWidget(self._create_search_group())
+        controls_layout.addWidget(self._create_live_group())
         controls_layout.addWidget(self._create_results_group(), 1)
         controls_layout.addWidget(self._create_playback_group())
 
@@ -414,7 +442,7 @@ class TiledBrowserTab(BaseImageTab):
         return group
 
     def _create_results_group(self) -> QWidget:
-        group = QGroupBox("3) Results")
+        group = QGroupBox("4) Results")
         layout = QVBoxLayout(group)
         self.scan_table = QTableWidget(0, 8)
         self.scan_table.setHorizontalHeaderLabels(
@@ -463,8 +491,37 @@ class TiledBrowserTab(BaseImageTab):
 
         return group
 
+    def _create_live_group(self) -> QWidget:
+        group = QGroupBox("3) Live")
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
+        layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
+        group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+
+        row = QHBoxLayout()
+        row.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
+        self.live_start_button = QPushButton("Listen")
+        self.live_start_button.setToolTip("Listen for newly created runs in the selected Tiled catalog")
+        apply_toolbar_text_button_style(self.live_start_button)
+        self.live_start_button.clicked.connect(self._start_live_monitor)
+        row.addWidget(self.live_start_button)
+
+        self.live_stop_button = QPushButton("Stop")
+        self.live_stop_button.setToolTip("Stop listening for live Tiled updates")
+        apply_toolbar_text_button_style(self.live_stop_button)
+        self.live_stop_button.setEnabled(False)
+        self.live_stop_button.clicked.connect(self._stop_live_monitor)
+        row.addWidget(self.live_stop_button)
+        row.addStretch()
+        layout.addLayout(row)
+
+        self.live_status_label = QLabel("Live stream idle")
+        apply_info_style(self.live_status_label)
+        layout.addWidget(self.live_status_label)
+        return group
+
     def _create_playback_group(self) -> QWidget:
-        group = QGroupBox("4) Series")
+        group = QGroupBox("5) Series")
         layout = QVBoxLayout(group)
         self.series_slider = QSlider(Qt.Horizontal)
         self.series_slider.setEnabled(False)
@@ -535,6 +592,7 @@ class TiledBrowserTab(BaseImageTab):
                 self.refresh_button,
                 self.run_search_button,
                 self.run_scan_id_button,
+                self.live_start_button,
             ):
                 widget.setEnabled(False)
             self.parent_app.show_status(f"Tiled browser disabled: {msg}")
@@ -589,11 +647,134 @@ class TiledBrowserTab(BaseImageTab):
         self._run_background(f"Connecting to Tiled profile {profile}...", do_login, done)
 
     def _on_catalog_changed(self) -> None:
+        self._stop_live_monitor()
         self._cancel_operation()
         self._clear_selection()
         self._refresh_auth_state()
 
+    def _start_live_monitor(self) -> None:
+        profile = self._active_profile()
+        if profile is None:
+            return
+        if self._live_monitor is not None and self._live_monitor.is_running:
+            QMessageBox.information(self, "Tiled live stream", "Live stream is already running")
+            return
+
+        def do_start():
+            monitor = self.image_service.create_tiled_live_monitor(profile_name=profile)
+            monitor.start(self._live_event_bridge.event_received.emit)
+            return monitor
+
+        def done(monitor: TiledLiveMonitor):
+            self._live_monitor = monitor
+            self.live_start_button.setEnabled(False)
+            self.live_stop_button.setEnabled(True)
+            self.live_status_label.setText(f"Listening for new runs in {profile}")
+            self.parent_app.show_status(f"Listening for Tiled live updates from {profile}")
+
+        self._run_background(f"Starting live Tiled stream for {profile}...", do_start, done)
+
+    def _stop_live_monitor(self) -> None:
+        monitor = self._live_monitor
+        self._live_monitor = None
+        if monitor is not None:
+            monitor.stop()
+        if hasattr(self, "live_start_button"):
+            self.live_start_button.setEnabled(self.image_service.tiled_is_available())
+            self.live_stop_button.setEnabled(False)
+            self.live_status_label.setText("Live stream idle")
+
+    def _handle_live_event(self, event: TiledLiveEvent) -> None:
+        if event.event_type == "started":
+            self.live_status_label.setText(f"Listening for new runs in {event.profile_name}")
+            return
+        if event.event_type == "stopped":
+            self.live_status_label.setText("Live stream idle")
+            return
+        if event.event_type == "error":
+            message = event.error or "Unknown live stream error"
+            self.live_status_label.setText(f"Live stream error: {message}")
+            self.parent_app.show_status(f"Tiled live stream error: {message}")
+            return
+        if event.event_type not in {"child_created", "new_data"} or event.scan is None:
+            return
+
+        row_index = self._upsert_live_scan(event.scan)
+        scan_label = event.scan.scan_id if event.scan.scan_id is not None else event.scan.uid[:8]
+        self.live_status_label.setText(f"New run: scan_id={scan_label}")
+        self.parent_app.show_status(f"New Tiled run detected: scan_id={scan_label}")
+        self._auto_load_live_scan(row_index, event.scan)
+
+    def _auto_load_live_scan(self, row_index: int, scan: TiledScanSummary) -> None:
+        if scan.scan_id is None or not scan.detectors:
+            self.scan_table.selectRow(row_index)
+            return
+        if self._active_thread is not None:
+            self.scan_table.selectRow(row_index)
+            self._schedule_live_auto_load_retry(scan, count_attempt=False)
+            return
+        self._activate_scan_row(row_index, live_auto_load=True)
+
+    def _live_scan_key(self, scan: TiledScanSummary) -> str:
+        if scan.uid:
+            return scan.uid
+        return f"scan_id:{scan.scan_id}"
+
+    def _schedule_live_auto_load_retry(
+        self,
+        scan: TiledScanSummary,
+        error: Exception | None = None,
+        *,
+        count_attempt: bool = True,
+    ) -> None:
+        key = self._live_scan_key(scan)
+        attempts = self._live_auto_load_attempts.get(key, 0)
+        if count_attempt:
+            attempts += 1
+        self._live_auto_load_attempts[key] = attempts
+        if attempts >= self.live_auto_load_max_attempts:
+            suffix = f": {error}" if error is not None else ""
+            self.live_status_label.setText(f"Live scan not ready after {attempts} attempts{suffix}")
+            self.parent_app.show_status(f"Live scan {scan.scan_id} did not auto-load{suffix}")
+            return
+
+        self.live_status_label.setText(
+            f"Waiting for scan {scan.scan_id} data, retry {attempts + 1}/{self.live_auto_load_max_attempts}"
+        )
+        QTimer.singleShot(self.live_auto_load_delay_ms, lambda: self._retry_live_auto_load(key))
+
+    def _retry_live_auto_load(self, key: str) -> None:
+        row_index = self._row_for_live_scan_key(key)
+        if row_index is None:
+            self._live_auto_load_attempts.pop(key, None)
+            return
+        self._auto_load_live_scan(row_index, self.scan_rows[row_index])
+
+    def _row_for_live_scan_key(self, key: str) -> int | None:
+        for index, scan in enumerate(self.scan_rows):
+            if self._live_scan_key(scan) == key:
+                return index
+        return None
+
+    def _upsert_live_scan(self, scan: TiledScanSummary) -> int:
+        for index, existing in enumerate(self.scan_rows):
+            if scan.uid and existing.uid == scan.uid:
+                self.scan_rows[index] = scan
+                self._populate_scan_table()
+                return index
+            if scan.scan_id is not None and existing.scan_id == scan.scan_id:
+                self.scan_rows[index] = scan
+                self._populate_scan_table()
+                return index
+
+        self.scan_rows.append(scan)
+        self._populate_scan_table()
+        self.series_slider.setEnabled(True)
+        self.series_slider.setMaximum(max(len(self.scan_rows) - 1, 0))
+        return len(self.scan_rows) - 1
+
     def _clear_selection(self) -> None:
+        self._live_auto_load_attempts.clear()
         self.scan_rows = []
         self.scan_table.setRowCount(0)
         self.series_slider.setEnabled(False)
@@ -742,7 +923,7 @@ class TiledBrowserTab(BaseImageTab):
         if row is not None:
             self._activate_scan_row(row)
 
-    def _activate_scan_row(self, row_index: int) -> None:
+    def _activate_scan_row(self, row_index: int, *, live_auto_load: bool = False) -> None:
         if row_index < 0 or row_index >= len(self.scan_rows):
             return
         if self._selected_row() != row_index:
@@ -751,9 +932,9 @@ class TiledBrowserTab(BaseImageTab):
         self.series_slider.setValue(row_index)
         self.series_slider.blockSignals(False)
         self._show_selected_metadata()
-        self._load_scan_row(row_index)
+        self._load_scan_row(row_index, live_auto_load=live_auto_load)
 
-    def _load_scan_row(self, row_index: int) -> None:
+    def _load_scan_row(self, row_index: int, *, live_auto_load: bool = False) -> None:
         profile = self._active_profile()
         if profile is None or row_index < 0 or row_index >= len(self.scan_rows):
             return
@@ -786,12 +967,24 @@ class TiledBrowserTab(BaseImageTab):
         self.load_progress_bar.setValue(0)
         self.load_progress_bar.setVisible(True)
         self.load_retry_label.setVisible(False)
+        def on_error(error: Exception) -> None:
+            if live_auto_load:
+                self._schedule_live_auto_load_retry(scan, error)
+                return
+            QMessageBox.warning(self, "Tiled operation failed", str(error))
+
+        def on_success(payload) -> None:
+            if live_auto_load:
+                self._live_auto_load_attempts.pop(self._live_scan_key(scan), None)
+            self._apply_loaded_image(payload)
+
         self._run_background_ex(
             f"Loading scan {scan.scan_id} detector {detector}...",
             do_load,
-            self._apply_loaded_image,
+            on_success,
             on_progress=self._on_load_progress,
             on_retry=self._on_load_retry,
+            on_error=on_error,
         )
 
     def _on_load_progress(self, chunks_done: int, total_chunks: int) -> None:
@@ -942,3 +1135,7 @@ class TiledBrowserTab(BaseImageTab):
         info_lines.append(f"UID: {self.current_scan.uid}")
         info_lines.append(f"Detector: {self.current_detector}")
         info_lines.append(f"Detectors: {', '.join(self.current_scan.detectors)}")
+
+    def closeEvent(self, event):
+        self._stop_live_monitor()
+        super().closeEvent(event)

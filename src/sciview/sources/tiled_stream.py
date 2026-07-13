@@ -145,11 +145,14 @@ class TiledLiveMonitor:
             return
 
         child_subscription = child.subscribe()
+        new_data_signal = getattr(child_subscription, "new_data", None)
+        if new_data_signal is None or not hasattr(new_data_signal, "add_callback"):
+            return
 
         def on_new_data(update: Any) -> None:
             self._on_new_data(update, summary, key)
 
-        child_subscription.new_data.add_callback(on_new_data)
+        new_data_signal.add_callback(on_new_data)
         child_subscription.start_in_thread(start=0)
         self._child_subscriptions.append(child_subscription)
 
