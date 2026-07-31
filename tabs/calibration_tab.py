@@ -112,9 +112,8 @@ class CalibrationApp(BaseImageTab):
         
         main_layout.addWidget(main_splitter)
 
-        # Connect matplotlib events
-        self.canvas_raw.mpl_connect('motion_notify_event', self.on_mouse_move)
-        self.canvas_raw.mpl_connect('button_press_event', self.on_mouse_click)
+        # Connect image viewer and matplotlib plot events
+        self.image_viewer.mouse_pressed.connect(self.on_mouse_click)
         self.canvas_plot.mpl_connect('motion_notify_event', self.on_mouse_move)
 
     def _create_plot_panel(self):
@@ -387,7 +386,7 @@ class CalibrationApp(BaseImageTab):
         """Load standards database"""
         return dict(STANDARDS)
 
-    def _add_beam_center_crosshair(self, ax):
+    def _add_beam_center_crosshair(self, viewer):
         """Hook to add crosshair at beam center position"""
         if hasattr(self, 'spin_x') and hasattr(self, 'spin_y'):
             center_x = self.spin_x.value()
@@ -395,20 +394,8 @@ class CalibrationApp(BaseImageTab):
             
             # Add crosshair lines
             if hasattr(self, 'image_data') and self.image_data is not None:
-                # Get image dimensions
-                if hasattr(self.image_data, 'data'):
-                    img_shape = self.image_data.data.shape
-                else:
-                    img_shape = self.image_data.shape
-                
-                # Draw crosshair lines
-                ax.axhline(y=center_y, color='red', linestyle='--', linewidth=1, alpha=0.7)
-                ax.axvline(x=center_x, color='red', linestyle='--', linewidth=1, alpha=0.7)
-                
-                # Add a small circle at the center
-                import matplotlib.pyplot as plt
-                circle = plt.Circle((center_x, center_y), radius=3, color='red', fill=False, linewidth=2, alpha=0.8)
-                ax.add_patch(circle)
+                viewer.clear_overlays(group='calibration-crosshair')
+                viewer.add_crosshair('beam-center', center_x, center_y, group='calibration-crosshair', color='#ff0000')
 
     def calculate_ring_center(self):
         """Calculate the center of a circle from multiple points"""
@@ -447,30 +434,18 @@ class CalibrationApp(BaseImageTab):
             )
             
             # Mark points and center on the raw image
-            if hasattr(self, 'ax_raw') and self.image_data is not None:
-                # Clear previous ring markers
-                for artist in self.ax_raw.collections[:]:
-                    if hasattr(artist, '_ring_marker'):
-                        artist.remove()
-                for artist in self.ax_raw.patches[:]:
-                    if hasattr(artist, '_ring_marker'):
-                        artist.remove()
-                
+            if hasattr(self, 'image_viewer') and self.image_data is not None:
+                self.image_viewer.clear_overlays(group='ring-center')
+
                 # Plot the input points
                 xs, ys = zip(*points)
-                scatter = self.ax_raw.scatter(xs, ys, c='cyan', s=50, marker='o', edgecolors='blue', linewidth=2)
-                scatter._ring_marker = True
+                self.image_viewer.add_points('ring-points', xs, ys, group='ring-center', color='#00ffff', size=9.0, pen='#0000ff')
                 
                 # Plot the calculated center
-                center_scatter = self.ax_raw.scatter([ux], [uy], c='red', s=100, marker='x', linewidth=3)
-                center_scatter._ring_marker = True
+                self.image_viewer.add_points('ring-center-point', [ux], [uy], group='ring-center', color='#ff0000', size=12.0, symbol='+')
                 
                 # Draw the circle
-                circle = plt.Circle((ux, uy), radius, fill=False, color='red', linestyle='--', linewidth=2)
-                circle._ring_marker = True
-                self.ax_raw.add_patch(circle)
-                
-                self.canvas_raw.draw()
+                self.image_viewer.add_circle('ring-center-circle', ux, uy, radius, group='ring-center', color='#ff0000', width=2.0)
             
             self.parent_app.show_status(f"Ring center calculated and applied: ({ux:.2f}, {uy:.2f}) using {len(points)} points")
             
@@ -496,14 +471,9 @@ class CalibrationApp(BaseImageTab):
         
         # Clear temporary yellow markers
         if hasattr(self, 'temp_markers'):
-            for marker in self.temp_markers:
-                try:
-                    marker.remove()
-                except:
-                    pass
             self.temp_markers = []
-            if hasattr(self, 'canvas_raw'):
-                self.canvas_raw.draw()
+            if hasattr(self, 'image_viewer'):
+                self.image_viewer.clear_overlays(group='ring-temp')
         
         self.ring_result_label.setText("Enter coordinates on a ring and click 'Calculate'")
         self.current_point_index = 0
@@ -840,12 +810,12 @@ class CalibrationApp(BaseImageTab):
 
     def on_mouse_click(self, event):
         """Handle mouse clicks on the raw image for ring center calculation"""
-        if not event.inaxes or event.inaxes != self.ax_raw:
+        if not getattr(event, 'inside_image', False):
             return
         
         # Mouse button mapping: 1=left, 2=middle, 3=right
-        if event.button == 3:  # Right click for coordinate selection (left click reserved for zoom/pan)
-            x, y = event.xdata, event.ydata
+        if event.button == Qt.RightButton:  # Right click for coordinate selection (left click reserved for zoom/pan)
+            x, y = event.x, event.y
             if x is not None and y is not None:
                 display_x, display_y = x, y
                 if getattr(self, 'snap_to_max_check', None) is not None and self.snap_to_max_check.isChecked():
@@ -859,23 +829,18 @@ class CalibrationApp(BaseImageTab):
                 y_input.setValue(display_y)
                 
                 # Visual feedback - add yellow marker
-                if hasattr(self, 'ax_raw'):
-                    temp_point = self.ax_raw.scatter([display_x], [display_y], c='yellow', s=100, marker='o', alpha=0.7)
-                    
+                if hasattr(self, 'image_viewer'):
                     # Add to temp markers list
                     if not hasattr(self, 'temp_markers'):
                         self.temp_markers = []
-                    self.temp_markers.append(temp_point)
+                    marker_id = f"ring-temp-{len(self.temp_markers)}"
+                    self.image_viewer.add_points(marker_id, [display_x], [display_y], group='ring-temp', color='#ffff00', size=12.0)
+                    self.temp_markers.append(marker_id)
                     
                     # Remove oldest marker if we exceed 10 markers
                     if len(self.temp_markers) > 10:
-                        oldest_marker = self.temp_markers.pop(0)
-                        try:
-                            oldest_marker.remove()
-                        except:
-                            pass
-                    
-                    self.canvas_raw.draw()
+                        oldest_marker_id = self.temp_markers.pop(0)
+                        self.image_viewer.remove_overlay(oldest_marker_id)
                 
                 self.current_point_index = (self.current_point_index + 1) % 10
                 

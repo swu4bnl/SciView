@@ -22,11 +22,6 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT as NavigationToolbar
-)
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
@@ -35,6 +30,7 @@ from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
 from sciview.settings.app_settings import PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE, SCIANALYSIS_PATH
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
+from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
 
 # Try to import SciAnalysis
 if SCIANALYSIS_AVAILABLE:
@@ -1041,18 +1037,13 @@ class ProtocolPreviewApp(BaseImageTab):
                 saved_files = result['files_saved']
                 print(f"DEBUG: Found {len(saved_files)} saved files")
             
-            # Create a new tab for results with its own matplotlib canvas
+            # Create a new tab for results with its own image viewer
             results_widget = QWidget()
             results_layout = QVBoxLayout(results_widget)
             results_layout.setContentsMargins(0, 0, 0, 0)
             
-            # Create matplotlib figure and canvas for this tab
-            fig, ax = plt.subplots(figsize=(5.1, 6.8))
-            fig.subplots_adjust(left=0.08, bottom=0.08, right=0.99, top=0.92)
-            canvas = FigureCanvas(fig)
-            
-            # Add canvas to results widget
-            results_layout.addWidget(canvas)
+            result_viewer = ImageViewer(results_widget)
+            results_layout.addWidget(result_viewer)
             
             # Display first image file in this new canvas
             image_displayed = False
@@ -1073,12 +1064,8 @@ class ProtocolPreviewApp(BaseImageTab):
                             
                             print(f"DEBUG: Loaded image from {filepath}, shape: {img_array.shape}")
                             
-                            # Display in new tab's canvas
-                            ax.clear()
-                            ax.imshow(img_array, origin='upper')
-                            ax.set_title(description, fontsize=10)
-                            fig.subplots_adjust(left=0.05, bottom=0.05, right=0.99, top=0.99)
-                            canvas.draw()
+                            result_viewer.set_image(img_array, preserve_view=False)
+                            result_viewer.set_title(description)
                             image_displayed = True
                             
                             print(f"DEBUG: Image displayed successfully in new tab")

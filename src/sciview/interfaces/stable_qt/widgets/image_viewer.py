@@ -1,0 +1,478 @@
+"""PyQtGraph-backed detector image viewer for the stable Qt interface."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+from PyQt5.QtCore import QEvent, QPointF, Qt, pyqtSignal
+from PyQt5.QtWidgets import QFileDialog, QHBoxLayout, QToolButton, QVBoxLayout, QWidget
+
+import pyqtgraph as pg
+import pyqtgraph.exporters
+
+from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
+
+
+pg.setConfigOptions(imageAxisOrder="row-major")
+
+
+@dataclass(frozen=True)
+class ImagePointerEvent:
+    """Image-coordinate mouse event passed from the viewer to tab tools."""
+
+    x: float
+    y: float
+    button: object
+    modifiers: object
+    inside_image: bool
+
+
+class ImageViewer(QWidget):
+    """Display detector images using PyQtGraph while preserving SciView coordinates.
+
+    Detector coordinates are ``x = array column`` and ``y = array row`` with the
+    origin at the upper-left. For logarithmic display, non-positive and non-finite
+    values are rendered at the lowest valid positive display level; the source
+    image array is never modified.
+    """
+
+    cursor_moved = pyqtSignal(float, float, object)
+    view_changed = pyqtSignal(object)
+    mouse_pressed = pyqtSignal(object)
+    mouse_moved = pyqtSignal(object)
+    mouse_released = pyqtSignal(object)
+
+    _SUPPORTED_COLORMAPS = {"gray", "viridis", "plasma", "inferno", "jet"}
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._source_array: np.ndarray | None = None
+        self._display_array: np.ndarray | None = None
+        self._display_levels: tuple[float, float] | None = None
+        self._levels: tuple[float | None, float | None] = (None, None)
+        self._scale = "linear"
+        self._colormap_name = "gray"
+        self._overlays: dict[str, tuple[Any, str | None]] = {}
+
+        self._graphics = pg.GraphicsLayoutWidget()
+        self._plot_item = self._graphics.addPlot(row=0, col=0)
+        self._plot_item.invertY(True)
+        self._plot_item.setMenuEnabled(False)
+        self._view_box = self._plot_item.getViewBox()
+        self._view_box.setMouseMode(pg.ViewBox.PanMode)
+        self._view_box.sigRangeChanged.connect(self._emit_view_changed)
+
+        self._image_item = pg.ImageItem(axisOrder="row-major")
+        self._plot_item.addItem(self._image_item)
+        self._image_item.setVisible(False)
+
+        self._message_item = pg.TextItem(text="", color=(180, 180, 180), anchor=(0.5, 0.5))
+        self._plot_item.addItem(self._message_item)
+        self._message_item.setVisible(False)
+
+        self._graphics.scene().sigMouseMoved.connect(self._on_scene_mouse_moved)
+        self._graphics.viewport().installEventFilter(self)
+
+        self._pan_button = self._make_tool_button("Pan", "Pan image: drag with the left mouse button.")
+        self._zoom_button = self._make_tool_button("Zoom", "Rectangular zoom: drag a box with the left mouse button.")
+        self._home_button = self._make_tool_button("Home", "Reset the image view to the full detector frame.")
+        self._save_button = self._make_tool_button("Save", "Save the rendered view with the current colormap and overlays.")
+        self._pan_button.setCheckable(True)
+        self._zoom_button.setCheckable(True)
+        self._pan_button.setChecked(True)
+        self._pan_button.clicked.connect(self._activate_pan_mode)
+        self._zoom_button.clicked.connect(self._activate_zoom_mode)
+        self._home_button.clicked.connect(self.reset_view)
+        self._save_button.clicked.connect(self._choose_export_path)
+
+        toolbar = QHBoxLayout()
+        toolbar.setContentsMargins(0, 0, 0, 0)
+        toolbar.setSpacing(2)
+        toolbar.addWidget(self._pan_button)
+        toolbar.addWidget(self._zoom_button)
+        toolbar.addWidget(self._home_button)
+        toolbar.addWidget(self._save_button)
+        toolbar.addStretch()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addWidget(self._graphics)
+        layout.addLayout(toolbar)
+
+        self.set_colormap(self._colormap_name)
+
+    @property
+    def source_array(self) -> np.ndarray | None:
+        return self._source_array
+
+    @property
+    def display_array(self) -> np.ndarray | None:
+        return self._display_array
+
+    @property
+    def display_levels(self) -> tuple[float, float] | None:
+        return self._display_levels
+
+    def set_image(self, image: Any, *, preserve_view: bool = True) -> None:
+        array, is_valid, error_msg = validate_and_prepare_image_array(image, use_converter=True)
+        if not is_valid:
+            self.clear_image(error_msg)
+            return
+
+        old_shape = self._source_array.shape if self._source_array is not None else None
+        old_range = self.get_view_range() if preserve_view and old_shape == array.shape else None
+        self._source_array = array
+        self._message_item.setVisible(False)
+        self._image_item.setVisible(True)
+        self._refresh_display_image()
+
+        if old_range is not None:
+            self.set_view_range(old_range)
+        else:
+            self.reset_view()
+
+    def clear_image(self, message: str | None = None) -> None:
+        self._source_array = None
+        self._display_array = None
+        self._display_levels = None
+        self._image_item.clear()
+        self._image_item.setVisible(False)
+        self._message_item.setText(message or "")
+        self._message_item.setPos(0.5, 0.5)
+        self._message_item.setVisible(bool(message))
+
+    def set_levels(self, vmin: float | None, vmax: float | None) -> None:
+        self._levels = (self._finite_or_none(vmin), self._finite_or_none(vmax))
+        self._refresh_display_image(preserve_view=True)
+
+    def set_colormap(self, name: str) -> None:
+        if name not in self._SUPPORTED_COLORMAPS:
+            raise ValueError(f"Unsupported colormap: {name}")
+        self._colormap_name = name
+        self._image_item.setLookupTable(self._matplotlib_lut(name))
+
+    def set_scale(self, scale: str) -> None:
+        if scale not in {"linear", "log"}:
+            raise ValueError(f"Unsupported image scale: {scale}")
+        self._scale = scale
+        self._refresh_display_image(preserve_view=True)
+
+    def set_title(self, title: str) -> None:
+        self._plot_item.setTitle(title)
+
+    def reset_view(self) -> None:
+        if self._source_array is None:
+            self._view_box.autoRange(padding=0.0)
+            return
+        height, width = self._source_array.shape
+        self._view_box.setRange(xRange=(0, width), yRange=(0, height), padding=0.0)
+
+    def get_view_range(self) -> tuple[tuple[float, float], tuple[float, float]]:
+        x_range, y_range = self._view_box.viewRange()
+        return (tuple(float(value) for value in x_range), tuple(float(value) for value in y_range))
+
+    def set_view_range(self, view_range: object) -> None:
+        x_range, y_range = view_range  # type: ignore[misc]
+        self._view_box.setRange(xRange=x_range, yRange=y_range, padding=0.0)
+
+    def get_raw_value_at(self, x: float, y: float) -> object | None:
+        if self._source_array is None or not (np.isfinite(x) and np.isfinite(y)):
+            return None
+        row = int(y)
+        column = int(x)
+        height, width = self._source_array.shape
+        if 0 <= column < width and 0 <= row < height:
+            return self._source_array[row, column]
+        return None
+
+    def set_overlay_item(self, overlay_id: str, item: Any, *, group: str | None = None, visible: bool = True) -> None:
+        self.remove_overlay(overlay_id)
+        self._plot_item.addItem(item)
+        item.setVisible(visible)
+        self._overlays[overlay_id] = (item, group)
+
+    def add_points(
+        self,
+        overlay_id: str,
+        x: list[float] | tuple[float, ...] | np.ndarray,
+        y: list[float] | tuple[float, ...] | np.ndarray,
+        *,
+        group: str | None = None,
+        color: str = "#00ffff",
+        size: float = 8.0,
+        symbol: str = "o",
+        pen: str | None = None,
+    ) -> Any:
+        item = pg.ScatterPlotItem(
+            x=np.asarray(x, dtype=float),
+            y=np.asarray(y, dtype=float),
+            pen=pg.mkPen(pen or color, width=1.5),
+            brush=pg.mkBrush(color),
+            size=size,
+            symbol=symbol,
+        )
+        item.setZValue(20)
+        self.set_overlay_item(overlay_id, item, group=group)
+        return item
+
+    def add_circle(
+        self,
+        overlay_id: str,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        *,
+        group: str | None = None,
+        color: str = "#ff0000",
+        width: float = 1.5,
+        points: int = 240,
+    ) -> Any:
+        theta = np.linspace(0.0, 2.0 * np.pi, points)
+        x = float(center_x) + float(radius) * np.cos(theta)
+        y = float(center_y) + float(radius) * np.sin(theta)
+        item = pg.PlotDataItem(x, y, pen=pg.mkPen(color, width=width))
+        item.setZValue(15)
+        self.set_overlay_item(overlay_id, item, group=group)
+        return item
+
+    def add_polyline(
+        self,
+        overlay_id: str,
+        x: list[float] | tuple[float, ...] | np.ndarray,
+        y: list[float] | tuple[float, ...] | np.ndarray,
+        *,
+        group: str | None = None,
+        color: str = "#ffffff",
+        width: float = 1.5,
+    ) -> Any:
+        item = pg.PlotDataItem(np.asarray(x, dtype=float), np.asarray(y, dtype=float), pen=pg.mkPen(color, width=width))
+        item.setZValue(15)
+        self.set_overlay_item(overlay_id, item, group=group)
+        return item
+
+    def add_text(
+        self,
+        overlay_id: str,
+        x: float,
+        y: float,
+        text: str,
+        *,
+        group: str | None = None,
+        color: str = "#ffffff",
+        anchor: tuple[float, float] = (0.5, 0.5),
+    ) -> Any:
+        item = pg.TextItem(text=text, color=color, anchor=anchor)
+        item.setPos(float(x), float(y))
+        item.setZValue(25)
+        self.set_overlay_item(overlay_id, item, group=group)
+        return item
+
+    def add_crosshair(
+        self,
+        overlay_id: str,
+        center_x: float,
+        center_y: float,
+        *,
+        group: str | None = None,
+        color: str = "#ff0000",
+        width: float = 1.0,
+    ) -> tuple[Any, Any, Any]:
+        if self._source_array is None:
+            return ()
+        height, width_px = self._source_array.shape
+        horizontal = pg.PlotDataItem([0, width_px], [center_y, center_y], pen=pg.mkPen(color, width=width))
+        vertical = pg.PlotDataItem([center_x, center_x], [0, height], pen=pg.mkPen(color, width=width))
+        center = pg.PlotDataItem(
+            [center_x - 3, center_x + 3, np.nan, center_x, center_x],
+            [center_y, center_y, np.nan, center_y - 3, center_y + 3],
+            pen=pg.mkPen(color, width=2.0),
+        )
+        for suffix, item in (("h", horizontal), ("v", vertical), ("center", center)):
+            item.setZValue(15)
+            self.set_overlay_item(f"{overlay_id}:{suffix}", item, group=group)
+        return horizontal, vertical, center
+
+    def add_mask_overlay(
+        self,
+        overlay_id: str,
+        mask: np.ndarray,
+        *,
+        group: str | None = None,
+        color: str = "#ef4444",
+        alpha: float = 0.5,
+    ) -> Any:
+        rgba = self._rgba_mask(mask, color, alpha)
+        item = pg.ImageItem(rgba, axisOrder="row-major")
+        item.setZValue(5)
+        self.set_overlay_item(overlay_id, item, group=group)
+        return item
+
+    def set_overlay_visible(self, overlay_id: str, visible: bool) -> None:
+        item = self._overlays[overlay_id][0]
+        item.setVisible(visible)
+
+    def remove_overlay(self, overlay_id: str) -> None:
+        overlay = self._overlays.pop(overlay_id, None)
+        if overlay is not None:
+            self._plot_item.removeItem(overlay[0])
+
+    def clear_overlays(self, group: str | None = None) -> None:
+        overlay_ids = [
+            overlay_id
+            for overlay_id, (_, overlay_group) in self._overlays.items()
+            if group is None or overlay_group == group
+        ]
+        for overlay_id in overlay_ids:
+            self.remove_overlay(overlay_id)
+
+    def export_rendered_view(self, path: str | Path) -> None:
+        exporter = pg.exporters.ImageExporter(self._plot_item)
+        exporter.export(str(path))
+
+    def eventFilter(self, watched: object, event: QEvent) -> bool:
+        if watched is self._graphics.viewport() and event.type() in {
+            QEvent.MouseButtonPress,
+            QEvent.MouseMove,
+            QEvent.MouseButtonRelease,
+        }:
+            pointer_event = self._pointer_event_from_viewport_pos(event.pos(), event.button(), event.modifiers())
+            if event.type() == QEvent.MouseButtonPress:
+                self.mouse_pressed.emit(pointer_event)
+            elif event.type() == QEvent.MouseMove:
+                self.mouse_moved.emit(pointer_event)
+            elif event.type() == QEvent.MouseButtonRelease:
+                self.mouse_released.emit(pointer_event)
+        return super().eventFilter(watched, event)
+
+    def _refresh_display_image(self, *, preserve_view: bool = False) -> None:
+        if self._source_array is None:
+            return
+        old_range = self.get_view_range() if preserve_view else None
+        if self._scale == "log":
+            self._display_array, self._display_levels = self._log_display_image(self._source_array, *self._levels)
+        else:
+            self._display_array = self._source_array
+            self._display_levels = self._linear_levels(*self._levels)
+
+        image_kwargs: dict[str, Any] = {"autoLevels": self._display_levels is None}
+        if self._display_levels is not None:
+            image_kwargs["levels"] = self._display_levels
+        self._image_item.setImage(self._display_array, **image_kwargs)
+        if old_range is not None:
+            self.set_view_range(old_range)
+
+    def _pointer_event_from_viewport_pos(self, pos: QPointF, button: object, modifiers: object) -> ImagePointerEvent:
+        scene_pos = self._graphics.mapToScene(pos)
+        view_pos = self._view_box.mapSceneToView(scene_pos)
+        x = float(view_pos.x())
+        y = float(view_pos.y())
+        inside = self._is_inside_image(x, y)
+        return ImagePointerEvent(x=x, y=y, button=button, modifiers=modifiers, inside_image=inside)
+
+    def _on_scene_mouse_moved(self, scene_pos: QPointF) -> None:
+        if self._source_array is None:
+            return
+        view_pos = self._view_box.mapSceneToView(scene_pos)
+        x = float(view_pos.x())
+        y = float(view_pos.y())
+        value = self.get_raw_value_at(x, y)
+        self.cursor_moved.emit(x, y, value)
+
+    def _emit_view_changed(self, *_args: object) -> None:
+        self.view_changed.emit(self.get_view_range())
+
+    def _is_inside_image(self, x: float, y: float) -> bool:
+        if self._source_array is None or not (np.isfinite(x) and np.isfinite(y)):
+            return False
+        height, width = self._source_array.shape
+        return 0 <= x < width and 0 <= y < height
+
+    def _activate_pan_mode(self) -> None:
+        self._view_box.setMouseMode(pg.ViewBox.PanMode)
+        self._pan_button.setChecked(True)
+        self._zoom_button.setChecked(False)
+
+    def _activate_zoom_mode(self) -> None:
+        self._view_box.setMouseMode(pg.ViewBox.RectMode)
+        self._pan_button.setChecked(False)
+        self._zoom_button.setChecked(True)
+
+    def _choose_export_path(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save displayed image",
+            "",
+            "PNG Images (*.png);;All Files (*)",
+        )
+        if path:
+            self.export_rendered_view(path)
+
+    @staticmethod
+    def _make_tool_button(text: str, tooltip: str) -> QToolButton:
+        button = QToolButton()
+        button.setText(text)
+        button.setToolTip(tooltip)
+        button.setAutoRaise(True)
+        return button
+
+    @staticmethod
+    def _finite_or_none(value: float | None) -> float | None:
+        if value is None:
+            return None
+        value = float(value)
+        return value if np.isfinite(value) else None
+
+    @staticmethod
+    def _linear_levels(vmin: float | None, vmax: float | None) -> tuple[float, float] | None:
+        if vmin is None or vmax is None or vmax <= vmin:
+            return None
+        return (float(vmin), float(vmax))
+
+    @staticmethod
+    def _log_display_image(
+        image: np.ndarray,
+        vmin: float | None,
+        vmax: float | None,
+    ) -> tuple[np.ndarray, tuple[float, float] | None]:
+        finite_positive = image[np.isfinite(image) & (image > 0)]
+        if finite_positive.size == 0:
+            return np.zeros(image.shape, dtype=float), None
+
+        min_positive = float(np.min(finite_positive))
+        max_positive = float(np.max(finite_positive))
+        safe_vmin = float(vmin) if vmin is not None and vmin > 0 else min_positive
+        safe_vmax = float(vmax) if vmax is not None and vmax > safe_vmin else max_positive
+        if safe_vmax <= safe_vmin:
+            safe_vmax = max_positive
+        if safe_vmax <= safe_vmin:
+            safe_vmax = safe_vmin * 10.0
+
+        floor_value = np.log10(safe_vmin)
+        display = np.full(image.shape, floor_value, dtype=float)
+        valid = np.isfinite(image) & (image > 0)
+        display[valid] = np.log10(image[valid])
+        return display, (floor_value, np.log10(safe_vmax))
+
+    @staticmethod
+    def _matplotlib_lut(name: str) -> np.ndarray:
+        import matplotlib as mpl
+
+        colormap = mpl.colormaps[name]
+        return (colormap(np.linspace(0.0, 1.0, 256))[:, :3] * 255).astype(np.ubyte)
+
+    @staticmethod
+    def _rgba_mask(mask: np.ndarray, color: str, alpha: float) -> np.ndarray:
+        import matplotlib.colors as mcolors
+
+        r, g, b = mcolors.to_rgb(color)
+        rgba = np.zeros((*mask.shape, 4), dtype=np.ubyte)
+        mask_bool = np.asarray(mask, dtype=bool)
+        rgba[mask_bool, 0] = int(r * 255)
+        rgba[mask_bool, 1] = int(g * 255)
+        rgba[mask_bool, 2] = int(b * 255)
+        rgba[mask_bool, 3] = int(np.clip(float(alpha), 0.0, 1.0) * 255)
+        return rgba

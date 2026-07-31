@@ -22,12 +22,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QPixmap, QIcon
 
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT as NavigationToolbar
-)
-
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
 from sciview.interfaces.theme.app_style import *
@@ -872,20 +866,14 @@ class ImageBrowserApp(BaseImageTab):
         )
         
         if current_image is None:
-            self.ax_raw.clear()
-            self.ax_raw.text(0.5, 0.5, 'No Image Loaded', 
-                        transform=self.ax_raw.transAxes, ha='center', va='center')
+            self.image_viewer.clear_image('No Image Loaded')
             self.current_image_label.setText("No image loaded")
-            self.canvas_raw.draw()
             return
         
         # Check if data is available (might still be None if loading failed)
         if current_image['data'] is None:
-            self.ax_raw.clear()
-            self.ax_raw.text(0.5, 0.5, f"Loading: {current_image['filename']}", 
-                        transform=self.ax_raw.transAxes, ha='center', va='center')
+            self.image_viewer.clear_image(f"Loading: {current_image['filename']}")
             self.current_image_label.setText(f"Loading: {current_image['filename']}")
-            self.canvas_raw.draw()
             return
         
         # Extract data and other info from current_image dict
@@ -899,11 +887,8 @@ class ImageBrowserApp(BaseImageTab):
         self.update_plot(image_data)
         
         # Set title and update current image label
-        self.ax_raw.set_title(filename, fontsize=10)
+        self.image_viewer.set_title(filename)
         self.current_image_label.setText(f"File: {filename} | Source: {source}")
-        
-        # Final canvas refresh
-        self.canvas_raw.draw()
         
         # Explicitly trigger garbage collection to clean up evicted cached images
         # This is important when switching between images in the session

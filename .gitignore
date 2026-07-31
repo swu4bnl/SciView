@@ -20,7 +20,11 @@ test*
 *debug*
 tests/
 tests/*
+!tests/
+!tests/test_image_viewer.py
 /docs/*.md
+!/docs/USER_HOW_TO.md
+!/docs/PYQTGRAPH_MIGRATION_NOTES.md
 
 # pixi environments
 .pixi/*

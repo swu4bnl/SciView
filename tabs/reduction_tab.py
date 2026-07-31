@@ -29,8 +29,6 @@ from PyQt5.QtWidgets import (
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-from matplotlib.lines import Line2D
-from matplotlib.patches import Circle, Wedge
 
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
@@ -39,7 +37,6 @@ from sciview.interfaces.stable_qt.utils.reduction_overlay import (
     chi_q_to_pixel,
     chi_convention_text,
     chi_to_screen_vector,
-    draw_solid_overlay,
     line_q_roi_mask,
     sector_roi_mask,
 )
@@ -800,14 +797,11 @@ class ReductionTab(BaseImageTab):
         self.parent_app.show_status(f"Reduction recipe exported to {path}")
 
     def _remove_overlay_artists(self):
-        for artist in self._overlay_artists:
-            try:
-                artist.remove()
-            except Exception:
-                pass
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.clear_overlays(group='reduction')
         self._overlay_artists = []
 
-    def _draw_reduction_overlay(self, ax):
+    def _draw_reduction_overlay(self, viewer):
         self._remove_overlay_artists()
 
         image = self._get_image_array()
@@ -845,21 +839,14 @@ class ReductionTab(BaseImageTab):
                 dx, dy = chi_to_screen_vector(angle_deg, calibration=calibration)
                 px = cx + dx * radius_px
                 py = cy + dy * radius_px
-            label = ax.text(
+            label_id = f"reduction-angle-label-{len(self._overlay_artists)}"
+            label = viewer.add_text(
+                label_id,
                 px,
                 py,
                 text,
+                group='reduction',
                 color=color,
-                fontsize=7.6,
-                ha="center",
-                va="center",
-                zorder=8,
-                bbox=dict(
-                    boxstyle="round,pad=0.14",
-                    facecolor=styles["labels"]["box"],
-                    alpha=styles["labels"]["box_alpha"],
-                    edgecolor="none",
-                ),
             )
             self._overlay_artists.append(label)
 
@@ -872,49 +859,34 @@ class ReductionTab(BaseImageTab):
                 dx, dy = chi_to_screen_vector(angle_deg, calibration=calibration)
                 px = cx + dx * r
                 py = cy + dy * r
-            label = ax.text(
+            label_id = f"reduction-q-label-{len(self._overlay_artists)}"
+            label = viewer.add_text(
+                label_id,
                 px,
                 py,
                 text,
+                group='reduction',
                 color=color,
-                fontsize=7.4,
-                ha="left",
-                va="bottom",
-                zorder=8,
-                bbox=dict(
-                    boxstyle="round,pad=0.12",
-                    facecolor=styles["labels"]["box"],
-                    alpha=styles["labels"]["box_alpha"],
-                    edgecolor="none",
-                ),
+                anchor=(0.0, 1.0),
             )
             self._overlay_artists.append(label)
 
-        center_marker = ax.scatter([cx], [cy], c="#00d1ff", s=18, zorder=5)
+        center_marker = viewer.add_points('reduction-center', [cx], [cy], group='reduction', color="#00d1ff", size=7.0)
         self._overlay_artists.append(center_marker)
 
         if self._use_mask_enabled():
             mask = self._get_mask_array(image.shape)
             if mask is not None:
-                mask_artist = draw_solid_overlay(ax, mask, styles["mask"]["color"], styles["mask"]["alpha"])
+                mask_artist = viewer.add_mask_overlay('reduction-mask', mask, group='reduction', color=styles["mask"]["color"], alpha=styles["mask"]["alpha"])
                 self._overlay_artists.append(mask_artist)
 
         if operation == "circular_average":
             radius = float(self._q_to_pixels(q_max))
-            circle = Circle((cx, cy), radius=radius, fill=False, linewidth=1.6, edgecolor=styles["circular"]["edge"])
-            ax.add_patch(circle)
+            circle = viewer.add_circle('reduction-qmax-circle', cx, cy, radius, group='reduction', color=styles["circular"]["edge"], width=1.6)
             self._overlay_artists.append(circle)
             if q_min > 0:
                 r_min = float(self._q_to_pixels(q_min))
-                circle_min = Circle(
-                    (cx, cy),
-                    radius=r_min,
-                    fill=False,
-                    linewidth=1.0,
-                    linestyle=":",
-                    edgecolor=styles["circular"]["edge_soft"],
-                )
-                ax.add_patch(circle_min)
+                circle_min = viewer.add_circle('reduction-qmin-circle', cx, cy, r_min, group='reduction', color=styles["circular"]["edge_soft"], width=1.0)
                 self._overlay_artists.append(circle_min)
                 _draw_q_label(0.0, q_min, f"qmin={q_min:.3f}")
             _draw_q_label(0.0, q_max, f"qmax={q_max:.3f}")
@@ -928,25 +900,13 @@ class ReductionTab(BaseImageTab):
 
             sector_mask = sector_roi_mask(calibration, start, end, q_min, q_max)
             if sector_mask is not None:
-                sector_artist = draw_solid_overlay(ax, sector_mask, styles["sector"]["color"], styles["sector"]["alpha"])
+                sector_artist = viewer.add_mask_overlay('reduction-sector', sector_mask, group='reduction', color=styles["sector"]["color"], alpha=styles["sector"]["alpha"])
                 self._overlay_artists.append(sector_artist)
             else:
                 radius = float(self._q_to_pixels(q_max))
-                if end <= start:
-                    end += 360.0
-                wedge = Wedge(
-                    (cx, cy),
-                    radius,
-                    theta1=start,
-                    theta2=end,
-                    width=None,
-                    facecolor=styles["sector"]["color"],
-                    alpha=styles["sector"]["alpha"],
-                    edgecolor=styles["sector"]["edge"],
-                    linewidth=1.4,
-                )
-                ax.add_patch(wedge)
-                self._overlay_artists.append(wedge)
+                sector_mask = self._screen_sector_mask(image.shape, cx, cy, radius, start, end)
+                sector_artist = viewer.add_mask_overlay('reduction-sector-fallback', sector_mask, group='reduction', color=styles["sector"]["color"], alpha=styles["sector"]["alpha"])
+                self._overlay_artists.append(sector_artist)
 
             _draw_angle_label(start, f"{start:.0f}\N{DEGREE SIGN}", q_max)
             _draw_angle_label(end, f"{end:.0f}\N{DEGREE SIGN}", q_max)
@@ -960,19 +920,9 @@ class ReductionTab(BaseImageTab):
                 dq = float(self.line_dq_spin.value())
                 r_inner = max(0.0, self._q_to_pixels(max(0.0, q0 - dq)))
                 r_outer = max(r_inner + 1e-6, self._q_to_pixels(max(0.0, q0 + dq)))
-                ring = Wedge(
-                    (cx, cy),
-                    r_outer,
-                    theta1=0.0,
-                    theta2=360.0,
-                    width=max(0.0, r_outer - r_inner),
-                    facecolor=styles["line_chi"]["color"],
-                    alpha=styles["line_chi"]["alpha"],
-                    edgecolor=styles["line_chi"]["edge"],
-                    linewidth=1.4,
-                )
-                ax.add_patch(ring)
-                self._overlay_artists.append(ring)
+                ring_mask = self._screen_ring_mask(image.shape, cx, cy, r_inner, r_outer)
+                ring_artist = viewer.add_mask_overlay('reduction-line-chi-ring', ring_mask, group='reduction', color=styles["line_chi"]["color"], alpha=styles["line_chi"]["alpha"])
+                self._overlay_artists.append(ring_artist)
                 _draw_q_label(0.0, max(0.0, q0 - dq), f"q-={max(0.0, q0-dq):.3f}")
                 _draw_q_label(0.0, q0 + dq, f"q+={q0+dq:.3f}")
                 for ang, txt in ((0.0, "0"), (90.0, "90"), (270.0, "270")):
@@ -985,7 +935,7 @@ class ReductionTab(BaseImageTab):
                 roi = line_q_roi_mask(calibration, chi0, dq_val, q_min, q_max)
                 draw_guides = roi is None
                 if roi is not None:
-                    roi_artist = draw_solid_overlay(ax, roi, styles["line_q"]["color"], styles["line_q"]["alpha"])
+                    roi_artist = viewer.add_mask_overlay('reduction-line-q-roi', roi, group='reduction', color=styles["line_q"]["color"], alpha=styles["line_q"]["alpha"])
                     self._overlay_artists.append(roi_artist)
 
                 # Draw the actual ROI: a radial stripe from beam center at angle chi0.
@@ -995,12 +945,14 @@ class ReductionTab(BaseImageTab):
                     ray_len = float(np.hypot(w, h))
                     dx, dy = chi_to_screen_vector(chi0, calibration=calibration)
                     # Centerline ray (bidirectional)
-                    center_ray = Line2D(
+                    center_ray = viewer.add_polyline(
+                        'reduction-line-q-center',
                         [cx - dx * ray_len, cx + dx * ray_len],
                         [cy - dy * ray_len, cy + dy * ray_len],
-                        color=styles["line_q"]["center"], linewidth=1.8, zorder=5,
+                        group='reduction',
+                        color=styles["line_q"]["center"],
+                        width=1.8,
                     )
-                    ax.add_line(center_ray)
                     self._overlay_artists.append(center_ray)
 
                     # Shaded band: offset perpendicular to chi0 by dq_px on each side
@@ -1009,14 +961,16 @@ class ReductionTab(BaseImageTab):
                         perp_dx = -dy  # perpendicular unit vector
                         perp_dy = dx
                         for sign in (+1, -1):
-                            band_line = Line2D(
+                            band_line = viewer.add_polyline(
+                                f'reduction-line-q-bound-{sign}',
                                 [cx + sign * perp_dx * dq_px - dx * ray_len,
                                  cx + sign * perp_dx * dq_px + dx * ray_len],
                                 [cy + sign * perp_dy * dq_px - dy * ray_len,
                                  cy + sign * perp_dy * dq_px + dy * ray_len],
-                                color=styles["line_q"]["bounds"], linewidth=1.0, linestyle=":", alpha=0.75, zorder=4,
+                                group='reduction',
+                                color=styles["line_q"]["bounds"],
+                                width=1.0,
                             )
-                            ax.add_line(band_line)
                             self._overlay_artists.append(band_line)
                 _draw_angle_label(chi0, f"{chi0:.0f}\N{DEGREE SIGN}", q_max, radial_offset_px=10.0, color="#99f6e4")
                 _draw_q_label(chi0, q_min, f"qmin={q_min:.3f}")
@@ -1027,24 +981,34 @@ class ReductionTab(BaseImageTab):
                 )
 
         if overlay_note:
-            note_artist = ax.text(
-                0.02,
-                0.98,
+            note_artist = viewer.add_text(
+                'reduction-note',
+                8.0,
+                18.0,
                 overlay_note,
-                transform=ax.transAxes,
-                ha="left",
-                va="top",
-                fontsize=8.5,
+                group='reduction',
                 color=styles["labels"]["note_text"],
-                bbox=dict(
-                    boxstyle="round,pad=0.22",
-                    facecolor=styles["labels"]["box"],
-                    alpha=styles["labels"]["note_box_alpha"],
-                    edgecolor="none",
-                ),
-                zorder=8,
+                anchor=(0.0, 0.0),
             )
             self._overlay_artists.append(note_artist)
+
+    def _screen_ring_mask(self, shape, cx, cy, r_inner, r_outer):
+        yy, xx = np.indices(shape)
+        rr = np.hypot(xx - float(cx), yy - float(cy))
+        return (rr >= float(r_inner)) & (rr <= float(r_outer))
+
+    def _screen_sector_mask(self, shape, cx, cy, radius, start_deg, end_deg):
+        yy, xx = np.indices(shape)
+        rr = np.hypot(xx - float(cx), yy - float(cy))
+        angles = (np.degrees(np.arctan2(float(cy) - yy, xx - float(cx))) + 360.0) % 360.0
+        span = (float(end_deg) - float(start_deg)) % 360.0
+        if np.isclose(span, 0.0):
+            in_angle = np.ones(shape, dtype=bool)
+        else:
+            center = (float(start_deg) + 0.5 * span) % 360.0
+            delta = ((angles - center + 180.0) % 360.0) - 180.0
+            in_angle = np.abs(delta) <= 0.5 * span
+        return (rr <= float(radius)) & in_angle
 
     def update_plot(self, image_data=None):
         display_data = image_data if image_data is not None else self.image_data

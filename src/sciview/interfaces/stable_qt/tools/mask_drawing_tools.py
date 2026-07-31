@@ -116,15 +116,16 @@ class DrawingTool(ABC):
     
     def on_press(self, event):
         """Handle mouse press event - derived classes can override for custom behavior"""
-        if not event.inaxes or event.inaxes != self.ax:
+        if not self._event_inside_image(event):
             return
         
         self.is_dragging = True
         self.is_active = True
         
-        if event.xdata is not None and event.ydata is not None:
+        coordinates = self._event_coordinates(event)
+        if coordinates is not None:
             try:
-                x, y = int(event.xdata), int(event.ydata)
+                x, y = coordinates
                 point = (y, x)  # (row, col) format for consistency
                 self.last_draw_point = point
                 self.start(point)
@@ -133,7 +134,7 @@ class DrawingTool(ABC):
     
     def on_motion(self, event):
         """Handle mouse motion - derived classes can override for custom behavior"""
-        if not event.inaxes or event.inaxes != self.ax:
+        if not self._event_inside_image(event):
             # Pointer left canvas - detect closest corner/edge
             if self.is_dragging and self.last_draw_point is not None:
                 self.pointer_left_canvas = True
@@ -151,9 +152,10 @@ class DrawingTool(ABC):
             self.canvas.setCursor(QCursor(Qt.CrossCursor))
         
         # Track last valid point
-        if event.xdata is not None and event.ydata is not None:
+        coordinates = self._event_coordinates(event)
+        if coordinates is not None:
             try:
-                x, y = int(event.xdata), int(event.ydata)
+                x, y = coordinates
                 self.last_draw_point = (y, x)
             except (TypeError, ValueError):
                 pass
@@ -177,6 +179,25 @@ class DrawingTool(ABC):
         self.last_draw_point = None
         self.pointer_left_canvas = False
         self.pointer_exit_edge = None
+
+    def _event_inside_image(self, event) -> bool:
+        if hasattr(event, 'inside_image'):
+            return bool(event.inside_image)
+        return bool(getattr(event, 'inaxes', None)) and event.inaxes == self.ax
+
+    def _event_coordinates(self, event) -> tuple[int, int] | None:
+        if hasattr(event, 'x') and hasattr(event, 'y'):
+            x = event.x
+            y = event.y
+        else:
+            x = getattr(event, 'xdata', None)
+            y = getattr(event, 'ydata', None)
+        if x is None or y is None:
+            return None
+        try:
+            return int(x), int(y)
+        except (TypeError, ValueError):
+            return None
     
     # ===== Edge Detection (shared by all tools) =====
     

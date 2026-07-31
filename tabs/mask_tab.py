@@ -45,13 +45,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QIcon, QCursor
 
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT as NavigationToolbar
-)
-
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
 from sciview.interfaces.theme.app_style import *
@@ -167,12 +160,12 @@ class MaskApp(BaseImageTab):
 
         # Configure drawing tools and connect events
         for tool in self.drawing_tools.values():
-            tool.configure(self.canvas_image, self.ax_image, self.parent_app, lambda: self.image_data)
+            tool.configure(self.image_viewer, None, self.parent_app, lambda: self.image_data)
         
-        # Connect matplotlib events - delegate to tool event handlers
-        self.canvas_image.mpl_connect('motion_notify_event', self._on_canvas_motion)
-        self.canvas_image.mpl_connect('button_press_event', self._on_canvas_press)
-        self.canvas_image.mpl_connect('button_release_event', self._on_canvas_release)
+        # Connect normalized image viewer events - delegate to tool event handlers
+        self.image_viewer.mouse_moved.connect(self._on_canvas_motion)
+        self.image_viewer.mouse_pressed.connect(self._on_canvas_press)
+        self.image_viewer.mouse_released.connect(self._on_canvas_release)
 
     def _create_visualization_panel(self):
         """Create the image and mask visualization panel"""
@@ -189,13 +182,9 @@ class MaskApp(BaseImageTab):
         # Filename label using inherited method
         self.create_filename_label(layout)
 
-        # Use the base class image panel (creates self.ax_raw, self.canvas_raw, etc.)
+        # Use the base class image panel (creates self.image_viewer)
         base_image_panel = self._create_image_panel()
         layout.addWidget(base_image_panel)
-        
-        # Use unified canvas references for mask tab
-        self.ax_image = self.ax_raw
-        self.canvas_image = self.canvas_raw
 
         # Mask display controls - compact layout with consistent spacing
         controls_group = QGroupBox("Display Options")
@@ -953,15 +942,11 @@ class MaskApp(BaseImageTab):
             if not self.mask_layers:
                 self._add_empty_layer()
             # Change cursor to indicate drawing mode ready
-            self.canvas_image.setCursor(QCursor(Qt.CrossCursor))
-            # Disable matplotlib toolbar zoom/pan to avoid conflicts
-            self._disable_matplotlib_tools()
+            self.image_viewer.setCursor(QCursor(Qt.CrossCursor))
             self.parent_app.show_status("Drawing mode enabled. Click and drag to draw mask. (Pan/Zoom disabled)")
         else:
             # Reset cursor to normal
-            self.canvas_image.setCursor(QCursor(Qt.ArrowCursor))
-            # Re-enable matplotlib toolbar zoom/pan
-            self._enable_matplotlib_tools()
+            self.image_viewer.setCursor(QCursor(Qt.ArrowCursor))
             self.parent_app.show_status("Drawing mode disabled")
     
     def _set_drawing_tool(self, tool_name: str):
@@ -998,26 +983,12 @@ class MaskApp(BaseImageTab):
     
     
     def _disable_matplotlib_tools(self):
-        """Disable matplotlib zoom/pan tools during drawing by setting mode to None"""
-        toolbar = self.canvas_image.toolbar if hasattr(self.canvas_image, 'toolbar') else None
-        if toolbar:
-            # Set mode to None to disable all tools (zoom, pan, etc)
-            toolbar.mode = ''
-            # Also disable the buttons in toolbar
-            for action in toolbar.actions():
-                action_text = action.text().lower() if hasattr(action, 'text') else ''
-                if any(x in action_text for x in ['zoom', 'pan']):
-                    action.setEnabled(False)
+        """Legacy no-op retained for old callbacks during viewer migration."""
+        return
     
     def _enable_matplotlib_tools(self):
-        """Re-enable matplotlib zoom/pan tools to default state"""
-        toolbar = self.canvas_image.toolbar if hasattr(self.canvas_image, 'toolbar') else None
-        if toolbar:
-            # Re-enable the buttons in toolbar
-            for action in toolbar.actions():
-                action_text = action.text().lower() if hasattr(action, 'text') else ''
-                if any(x in action_text for x in ['zoom', 'pan']):
-                    action.setEnabled(True)
+        """Legacy no-op retained for old callbacks during viewer migration."""
+        return
     
     # ===== External Editor Methods =====
     
@@ -1324,8 +1295,9 @@ class MaskApp(BaseImageTab):
     
     # ===== Display Methods =====
     
-    def _add_mask_overlay(self, ax):
+    def _add_mask_overlay(self, viewer):
         """Hook to add mask overlay after base image display"""
+        viewer.clear_overlays(group='mask')
         # Only add overlay if mask should be shown
         if not self.show_mask_check.isChecked():
             return
@@ -1342,23 +1314,7 @@ class MaskApp(BaseImageTab):
             alpha = self.alpha_spin.value() / 100.0
             color = self.mask_color_combo.currentText()
             
-            # Create RGBA overlay
-            mask_overlay = np.zeros((*self.combined_mask.shape, 4))
-            
-            # Set color for masked pixels (True values)
-            color_map = {
-                'red': [1, 0, 0, alpha],
-                'blue': [0, 0, 1, alpha],
-                'green': [0, 1, 0, alpha],
-                'yellow': [1, 1, 0, alpha],
-                'magenta': [1, 0, 1, alpha],
-                'cyan': [0, 1, 1, alpha]
-            }
-            
-            if color in color_map:
-                mask_overlay[self.combined_mask] = color_map[color]
-            
-            ax.imshow(mask_overlay, origin='upper', interpolation='nearest')
+            viewer.add_mask_overlay('combined-mask', self.combined_mask, group='mask', color=color, alpha=alpha)
         except Exception as e:
             # Silently skip overlay if there's any issue
             print(f"DEBUG: _add_mask_overlay error: {e}")
@@ -1372,12 +1328,13 @@ class MaskApp(BaseImageTab):
         Handles zoom/pan states correctly by using image dimensions directly.
         Returns None if coordinates are invalid.
         """
-        # Check if event has valid coordinates
-        if event.xdata is None or event.ydata is None:
+        x_value = getattr(event, 'x', getattr(event, 'xdata', None))
+        y_value = getattr(event, 'y', getattr(event, 'ydata', None))
+        if x_value is None or y_value is None:
             return None
         
         # Check if image data is loaded
-        if self.image_data is None or self.ax_image is None:
+        if self.image_data is None:
             return None
         
         # Get actual image array (handles Data2DScattering objects)
@@ -1390,9 +1347,9 @@ class MaskApp(BaseImageTab):
         
         try:
             # Convert to integers and clamp to valid pixel range
-            # Data coordinates from imshow already respect zoom/pan state
-            x = int(event.xdata)
-            y = int(event.ydata)
+            # Viewer image coordinates already respect zoom/pan state
+            x = int(x_value)
+            y = int(y_value)
             
             # Clamp to image bounds
             x = max(0, min(img_width - 1, x))
@@ -1458,10 +1415,10 @@ class MaskApp(BaseImageTab):
                 if pointer_left and last_point is not None:
                     # Extend to edge/corner based on detected zone
                     x, y = self.drawing_tool.get_endpoint_for_edge(exit_edge, last_point[1], last_point[0], img_width, img_height)
-                elif event.inaxes == self.ax_image and event.xdata is not None and event.ydata is not None:
+                elif getattr(event, 'inside_image', False):
                     # Normal release inside canvas
-                    x = max(0, min(img_width - 1, int(event.xdata)))
-                    y = max(0, min(img_height - 1, int(event.ydata)))
+                    x = max(0, min(img_width - 1, int(event.x)))
+                    y = max(0, min(img_height - 1, int(event.y)))
                 else:
                     return
                 
@@ -1490,7 +1447,7 @@ class MaskApp(BaseImageTab):
     def _draw_brush_stroke(self, event):
         """Draw continuously with brush tool during drag"""
         try:
-            x, y = int(event.xdata), int(event.ydata)
+            x, y = int(event.x), int(event.y)
             current_layer = self._get_active_layer(create_if_missing=True)
             if current_layer is None:
                 return
@@ -1511,7 +1468,7 @@ class MaskApp(BaseImageTab):
     def _show_preview(self, event):
         """Show preview of what would be drawn without committing to the layer"""
         try:
-            x, y = int(event.xdata), int(event.ydata)
+            x, y = int(event.x), int(event.y)
             layer_index = self._get_active_layer_index(create_if_missing=True)
             if layer_index is None:
                 return
