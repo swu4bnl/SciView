@@ -1064,7 +1064,10 @@ class ProtocolPreviewApp(BaseImageTab):
                             
                             print(f"DEBUG: Loaded image from {filepath}, shape: {img_array.shape}")
                             
-                            result_viewer.set_image(img_array, preserve_view=False)
+                            if img_array.ndim == 3 and img_array.shape[2] in (3, 4):
+                                result_viewer.set_color_image(img_array, preserve_view=False)
+                            else:
+                                result_viewer.set_image(img_array, preserve_view=False)
                             result_viewer.set_title(description)
                             image_displayed = True
                             

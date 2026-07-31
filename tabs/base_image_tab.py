@@ -20,21 +20,13 @@ from PyQt5.QtCore import Qt
 # Import configuration from package modules.
 from sciview.interfaces.theme.app_style import *
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_detector_config, get_file_status as get_profile_file_status
-from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
+from sciview.settings.app_settings import DEFAULT_DISPLAY_SETTINGS, MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, get_image_info
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
-from sciview.interfaces.stable_qt.viewer_config import SUPPORTED_IMAGE_COLORMAPS, SUPPORTED_IMAGE_SCALES
+from sciview.settings.viewer_config import SUPPORTED_IMAGE_COLORMAPS, SUPPORTED_IMAGE_SCALES
 
 # Get constants
 HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
-
-DEFAULT_DISPLAY_SETTINGS = {
-    'vmin': -2,
-    'vmax': 1000,
-    'cmap': 'gray',
-    'scale': 'linear'
-}
-
 
 class BaseImageTab(QWidget):
     """Base class for tabs that work with images and provide status information"""
@@ -298,7 +290,12 @@ class BaseImageTab(QWidget):
 
     def apply_shared_display_settings(self, settings):
         """Receive display settings from the main app and refresh local controls."""
-        self.display_settings = settings
+        if hasattr(self.parent_app, 'display_settings'):
+            self.display_settings = self.parent_app.display_settings
+            if self.display_settings is not settings:
+                self.display_settings.update(settings)
+        else:
+            self.display_settings.update(settings)
         self.sync_display_controls()
         self._apply_display_settings_to_viewer()
 

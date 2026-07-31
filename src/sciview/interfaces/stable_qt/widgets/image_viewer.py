@@ -14,7 +14,7 @@ import pyqtgraph as pg
 import pyqtgraph.exporters
 
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
-from sciview.interfaces.stable_qt.viewer_config import (
+from sciview.settings.viewer_config import (
     SUPPORTED_IMAGE_COLORMAPS,
     SUPPORTED_IMAGE_SCALES,
     VIEWER_BEHAVIOR,
@@ -158,6 +158,32 @@ class ImageViewer(QWidget):
         else:
             self.reset_view()
 
+    def set_color_image(self, image: Any, *, preserve_view: bool = True) -> None:
+        array = np.asarray(image)
+        if array.ndim != 3 or array.shape[2] not in (3, 4):
+            self.clear_image("Color image must be RGB or RGBA")
+            return
+
+        old_shape = self._source_array.shape if self._source_array is not None else None
+        old_range = self.get_view_range() if preserve_view and old_shape == array.shape[:2] else None
+        if array.dtype != np.ubyte:
+            if np.issubdtype(array.dtype, np.floating) and np.nanmax(array) <= 1.0:
+                array = np.clip(array, 0.0, 1.0) * 255.0
+            array = np.clip(array, 0, 255).astype(np.ubyte)
+
+        self._source_array = array
+        self._display_array = array
+        self._display_levels = None
+        self._message_item.setVisible(False)
+        self._image_item.setLookupTable(None)
+        self._image_item.setVisible(True)
+        self._image_item.setImage(array, autoLevels=False)
+
+        if old_range is not None:
+            self.set_view_range(old_range)
+        else:
+            self.reset_view()
+
     def clear_image(self, message: str | None = None) -> None:
         self._source_array = None
         self._display_array = None
@@ -210,7 +236,7 @@ class ImageViewer(QWidget):
         if self._source_array is None:
             self._view_box.autoRange(padding=0.0)
             return
-        height, width = self._source_array.shape
+        height, width = self._source_array.shape[:2]
         self._view_box.setRange(xRange=(0, width), yRange=(0, height), padding=0.0)
 
     def get_view_range(self) -> tuple[tuple[float, float], tuple[float, float]]:
@@ -226,7 +252,7 @@ class ImageViewer(QWidget):
             return None
         row = int(y)
         column = int(x)
-        height, width = self._source_array.shape
+        height, width = self._source_array.shape[:2]
         if 0 <= column < width and 0 <= row < height:
             return self._source_array[row, column]
         return None
@@ -325,7 +351,7 @@ class ImageViewer(QWidget):
     ) -> tuple[Any, Any, Any]:
         if self._source_array is None:
             return ()
-        height, width_px = self._source_array.shape
+        height, width_px = self._source_array.shape[:2]
         horizontal = pg.PlotDataItem([0, width_px], [center_y, center_y], pen=pg.mkPen(color, width=width))
         vertical = pg.PlotDataItem([center_x, center_x], [0, height], pen=pg.mkPen(color, width=width))
         center = pg.PlotDataItem(
@@ -466,7 +492,7 @@ class ImageViewer(QWidget):
     def _is_inside_image(self, x: float, y: float) -> bool:
         if self._source_array is None or not (np.isfinite(x) and np.isfinite(y)):
             return False
-        height, width = self._source_array.shape
+        height, width = self._source_array.shape[:2]
         return 0 <= x < width and 0 <= y < height
 
     def _activate_pan_mode(self) -> None:

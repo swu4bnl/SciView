@@ -12,7 +12,7 @@ from typing import Optional, Tuple, Callable
 
 from sciview.masking.operations import watershed_fill_mask
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
-from sciview.interfaces.stable_qt.viewer_config import MASK_DRAWING_DEFAULTS
+from sciview.settings.viewer_config import MASK_DRAWING_DEFAULTS
 
 
 def _draw_disk(mask_layer: np.ndarray, center_row: int, center_col: int, radius: int, draw_value: bool) -> None:

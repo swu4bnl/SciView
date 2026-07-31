@@ -56,7 +56,7 @@ from sciview.masking.io import export_mask_file as backend_export_mask_file
 from sciview.masking.io import load_mask_file as backend_load_mask_file
 from sciview.masking.operations import close_mask_holes, dilate_mask, erode_mask, sobel_edge_mask
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
-from sciview.interfaces.stable_qt.viewer_config import MASK_DRAWING_DEFAULTS, MASK_TOOL_NAMES
+from sciview.settings.viewer_config import MASK_DRAWING_DEFAULTS, MASK_TOOL_NAMES
 
 
 class MaskLayer:

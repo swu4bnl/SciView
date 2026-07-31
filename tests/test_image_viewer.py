@@ -134,6 +134,19 @@ def test_clear_image_records_empty_state(viewer):
     assert viewer.display_levels is None
 
 
+def test_color_image_preserves_rgb_channels(viewer):
+    image = np.zeros((3, 4, 3), dtype=np.ubyte)
+    image[..., 0] = 255
+    image[..., 1] = np.arange(4, dtype=np.ubyte)
+
+    viewer.set_color_image(image)
+
+    assert viewer.source_array is image
+    assert viewer.display_array is image
+    assert viewer.source_array.shape == (3, 4, 3)
+    assert viewer.get_raw_value_at(1.0, 0.0).tolist() == [255, 1, 0]
+
+
 def test_overlay_lifecycle(viewer):
     viewer.set_image(np.arange(3 * 5, dtype=float).reshape(3, 5))
     point = pg.ScatterPlotItem([1.0], [1.0])
@@ -369,6 +382,36 @@ def test_switching_to_real_image_tab_loads_blank_viewer(qapp):
 
         assert calibration_tab.image_viewer.source_array is image
         assert calibration_tab.image_viewer.display_array is image
+    finally:
+        app.close()
+
+
+def test_switching_to_nonblank_tab_rerenders_when_shared_image_changes(qapp):
+    from main import SciAnaApp
+    from tabs.calibration_tab import CalibrationApp
+
+    app = SciAnaApp()
+    source = DummyImageTab()
+    calibration_tab = CalibrationApp(app)
+    try:
+        app.add_tab(source, "Source")
+        app.add_tab(calibration_tab, "Calibration")
+        app.tab_widget.setCurrentWidget(source)
+
+        image_a = np.ones((5, 7), dtype=float)
+        app.publish_shared_image(image_a, source_tab=source)
+        app.tab_widget.setCurrentWidget(calibration_tab)
+        assert calibration_tab.image_viewer.source_array is image_a
+
+        app.tab_widget.setCurrentWidget(source)
+        image_b = np.full((5, 7), 2.0, dtype=float)
+        app.publish_shared_image(image_b, source_tab=source)
+        assert calibration_tab.image_viewer.source_array is image_a
+
+        app.tab_widget.setCurrentWidget(calibration_tab)
+
+        assert calibration_tab.image_data is image_b
+        assert calibration_tab.image_viewer.source_array is image_b
     finally:
         app.close()
 

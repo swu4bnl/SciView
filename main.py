@@ -51,6 +51,7 @@ from PyQt5.QtCore import Qt, QTimer
 from sciview.interfaces.theme.app_style import AppStyle, apply_info_style
 from sciview.profiles.cms_profile import BEAMLINE_NAME, DEFAULT_CALIBRATION
 from sciview.settings.app_settings import (
+    DEFAULT_DISPLAY_SETTINGS,
     GUI_SETTINGS,
     SCIANALYSIS_AVAILABLE,
     SCIANALYSIS_SOURCE_MODE,
@@ -63,8 +64,6 @@ if SCIANALYSIS_AVAILABLE:
     from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
 from sciview.interfaces.stable_qt.utils.resource_monitor import get_resource_monitor
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file
-from tabs.base_image_tab import DEFAULT_DISPLAY_SETTINGS
-from tabs.base_image_tab import DEFAULT_DISPLAY_SETTINGS
 
 
 def _build_placeholder_tab(message):
@@ -162,6 +161,7 @@ class SciAnaApp(QMainWindow):
         self.mask = None
         self.shared_info_text = None
         self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
+        self._shared_image_revision = 0
         
         # Set initial window size from config
         window_size = GUI_SETTINGS['default_window_size']
@@ -197,6 +197,7 @@ class SciAnaApp(QMainWindow):
         self.image_data = image_data
         if image_path is not None:
             self.image_path = image_path
+        self._shared_image_revision += 1
 
         # Prefer the image-attached calibration as canonical when available.
         image_calibration = getattr(image_data, "calibration", None)
@@ -285,6 +286,7 @@ class SciAnaApp(QMainWindow):
             if hasattr(tab, 'update_plot'):
                 try:
                     tab.update_plot()
+                    setattr(tab, '_displayed_shared_image_revision', self._shared_image_revision)
                 except Exception as e:
                     print(f"DEBUG: Error syncing plot for tab {i}: {e}")
 
@@ -321,10 +323,16 @@ class SciAnaApp(QMainWindow):
             tab.image_data = self.image_data
 
         image_viewer = getattr(tab, 'image_viewer', None)
-        if image_viewer is not None and getattr(image_viewer, 'source_array', None) is None:
+        rendered_revision = getattr(tab, '_displayed_shared_image_revision', None)
+        needs_image_render = image_viewer is not None and (
+            getattr(image_viewer, 'source_array', None) is None
+            or rendered_revision != self._shared_image_revision
+        )
+        if needs_image_render:
             if hasattr(tab, 'update_plot'):
                 try:
                     tab.update_plot()
+                    setattr(tab, '_displayed_shared_image_revision', self._shared_image_revision)
                     return
                 except Exception as e:
                     print(f"DEBUG: Error rendering active tab: {e}")

@@ -79,8 +79,7 @@ Arrow callouts to add:
 - `D` - Playback controls. Step through a folder or play the image sequence.
 - `E` - Raw Image display. Inspect the selected image.
 - `F` - Display controls. Adjust `vmin`, `vmax`, color map, and scale.
-- `G` - Use This Image. Send the current image to Calibration, Mask Editing, Reduction, and Transform.
-- `H` - Session Images. Review images already loaded into the current session.
+- `G` - Session Images. Review images already loaded into the current session.
 
 Steps:
 
@@ -89,7 +88,7 @@ Steps:
 3. Set `Filename Filter` if the folder contains mixed files.
 4. Click an image in the list.
 5. Adjust display controls until the image is readable.
-6. Click `Use This Image`.
+6. Switch to Calibration, Mask Editing, Reduction, or Transform. SciView automatically shares the current browser image when you leave this page.
 
 Success check: the selected image appears in the other pages when you switch tabs.
 
@@ -111,7 +110,7 @@ Arrow callouts to add:
 - `H` - Series controls. Step, play, stop, loop, or cancel loading/series preview.
 - `I` - Frame slider. Select a frame in stacked image data.
 - `J` - Metadata panel. Review scan metadata for the selected image.
-- `K` - Use This Image. Share the loaded Tiled image with the rest of SciView.
+- `K` - Auto-share behavior. The loaded image or selected frame is shared with the rest of SciView when you switch to another tab.
 
 Steps for a scan ID:
 
@@ -122,7 +121,7 @@ Steps for a scan ID:
 5. Select a result.
 6. Click `Load`.
 7. If the data are stacked, move the frame slider to the frame you want.
-8. Click `Use This Image`.
+8. Switch to the destination analysis tab. SciView automatically shares the currently loaded frame.
 
 Steps for proposal search:
 
@@ -130,7 +129,7 @@ Steps for proposal search:
 2. Enter `Cycle` and `Proposal`.
 3. Open `Filters` only if you need to narrow the table.
 4. Click the proposal search button.
-5. Select a row, click `Load`, then click `Use This Image`.
+5. Select a row, click `Load`, choose the desired frame if needed, then switch to the destination analysis tab.
 
 Success check: the preview panel shows the selected image and metadata before you share it.
 
@@ -156,7 +155,7 @@ Arrow callouts to add:
 
 Steps:
 
-1. Load an image from Image Browser or Tiled Browser and click `Use This Image`.
+1. Load an image from Image Browser or Tiled Browser, then switch to `Calibration`.
 2. Switch to `Calibration`.
 3. Inspect whether the beam center crosshair looks reasonable.
 4. If the center needs adjustment, right-click points around a visible diffraction ring.
@@ -194,7 +193,7 @@ Arrow callouts to add:
 
 Steps:
 
-1. Load and share an image.
+1. Load an image from Image Browser or Tiled Browser, then switch to `Mask Editing`.
 2. Switch to `Mask Editing`.
 3. Click `Add` to create a new mask layer.
 4. Use Threshold or Drawing Tools to mark invalid regions.
@@ -229,7 +228,7 @@ Arrow callouts to add:
 
 Steps:
 
-1. Load and share an image.
+1. Load an image from Image Browser or Tiled Browser, then switch to `Reduction`.
 2. Create or load calibration.
 3. Create or load a mask if needed.
 4. Switch to `Reduction`.
@@ -266,7 +265,7 @@ Arrow callouts to add:
 
 Steps:
 
-1. Load and share an image.
+1. Load an image from Image Browser or Tiled Browser, then switch to `Transform`.
 2. Confirm calibration and mask sources.
 3. Switch to `Transform`.
 4. Pick the transform operation.
@@ -336,7 +335,7 @@ Success check: the status bar reports whether the refresh or update succeeded.
 
 1. Go to `Image Browser`.
 2. Click `Open Folder` and select your data folder.
-3. Pick an image and click `Use This Image`.
+3. Pick an image, then switch to `Calibration`.
 4. Go to `Calibration` and confirm or export calibration.
 5. Go to `Mask Editing` if you need a mask, then export the combined mask.
 6. Go to `Reduction`.
@@ -354,7 +353,7 @@ Success check: the status bar reports whether the refresh or update succeeded.
 5. Click `Load`.
 6. Review the metadata panel.
 7. Select the desired frame if the scan is stacked.
-8. Click `Use This Image`.
+8. Switch to the tab where you want to inspect or process the loaded image.
 
 ### Workflow C: Make a Mask for Bad Pixels or Beamstop Shadow
 
@@ -371,7 +370,7 @@ Success check: the status bar reports whether the refresh or update succeeded.
 
 | Problem | What to Try |
 | --- | --- |
-| Other tabs do not show the image | Return to Image Browser or Tiled Browser and click `Use This Image`. |
+| Other tabs do not show the image | Return to Image Browser or Tiled Browser, confirm the image is selected or loaded, then switch back to the destination tab. |
 | Image looks blank | Adjust `vmin`, `vmax`, color map, and scale. Try log scale for scattering data. |
 | Tiled search fails | Confirm catalog, login status, cycle, proposal, scan ID, and network access. |
 | Calibration result looks wrong | Check beam center, distance, pixel size, wavelength, and selected standard material. |
