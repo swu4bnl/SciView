@@ -69,6 +69,8 @@ PYTHONPATH=src ./.venv/bin/python main.py
 
 ## User workflow overview
 
+For a step-by-step illustrated tutorial layout, see [docs/USER_HOW_TO.md](docs/USER_HOW_TO.md).
+
 ### Image Browser
 
 - Load single images and folders.

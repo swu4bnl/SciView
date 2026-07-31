@@ -2,18 +2,17 @@
 Mask Drawing Tools
 
 Provides interactive drawing tools for mask creation and editing.
-Tools handle both drawing logic and event coordination with automatic edge detection.
-Each tool can be used independently: tool.on_press(), tool.on_motion(), tool.on_release()
+MaskDrawingSession coordinates PyQtGraph pointer events while tools focus on
+previewing or mutating boolean mask arrays.
 """
 
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Callable
-from PyQt5.QtGui import QCursor
-from PyQt5.QtCore import Qt
 
 from sciview.masking.operations import watershed_fill_mask
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
+from sciview.interfaces.stable_qt.viewer_config import MASK_DRAWING_DEFAULTS
 
 
 def _draw_disk(mask_layer: np.ndarray, center_row: int, center_col: int, radius: int, draw_value: bool) -> None:
@@ -41,52 +40,44 @@ def _draw_disk(mask_layer: np.ndarray, center_row: int, center_col: int, radius:
 
 
 class DrawingTool(ABC):
-    """
-    Base class for interactive drawing tools with full event handling.
-    
-    Manages:
-    - Drawing state (is_dragging, last_draw_point, pointer tracking)
-    - Zone-based corner detection for out-of-canvas drawing
-    - Event flow (press → motion → release)
-    - Preview/finalize pattern for non-destructive editing
-    
-    Derived tools only need to implement:
-    - start(point): Initialize drawing
-    - preview(layer, point): Show non-destructive preview
-    - finalize(layer, point): Apply drawing to layer
+    """Base class for PyQtGraph-driven mask drawing tools.
+
+    The viewer/session owns mouse events. Tools only maintain the minimum drawing
+    state needed to preview or mutate a boolean mask layer.
     """
     
     def __init__(self, name: str):
         self.name = name
-        self.brush_size = 5
+        self.brush_size = int(MASK_DRAWING_DEFAULTS["brush_size"])
         self.draw_value = True  # True = add (mask), False = remove (unmask)
         self.is_active = False  # Track if tool is in drawing state
         
         # Drawing state (inherited by all tools)
         self.is_dragging = False
         self.last_draw_point = None
-        self.pointer_left_canvas = False
-        self.pointer_exit_edge = None
-        
-        # Zone-based corner detection configuration
-        self.corner_zone_ratio = 0.15  # 15% corners per side
-        
-        # Optional callbacks
-        self.canvas = None
-        self.ax = None
         self.parent_app = None
         self.get_image_data = None
     
     def configure(self, canvas, ax, parent_app, image_data_getter=None):
-        """Configure the tool with canvas and app references"""
-        self.canvas = canvas
-        self.ax = ax
+        """Configure optional app references retained for tab compatibility."""
         self.parent_app = parent_app
         self.get_image_data = image_data_getter
     
     def set_image_data_getter(self, getter: Callable):
         """Set function to retrieve current image data"""
         self.get_image_data = getter
+
+    def begin(self, point: Tuple[int, int]) -> None:
+        self.is_dragging = True
+        self.is_active = True
+        self.last_draw_point = point
+        self.start(point)
+
+    def move(self, point: Tuple[int, int]) -> None:
+        self.last_draw_point = point
+
+    def end(self) -> None:
+        self.is_dragging = False
     
     @abstractmethod
     def start(self, point: Tuple[int, int]):
@@ -112,213 +103,170 @@ class DrawingTool(ABC):
         """
         pass
     
-    # ===== Event Handlers (can be overridden by derived classes) =====
-    
-    def on_press(self, event):
-        """Handle mouse press event - derived classes can override for custom behavior"""
-        if not self._event_inside_image(event):
-            return
-        
-        self.is_dragging = True
-        self.is_active = True
-        
-        coordinates = self._event_coordinates(event)
-        if coordinates is not None:
-            try:
-                x, y = coordinates
-                point = (y, x)  # (row, col) format for consistency
-                self.last_draw_point = point
-                self.start(point)
-            except (TypeError, ValueError):
-                pass
-    
-    def on_motion(self, event):
-        """Handle mouse motion - derived classes can override for custom behavior"""
-        if not self._event_inside_image(event):
-            # Pointer left canvas - detect closest corner/edge
-            if self.is_dragging and self.last_draw_point is not None:
-                self.pointer_left_canvas = True
-                self._detect_exit_edge()
-            
-            if self.canvas:
-                self.canvas.setCursor(QCursor(Qt.CrossCursor))
-            return
-        
-        # Pointer inside canvas
-        self.pointer_left_canvas = False
-        self.pointer_exit_edge = None
-        
-        if self.canvas:
-            self.canvas.setCursor(QCursor(Qt.CrossCursor))
-        
-        # Track last valid point
-        coordinates = self._event_coordinates(event)
-        if coordinates is not None:
-            try:
-                x, y = coordinates
-                self.last_draw_point = (y, x)
-            except (TypeError, ValueError):
-                pass
-    
-    def on_release(self, event):
-        """Handle mouse release - derived classes can override for custom behavior"""
-        was_dragging = self.is_dragging
-        self.is_dragging = False
-        
-        # Reset state
-        self.pointer_left_canvas = False
-        self.pointer_exit_edge = None
-        
-        if self.canvas:
-            self.canvas.setCursor(QCursor(Qt.ArrowCursor))
-    
     def reset(self):
         """Reset tool state between drawings"""
         self.is_active = False
         self.is_dragging = False
         self.last_draw_point = None
-        self.pointer_left_canvas = False
-        self.pointer_exit_edge = None
 
-    def _event_inside_image(self, event) -> bool:
-        if hasattr(event, 'inside_image'):
-            return bool(event.inside_image)
-        return bool(getattr(event, 'inaxes', None)) and event.inaxes == self.ax
 
-    def _event_coordinates(self, event) -> tuple[int, int] | None:
-        if hasattr(event, 'x') and hasattr(event, 'y'):
-            x = event.x
-            y = event.y
+class MaskDrawingSession:
+    """Coordinate mask drawing events, previews, and layer mutation."""
+
+    def __init__(
+        self,
+        *,
+        is_enabled: Callable[[], bool],
+        get_tool: Callable[[], DrawingTool | None],
+        get_image_data: Callable[[], object],
+        get_active_layer: Callable[[bool], object | None],
+        get_active_layer_index: Callable[[bool], int | None],
+        get_layers: Callable[[], list],
+        get_combine_method: Callable[[], str],
+        set_combined_mask: Callable[[np.ndarray], None],
+        update_combined_mask: Callable[[], None],
+        update_plot: Callable[[], None],
+        set_drawing_enabled: Callable[[bool], None],
+        should_auto_disable: Callable[[], bool],
+        get_brush_size: Callable[[], int],
+        get_draw_value: Callable[[], bool],
+    ) -> None:
+        self.is_enabled = is_enabled
+        self.get_tool = get_tool
+        self.get_image_data = get_image_data
+        self.get_active_layer = get_active_layer
+        self.get_active_layer_index = get_active_layer_index
+        self.get_layers = get_layers
+        self.get_combine_method = get_combine_method
+        self.set_combined_mask = set_combined_mask
+        self.update_combined_mask = update_combined_mask
+        self.update_plot = update_plot
+        self.set_drawing_enabled = set_drawing_enabled
+        self.should_auto_disable = should_auto_disable
+        self.get_brush_size = get_brush_size
+        self.get_draw_value = get_draw_value
+        self.preview_mask: np.ndarray | None = None
+
+    def handle_press(self, event) -> None:
+        tool = self.get_tool()
+        if not self.is_enabled() or tool is None:
+            return
+        point = self._event_point(event, require_inside=True)
+        if point is None:
+            return
+        self._sync_tool(tool)
+        tool.begin(point)
+        if isinstance(tool, BrushDrawingTool):
+            self._draw_brush_stroke(point, tool)
         else:
-            x = getattr(event, 'xdata', None)
-            y = getattr(event, 'ydata', None)
+            self._show_preview(point, tool)
+
+    def handle_motion(self, event) -> None:
+        tool = self.get_tool()
+        if not self.is_enabled() or tool is None:
+            return
+        self._sync_tool(tool)
+        if not (tool.is_dragging and tool.is_active):
+            return
+        point = self._event_point(event, require_inside=True)
+        if point is None:
+            return
+        if isinstance(tool, BrushDrawingTool):
+            self._draw_brush_stroke(point, tool)
+        else:
+            tool.move(point)
+            self._show_preview(point, tool)
+
+    def handle_release(self, event) -> None:
+        tool = self.get_tool()
+        if tool is None or not tool.is_dragging:
+            return
+
+        if tool.is_active:
+            try:
+                point = self._event_point(event, require_inside=True) or tool.last_draw_point
+                if point is None:
+                    return
+                if not isinstance(tool, BrushDrawingTool):
+                    current_layer = self.get_active_layer(True)
+                    if current_layer is None:
+                        return
+                    current_layer.data = tool.finalize(current_layer.data, point)
+                self.update_combined_mask()
+                self.update_plot()
+            finally:
+                self.preview_mask = None
+                tool.end()
+                tool.reset()
+
+        if self.should_auto_disable():
+            self.set_drawing_enabled(False)
+
+    def _sync_tool(self, tool: DrawingTool) -> None:
+        tool.brush_size = self.get_brush_size()
+        tool.draw_value = self.get_draw_value()
+
+    def _draw_brush_stroke(self, point: tuple[int, int], tool: DrawingTool) -> None:
+        current_layer = self.get_active_layer(True)
+        if current_layer is None:
+            return
+        current_layer.data = tool.finalize(current_layer.data, point)
+        tool.move(point)
+        layer_index = self.get_active_layer_index(False)
+        if layer_index is not None:
+            self._show_layer_preview(layer_index, current_layer.data)
+
+    def _show_preview(self, point: tuple[int, int], tool: DrawingTool) -> None:
+        layer_index = self.get_active_layer_index(True)
+        if layer_index is None:
+            return
+        layers = self.get_layers()
+        current_layer = layers[layer_index]
+        preview_data = tool.preview(current_layer.data, point)
+        self._show_layer_preview(layer_index, preview_data)
+
+    def _show_layer_preview(self, layer_index: int, preview_data: np.ndarray) -> None:
+        temp_combined = self._compose_preview(self.get_layers(), layer_index, preview_data)
+        preview_mask = temp_combined.astype(bool, copy=False)
+        self.set_combined_mask(preview_mask)
+        self.preview_mask = preview_mask
+        self.update_plot()
+
+    def _compose_preview(self, layers, layer_index: int, preview_data: np.ndarray) -> np.ndarray:
+        visible_layers = [layer for layer in layers if layer.visible]
+        if not visible_layers:
+            return preview_data.astype(bool, copy=False)
+        if len(visible_layers) == 1 and layers[layer_index].visible:
+            return preview_data.astype(bool, copy=False)
+        if self.get_combine_method() == "OR":
+            temp_combined = np.zeros_like(preview_data, dtype=bool)
+            for idx, layer in enumerate(layers):
+                if not layer.visible:
+                    continue
+                layer_data = preview_data if idx == layer_index else layer.data
+                temp_combined = np.logical_or(temp_combined, layer_data)
+            return temp_combined
+
+        temp_combined = None
+        for idx, layer in enumerate(layers):
+            if not layer.visible:
+                continue
+            layer_data = preview_data if idx == layer_index else layer.data
+            temp_combined = layer_data.astype(bool, copy=False) if temp_combined is None else np.logical_and(temp_combined, layer_data)
+        return preview_data.astype(bool, copy=False) if temp_combined is None else temp_combined
+
+    @staticmethod
+    def _event_point(event, *, require_inside: bool) -> tuple[int, int] | None:
+        if require_inside and hasattr(event, 'inside_image') and not bool(event.inside_image):
+            return None
+        x = getattr(event, 'x', getattr(event, 'xdata', None))
+        y = getattr(event, 'y', getattr(event, 'ydata', None))
         if x is None or y is None:
             return None
         try:
-            return int(x), int(y)
+            return int(y), int(x)
         except (TypeError, ValueError):
             return None
-    
-    # ===== Edge Detection (shared by all tools) =====
-    
-    def _detect_exit_edge(self):
-        """Detect which corner/edge pointer exited based on zone detection"""
-        if self.last_draw_point is None or not self.get_image_data:
-            return
-        
-        try:
-            image_data = self.get_image_data()
-            image_2d, is_valid, _ = validate_and_prepare_image_array(image_data)
-            if not is_valid:
-                return
-            
-            last_y, last_x = self.last_draw_point
-            img_height, img_width = image_2d.shape[:2]
-            
-            # Define zones using configurable ratio
-            zone_x = img_width * self.corner_zone_ratio
-            zone_y = img_height * self.corner_zone_ratio
-            
-            x_zone = 0 if last_x < zone_x else (1 if last_x < img_width - zone_x else 2)
-            y_zone = 0 if last_y < zone_y else (1 if last_y < img_height - zone_y else 2)
-            
-            # Build candidate endpoints with zone-based preference ordering
-            candidates = self._build_candidates(x_zone, y_zone, last_x, last_y, img_width, img_height)
-            
-            # Pick first (preferred) candidate
-            if candidates:
-                self.pointer_exit_edge = candidates[0][0]
-        except:
-            pass
-    
-    def _build_candidates(self, x_zone, y_zone, last_x, last_y, img_width, img_height):
-        """Build preferred endpoint candidates based on zones"""
-        candidates = []
-        
-        if y_zone == 0:  # Top zones
-            if x_zone == 0:  # Top-left
-                candidates = [
-                    (4, 0, 0),
-                    (0, 0, last_y),
-                    (2, last_x, 0),
-                ]
-            elif x_zone == 1:  # Top-center
-                candidates = [
-                    (2, last_x, 0),
-                    (4, 0, 0),
-                    (5, img_width - 1, 0),
-                ]
-            else:  # Top-right
-                candidates = [
-                    (5, img_width - 1, 0),
-                    (1, img_width - 1, last_y),
-                    (2, last_x, 0),
-                ]
-        elif y_zone == 1:  # Middle zones
-            if x_zone == 0:  # Left edge
-                candidates = [
-                    (0, 0, last_y),
-                    (4, 0, 0),
-                    (6, 0, img_height - 1),
-                ]
-            elif x_zone == 1:  # Center (prefer closest corner)
-                candidates = [
-                    (4, 0, 0),
-                    (5, img_width - 1, 0),
-                    (6, 0, img_height - 1),
-                    (7, img_width - 1, img_height - 1),
-                    (0, 0, last_y),
-                    (1, img_width - 1, last_y),
-                    (2, last_x, 0),
-                    (3, last_x, img_height - 1),
-                ]
-            else:  # Right edge
-                candidates = [
-                    (1, img_width - 1, last_y),
-                    (5, img_width - 1, 0),
-                    (7, img_width - 1, img_height - 1),
-                ]
-        else:  # Bottom zones
-            if x_zone == 0:  # Bottom-left
-                candidates = [
-                    (6, 0, img_height - 1),
-                    (0, 0, last_y),
-                    (3, last_x, img_height - 1),
-                ]
-            elif x_zone == 1:  # Bottom-center
-                candidates = [
-                    (3, last_x, img_height - 1),
-                    (6, 0, img_height - 1),
-                    (7, img_width - 1, img_height - 1),
-                ]
-            else:  # Bottom-right
-                candidates = [
-                    (7, img_width - 1, img_height - 1),
-                    (1, img_width - 1, last_y),
-                    (3, last_x, img_height - 1),
-                ]
-        
-        return candidates
-    
-    def get_endpoint_for_edge(self, edge_code, last_x, last_y, img_width, img_height):
-        """
-        Get (x, y) endpoint for a given edge code.
-        
-        Edge codes:
-        - 0=left, 1=right, 2=top, 3=bottom
-        - 4=top-left, 5=top-right, 6=bottom-left, 7=bottom-right
-        """
-        zone_to_endpoint = {
-            0: (0, last_y),
-            1: (img_width - 1, last_y),
-            2: (last_x, 0),
-            3: (last_x, img_height - 1),
-            4: (0, 0),
-            5: (img_width - 1, 0),
-            6: (0, img_height - 1),
-            7: (img_width - 1, img_height - 1),
-        }
-        return zone_to_endpoint.get(edge_code, (last_x, last_y))
 
 
 class BrushDrawingTool(DrawingTool):

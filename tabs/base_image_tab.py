@@ -23,6 +23,7 @@ from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_detector_confi
 from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, get_image_info
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
+from sciview.interfaces.stable_qt.viewer_config import SUPPORTED_IMAGE_COLORMAPS, SUPPORTED_IMAGE_SCALES
 
 # Get constants
 HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
@@ -315,14 +316,14 @@ class BaseImageTab(QWidget):
         
         img_ctrl.addWidget(QLabel("cmap:"))
         self.cmap_selector = QComboBox()
-        self.cmap_selector.addItems(['gray', 'viridis', 'plasma', 'inferno', 'jet'])
+        self.cmap_selector.addItems(list(SUPPORTED_IMAGE_COLORMAPS))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.cmap_selector.currentTextChanged.connect(self._on_cmap_changed)
         img_ctrl.addWidget(self.cmap_selector)
         
         img_ctrl.addWidget(QLabel("scale:"))
         self.img_scale_combo = QComboBox()
-        self.img_scale_combo.addItems(["linear", "log"])
+        self.img_scale_combo.addItems(list(SUPPORTED_IMAGE_SCALES))
         self.img_scale_combo.setCurrentText(self.display_settings['scale'])
         self.img_scale_combo.currentTextChanged.connect(self._on_scale_changed)
         img_ctrl.addWidget(self.img_scale_combo)

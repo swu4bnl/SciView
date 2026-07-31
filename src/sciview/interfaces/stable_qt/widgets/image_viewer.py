@@ -14,6 +14,13 @@ import pyqtgraph as pg
 import pyqtgraph.exporters
 
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
+from sciview.interfaces.stable_qt.viewer_config import (
+    SUPPORTED_IMAGE_COLORMAPS,
+    SUPPORTED_IMAGE_SCALES,
+    VIEWER_BEHAVIOR,
+    VIEWER_COLORS,
+    VIEWER_TOOLBAR_ACTIONS,
+)
 
 
 pg.setConfigOptions(imageAxisOrder="row-major")
@@ -45,7 +52,7 @@ class ImageViewer(QWidget):
     mouse_moved = pyqtSignal(object)
     mouse_released = pyqtSignal(object)
 
-    _SUPPORTED_COLORMAPS = {"gray", "viridis", "plasma", "inferno", "jet"}
+    _SUPPORTED_COLORMAPS = set(SUPPORTED_IMAGE_COLORMAPS)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -54,14 +61,20 @@ class ImageViewer(QWidget):
         self._display_levels: tuple[float, float] | None = None
         self._levels: tuple[float | None, float | None] = (None, None)
         self._scale = "linear"
-        self._colormap_name = "gray"
+        self._colormap_name = SUPPORTED_IMAGE_COLORMAPS[0]
         self._overlays: dict[str, tuple[Any, str | None]] = {}
+        self._interaction_locked = False
 
         self._graphics = pg.GraphicsLayoutWidget()
+        self._graphics.setBackground(VIEWER_COLORS.background)
         self._plot_item = self._graphics.addPlot(row=0, col=0)
+        self._plot_item.setAspectLocked(True, ratio=VIEWER_BEHAVIOR.aspect_ratio)
         self._plot_item.invertY(True)
         self._plot_item.setMenuEnabled(False)
+        self._plot_item.hideAxis("left")
+        self._plot_item.hideAxis("bottom")
         self._view_box = self._plot_item.getViewBox()
+        self._view_box.setBackgroundColor(VIEWER_COLORS.background)
         self._view_box.setMouseMode(pg.ViewBox.PanMode)
         self._view_box.sigRangeChanged.connect(self._emit_view_changed)
 
@@ -69,17 +82,18 @@ class ImageViewer(QWidget):
         self._plot_item.addItem(self._image_item)
         self._image_item.setVisible(False)
 
-        self._message_item = pg.TextItem(text="", color=(180, 180, 180), anchor=(0.5, 0.5))
+        self._message_item = pg.TextItem(text="", color=VIEWER_COLORS.message, anchor=(0.5, 0.5))
         self._plot_item.addItem(self._message_item)
         self._message_item.setVisible(False)
 
         self._graphics.scene().sigMouseMoved.connect(self._on_scene_mouse_moved)
         self._graphics.viewport().installEventFilter(self)
 
-        self._pan_button = self._make_tool_button("Pan", "Pan image: drag with the left mouse button.")
-        self._zoom_button = self._make_tool_button("Zoom", "Rectangular zoom: drag a box with the left mouse button.")
-        self._home_button = self._make_tool_button("Home", "Reset the image view to the full detector frame.")
-        self._save_button = self._make_tool_button("Save", "Save the rendered view with the current colormap and overlays.")
+        toolbar_actions = {action.key: action for action in VIEWER_TOOLBAR_ACTIONS}
+        self._pan_button = self._make_tool_button(toolbar_actions["pan"].label, toolbar_actions["pan"].tooltip)
+        self._zoom_button = self._make_tool_button(toolbar_actions["zoom"].label, toolbar_actions["zoom"].tooltip)
+        self._home_button = self._make_tool_button(toolbar_actions["home"].label, toolbar_actions["home"].tooltip)
+        self._save_button = self._make_tool_button(toolbar_actions["save"].label, toolbar_actions["save"].tooltip)
         self._pan_button.setCheckable(True)
         self._zoom_button.setCheckable(True)
         self._pan_button.setChecked(True)
@@ -156,13 +170,27 @@ class ImageViewer(QWidget):
         self._image_item.setLookupTable(self._matplotlib_lut(name))
 
     def set_scale(self, scale: str) -> None:
-        if scale not in {"linear", "log"}:
+        if scale not in SUPPORTED_IMAGE_SCALES:
             raise ValueError(f"Unsupported image scale: {scale}")
         self._scale = scale
         self._refresh_display_image(preserve_view=True)
 
     def set_title(self, title: str) -> None:
         self._plot_item.setTitle(title)
+
+    def set_interaction_locked(self, locked: bool) -> None:
+        """Lock pan/zoom handling while preserving pointer signals for tools."""
+        self._interaction_locked = bool(locked)
+        self._view_box.setMouseEnabled(x=not locked, y=not locked)
+        self._pan_button.setEnabled(not locked)
+        self._zoom_button.setEnabled(not locked)
+        if locked:
+            self._pan_button.setChecked(False)
+            self._zoom_button.setChecked(False)
+        elif self._view_box.state.get("mouseMode") == pg.ViewBox.RectMode:
+            self._zoom_button.setChecked(True)
+        else:
+            self._pan_button.setChecked(True)
 
     def reset_view(self) -> None:
         if self._source_array is None:
@@ -202,8 +230,8 @@ class ImageViewer(QWidget):
         y: list[float] | tuple[float, ...] | np.ndarray,
         *,
         group: str | None = None,
-        color: str = "#00ffff",
-        size: float = 8.0,
+        color: str = VIEWER_COLORS.default_point,
+        size: float = VIEWER_BEHAVIOR.default_point_size,
         symbol: str = "o",
         pen: str | None = None,
     ) -> Any:
@@ -227,9 +255,9 @@ class ImageViewer(QWidget):
         radius: float,
         *,
         group: str | None = None,
-        color: str = "#ff0000",
-        width: float = 1.5,
-        points: int = 240,
+        color: str = VIEWER_COLORS.default_circle,
+        width: float = VIEWER_BEHAVIOR.default_line_width,
+        points: int = VIEWER_BEHAVIOR.circle_sample_points,
     ) -> Any:
         theta = np.linspace(0.0, 2.0 * np.pi, points)
         x = float(center_x) + float(radius) * np.cos(theta)
@@ -246,8 +274,8 @@ class ImageViewer(QWidget):
         y: list[float] | tuple[float, ...] | np.ndarray,
         *,
         group: str | None = None,
-        color: str = "#ffffff",
-        width: float = 1.5,
+        color: str = VIEWER_COLORS.default_line,
+        width: float = VIEWER_BEHAVIOR.default_line_width,
     ) -> Any:
         item = pg.PlotDataItem(np.asarray(x, dtype=float), np.asarray(y, dtype=float), pen=pg.mkPen(color, width=width))
         item.setZValue(15)
@@ -262,7 +290,7 @@ class ImageViewer(QWidget):
         text: str,
         *,
         group: str | None = None,
-        color: str = "#ffffff",
+        color: str = VIEWER_COLORS.default_line,
         anchor: tuple[float, float] = (0.5, 0.5),
     ) -> Any:
         item = pg.TextItem(text=text, color=color, anchor=anchor)
@@ -278,7 +306,7 @@ class ImageViewer(QWidget):
         center_y: float,
         *,
         group: str | None = None,
-        color: str = "#ff0000",
+        color: str = VIEWER_COLORS.default_crosshair,
         width: float = 1.0,
     ) -> tuple[Any, Any, Any]:
         if self._source_array is None:
@@ -302,10 +330,16 @@ class ImageViewer(QWidget):
         mask: np.ndarray,
         *,
         group: str | None = None,
-        color: str = "#ef4444",
+        color: str = VIEWER_COLORS.default_mask,
         alpha: float = 0.5,
     ) -> Any:
         rgba = self._rgba_mask(mask, color, alpha)
+        existing = self._overlays.get(overlay_id)
+        if existing is not None and isinstance(existing[0], pg.ImageItem):
+            existing[0].setImage(rgba, autoLevels=False)
+            existing[0].setVisible(True)
+            return existing[0]
+
         item = pg.ImageItem(rgba, axisOrder="row-major")
         item.setZValue(5)
         self.set_overlay_item(overlay_id, item, group=group)
@@ -346,6 +380,10 @@ class ImageViewer(QWidget):
                 self.mouse_moved.emit(pointer_event)
             elif event.type() == QEvent.MouseButtonRelease:
                 self.mouse_released.emit(pointer_event)
+            if self._interaction_locked:
+                return True
+        if watched is self._graphics.viewport() and event.type() == QEvent.Wheel and self._interaction_locked:
+            return True
         return super().eventFilter(watched, event)
 
     def _refresh_display_image(self, *, preserve_view: bool = False) -> None:
