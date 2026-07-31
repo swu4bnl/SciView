@@ -12,7 +12,7 @@ import yaml
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.colors import LogNorm
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -51,6 +51,10 @@ class TransformTab(BaseImageTab):
         self._custom_mask = None
         self._custom_mask_label = "None"
         self._building_controls = True
+        self._preview_delay_ms = 450
+        self._preview_timer = QTimer(self)
+        self._preview_timer.setSingleShot(True)
+        self._preview_timer.timeout.connect(self.refresh_preview)
         self._build_ui()
         self._building_controls = False
 
@@ -173,7 +177,7 @@ class TransformTab(BaseImageTab):
         transform_layout.setLabelAlignment(Qt.AlignRight)
 
         self.operation_combo = QComboBox()
-        self.operation_combo.addItems(["Q Image", "Q-Phi Image", "Qx-Qz Image"])
+        self.operation_combo.addItems(["Q Image", "Q-Phi Image", "Qr-Qz Image"])
         transform_layout.addRow("Operation", self.operation_combo)
 
         self.auto_update_check = QCheckBox("Auto preview")
@@ -263,14 +267,14 @@ class TransformTab(BaseImageTab):
         manual_q = not self.auto_qrange_check.isChecked()
         self.q_min_spin.setEnabled(manual_q)
         self.q_max_spin.setEnabled(manual_q)
-        self.update_plot()
+        self.update_plot(schedule_preview=True)
 
     def _selected_operation(self):
         text = self.operation_combo.currentText()
         return {
             "Q Image": "q_image",
             "Q-Phi Image": "q_phi_image",
-            "Qx-Qz Image": "qx_qz_image",
+            "Qr-Qz Image": "qr_qz_image",
         }[text]
 
     def _use_mask_enabled(self):
@@ -638,7 +642,11 @@ class TransformTab(BaseImageTab):
         written_path = save_transform_result(self._current_result, file_path)
         self.parent_app.show_status(f"Transformed image exported to {written_path}")
 
-    def update_plot(self, image_data=None):
+    def _schedule_preview(self):
+        self.status_label.setText("Preview pending...")
+        self._preview_timer.start(self._preview_delay_ms)
+
+    def update_plot(self, image_data=None, schedule_preview: bool = False):
         display_data = image_data if image_data is not None else self.image_data
         if display_data is None and hasattr(self.parent_app, "image_data"):
             display_data = self.parent_app.image_data
@@ -657,13 +665,21 @@ class TransformTab(BaseImageTab):
 
         self.result_summary.setText(f"Image loaded: {image_array.shape[1]}x{image_array.shape[0]}")
 
-        self._compute_q_bounds(image_array.shape)
-        self._refresh_auto_q_range()
+        if self._selected_operation() != "qr_qz_image":
+            self._compute_q_bounds(image_array.shape)
+            self._refresh_auto_q_range()
         self._refresh_source_status()
         super().update_plot(display_data)
 
         if self.auto_update_check.isChecked():
-            self.refresh_preview()
+            if schedule_preview:
+                self._schedule_preview()
+            else:
+                self.refresh_preview()
+
+    def on_shared_state_activated(self):
+        """Refresh transform state when shared image/calibration/mask becomes active."""
+        self.update_plot()
 
     def _add_tab_specific_status(self, info_lines):
         info_lines.append("")

@@ -72,6 +72,7 @@ class ImageViewer(QWidget):
         self._colormap_name = SUPPORTED_IMAGE_COLORMAPS[0]
         self._overlays: dict[str, tuple[Any, str | None]] = {}
         self._interaction_locked = False
+        self._pointer_captured = False
         self._updating_histogram = False
 
         self._graphics = pg.GraphicsLayoutWidget()
@@ -282,6 +283,8 @@ class ImageViewer(QWidget):
     def set_interaction_locked(self, locked: bool) -> None:
         """Lock pan/zoom handling while preserving pointer signals for tools."""
         self._interaction_locked = bool(locked)
+        if not locked:
+            self._release_pointer_capture()
         self._view_box.setMouseEnabled(x=not locked, y=not locked)
         self._pan_button.setEnabled(not locked)
         self._zoom_button.setEnabled(not locked)
@@ -297,6 +300,18 @@ class ImageViewer(QWidget):
         if QApplication.keyboardModifiers() & Qt.AltModifier:
             self.apply_next_artist_palette()
         self.auto_levels()
+
+    def _capture_pointer(self) -> None:
+        if self._pointer_captured:
+            return
+        self._graphics.viewport().grabMouse()
+        self._pointer_captured = True
+
+    def _release_pointer_capture(self) -> None:
+        if not self._pointer_captured:
+            return
+        self._graphics.viewport().releaseMouse()
+        self._pointer_captured = False
 
     def _update_palette_info_label(self, name: str) -> None:
         palette = ARTIST_IMAGE_COLORMAPS.get(name)
@@ -500,11 +515,14 @@ class ImageViewer(QWidget):
         }:
             pointer_event = self._pointer_event_from_viewport_pos(event.pos(), event.button(), event.modifiers())
             if event.type() == QEvent.MouseButtonPress:
+                if self._interaction_locked:
+                    self._capture_pointer()
                 self.mouse_pressed.emit(pointer_event)
             elif event.type() == QEvent.MouseMove:
                 self.mouse_moved.emit(pointer_event)
             elif event.type() == QEvent.MouseButtonRelease:
                 self.mouse_released.emit(pointer_event)
+                self._release_pointer_capture()
             if self._interaction_locked:
                 return True
         if watched is self._graphics.viewport() and event.type() == QEvent.Wheel and self._interaction_locked:

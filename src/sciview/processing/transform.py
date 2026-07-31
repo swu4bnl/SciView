@@ -14,7 +14,7 @@ import numpy as np
 from sciview.processing.angle_conventions import display_angle_map
 
 
-TransformOperation = Literal["q_image", "q_phi_image", "qx_qz_image"]
+TransformOperation = Literal["q_image", "q_phi_image", "qr_qz_image"]
 TransformRunner = Callable[[Any, "TransformRequest"], Any]
 
 
@@ -307,15 +307,15 @@ class TransformBackend:
             except ValueError:
                 return self._run_calibration_fallback(data_2d, request)
 
-        if request.operation == "qx_qz_image":
+        if request.operation == "qr_qz_image":
             try:
                 return _invoke_first_available(
                     data_2d,
                     [
                         (
-                            "remesh_qxqz",
+                            "remesh_qr_bin",
                             {
-                                "bins_q": request.bins_q,
+                                "flag_mask": request.use_mask,
                             },
                         ),
                     ],
@@ -368,7 +368,10 @@ class TransformBackend:
                 "fallback": True,
             }
 
-        qx_map = np.asarray(calibration.qx_map(), dtype=float)
+        if request.operation == "qr_qz_image":
+            qx_map = np.asarray(calibration.qr_map(), dtype=float)
+        else:
+            qx_map = np.asarray(calibration.qx_map(), dtype=float)
         qz_map = np.asarray(calibration.qz_map(), dtype=float)
 
         x_min = float(np.nanmin(qx_map[np.isfinite(qx_map)]))
@@ -398,8 +401,8 @@ class TransformBackend:
     def _axis_labels(self, operation: TransformOperation) -> tuple[str, str]:
         if operation == "q_phi_image":
             return "q (1/A)", "chi (deg)"
-        if operation == "qx_qz_image":
-            return "qx (1/A)", "qz (1/A)"
+        if operation == "qr_qz_image":
+            return "qr (1/A)", "qz (1/A)"
         return "qx (1/A)", "qz (1/A)"
 
 

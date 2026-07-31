@@ -168,12 +168,19 @@ class MaskDrawingSession:
         self._sync_tool(tool)
         if not (tool.is_dragging and tool.is_active):
             return
-        point = self._event_point(event, require_inside=True)
-        if point is None:
-            return
         if isinstance(tool, BrushDrawingTool):
+            point = self._event_point(event, require_inside=True)
+            if point is None:
+                return
             self._draw_brush_stroke(point, tool)
         else:
+            current_layer = self.get_active_layer(True)
+            if current_layer is None:
+                return
+            point = self._event_point(event, require_inside=False)
+            if point is None:
+                return
+            point = self._clamp_point_to_mask(point, current_layer.data)
             tool.move(point)
             self._show_preview(point, tool)
 
@@ -184,13 +191,18 @@ class MaskDrawingSession:
 
         if tool.is_active:
             try:
-                point = self._event_point(event, require_inside=True) or tool.last_draw_point
-                if point is None:
-                    return
-                if not isinstance(tool, BrushDrawingTool):
+                if isinstance(tool, BrushDrawingTool):
+                    point = self._event_point(event, require_inside=True) or tool.last_draw_point
+                    if point is None:
+                        return
+                else:
                     current_layer = self.get_active_layer(True)
                     if current_layer is None:
                         return
+                    point = self._event_point(event, require_inside=False) or tool.last_draw_point
+                    if point is None:
+                        return
+                    point = self._clamp_point_to_mask(point, current_layer.data)
                     current_layer.data = tool.finalize(current_layer.data, point)
                 self.update_combined_mask()
                 self.update_plot()
@@ -267,6 +279,12 @@ class MaskDrawingSession:
             return int(y), int(x)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _clamp_point_to_mask(point: tuple[int, int], mask_layer: np.ndarray) -> tuple[int, int]:
+        height, width = mask_layer.shape[:2]
+        row, col = point
+        return int(np.clip(row, 0, height - 1)), int(np.clip(col, 0, width - 1))
 
 
 class BrushDrawingTool(DrawingTool):

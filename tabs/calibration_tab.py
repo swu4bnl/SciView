@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
@@ -28,6 +28,7 @@ from sciview.interfaces.theme.app_style import *
 from sciview.calibration.standards_db import STANDARDS
 from sciview.interfaces.stable_qt.tools.ring_center import RingCenterCalculator
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_select_directory, dialog_save_file
+from sciview.processing.calibration_profiles import compute_calibration_profiles
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS
 from sciview.calibration.io import build_calibration_payload, write_calibration_yaml
@@ -55,6 +56,11 @@ class CalibrationApp(BaseImageTab):
         # Store 1D profile data for export
         self._profile_data = None
         self._last_profile_signature = None
+        self._calibration_update_delay_ms = 150
+        self._calibration_update_timer = QTimer(self)
+        self._calibration_update_timer.setSingleShot(True)
+        self._calibration_update_timer.timeout.connect(self.calibrate_and_update_status)
+        self._profile_bins = 600
         
         # Build UI
         self._build_ui()
@@ -197,7 +203,7 @@ class CalibrationApp(BaseImageTab):
         self.spin_wl_ang.setSingleStep(0.001)
         self.spin_wl_ang.setDecimals(4)
         self.spin_wl_ang.setValue(DEFAULT_CALIBRATION['wavelength_A'])
-        self.spin_wl_ang.editingFinished.connect(self.on_wavelength_changed)
+        self.spin_wl_ang.valueChanged.connect(self.on_wavelength_changed)
         wl_layout.addWidget(self.spin_wl_ang)
         layout.addLayout(wl_layout)
         
@@ -207,7 +213,7 @@ class CalibrationApp(BaseImageTab):
         self.spin_energy_ev.setRange(100.0, 50000.0)
         self.spin_energy_ev.setSingleStep(1.0)
         self.spin_energy_ev.setValue(DEFAULT_CALIBRATION['energy_eV'])
-        self.spin_energy_ev.editingFinished.connect(self.on_energy_changed)
+        self.spin_energy_ev.valueChanged.connect(self.on_energy_changed)
         energy_layout.addWidget(self.spin_energy_ev)
         layout.addLayout(energy_layout)
 
@@ -376,11 +382,14 @@ class CalibrationApp(BaseImageTab):
         spin.setSingleStep(step)
         spin.setValue(default)
         spin.setDecimals(4 if step < 0.01 else 2)
-        # Connect value changes to both status updates and plot updates
-        spin.editingFinished.connect(self.calibrate_and_update_status)
+        spin.valueChanged.connect(self._schedule_calibration_update)
         lay.addWidget(spin)
         parent.addLayout(lay)
         return spin
+
+    def _schedule_calibration_update(self, *_args):
+        self.parent_app.show_status("Calibration update pending...")
+        self._calibration_update_timer.start(self._calibration_update_delay_ms)
 
     def _load_standards_db(self):
         """Load standards database"""
@@ -512,19 +521,23 @@ class CalibrationApp(BaseImageTab):
         self.update_status_info()
         self.parent_app.show_status("Calibration updated and plots refreshed")
 
-    def on_wavelength_changed(self):
+    def on_wavelength_changed(self, *_args):
         """Handle wavelength changes"""
         wavelength = self.spin_wl_ang.value()
         energy = HC_E / wavelength
+        self.spin_energy_ev.blockSignals(True)
         self.spin_energy_ev.setValue(energy)
-        self.calibrate_and_update_status()
+        self.spin_energy_ev.blockSignals(False)
+        self._schedule_calibration_update()
 
-    def on_energy_changed(self):
+    def on_energy_changed(self, *_args):
         """Handle energy changes"""
         energy = self.spin_energy_ev.value()
         wavelength = HC_E / energy
+        self.spin_wl_ang.blockSignals(True)
         self.spin_wl_ang.setValue(wavelength)
-        self.calibrate_and_update_status()
+        self.spin_wl_ang.blockSignals(False)
+        self._schedule_calibration_update()
 
     def _draw_standard_lines(self):
         """Draw vertical lines for selected standard in 1D plot"""
@@ -565,8 +578,10 @@ class CalibrationApp(BaseImageTab):
         plot_xlim_valid = not np.allclose(plot_xlim, (0, 1))
         plot_ylim_valid = not np.allclose(plot_ylim, (0, 1))
 
-        # First, update the raw image using the unified base class method
-        self.update_plot()
+        if getattr(self.image_viewer, 'source_array', None) is None:
+            self.update_plot()
+        else:
+            self._refresh_calibration_crosshair()
         
         # Then, update the 1D plots
         self._update_1d_plots(plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
@@ -614,13 +629,19 @@ class CalibrationApp(BaseImageTab):
             # This is crucial for Q-space calculations to use the new parameters
             # self.image_data.calibration = cal
             
-            # Calculate Q-space data using SciAnalysis with error handling
+            # Calculate Q-space preview profiles using the backend fast path.
             try:
-                circ = self.image_data.circular_average_q_bin(apply_mask=False)
-                hor_1 = self.image_data.sector_average_q_bin(angle=0, dangle=5, apply_mask=False)
-                hor_2 = self.image_data.sector_average_q_bin(angle=180, dangle=5, apply_mask=False)
-                ver_1 = self.image_data.sector_average_q_bin(angle=90, dangle=5, apply_mask=False)
-                ver_2 = self.image_data.sector_average_q_bin(angle=-90, dangle=5, apply_mask=False)
+                profiles = compute_calibration_profiles(
+                    image=self.image_data.data,
+                    calibration=self.image_data.calibration,
+                    bins=self._profile_bins,
+                    sector_dangle_deg=5.0,
+                )
+                circ = profiles.circular
+                hor_1 = profiles.horizontal_0
+                hor_2 = profiles.horizontal_180
+                ver_1 = profiles.vertical_90
+                ver_2 = profiles.vertical_270
             except Exception as e:
                 # If Q-space analysis fails, clear the plot and show error
                 print(f"Warning: Q-space analysis failed: {e}")
@@ -634,16 +655,22 @@ class CalibrationApp(BaseImageTab):
             return
 
         # Store profile data for export
-        self._profile_data = {
-            'Circular Avg': circ,
-            'Horizontal 0deg': hor_1,
-            'Horizontal 180deg': hor_2,
-            'Vertical 90deg': ver_1,
-            'Vertical 270deg': ver_2,
-        }
+        self._profile_data = profiles.as_dict()
 
         # Update 1D plot with real data
         self._draw_1d_plots(circ, hor_1, hor_2, ver_1, ver_2, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
+
+    def _refresh_calibration_crosshair(self):
+        if not hasattr(self, 'image_viewer') or self.image_data is None:
+            return
+        self.image_viewer.clear_overlays(group='calibration-crosshair')
+        self.image_viewer.add_crosshair(
+            'beam-center',
+            self.spin_x.value(),
+            self.spin_y.value(),
+            group='calibration-crosshair',
+            color='#ff0000',
+        )
     
     def _clear_1d_plots(self):
         """Clear 1D plots when SciAnalysis is not available or analysis fails"""
