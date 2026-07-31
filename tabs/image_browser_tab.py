@@ -534,10 +534,10 @@ class ImageBrowserApp(BaseImageTab):
         refresh the current image being displayed in the image browser.
         """
         self.display_settings.update(kwargs)
-        
-        # Refresh current image with new display settings
-        if hasattr(self, '_update_display'):
-            self._update_display()
+        if hasattr(self.parent_app, 'publish_shared_display_settings'):
+            self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
+
+        self._apply_display_settings_to_viewer()
 
     def _build_ui(self):
         """Build the main user interface"""

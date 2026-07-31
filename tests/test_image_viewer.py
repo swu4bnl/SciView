@@ -4,7 +4,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QWidget
 
 import pyqtgraph as pg
 
@@ -151,11 +151,24 @@ def test_overlay_lifecycle(viewer):
 class DummyParentApp:
     image_data = None
 
+    def __init__(self):
+        self.display_settings = {
+            'vmin': -2,
+            'vmax': 1000,
+            'cmap': 'gray',
+            'scale': 'linear'
+        }
+        self.display_publish_count = 0
+
     def show_status(self, message):
         self.last_status = message
 
     def update_all_displays(self):
         pass
+
+    def publish_shared_display_settings(self, settings, source_tab=None):
+        self.display_settings.update(settings)
+        self.display_publish_count += 1
 
     def publish_shared_info_text(self, text, source_tab=None):
         self.last_info_text = text
@@ -187,6 +200,178 @@ def test_migrated_image_tabs_construct_with_image_viewer(qapp, module_name, clas
     tab = tab_class(DummyParentApp())
     try:
         assert isinstance(tab.image_viewer, ImageViewer)
+    finally:
+        tab.close()
+
+
+def test_viewer_shows_axes_and_histogram_controls(viewer):
+    image = np.arange(4 * 6, dtype=float).reshape(4, 6)
+
+    viewer.set_image(image)
+    viewer.set_levels(1.0, 20.0)
+
+    assert viewer._plot_item.getAxis("left").isVisible()
+    assert viewer._plot_item.getAxis("bottom").isVisible()
+    assert viewer._histogram.imageItem() is viewer._image_item
+    assert viewer._histogram.getLevels() == pytest.approx((1.0, 20.0))
+
+
+def test_base_tabs_share_display_settings_from_controls(qapp):
+    from tabs.calibration_tab import CalibrationApp
+
+    parent = DummyParentApp()
+    first = CalibrationApp(parent)
+    second = CalibrationApp(parent)
+    try:
+        assert first.display_settings is parent.display_settings
+        assert second.display_settings is parent.display_settings
+
+        first.update_display_settings(vmin=3.0, vmax=123.0, cmap="viridis")
+        second.sync_display_controls()
+
+        assert parent.display_settings["vmin"] == 3.0
+        assert parent.display_settings["vmax"] == 123.0
+        assert parent.display_settings["cmap"] == "viridis"
+        assert second.vmin_input.text() == "3.0"
+        assert second.vmax_input.text() == "123.0"
+        assert second.cmap_selector.currentText() == "viridis"
+    finally:
+        first.close()
+        second.close()
+
+
+def test_shared_display_settings_update_existing_viewers_without_full_redraw(qapp):
+    from tabs.calibration_tab import CalibrationApp
+
+    parent = DummyParentApp()
+    tab = CalibrationApp(parent)
+    redraw_count = {"value": 0}
+    try:
+        tab.update_plot = lambda *args, **kwargs: redraw_count.__setitem__("value", redraw_count["value"] + 1)
+        tab.image_viewer.set_image(np.arange(4 * 4, dtype=float).reshape(4, 4))
+
+        tab.apply_shared_display_settings({
+            'vmin': 2.0,
+            'vmax': 12.0,
+            'cmap': 'plasma',
+            'scale': 'linear',
+        })
+
+        assert redraw_count["value"] == 0
+        assert tab.image_viewer.display_levels == (2.0, 12.0)
+        assert tab.vmin_input.text() == "2.0"
+        assert tab.vmax_input.text() == "12.0"
+        assert tab.cmap_selector.currentText() == "plasma"
+    finally:
+        tab.close()
+
+
+def test_shared_image_sync_only_renders_current_tab(qapp):
+    from main import SciAnaApp
+
+    app = SciAnaApp()
+    source = DummyImageTab()
+    active = DummyImageTab()
+    inactive = DummyImageTab()
+    try:
+        app.add_tab(source, "Source")
+        app.add_tab(active, "Active")
+        app.add_tab(inactive, "Inactive")
+        app.tab_widget.setCurrentWidget(active)
+
+        image = np.ones((3, 3), dtype=float)
+        app.publish_shared_image(image, source_tab=source)
+
+        assert active.image_data is image
+        assert inactive.image_data is image
+        assert active.update_count == 1
+        assert inactive.update_count == 0
+    finally:
+        app.close()
+
+
+def test_switching_to_synced_tab_renders_shared_image(qapp):
+    from main import SciAnaApp
+
+    app = SciAnaApp()
+    source = DummyImageTab()
+    active = DummyImageTab()
+    inactive = DummyImageTab()
+    try:
+        app.add_tab(source, "Source")
+        app.add_tab(active, "Active")
+        app.add_tab(inactive, "Inactive")
+        app.tab_widget.setCurrentWidget(active)
+
+        image = np.ones((3, 3), dtype=float)
+        app.publish_shared_image(image, source_tab=source)
+        assert inactive.update_count == 0
+
+        app.tab_widget.setCurrentWidget(inactive)
+
+        assert inactive.image_data is image
+        assert inactive.update_count == 1
+    finally:
+        app.close()
+
+
+def test_switching_to_real_image_tab_loads_blank_viewer(qapp):
+    from main import SciAnaApp
+    from tabs.calibration_tab import CalibrationApp
+
+    app = SciAnaApp()
+    source = DummyImageTab()
+    calibration_tab = CalibrationApp(app)
+    try:
+        app.add_tab(source, "Source")
+        app.add_tab(calibration_tab, "Calibration")
+        app.tab_widget.setCurrentWidget(source)
+
+        image = np.arange(5 * 7, dtype=float).reshape(5, 7)
+        app.publish_shared_image(image, source_tab=source)
+
+        assert calibration_tab.image_data is image
+        assert calibration_tab.image_viewer.source_array is None
+
+        app.tab_widget.setCurrentWidget(calibration_tab)
+
+        assert calibration_tab.image_viewer.source_array is image
+        assert calibration_tab.image_viewer.display_array is image
+    finally:
+        app.close()
+
+
+class DummyImageTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.image_data = None
+        self.update_count = 0
+
+    def update_plot(self):
+        self.update_count += 1
+
+
+def test_mask_tool_buttons_toggle_canvas_lock(qapp):
+    from tabs.mask_tab import MaskApp
+
+    tab = MaskApp(DummyParentApp())
+    tab.image_data = np.zeros((6, 6), dtype=float)
+    try:
+        assert not hasattr(tab, 'drawing_mode_check')
+        assert not tab.drawing_mode
+        assert not tab.image_viewer._interaction_locked
+
+        tab.tool_buttons["Brush"].click()
+
+        assert tab.drawing_mode
+        assert tab.image_viewer._interaction_locked
+        assert tab.tool_buttons["Brush"].isChecked()
+
+        tab.tool_buttons["Brush"].click()
+
+        assert not tab.drawing_mode
+        assert not tab.image_viewer._interaction_locked
+        assert not tab.tool_buttons["Brush"].isChecked()
     finally:
         tab.close()
 

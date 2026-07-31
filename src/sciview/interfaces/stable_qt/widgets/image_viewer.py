@@ -48,6 +48,7 @@ class ImageViewer(QWidget):
 
     cursor_moved = pyqtSignal(float, float, object)
     view_changed = pyqtSignal(object)
+    levels_changed = pyqtSignal(float, float)
     mouse_pressed = pyqtSignal(object)
     mouse_moved = pyqtSignal(object)
     mouse_released = pyqtSignal(object)
@@ -64,6 +65,7 @@ class ImageViewer(QWidget):
         self._colormap_name = SUPPORTED_IMAGE_COLORMAPS[0]
         self._overlays: dict[str, tuple[Any, str | None]] = {}
         self._interaction_locked = False
+        self._updating_histogram = False
 
         self._graphics = pg.GraphicsLayoutWidget()
         self._graphics.setBackground(VIEWER_COLORS.background)
@@ -71,8 +73,10 @@ class ImageViewer(QWidget):
         self._plot_item.setAspectLocked(True, ratio=VIEWER_BEHAVIOR.aspect_ratio)
         self._plot_item.invertY(True)
         self._plot_item.setMenuEnabled(False)
-        self._plot_item.hideAxis("left")
-        self._plot_item.hideAxis("bottom")
+        self._plot_item.showAxis("left")
+        self._plot_item.showAxis("bottom")
+        self._plot_item.setLabel("bottom", "x", units="px")
+        self._plot_item.setLabel("left", "y", units="px")
         self._view_box = self._plot_item.getViewBox()
         self._view_box.setBackgroundColor(VIEWER_COLORS.background)
         self._view_box.setMouseMode(pg.ViewBox.PanMode)
@@ -81,6 +85,11 @@ class ImageViewer(QWidget):
         self._image_item = pg.ImageItem(axisOrder="row-major")
         self._plot_item.addItem(self._image_item)
         self._image_item.setVisible(False)
+
+        self._histogram = pg.HistogramLUTItem(image=self._image_item)
+        self._histogram.setMinimumWidth(100)
+        self._histogram.sigLevelsChanged.connect(self._on_histogram_levels_changed)
+        self._graphics.addItem(self._histogram, row=0, col=1)
 
         self._message_item = pg.TextItem(text="", color=VIEWER_COLORS.message, anchor=(0.5, 0.5))
         self._plot_item.addItem(self._message_item)
@@ -167,7 +176,12 @@ class ImageViewer(QWidget):
         if name not in self._SUPPORTED_COLORMAPS:
             raise ValueError(f"Unsupported colormap: {name}")
         self._colormap_name = name
-        self._image_item.setLookupTable(self._matplotlib_lut(name))
+        lut = self._matplotlib_lut(name)
+        self._image_item.setLookupTable(lut)
+        try:
+            self._histogram.gradient.setColorMap(pg.ColorMap(np.linspace(0.0, 1.0, lut.shape[0]), lut))
+        except Exception:
+            pass
 
     def set_scale(self, scale: str) -> None:
         if scale not in SUPPORTED_IMAGE_SCALES:
@@ -400,8 +414,34 @@ class ImageViewer(QWidget):
         if self._display_levels is not None:
             image_kwargs["levels"] = self._display_levels
         self._image_item.setImage(self._display_array, **image_kwargs)
+        if self._display_levels is not None:
+            self._updating_histogram = True
+            try:
+                self._histogram.setLevels(*self._display_levels)
+            finally:
+                self._updating_histogram = False
         if old_range is not None:
             self.set_view_range(old_range)
+
+    def _on_histogram_levels_changed(self) -> None:
+        if self._updating_histogram:
+            return
+        try:
+            display_min, display_max = self._histogram.getLevels()
+        except Exception:
+            return
+        if not (np.isfinite(display_min) and np.isfinite(display_max) and display_max > display_min):
+            return
+
+        if self._scale == "log":
+            raw_min = float(10.0**display_min)
+            raw_max = float(10.0**display_max)
+        else:
+            raw_min = float(display_min)
+            raw_max = float(display_max)
+        self._levels = (raw_min, raw_max)
+        self._display_levels = (float(display_min), float(display_max))
+        self.levels_changed.emit(raw_min, raw_max)
 
     def _pointer_event_from_viewport_pos(self, pos: QPointF, button: object, modifiers: object) -> ImagePointerEvent:
         scene_pos = self._graphics.mapToScene(pos)

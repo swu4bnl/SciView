@@ -28,6 +28,13 @@ from sciview.interfaces.stable_qt.viewer_config import SUPPORTED_IMAGE_COLORMAPS
 # Get constants
 HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
 
+DEFAULT_DISPLAY_SETTINGS = {
+    'vmin': -2,
+    'vmax': 1000,
+    'cmap': 'gray',
+    'scale': 'linear'
+}
+
 
 class BaseImageTab(QWidget):
     """Base class for tabs that work with images and provide status information"""
@@ -43,13 +50,11 @@ class BaseImageTab(QWidget):
         # Initialize calibration from config
         self._init_calibration()
         
-        # Shared display state - all tabs will use these
-        self.display_settings = {
-            'vmin': -2,
-            'vmax': 1000,
-            'cmap': 'gray',
-            'scale': 'linear'
-        }
+        # Shared display state - all tabs use the main app dictionary when available.
+        if hasattr(self.parent_app, 'display_settings'):
+            self.display_settings = self.parent_app.display_settings
+        else:
+            self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
         
         # Image-related attributes that will be set by load_image
         self.export_cali_path = None
@@ -225,15 +230,15 @@ class BaseImageTab(QWidget):
 
     def update_display_settings(self, **kwargs):
         """Update shared display settings and refresh all tabs"""
-        # TODO: This is not working as intended - fix later
         self.display_settings.update(kwargs)
-        
-        # Notify all tabs to update their displays
-        if hasattr(self.parent_app, 'update_all_displays'):
+
+        if hasattr(self.parent_app, 'publish_shared_display_settings'):
+            self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
+            self._apply_display_settings_to_viewer()
+        elif hasattr(self.parent_app, 'update_all_displays'):
             self.parent_app.update_all_displays()
         else:
-            # Fallback: just update this tab
-            self.update_plot()
+            self._apply_display_settings_to_viewer()
 
     def get_display_values(self):
         """Get current display values with validation"""
@@ -276,10 +281,42 @@ class BaseImageTab(QWidget):
 
     def sync_display_controls(self):
         """Sync display controls with current settings"""
+        if not hasattr(self, 'vmin_input'):
+            return
+        self.vmin_input.blockSignals(True)
+        self.vmax_input.blockSignals(True)
+        self.cmap_selector.blockSignals(True)
+        self.img_scale_combo.blockSignals(True)
         self.vmin_input.setText(str(self.display_settings['vmin']))
         self.vmax_input.setText(str(self.display_settings['vmax']))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.img_scale_combo.setCurrentText(self.display_settings['scale'])
+        self.vmin_input.blockSignals(False)
+        self.vmax_input.blockSignals(False)
+        self.cmap_selector.blockSignals(False)
+        self.img_scale_combo.blockSignals(False)
+
+    def apply_shared_display_settings(self, settings):
+        """Receive display settings from the main app and refresh local controls."""
+        self.display_settings = settings
+        self.sync_display_controls()
+        self._apply_display_settings_to_viewer()
+
+    def _on_viewer_levels_changed(self, vmin: float, vmax: float):
+        """Handle vmin/vmax changes made with the PyQtGraph histogram handles."""
+        self.display_settings.update(vmin=float(vmin), vmax=float(vmax))
+        self.sync_display_controls()
+        if hasattr(self.parent_app, 'publish_shared_display_settings'):
+            self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
+
+    def _apply_display_settings_to_viewer(self) -> None:
+        """Apply contrast and colormap to the existing viewer image without reloading it."""
+        if not hasattr(self, 'image_viewer') or self.image_viewer.source_array is None:
+            return
+        display_vals = self.get_display_values()
+        self.image_viewer.set_colormap(display_vals['cmap'])
+        self.image_viewer.set_scale(display_vals['scale'])
+        self.image_viewer.set_levels(display_vals['vmin'], display_vals['vmax'])
 
     def _create_image_panel(self):
         """Create the image display panel"""
@@ -300,6 +337,7 @@ class BaseImageTab(QWidget):
 
         self.image_viewer = ImageViewer(self)
         self.image_viewer.cursor_moved.connect(self._on_viewer_cursor_moved)
+        self.image_viewer.levels_changed.connect(self._on_viewer_levels_changed)
         layout.addWidget(self.image_viewer)
 
         # Image controls - now shared across all tabs

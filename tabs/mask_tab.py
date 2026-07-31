@@ -41,7 +41,7 @@ from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QCheckBox, QComboBox, QSpinBox, QListWidget, QListWidgetItem,
     QGroupBox, QSlider, QDoubleSpinBox, QFileDialog, QMessageBox,
-    QScrollArea, QSplitter, QButtonGroup, QRadioButton, QFrame, QMenu
+    QScrollArea, QSplitter, QButtonGroup, QRadioButton, QFrame, QMenu, QToolButton
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QIcon, QCursor
@@ -434,11 +434,6 @@ class MaskApp(BaseImageTab):
         drawing_layout.setSpacing(2)
         drawing_layout.setContentsMargins(6, 6, 6, 6)
         
-        # Enable/Disable drawing mode
-        self.drawing_mode_check = QCheckBox("Enable drawing mode")
-        self.drawing_mode_check.stateChanged.connect(self._toggle_drawing_mode)
-        drawing_layout.addWidget(self.drawing_mode_check)
-        
         # Tool selection row
         tool_layout = QHBoxLayout()
         tool_layout.setSpacing(2)
@@ -446,39 +441,30 @@ class MaskApp(BaseImageTab):
         tool_label = QLabel("Tool:")
         apply_body_style(tool_label)
         tool_layout.addWidget(tool_label)
-        
-        # Create button group for tool selection to ensure mutual exclusivity
-        self.tool_group = QButtonGroup()
-        self.tool_brush_radio = QRadioButton("Brush")
-        self.tool_brush_radio.setChecked(True)
-        self.tool_brush_radio.setToolTip("Freehand drawing")
-        self.tool_brush_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Brush'))
-        self.tool_group.addButton(self.tool_brush_radio, 0)
-        tool_layout.addWidget(self.tool_brush_radio)
-        
-        self.tool_line_radio = QRadioButton("Line")
-        self.tool_line_radio.setToolTip("Straight line")
-        self.tool_line_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Line'))
-        self.tool_group.addButton(self.tool_line_radio, 1)
-        tool_layout.addWidget(self.tool_line_radio)
-        
-        self.tool_rect_radio = QRadioButton("Rect")
-        self.tool_rect_radio.setToolTip("Filled rectangle")
-        self.tool_rect_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Rectangle'))
-        self.tool_group.addButton(self.tool_rect_radio, 2)
-        tool_layout.addWidget(self.tool_rect_radio)
 
-        self.tool_circle_radio = QRadioButton("Circle")
-        self.tool_circle_radio.setToolTip("Filled circle from center and radius")
-        self.tool_circle_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Circle'))
-        self.tool_group.addButton(self.tool_circle_radio, 3)
-        tool_layout.addWidget(self.tool_circle_radio)
+        self.tool_buttons = {}
+        tool_specs = (
+            ("Brush", "B", "Freehand drawing"),
+            ("Line", "/", "Straight line"),
+            ("Rectangle", "Rect", "Filled rectangle"),
+            ("Circle", "Circle", "Filled circle from center and radius"),
+            ("Watershed Fill", "Fill", "Seeded watershed-style fill constrained by image edges"),
+        )
+        for tool_name, label, tooltip in tool_specs:
+            button = QToolButton()
+            button.setText(label)
+            button.setToolTip(tooltip)
+            button.setCheckable(True)
+            button.setAutoRaise(True)
+            button.clicked.connect(lambda checked, name=tool_name: self._activate_drawing_tool(name, checked))
+            self.tool_buttons[tool_name] = button
+            tool_layout.addWidget(button)
 
-        self.tool_fill_radio = QRadioButton("Smart Fill")
-        self.tool_fill_radio.setToolTip("Seeded watershed-style fill constrained by image edges")
-        self.tool_fill_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Watershed Fill'))
-        self.tool_group.addButton(self.tool_fill_radio, 4)
-        tool_layout.addWidget(self.tool_fill_radio)
+        self.tool_brush_radio = self.tool_buttons["Brush"]
+        self.tool_line_radio = self.tool_buttons["Line"]
+        self.tool_rect_radio = self.tool_buttons["Rectangle"]
+        self.tool_circle_radio = self.tool_buttons["Circle"]
+        self.tool_fill_radio = self.tool_buttons["Watershed Fill"]
         
         tool_layout.addStretch()
         drawing_layout.addLayout(tool_layout)
@@ -541,16 +527,7 @@ class MaskApp(BaseImageTab):
         
         layout.addWidget(drawing_group)
         
-        # Disable drawing controls initially (drawing mode is off by default)
-        self.tool_brush_radio.setEnabled(False)
-        self.tool_line_radio.setEnabled(False)
-        self.tool_rect_radio.setEnabled(False)
-        self.tool_circle_radio.setEnabled(False)
-        self.tool_fill_radio.setEnabled(False)
-        self.draw_add_radio.setEnabled(False)
-        self.draw_remove_radio.setEnabled(False)
-        self.brush_size_spin.setEnabled(False)
-        self.brush_size_slider.setEnabled(False)
+        self._set_drawing_tool("Brush")
         
         layout.addStretch()
         return panel
@@ -873,10 +850,29 @@ class MaskApp(BaseImageTab):
         self.combined_mask = mask
 
     def _set_drawing_enabled_from_session(self, enabled: bool) -> None:
-        """Let the drawing session update the checkbox without owning UI widgets."""
+        """Set drawing state and keep tool buttons/canvas lock in sync."""
         self.drawing_mode = bool(enabled)
-        if hasattr(self, 'drawing_mode_check'):
-            self.drawing_mode_check.setChecked(bool(enabled))
+        if self.drawing_tool:
+            self.drawing_tool.reset()
+
+        if self.drawing_mode:
+            if not self.mask_layers:
+                self._add_empty_layer()
+            self.image_viewer.set_interaction_locked(True)
+            self.image_viewer.setCursor(QCursor(Qt.CrossCursor))
+            if hasattr(self, 'tool_buttons') and self.drawing_tool.name in self.tool_buttons:
+                button = self.tool_buttons[self.drawing_tool.name]
+                button.blockSignals(True)
+                button.setChecked(True)
+                button.blockSignals(False)
+        else:
+            if hasattr(self, 'tool_buttons'):
+                for button in self.tool_buttons.values():
+                    button.blockSignals(True)
+                    button.setChecked(False)
+                    button.blockSignals(False)
+            self.image_viewer.set_interaction_locked(False)
+            self.image_viewer.setCursor(QCursor(Qt.ArrowCursor))
         
         self.update_plot()
         self.update_status_info()
@@ -950,36 +946,24 @@ class MaskApp(BaseImageTab):
             self.parent_app.show_status(f"Error applying filter: {str(e)}")
     
     def _toggle_drawing_mode(self, state):
-        """Toggle manual drawing mode"""
-        self.drawing_mode = (state == Qt.Checked)
-        
-        # Reset tool state when toggling mode
-        if self.drawing_tool:
-            self.drawing_tool.reset()
-        
-        # Disable/enable all drawing controls (except the checkbox itself)
-        drawing_controls = [
-            self.tool_brush_radio, self.tool_line_radio, self.tool_rect_radio,
-            self.tool_circle_radio, self.tool_fill_radio,
-            self.draw_add_radio, self.draw_remove_radio,
-            self.brush_size_spin, self.brush_size_slider
-        ]
-        for control in drawing_controls:
-            control.setEnabled(self.drawing_mode)
-        
-        if self.drawing_mode:
-            # Create a new empty layer if none exist or if current is not editable
-            if not self.mask_layers:
-                self._add_empty_layer()
-            # Change cursor to indicate drawing mode ready
-            self.image_viewer.set_interaction_locked(True)
-            self.image_viewer.setCursor(QCursor(Qt.CrossCursor))
-            self.parent_app.show_status("Drawing mode enabled. Click and drag to draw mask. (Pan/Zoom disabled)")
-        else:
-            # Reset cursor to normal
-            self.image_viewer.set_interaction_locked(False)
-            self.image_viewer.setCursor(QCursor(Qt.ArrowCursor))
-            self.parent_app.show_status("Drawing mode disabled")
+        """Compatibility shim for older code paths that toggled drawing mode."""
+        self._set_drawing_enabled_from_session(state == Qt.Checked)
+
+    def _activate_drawing_tool(self, tool_name: str, checked: bool):
+        """Activate a drawing tool button and lock the image canvas while it is checked."""
+        if checked:
+            for name, button in self.tool_buttons.items():
+                if name != tool_name:
+                    button.blockSignals(True)
+                    button.setChecked(False)
+                    button.blockSignals(False)
+            self._set_drawing_tool(tool_name)
+            self._set_drawing_enabled_from_session(True)
+            self.parent_app.show_status(f"{tool_name} tool active. Click the tool again to return to pan/zoom.")
+            return
+
+        if self.drawing_tool and self.drawing_tool.name == tool_name:
+            self._set_drawing_enabled_from_session(False)
     
     def _set_drawing_tool(self, tool_name: str):
         """Switch to a different drawing tool"""

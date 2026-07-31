@@ -63,6 +63,8 @@ if SCIANALYSIS_AVAILABLE:
     from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
 from sciview.interfaces.stable_qt.utils.resource_monitor import get_resource_monitor
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file
+from tabs.base_image_tab import DEFAULT_DISPLAY_SETTINGS
+from tabs.base_image_tab import DEFAULT_DISPLAY_SETTINGS
 
 
 def _build_placeholder_tab(message):
@@ -87,6 +89,7 @@ class SciAnaApp(QMainWindow):
         # Tab widget
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
+        self.tab_widget.currentChanged.connect(self._render_current_tab_from_shared)
         tab_bar = self.tab_widget.tabBar()
         tab_bar.setIconSize(AppStyle.tab_icon_size())
         tab_bar.setExpanding(False)
@@ -157,6 +160,7 @@ class SciAnaApp(QMainWindow):
         self.calibration = None
         self.mask = None
         self.shared_info_text = None
+        self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
         
         # Set initial window size from config
         window_size = GUI_SETTINGS['default_window_size']
@@ -212,6 +216,11 @@ class SciAnaApp(QMainWindow):
         if propagate:
             self.sync_tabs_from_shared(source_tab=source_tab)
 
+    def publish_shared_display_settings(self, settings, source_tab=None):
+        """Publish image display settings so all image tabs share contrast and colormap."""
+        self.display_settings.update(settings)
+        self.update_all_displays(source_tab=source_tab)
+
     def publish_shared_info_text(self, info_text, source_tab=None):
         """Publish image information text to dedicated info consumers."""
         self.shared_info_text = info_text
@@ -239,6 +248,7 @@ class SciAnaApp(QMainWindow):
 
     def sync_tabs_from_shared(self, source_tab=None):
         """Push shared state into tabs and request redraws."""
+        current_tab = self.tab_widget.currentWidget()
         for i in range(self.tab_widget.count()):
             tab = self.tab_widget.widget(i)
             if tab == source_tab:
@@ -263,6 +273,9 @@ class SciAnaApp(QMainWindow):
                 except Exception as e:
                     print(f"DEBUG: Error restoring shared info for tab {i}: {e}")
 
+            if tab != current_tab:
+                continue
+
             if hasattr(tab, 'update_plot'):
                 try:
                     tab.update_plot()
@@ -272,6 +285,40 @@ class SciAnaApp(QMainWindow):
     def show_status(self, msg):
         """Display status message"""
         self.status.showMessage(msg)
+
+    def _render_current_tab_from_shared(self, *_args):
+        """Render shared image data when a tab becomes active."""
+        if self.image_data is None:
+            return
+
+        tab = self.tab_widget.currentWidget()
+        if tab is None:
+            return
+
+        if hasattr(tab, 'image_data'):
+            tab.image_data = self.image_data
+
+        image_viewer = getattr(tab, 'image_viewer', None)
+        if image_viewer is not None and getattr(image_viewer, 'source_array', None) is None:
+            if hasattr(tab, 'update_plot'):
+                try:
+                    tab.update_plot()
+                    return
+                except Exception as e:
+                    print(f"DEBUG: Error rendering active tab: {e}")
+
+        if hasattr(tab, 'apply_shared_display_settings'):
+            try:
+                tab.apply_shared_display_settings(self.display_settings)
+                return
+            except Exception as e:
+                print(f"DEBUG: Error applying display settings to active tab: {e}")
+
+        if hasattr(tab, 'update_plot'):
+            try:
+                tab.update_plot()
+            except Exception as e:
+                print(f"DEBUG: Error rendering active tab: {e}")
     
     def _setup_resource_monitor(self):
         """Setup periodic resource usage updates in status bar"""
@@ -296,12 +343,20 @@ class SciAnaApp(QMainWindow):
         except Exception as e:
             print(f"Error updating resource display: {e}")
     
-    def update_all_displays(self):
+    def update_all_displays(self, source_tab=None):
         """Update display across all tabs when display settings change"""
         for i in range(self.tab_widget.count()):
             tab = self.tab_widget.widget(i)
+
+            if tab == source_tab:
+                continue
             
-            if hasattr(tab, 'update_plot'):
+            if hasattr(tab, 'apply_shared_display_settings'):
+                try:
+                    tab.apply_shared_display_settings(self.display_settings)
+                except Exception as e:
+                    print(f"Error updating tab {i}: {e}")
+            elif hasattr(tab, 'update_plot'):
                 try:
                     tab.update_plot()
                 except Exception as e:
