@@ -186,8 +186,9 @@ def validate_and_prepare_image_array(image_data, use_converter=True):
     # Step 1: Extract data from wrapper objects (SciAnalysis, etc.)
     extracted_data = image_data
     
-    # Handle SciAnalysis Data2DScattering object
-    if hasattr(image_data, 'data'):
+    # Handle SciAnalysis Data2DScattering-style objects. NumPy arrays also have
+    # a .data memoryview, so keep ndarrays intact to avoid unnecessary copies.
+    if not isinstance(image_data, np.ndarray) and hasattr(image_data, 'data'):
         extracted_data = image_data.data
         if extracted_data is None:
             return None, False, "SciAnalysis object has no data"

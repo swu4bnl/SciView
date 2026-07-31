@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
@@ -28,6 +28,7 @@ from sciview.interfaces.theme.app_style import *
 from sciview.calibration.standards_db import STANDARDS
 from sciview.interfaces.stable_qt.tools.ring_center import RingCenterCalculator
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_select_directory, dialog_save_file
+from sciview.processing.calibration_profiles import compute_calibration_profiles
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS
 from sciview.calibration.io import build_calibration_payload, write_calibration_yaml
@@ -55,6 +56,11 @@ class CalibrationApp(BaseImageTab):
         # Store 1D profile data for export
         self._profile_data = None
         self._last_profile_signature = None
+        self._calibration_update_delay_ms = 150
+        self._calibration_update_timer = QTimer(self)
+        self._calibration_update_timer.setSingleShot(True)
+        self._calibration_update_timer.timeout.connect(self.calibrate_and_update_status)
+        self._profile_bins = 600
         
         # Build UI
         self._build_ui()
@@ -112,9 +118,8 @@ class CalibrationApp(BaseImageTab):
         
         main_layout.addWidget(main_splitter)
 
-        # Connect matplotlib events
-        self.canvas_raw.mpl_connect('motion_notify_event', self.on_mouse_move)
-        self.canvas_raw.mpl_connect('button_press_event', self.on_mouse_click)
+        # Connect image viewer and matplotlib plot events
+        self.image_viewer.mouse_pressed.connect(self.on_mouse_click)
         self.canvas_plot.mpl_connect('motion_notify_event', self.on_mouse_move)
 
     def _create_plot_panel(self):
@@ -198,7 +203,7 @@ class CalibrationApp(BaseImageTab):
         self.spin_wl_ang.setSingleStep(0.001)
         self.spin_wl_ang.setDecimals(4)
         self.spin_wl_ang.setValue(DEFAULT_CALIBRATION['wavelength_A'])
-        self.spin_wl_ang.editingFinished.connect(self.on_wavelength_changed)
+        self.spin_wl_ang.valueChanged.connect(self.on_wavelength_changed)
         wl_layout.addWidget(self.spin_wl_ang)
         layout.addLayout(wl_layout)
         
@@ -208,7 +213,7 @@ class CalibrationApp(BaseImageTab):
         self.spin_energy_ev.setRange(100.0, 50000.0)
         self.spin_energy_ev.setSingleStep(1.0)
         self.spin_energy_ev.setValue(DEFAULT_CALIBRATION['energy_eV'])
-        self.spin_energy_ev.editingFinished.connect(self.on_energy_changed)
+        self.spin_energy_ev.valueChanged.connect(self.on_energy_changed)
         energy_layout.addWidget(self.spin_energy_ev)
         layout.addLayout(energy_layout)
 
@@ -361,7 +366,7 @@ class CalibrationApp(BaseImageTab):
         layout.addWidget(self.standards_combo)
 
         # Info label
-        self.standards_info_label = QLabel("Select a material to show its diffraction lines in the 1D plot.")
+        self.standards_info_label = QLabel("Select a standard for reference lines.")
         self.standards_info_label.setWordWrap(True)
         apply_info_style(self.standards_info_label)
         layout.addWidget(self.standards_info_label)
@@ -377,17 +382,20 @@ class CalibrationApp(BaseImageTab):
         spin.setSingleStep(step)
         spin.setValue(default)
         spin.setDecimals(4 if step < 0.01 else 2)
-        # Connect value changes to both status updates and plot updates
-        spin.editingFinished.connect(self.calibrate_and_update_status)
+        spin.valueChanged.connect(self._schedule_calibration_update)
         lay.addWidget(spin)
         parent.addLayout(lay)
         return spin
+
+    def _schedule_calibration_update(self, *_args):
+        self.parent_app.show_status("Calibration update pending...")
+        self._calibration_update_timer.start(self._calibration_update_delay_ms)
 
     def _load_standards_db(self):
         """Load standards database"""
         return dict(STANDARDS)
 
-    def _add_beam_center_crosshair(self, ax):
+    def _add_beam_center_crosshair(self, viewer):
         """Hook to add crosshair at beam center position"""
         if hasattr(self, 'spin_x') and hasattr(self, 'spin_y'):
             center_x = self.spin_x.value()
@@ -395,20 +403,8 @@ class CalibrationApp(BaseImageTab):
             
             # Add crosshair lines
             if hasattr(self, 'image_data') and self.image_data is not None:
-                # Get image dimensions
-                if hasattr(self.image_data, 'data'):
-                    img_shape = self.image_data.data.shape
-                else:
-                    img_shape = self.image_data.shape
-                
-                # Draw crosshair lines
-                ax.axhline(y=center_y, color='red', linestyle='--', linewidth=1, alpha=0.7)
-                ax.axvline(x=center_x, color='red', linestyle='--', linewidth=1, alpha=0.7)
-                
-                # Add a small circle at the center
-                import matplotlib.pyplot as plt
-                circle = plt.Circle((center_x, center_y), radius=3, color='red', fill=False, linewidth=2, alpha=0.8)
-                ax.add_patch(circle)
+                viewer.clear_overlays(group='calibration-crosshair')
+                viewer.add_crosshair('beam-center', center_x, center_y, group='calibration-crosshair', color='#ff0000')
 
     def calculate_ring_center(self):
         """Calculate the center of a circle from multiple points"""
@@ -447,30 +443,18 @@ class CalibrationApp(BaseImageTab):
             )
             
             # Mark points and center on the raw image
-            if hasattr(self, 'ax_raw') and self.image_data is not None:
-                # Clear previous ring markers
-                for artist in self.ax_raw.collections[:]:
-                    if hasattr(artist, '_ring_marker'):
-                        artist.remove()
-                for artist in self.ax_raw.patches[:]:
-                    if hasattr(artist, '_ring_marker'):
-                        artist.remove()
-                
+            if hasattr(self, 'image_viewer') and self.image_data is not None:
+                self.image_viewer.clear_overlays(group='ring-center')
+
                 # Plot the input points
                 xs, ys = zip(*points)
-                scatter = self.ax_raw.scatter(xs, ys, c='cyan', s=50, marker='o', edgecolors='blue', linewidth=2)
-                scatter._ring_marker = True
+                self.image_viewer.add_points('ring-points', xs, ys, group='ring-center', color='#00ffff', size=9.0, pen='#0000ff')
                 
                 # Plot the calculated center
-                center_scatter = self.ax_raw.scatter([ux], [uy], c='red', s=100, marker='x', linewidth=3)
-                center_scatter._ring_marker = True
+                self.image_viewer.add_points('ring-center-point', [ux], [uy], group='ring-center', color='#ff0000', size=12.0, symbol='+')
                 
                 # Draw the circle
-                circle = plt.Circle((ux, uy), radius, fill=False, color='red', linestyle='--', linewidth=2)
-                circle._ring_marker = True
-                self.ax_raw.add_patch(circle)
-                
-                self.canvas_raw.draw()
+                self.image_viewer.add_circle('ring-center-circle', ux, uy, radius, group='ring-center', color='#ff0000', width=2.0)
             
             self.parent_app.show_status(f"Ring center calculated and applied: ({ux:.2f}, {uy:.2f}) using {len(points)} points")
             
@@ -496,14 +480,9 @@ class CalibrationApp(BaseImageTab):
         
         # Clear temporary yellow markers
         if hasattr(self, 'temp_markers'):
-            for marker in self.temp_markers:
-                try:
-                    marker.remove()
-                except:
-                    pass
             self.temp_markers = []
-            if hasattr(self, 'canvas_raw'):
-                self.canvas_raw.draw()
+            if hasattr(self, 'image_viewer'):
+                self.image_viewer.clear_overlays(group='ring-temp')
         
         self.ring_result_label.setText("Enter coordinates on a ring and click 'Calculate'")
         self.current_point_index = 0
@@ -542,19 +521,23 @@ class CalibrationApp(BaseImageTab):
         self.update_status_info()
         self.parent_app.show_status("Calibration updated and plots refreshed")
 
-    def on_wavelength_changed(self):
+    def on_wavelength_changed(self, *_args):
         """Handle wavelength changes"""
         wavelength = self.spin_wl_ang.value()
         energy = HC_E / wavelength
+        self.spin_energy_ev.blockSignals(True)
         self.spin_energy_ev.setValue(energy)
-        self.calibrate_and_update_status()
+        self.spin_energy_ev.blockSignals(False)
+        self._schedule_calibration_update()
 
-    def on_energy_changed(self):
+    def on_energy_changed(self, *_args):
         """Handle energy changes"""
         energy = self.spin_energy_ev.value()
         wavelength = HC_E / energy
+        self.spin_wl_ang.blockSignals(True)
         self.spin_wl_ang.setValue(wavelength)
-        self.calibrate_and_update_status()
+        self.spin_wl_ang.blockSignals(False)
+        self._schedule_calibration_update()
 
     def _draw_standard_lines(self):
         """Draw vertical lines for selected standard in 1D plot"""
@@ -595,8 +578,10 @@ class CalibrationApp(BaseImageTab):
         plot_xlim_valid = not np.allclose(plot_xlim, (0, 1))
         plot_ylim_valid = not np.allclose(plot_ylim, (0, 1))
 
-        # First, update the raw image using the unified base class method
-        self.update_plot()
+        if getattr(self.image_viewer, 'source_array', None) is None:
+            self.update_plot()
+        else:
+            self._refresh_calibration_crosshair()
         
         # Then, update the 1D plots
         self._update_1d_plots(plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
@@ -644,13 +629,19 @@ class CalibrationApp(BaseImageTab):
             # This is crucial for Q-space calculations to use the new parameters
             # self.image_data.calibration = cal
             
-            # Calculate Q-space data using SciAnalysis with error handling
+            # Calculate Q-space preview profiles using the backend fast path.
             try:
-                circ = self.image_data.circular_average_q_bin(apply_mask=False)
-                hor_1 = self.image_data.sector_average_q_bin(angle=0, dangle=5, apply_mask=False)
-                hor_2 = self.image_data.sector_average_q_bin(angle=180, dangle=5, apply_mask=False)
-                ver_1 = self.image_data.sector_average_q_bin(angle=90, dangle=5, apply_mask=False)
-                ver_2 = self.image_data.sector_average_q_bin(angle=-90, dangle=5, apply_mask=False)
+                profiles = compute_calibration_profiles(
+                    image=self.image_data.data,
+                    calibration=self.image_data.calibration,
+                    bins=self._profile_bins,
+                    sector_dangle_deg=5.0,
+                )
+                circ = profiles.circular
+                hor_1 = profiles.horizontal_0
+                hor_2 = profiles.horizontal_180
+                ver_1 = profiles.vertical_90
+                ver_2 = profiles.vertical_270
             except Exception as e:
                 # If Q-space analysis fails, clear the plot and show error
                 print(f"Warning: Q-space analysis failed: {e}")
@@ -664,16 +655,22 @@ class CalibrationApp(BaseImageTab):
             return
 
         # Store profile data for export
-        self._profile_data = {
-            'Circular Avg': circ,
-            'Horizontal 0deg': hor_1,
-            'Horizontal 180deg': hor_2,
-            'Vertical 90deg': ver_1,
-            'Vertical 270deg': ver_2,
-        }
+        self._profile_data = profiles.as_dict()
 
         # Update 1D plot with real data
         self._draw_1d_plots(circ, hor_1, hor_2, ver_1, ver_2, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
+
+    def _refresh_calibration_crosshair(self):
+        if not hasattr(self, 'image_viewer') or self.image_data is None:
+            return
+        self.image_viewer.clear_overlays(group='calibration-crosshair')
+        self.image_viewer.add_crosshair(
+            'beam-center',
+            self.spin_x.value(),
+            self.spin_y.value(),
+            group='calibration-crosshair',
+            color='#ff0000',
+        )
     
     def _clear_1d_plots(self):
         """Clear 1D plots when SciAnalysis is not available or analysis fails"""
@@ -840,12 +837,12 @@ class CalibrationApp(BaseImageTab):
 
     def on_mouse_click(self, event):
         """Handle mouse clicks on the raw image for ring center calculation"""
-        if not event.inaxes or event.inaxes != self.ax_raw:
+        if not getattr(event, 'inside_image', False):
             return
         
         # Mouse button mapping: 1=left, 2=middle, 3=right
-        if event.button == 3:  # Right click for coordinate selection (left click reserved for zoom/pan)
-            x, y = event.xdata, event.ydata
+        if event.button == Qt.RightButton:  # Right click for coordinate selection (left click reserved for zoom/pan)
+            x, y = event.x, event.y
             if x is not None and y is not None:
                 display_x, display_y = x, y
                 if getattr(self, 'snap_to_max_check', None) is not None and self.snap_to_max_check.isChecked():
@@ -859,23 +856,18 @@ class CalibrationApp(BaseImageTab):
                 y_input.setValue(display_y)
                 
                 # Visual feedback - add yellow marker
-                if hasattr(self, 'ax_raw'):
-                    temp_point = self.ax_raw.scatter([display_x], [display_y], c='yellow', s=100, marker='o', alpha=0.7)
-                    
+                if hasattr(self, 'image_viewer'):
                     # Add to temp markers list
                     if not hasattr(self, 'temp_markers'):
                         self.temp_markers = []
-                    self.temp_markers.append(temp_point)
+                    marker_id = f"ring-temp-{len(self.temp_markers)}"
+                    self.image_viewer.add_points(marker_id, [display_x], [display_y], group='ring-temp', color='#ffff00', size=12.0)
+                    self.temp_markers.append(marker_id)
                     
                     # Remove oldest marker if we exceed 10 markers
                     if len(self.temp_markers) > 10:
-                        oldest_marker = self.temp_markers.pop(0)
-                        try:
-                            oldest_marker.remove()
-                        except:
-                            pass
-                    
-                    self.canvas_raw.draw()
+                        oldest_marker_id = self.temp_markers.pop(0)
+                        self.image_viewer.remove_overlay(oldest_marker_id)
                 
                 self.current_point_index = (self.current_point_index + 1) % 10
                 

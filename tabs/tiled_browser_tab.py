@@ -36,7 +36,6 @@ from sciview.interfaces.theme.app_style import (
     AppStyle,
     apply_info_style,
     apply_subtitle_style,
-    apply_sync_button_style,
     setup_splitter_layout,
     apply_title_style,
     apply_toolbar_symbol_button_style,
@@ -274,12 +273,6 @@ class TiledBrowserTab(BaseImageTab):
         apply_info_style(self.metadata_text)
         viewer_layout.addWidget(self.metadata_text)
 
-        self.sync_button = QPushButton("Use This Image")
-        self.sync_button.setEnabled(False)
-        self.sync_button.clicked.connect(self._sync_to_parent)
-        apply_sync_button_style(self.sync_button)
-        viewer_layout.addWidget(self.sync_button)
-
         splitter.addWidget(controls)
         splitter.addWidget(viewer)
         setup_splitter_layout(splitter, layout_cfg['tiled_main_splitter_ratio'])
@@ -436,7 +429,7 @@ class TiledBrowserTab(BaseImageTab):
         metadata_buttons.addStretch()
         layout.addLayout(metadata_buttons)
 
-        self.search_status_label = QLabel("Find by scan ID range, or by cycle + proposal")
+        self.search_status_label = QLabel("Search by scan ID or proposal.")
         apply_info_style(self.search_status_label)
         layout.addWidget(self.search_status_label)
         return group
@@ -785,7 +778,6 @@ class TiledBrowserTab(BaseImageTab):
         self.current_image_source = None
         self.current_detector = ""
         self.load_button.setEnabled(False)
-        self.sync_button.setEnabled(False)
         self.frame_slider.setEnabled(False)
         self.frame_slider.setMaximum(0)
         self.frame_label.setText("1 / 1")
@@ -1015,7 +1007,6 @@ class TiledBrowserTab(BaseImageTab):
         self.current_frame_array = display_frame
         self.image_data = display_frame
         self.update_plot(display_frame)
-        self.sync_button.setEnabled(True)
         self.current_image_label.setText(
             f"scan_id={scan.scan_id} detector={detector} sample={scan.sample_name or scan.sample_savename or '?'}"
         )
@@ -1106,25 +1097,29 @@ class TiledBrowserTab(BaseImageTab):
         if self.scan_rows:
             self.series_slider.setValue(min(len(self.scan_rows) - 1, self.series_slider.value() + 1))
 
-    def _sync_to_parent(self) -> None:
+    def _sync_to_parent(self, show_status: bool = True) -> bool:
         if self.current_frame_array is None or self.current_scan is None:
-            return
+            return False
         synthetic_name = f"scan_{self.current_scan.scan_id}.tif"
         image_data_obj = self.create_data2d_object(self.current_frame_array, synthetic_name)
 
-        self.parent_app.image_data = image_data_obj
-        self.parent_app.image_path = self.current_image_source
-        for index in range(self.parent_app.tab_widget.count()):
-            tab = self.parent_app.tab_widget.widget(index)
-            if tab is self:
-                continue
-            if hasattr(tab, "image_data"):
-                tab.image_data = image_data_obj
-            if hasattr(tab, "populate_image_info") and hasattr(tab, "image_info_text"):
-                tab.populate_image_info(image_data_obj, self.current_image_source)
-            if hasattr(tab, "update_plot"):
-                tab.update_plot()
-        self.parent_app.show_status(f"Synced scan {self.current_scan.scan_id} to other tabs")
+        if hasattr(self.parent_app, "publish_shared_image"):
+            self.parent_app.publish_shared_image(
+                image_data_obj,
+                image_path=self.current_image_source,
+                source_tab=self,
+            )
+        else:
+            self.parent_app.image_data = image_data_obj
+            self.parent_app.image_path = self.current_image_source
+
+        if show_status:
+            self.parent_app.show_status(f"Synced scan {self.current_scan.scan_id} to other tabs")
+        return True
+
+    def auto_publish_current_image(self) -> bool:
+        """Publish the current Tiled preview when the user leaves the browser tab."""
+        return self._sync_to_parent(show_status=False)
 
     def _add_tab_specific_status(self, info_lines):
         if self.current_scan is None:

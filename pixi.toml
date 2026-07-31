@@ -1,5 +1,5 @@
 [workspace]
-authors = ["wsy94 <wsy94@temple.edu>"]
+authors = ["swu4bnl <swu4@bnl.gov>"]
 channels = ["conda-forge"]
 name = "SciView"
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
@@ -17,6 +17,7 @@ numpy = ">=2.4.3,<3"
 pyqt = ">=5.15.11,<6"
 matplotlib = ">=3.10.9,<4"
 scipy = ">=1.17.1,<2"
+pyqtgraph = ">=0.13,<0.14"
 scitoolsscianalysis = ">=2.6.6,<3"
 psutil = ">=7.1.0,<8"
 tiled = ">=0.1"

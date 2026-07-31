@@ -32,6 +32,7 @@ from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
     BrushDrawingTool,
     CircleDrawingTool,
     LineDrawingTool,
+    MaskDrawingSession,
     RectangleDrawingTool,
     WatershedFillTool,
 )
@@ -39,18 +40,12 @@ from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QCheckBox, QComboBox, QSpinBox, QListWidget, QListWidgetItem,
-    QGroupBox, QSlider, QDoubleSpinBox, QFileDialog, QMessageBox,
-    QScrollArea, QSplitter, QButtonGroup, QRadioButton, QFrame, QMenu
+    QGroupBox, QSlider, QDoubleSpinBox, QFileDialog, QMessageBox, QGridLayout,
+    QScrollArea, QSplitter, QButtonGroup, QRadioButton, QFrame, QMenu, QToolButton,
+    QSizePolicy, QProgressBar
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QIcon, QCursor
-
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT as NavigationToolbar
-)
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
@@ -62,6 +57,7 @@ from sciview.masking.io import export_mask_file as backend_export_mask_file
 from sciview.masking.io import load_mask_file as backend_load_mask_file
 from sciview.masking.operations import close_mask_holes, dilate_mask, erode_mask, sobel_edge_mask
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
+from sciview.settings.viewer_config import MASK_DRAWING_DEFAULTS, MASK_TOOL_ICON_FILES, MASK_TOOL_NAMES
 
 
 class MaskLayer:
@@ -79,6 +75,12 @@ class MaskLayer:
 
 class MaskApp(BaseImageTab):
     """Comprehensive mask editing application with layered approach"""
+
+    @staticmethod
+    def _use_compact_spinbox_width(spinbox):
+        """Keep numeric controls from taking the whole control column."""
+        spinbox.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        spinbox.setMaximumWidth(spinbox.sizeHint().width())
     
     def __init__(self, parent_app):
         super().__init__(parent_app)
@@ -92,7 +94,7 @@ class MaskApp(BaseImageTab):
         # Mask editing state
         self.drawing_mode = False
         self.draw_mask_value = True  # True = mask (add), False = unmask (remove)
-        self.brush_size = 5
+        self.brush_size = int(MASK_DRAWING_DEFAULTS["brush_size"])
         self.toolbar_image = None  # Reference to toolbar for mode management
         
         # Drawing tool instance
@@ -101,13 +103,30 @@ class MaskApp(BaseImageTab):
         self.drawing_tool.brush_size = self.brush_size
         
         # Available drawing tools
-        self.drawing_tools = {
-            'Brush': BrushDrawingTool(),
-            'Line': LineDrawingTool(),
-            'Rectangle': RectangleDrawingTool(),
-            'Circle': CircleDrawingTool(),
-            'Watershed Fill': WatershedFillTool(),
+        tool_classes = {
+            "Brush": BrushDrawingTool,
+            "Line": LineDrawingTool,
+            "Rectangle": RectangleDrawingTool,
+            "Circle": CircleDrawingTool,
+            "Watershed Fill": WatershedFillTool,
         }
+        self.drawing_tools = {tool_name: tool_classes[tool_name]() for tool_name in MASK_TOOL_NAMES}
+        self.drawing_session = MaskDrawingSession(
+            is_enabled=lambda: self.drawing_mode,
+            get_tool=lambda: self.drawing_tool,
+            get_image_data=lambda: self.image_data,
+            get_active_layer=self._get_active_layer,
+            get_active_layer_index=self._get_active_layer_index,
+            get_layers=lambda: self.mask_layers,
+            get_combine_method=lambda: self.combine_method,
+            set_combined_mask=self._set_combined_mask_preview,
+            update_combined_mask=self._update_combined_mask,
+            update_plot=self._refresh_mask_overlay,
+            set_drawing_enabled=self._set_drawing_enabled_from_session,
+            should_auto_disable=lambda: self.auto_disable_drawing_mode,
+            get_brush_size=lambda: self.brush_size,
+            get_draw_value=lambda: self.draw_add_radio.isChecked() if hasattr(self, 'draw_add_radio') else self.draw_mask_value,
+        )
         
         # Developer control: auto-disable drawing mode after each stroke
         # Set to False to keep drawing mode enabled for continuous drawing
@@ -167,12 +186,12 @@ class MaskApp(BaseImageTab):
 
         # Configure drawing tools and connect events
         for tool in self.drawing_tools.values():
-            tool.configure(self.canvas_image, self.ax_image, self.parent_app, lambda: self.image_data)
+            tool.configure(self.image_viewer, None, self.parent_app, lambda: self.image_data)
         
-        # Connect matplotlib events - delegate to tool event handlers
-        self.canvas_image.mpl_connect('motion_notify_event', self._on_canvas_motion)
-        self.canvas_image.mpl_connect('button_press_event', self._on_canvas_press)
-        self.canvas_image.mpl_connect('button_release_event', self._on_canvas_release)
+        # Connect normalized image viewer events - delegate to tool event handlers
+        self.image_viewer.mouse_moved.connect(self.drawing_session.handle_motion)
+        self.image_viewer.mouse_pressed.connect(self.drawing_session.handle_press)
+        self.image_viewer.mouse_released.connect(self.drawing_session.handle_release)
 
     def _create_visualization_panel(self):
         """Create the image and mask visualization panel"""
@@ -189,13 +208,9 @@ class MaskApp(BaseImageTab):
         # Filename label using inherited method
         self.create_filename_label(layout)
 
-        # Use the base class image panel (creates self.ax_raw, self.canvas_raw, etc.)
+        # Use the base class image panel (creates self.image_viewer)
         base_image_panel = self._create_image_panel()
         layout.addWidget(base_image_panel)
-        
-        # Use unified canvas references for mask tab
-        self.ax_image = self.ax_raw
-        self.canvas_image = self.canvas_raw
 
         # Mask display controls - compact layout with consistent spacing
         controls_group = QGroupBox("Display Options")
@@ -300,11 +315,18 @@ class MaskApp(BaseImageTab):
         combine_layout.addStretch()
         layout.addLayout(combine_layout)
         
-        # Combined mask statistics
-        self.combined_stats_label = QLabel("No layers")
-        self.combined_stats_label.setWordWrap(True)
+        # Combined mask coverage
+        self.combined_stats_label = QLabel("No visible layers")
         apply_info_style(self.combined_stats_label)
         layout.addWidget(self.combined_stats_label)
+
+        self.mask_coverage_bar = QProgressBar()
+        self.mask_coverage_bar.setRange(0, 1000)
+        self.mask_coverage_bar.setValue(0)
+        self.mask_coverage_bar.setFormat("Masked 0.0%")
+        self.mask_coverage_bar.setTextVisible(True)
+        self.mask_coverage_bar.setToolTip("Fraction of visible image pixels included in the combined mask")
+        layout.addWidget(self.mask_coverage_bar)
         
         layout.addStretch()
         return panel
@@ -335,32 +357,33 @@ class MaskApp(BaseImageTab):
         threshold_layout = QVBoxLayout(threshold_group)
         threshold_layout.setSpacing(2)
         
-        # Threshold controls in grid for better alignment
-        thresh_grid = QHBoxLayout()
+        # Threshold controls in one compact row.
+        thresh_grid = QGridLayout()
+        thresh_grid.setHorizontalSpacing(6)
+        thresh_grid.setVerticalSpacing(2)
         
         # Mode control
-        thresh_grid.addWidget(QLabel("Mode:"))
+        thresh_grid.addWidget(QLabel("Mode:"), 0, 0)
         self.threshold_mode_combo = QComboBox()
         self.threshold_mode_combo.addItems(["Above", "Below", "Range"])
         self.threshold_mode_combo.setCurrentIndex(1)
-        self.threshold_mode_combo.setMinimumWidth(100)
-        self.threshold_mode_combo.setMaximumWidth(120)
-        thresh_grid.addWidget(self.threshold_mode_combo)
-        thresh_grid.addStretch()
+        self.threshold_mode_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        thresh_grid.addWidget(self.threshold_mode_combo, 0, 1)
 
         # Value control
-        thresh_grid.addWidget(QLabel("Value:"))
+        thresh_grid.addWidget(QLabel("Value:"), 0, 2)
         self.threshold_spin = QDoubleSpinBox()
         self.threshold_spin.setRange(-1e9, 1e9)
         self.threshold_spin.setValue(10)
         self.threshold_spin.setDecimals(1)
-        self.threshold_spin.setMinimumWidth(100)
-        self.threshold_spin.setMaximumWidth(120)
-        thresh_grid.addWidget(self.threshold_spin)
+        self._use_compact_spinbox_width(self.threshold_spin)
+        thresh_grid.addWidget(self.threshold_spin, 0, 3)
+        thresh_grid.setColumnStretch(1, 1)
         
         threshold_layout.addLayout(thresh_grid)
         
-        btn_gen_threshold = QPushButton("Generate Threshold Mask")
+        btn_gen_threshold = QPushButton("Generate")
+        btn_gen_threshold.setToolTip("Create a new layer from the current threshold settings")
         btn_gen_threshold.clicked.connect(self._generate_threshold_mask)
         threshold_layout.addWidget(btn_gen_threshold)
         
@@ -369,52 +392,54 @@ class MaskApp(BaseImageTab):
         ###### Filter-based mask controls ######
 
         # Filter-based mask
-        filter_group = QGroupBox("Filter")
+        filter_group = QGroupBox("Clean Up Mask")
         filter_layout = QVBoxLayout(filter_group)
         filter_layout.setSpacing(2)
         
-        # Filter controls in grid
-        filter_grid = QHBoxLayout()
+        # Filter controls in one compact row.
+        filter_grid = QGridLayout()
+        filter_grid.setHorizontalSpacing(6)
+        filter_grid.setVerticalSpacing(2)
         
         # Type control
-        filter_grid.addWidget(QLabel("Type:"))
+        filter_grid.addWidget(QLabel("Action:"), 0, 0)
         self.filter_type_combo = QComboBox()
         self.filter_type_combo.addItems([
-            "Remove Speckles (Erode)",
-            "Expand Regions (Dilate)",
-            "Close Small Holes",
-            "Sobel Edge Mask",
+            "Shrink mask",
+            "Grow mask",
+            "Fill small gaps",
+            "Find image edges",
         ])
-        self.filter_type_combo.setMinimumWidth(100)
-        filter_grid.addWidget(self.filter_type_combo)
-        filter_grid.addStretch()
+        self.filter_type_combo.setItemData(0, "Erode the active layer by the selected radius.", Qt.ToolTipRole)
+        self.filter_type_combo.setItemData(1, "Dilate the active layer by the selected radius.", Qt.ToolTipRole)
+        self.filter_type_combo.setItemData(2, "Close small holes or gaps in the active layer.", Qt.ToolTipRole)
+        self.filter_type_combo.setItemData(3, "Replace the active layer with edges found in the current image.", Qt.ToolTipRole)
+        self.filter_type_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        filter_grid.addWidget(self.filter_type_combo, 0, 1)
         
         # Size control
-        filter_grid.addWidget(QLabel("Radius:"))
+        filter_grid.addWidget(QLabel("Radius:"), 0, 2)
         self.filter_size_spin = QDoubleSpinBox()
         self.filter_size_spin.setRange(1, 21)
         self.filter_size_spin.setValue(3)
         self.filter_size_spin.setDecimals(0)
         self.filter_size_spin.setSingleStep(1)
-        self.filter_size_spin.setMinimumWidth(100)
-        filter_grid.addWidget(self.filter_size_spin)
+        self._use_compact_spinbox_width(self.filter_size_spin)
+        filter_grid.addWidget(self.filter_size_spin, 0, 3)
 
-        filter_grid.addWidget(QLabel("Edge %:"))
+        filter_grid.addWidget(QLabel("Edge:"), 0, 4)
         self.filter_percentile_spin = QDoubleSpinBox()
         self.filter_percentile_spin.setRange(50, 99.9)
         self.filter_percentile_spin.setValue(92.0)
         self.filter_percentile_spin.setDecimals(1)
-        self.filter_percentile_spin.setMinimumWidth(90)
-        filter_grid.addWidget(self.filter_percentile_spin)
+        self._use_compact_spinbox_width(self.filter_percentile_spin)
+        filter_grid.addWidget(self.filter_percentile_spin, 0, 5)
+        filter_grid.setColumnStretch(1, 1)
         
         filter_layout.addLayout(filter_grid)
-
-        filter_info = QLabel("Applies to the selected mask layer. Sobel uses the current image; morphology edits the active mask directly.")
-        filter_info.setWordWrap(True)
-        apply_info_style(filter_info)
-        filter_layout.addWidget(filter_info)
         
-        btn_gen_filter = QPushButton("Apply Filter to Active Layer")
+        btn_gen_filter = QPushButton("Apply")
+        btn_gen_filter.setToolTip("Apply the selected cleanup action to the active layer")
         btn_gen_filter.clicked.connect(self._generate_filter_mask)
         filter_layout.addWidget(btn_gen_filter)
         
@@ -426,62 +451,50 @@ class MaskApp(BaseImageTab):
         drawing_layout.setSpacing(2)
         drawing_layout.setContentsMargins(6, 6, 6, 6)
         
-        # Enable/Disable drawing mode
-        self.drawing_mode_check = QCheckBox("Enable drawing mode")
-        self.drawing_mode_check.stateChanged.connect(self._toggle_drawing_mode)
-        drawing_layout.addWidget(self.drawing_mode_check)
-        
         # Tool selection row
         tool_layout = QHBoxLayout()
         tool_layout.setSpacing(2)
         tool_layout.setContentsMargins(0, 4, 0, 4)
-        tool_label = QLabel("Tool:")
-        apply_body_style(tool_label)
-        tool_layout.addWidget(tool_label)
-        
-        # Create button group for tool selection to ensure mutual exclusivity
-        self.tool_group = QButtonGroup()
-        self.tool_brush_radio = QRadioButton("Brush")
-        self.tool_brush_radio.setChecked(True)
-        self.tool_brush_radio.setToolTip("Freehand drawing")
-        self.tool_brush_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Brush'))
-        self.tool_group.addButton(self.tool_brush_radio, 0)
-        tool_layout.addWidget(self.tool_brush_radio)
-        
-        self.tool_line_radio = QRadioButton("Line")
-        self.tool_line_radio.setToolTip("Straight line")
-        self.tool_line_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Line'))
-        self.tool_group.addButton(self.tool_line_radio, 1)
-        tool_layout.addWidget(self.tool_line_radio)
-        
-        self.tool_rect_radio = QRadioButton("Rect")
-        self.tool_rect_radio.setToolTip("Filled rectangle")
-        self.tool_rect_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Rectangle'))
-        self.tool_group.addButton(self.tool_rect_radio, 2)
-        tool_layout.addWidget(self.tool_rect_radio)
+        self.tool_buttons = {}
+        tool_specs = (
+            ("Brush", "B", "Freehand drawing"),
+            ("Line", "/", "Straight line"),
+            ("Rectangle", "Rect", "Filled rectangle"),
+            ("Circle", "Circle", "Filled circle from center and radius"),
+            ("Watershed Fill", "Fill", "Seeded watershed-style fill constrained by image edges"),
+        )
+        for tool_name, label, tooltip in tool_specs:
+            button = QToolButton()
+            icon = self._load_tool_icon(tool_name)
+            if not icon.isNull():
+                button.setIcon(icon)
+                button.setIconSize(AppStyle.mask_tool_icon_size())
+            else:
+                button.setText(label)
+            button.setToolTip(tooltip)
+            button.setCheckable(True)
+            button.setAutoRaise(True)
+            button.setFixedSize(AppStyle.mask_tool_button_size())
+            button.clicked.connect(lambda checked, name=tool_name: self._activate_drawing_tool(name, checked))
+            self.tool_buttons[tool_name] = button
+            tool_layout.addWidget(button)
 
-        self.tool_circle_radio = QRadioButton("Circle")
-        self.tool_circle_radio.setToolTip("Filled circle from center and radius")
-        self.tool_circle_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Circle'))
-        self.tool_group.addButton(self.tool_circle_radio, 3)
-        tool_layout.addWidget(self.tool_circle_radio)
-
-        self.tool_fill_radio = QRadioButton("Smart Fill")
-        self.tool_fill_radio.setToolTip("Seeded watershed-style fill constrained by image edges")
-        self.tool_fill_radio.toggled.connect(lambda checked: checked and self._set_drawing_tool('Watershed Fill'))
-        self.tool_group.addButton(self.tool_fill_radio, 4)
-        tool_layout.addWidget(self.tool_fill_radio)
+        self.tool_brush_radio = self.tool_buttons["Brush"]
+        self.tool_line_radio = self.tool_buttons["Line"]
+        self.tool_rect_radio = self.tool_buttons["Rectangle"]
+        self.tool_circle_radio = self.tool_buttons["Circle"]
+        self.tool_fill_radio = self.tool_buttons["Watershed Fill"]
         
-        tool_layout.addStretch()
         drawing_layout.addLayout(tool_layout)
+
+        tool_options_layout = QGridLayout()
+        tool_options_layout.setSpacing(2)
+        tool_options_layout.setContentsMargins(0, 0, 0, 0)
         
         # Mode selection row (Add/Remove)
-        mode_layout = QHBoxLayout()
-        mode_layout.setSpacing(2)
-        mode_layout.setContentsMargins(0, 4, 0, 4)
         mode_label = QLabel("Mode:")
         apply_body_style(mode_label)
-        mode_layout.addWidget(mode_label)
+        tool_options_layout.addWidget(mode_label, 0, 0)
         
         # Create button group for mode selection
         self.mode_group = QButtonGroup()
@@ -490,62 +503,53 @@ class MaskApp(BaseImageTab):
         self.draw_add_radio.setToolTip("Add to mask")
         self.draw_add_radio.toggled.connect(lambda checked: checked and self._update_tool_mode())
         self.mode_group.addButton(self.draw_add_radio, 0)
-        mode_layout.addWidget(self.draw_add_radio)
+        tool_options_layout.addWidget(self.draw_add_radio, 0, 1)
         
         self.draw_remove_radio = QRadioButton("Remove")
         self.draw_remove_radio.setToolTip("Remove from mask")
         self.draw_remove_radio.toggled.connect(lambda checked: checked and self._update_tool_mode())
         self.mode_group.addButton(self.draw_remove_radio, 1)
-        mode_layout.addWidget(self.draw_remove_radio)
-        
-        mode_layout.addStretch()
-        drawing_layout.addLayout(mode_layout)
+        tool_options_layout.addWidget(self.draw_remove_radio, 0, 2)
         
         # Brush size control (compact)
-        brush_layout = QHBoxLayout()
-        brush_layout.setSpacing(4)
-        brush_layout.setContentsMargins(0, 4, 0, 4)
         brush_label = QLabel("Size:")
         apply_body_style(brush_label)
-        brush_layout.addWidget(brush_label)
+        tool_options_layout.addWidget(brush_label, 1, 0)
         
         self.brush_size_spin = QSpinBox()
         self.brush_size_spin.setRange(1, 50)
         self.brush_size_spin.setValue(5)
-        self.brush_size_spin.setMinimumWidth(50)
-        self.brush_size_spin.setMaximumWidth(70)
         self.brush_size_spin.setSuffix("px")
         self.brush_size_spin.valueChanged.connect(lambda v: self._update_tool_brush_size(v))
         self.brush_size_spin.setToolTip("Brush size for Brush and Line tools")
-        brush_layout.addWidget(self.brush_size_spin)
+        self._use_compact_spinbox_width(self.brush_size_spin)
+        tool_options_layout.addWidget(self.brush_size_spin, 1, 1)
         
         # Slider for brush size
         self.brush_size_slider = QSlider(Qt.Horizontal)
         self.brush_size_slider.setRange(1, 50)
         self.brush_size_slider.setValue(5)
-        self.brush_size_slider.setMaximumWidth(120)
         self.brush_size_slider.setMaximumHeight(18)
         self.brush_size_slider.sliderMoved.connect(lambda v: self.brush_size_spin.setValue(v))
         self.brush_size_spin.valueChanged.connect(lambda v: self.brush_size_slider.blockSignals(True) or self.brush_size_slider.setValue(v) or self.brush_size_slider.blockSignals(False))
-        brush_layout.addWidget(self.brush_size_slider)
-        brush_layout.addStretch()
-        drawing_layout.addLayout(brush_layout)
+        self.brush_size_slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        tool_options_layout.addWidget(self.brush_size_slider, 1, 2)
+        tool_options_layout.setColumnStretch(2, 1)
+        drawing_layout.addLayout(tool_options_layout)
         
         layout.addWidget(drawing_group)
         
-        # Disable drawing controls initially (drawing mode is off by default)
-        self.tool_brush_radio.setEnabled(False)
-        self.tool_line_radio.setEnabled(False)
-        self.tool_rect_radio.setEnabled(False)
-        self.tool_circle_radio.setEnabled(False)
-        self.tool_fill_radio.setEnabled(False)
-        self.draw_add_radio.setEnabled(False)
-        self.draw_remove_radio.setEnabled(False)
-        self.brush_size_spin.setEnabled(False)
-        self.brush_size_slider.setEnabled(False)
+        self._set_drawing_tool("Brush")
         
         layout.addStretch()
         return panel
+
+    def _load_tool_icon(self, tool_name: str) -> QIcon:
+        icon_filename = MASK_TOOL_ICON_FILES.get(tool_name)
+        if not icon_filename:
+            return QIcon()
+        workspace_root = getattr(self.parent_app, '_workspace_root', Path(__file__).resolve().parent.parent)
+        return AppStyle.load_icon(workspace_root, icon_filename)
     
     def _create_external_editor_panel(self):
         """Create the external editor integration panel"""
@@ -591,12 +595,14 @@ class MaskApp(BaseImageTab):
         layout.addWidget(title)
         
         # Export Selected Layer button
-        btn_export_layer = QPushButton("Export Selected Layer")
+        btn_export_layer = QPushButton("Export Layer")
+        btn_export_layer.setToolTip("Export the selected layer")
         btn_export_layer.clicked.connect(self._export_selected_layer)
         layout.addWidget(btn_export_layer)
 
         # Export Combined Mask button (green)
-        btn_export_combined = QPushButton("Export Mask (All Layers)")
+        btn_export_combined = QPushButton("Export Combined")
+        btn_export_combined.setToolTip("Export the combined mask from all visible layers")
         btn_export_combined.clicked.connect(self._export_combined_mask)
         apply_sync_button_style(btn_export_combined)
         layout.addWidget(btn_export_combined)
@@ -834,6 +840,9 @@ class MaskApp(BaseImageTab):
             if hasattr(self.parent_app, 'publish_shared_mask'):
                 self.parent_app.publish_shared_mask(None, source_tab=self)
             self.combined_stats_label.setText("No visible layers")
+            self.mask_coverage_bar.setValue(0)
+            self.mask_coverage_bar.setFormat("Masked 0.0%")
+            self.mask_coverage_bar.setToolTip("No visible mask layers")
             self.update_plot()
             self.update_status_info()
             return
@@ -852,12 +861,40 @@ class MaskApp(BaseImageTab):
         total_pixels = self.combined_mask.size
         mask_percentage = (masked_pixels / total_pixels) * 100
         
-        self.combined_stats_label.setText(
-            f"Combined Mask:\n"
-            f"{len(visible_layers)} layers ({self.combine_method})\n"
-            f"Masked: {masked_pixels:,} pixels\n"
-            f"({mask_percentage:.1f}%)"
-        )
+        self.combined_stats_label.setText("Coverage")
+        self.mask_coverage_bar.setValue(round(mask_percentage * 10))
+        self.mask_coverage_bar.setFormat(f"Masked {mask_percentage:.1f}%")
+        self.mask_coverage_bar.setToolTip(f"{masked_pixels:,} of {total_pixels:,} pixels masked")
+        self._refresh_mask_overlay()
+
+    def _set_combined_mask_preview(self, mask: np.ndarray) -> None:
+        """Set a temporary combined mask generated by the drawing session."""
+        self.combined_mask = mask
+
+    def _set_drawing_enabled_from_session(self, enabled: bool) -> None:
+        """Set drawing state and keep tool buttons/canvas lock in sync."""
+        self.drawing_mode = bool(enabled)
+        if self.drawing_tool:
+            self.drawing_tool.reset()
+
+        if self.drawing_mode:
+            if not self.mask_layers:
+                self._add_empty_layer()
+            self.image_viewer.set_interaction_locked(True)
+            self.image_viewer.setCursor(QCursor(Qt.CrossCursor))
+            if hasattr(self, 'tool_buttons') and self.drawing_tool.name in self.tool_buttons:
+                button = self.tool_buttons[self.drawing_tool.name]
+                button.blockSignals(True)
+                button.setChecked(True)
+                button.blockSignals(False)
+        else:
+            if hasattr(self, 'tool_buttons'):
+                for button in self.tool_buttons.values():
+                    button.blockSignals(True)
+                    button.setChecked(False)
+                    button.blockSignals(False)
+            self.image_viewer.set_interaction_locked(False)
+            self.image_viewer.setCursor(QCursor(Qt.ArrowCursor))
         
         self.update_plot()
         self.update_status_info()
@@ -907,16 +944,16 @@ class MaskApp(BaseImageTab):
             filter_type = self.filter_type_combo.currentText()
             filter_radius = int(self.filter_size_spin.value())
 
-            if filter_type == "Remove Speckles (Erode)":
+            if filter_type == "Shrink mask":
                 active_layer.data = erode_mask(active_layer.data, radius=filter_radius)
-            elif filter_type == "Expand Regions (Dilate)":
+            elif filter_type == "Grow mask":
                 active_layer.data = dilate_mask(active_layer.data, radius=filter_radius)
-            elif filter_type == "Close Small Holes":
+            elif filter_type == "Fill small gaps":
                 active_layer.data = close_mask_holes(active_layer.data, radius=filter_radius)
             else:
                 image_2d, is_valid, error_msg = validate_and_prepare_image_array(self.image_data)
                 if not is_valid:
-                    self.parent_app.show_status(error_msg or "Load an image first. Use 'Sync to Other Tabs' in Image Browser.")
+                    self.parent_app.show_status(error_msg or "Load an image first")
                     return
                 active_layer.data = sobel_edge_mask(
                     image_2d,
@@ -931,38 +968,24 @@ class MaskApp(BaseImageTab):
             self.parent_app.show_status(f"Error applying filter: {str(e)}")
     
     def _toggle_drawing_mode(self, state):
-        """Toggle manual drawing mode"""
-        self.drawing_mode = (state == Qt.Checked)
-        
-        # Reset tool state when toggling mode
-        if self.drawing_tool:
-            self.drawing_tool.reset()
-        
-        # Disable/enable all drawing controls (except the checkbox itself)
-        drawing_controls = [
-            self.tool_brush_radio, self.tool_line_radio, self.tool_rect_radio,
-            self.tool_circle_radio, self.tool_fill_radio,
-            self.draw_add_radio, self.draw_remove_radio,
-            self.brush_size_spin, self.brush_size_slider
-        ]
-        for control in drawing_controls:
-            control.setEnabled(self.drawing_mode)
-        
-        if self.drawing_mode:
-            # Create a new empty layer if none exist or if current is not editable
-            if not self.mask_layers:
-                self._add_empty_layer()
-            # Change cursor to indicate drawing mode ready
-            self.canvas_image.setCursor(QCursor(Qt.CrossCursor))
-            # Disable matplotlib toolbar zoom/pan to avoid conflicts
-            self._disable_matplotlib_tools()
-            self.parent_app.show_status("Drawing mode enabled. Click and drag to draw mask. (Pan/Zoom disabled)")
-        else:
-            # Reset cursor to normal
-            self.canvas_image.setCursor(QCursor(Qt.ArrowCursor))
-            # Re-enable matplotlib toolbar zoom/pan
-            self._enable_matplotlib_tools()
-            self.parent_app.show_status("Drawing mode disabled")
+        """Compatibility shim for older code paths that toggled drawing mode."""
+        self._set_drawing_enabled_from_session(state == Qt.Checked)
+
+    def _activate_drawing_tool(self, tool_name: str, checked: bool):
+        """Activate a drawing tool button and lock the image canvas while it is checked."""
+        if checked:
+            for name, button in self.tool_buttons.items():
+                if name != tool_name:
+                    button.blockSignals(True)
+                    button.setChecked(False)
+                    button.blockSignals(False)
+            self._set_drawing_tool(tool_name)
+            self._set_drawing_enabled_from_session(True)
+            self.parent_app.show_status(f"{tool_name} tool active. Click the tool again to return to pan/zoom.")
+            return
+
+        if self.drawing_tool and self.drawing_tool.name == tool_name:
+            self._set_drawing_enabled_from_session(False)
     
     def _set_drawing_tool(self, tool_name: str):
         """Switch to a different drawing tool"""
@@ -998,26 +1021,12 @@ class MaskApp(BaseImageTab):
     
     
     def _disable_matplotlib_tools(self):
-        """Disable matplotlib zoom/pan tools during drawing by setting mode to None"""
-        toolbar = self.canvas_image.toolbar if hasattr(self.canvas_image, 'toolbar') else None
-        if toolbar:
-            # Set mode to None to disable all tools (zoom, pan, etc)
-            toolbar.mode = ''
-            # Also disable the buttons in toolbar
-            for action in toolbar.actions():
-                action_text = action.text().lower() if hasattr(action, 'text') else ''
-                if any(x in action_text for x in ['zoom', 'pan']):
-                    action.setEnabled(False)
+        """Legacy no-op retained for old callbacks during viewer migration."""
+        return
     
     def _enable_matplotlib_tools(self):
-        """Re-enable matplotlib zoom/pan tools to default state"""
-        toolbar = self.canvas_image.toolbar if hasattr(self.canvas_image, 'toolbar') else None
-        if toolbar:
-            # Re-enable the buttons in toolbar
-            for action in toolbar.actions():
-                action_text = action.text().lower() if hasattr(action, 'text') else ''
-                if any(x in action_text for x in ['zoom', 'pan']):
-                    action.setEnabled(True)
+        """Legacy no-op retained for old callbacks during viewer migration."""
+        return
     
     # ===== External Editor Methods =====
     
@@ -1324,246 +1333,35 @@ class MaskApp(BaseImageTab):
     
     # ===== Display Methods =====
     
-    def _add_mask_overlay(self, ax):
+    def _add_mask_overlay(self, viewer):
         """Hook to add mask overlay after base image display"""
         # Only add overlay if mask should be shown
         if not self.show_mask_check.isChecked():
+            viewer.remove_overlay('combined-mask')
             return
         
         # Overlay combined mask if available
         if self.combined_mask is None:
+            viewer.remove_overlay('combined-mask')
             return
         
         # Validate combined_mask shape
         if not isinstance(self.combined_mask, np.ndarray) or self.combined_mask.ndim != 2:
+            viewer.remove_overlay('combined-mask')
             return
         
         try:
             alpha = self.alpha_spin.value() / 100.0
             color = self.mask_color_combo.currentText()
             
-            # Create RGBA overlay
-            mask_overlay = np.zeros((*self.combined_mask.shape, 4))
-            
-            # Set color for masked pixels (True values)
-            color_map = {
-                'red': [1, 0, 0, alpha],
-                'blue': [0, 0, 1, alpha],
-                'green': [0, 1, 0, alpha],
-                'yellow': [1, 1, 0, alpha],
-                'magenta': [1, 0, 1, alpha],
-                'cyan': [0, 1, 1, alpha]
-            }
-            
-            if color in color_map:
-                mask_overlay[self.combined_mask] = color_map[color]
-            
-            ax.imshow(mask_overlay, origin='upper', interpolation='nearest')
+            viewer.add_mask_overlay('combined-mask', self.combined_mask, group='mask', color=color, alpha=alpha)
         except Exception as e:
             # Silently skip overlay if there's any issue
             print(f"DEBUG: _add_mask_overlay error: {e}")
             pass
+
+    def _refresh_mask_overlay(self):
+        """Refresh only the PyQtGraph mask overlay, leaving the detector image untouched."""
+        if hasattr(self, 'image_viewer'):
+            self._add_mask_overlay(self.image_viewer)
     
-    # ===== Mouse Event Handlers =====
-    
-    def _get_valid_image_coordinates(self, event):
-        """Get valid image pixel coordinates, clamped to image bounds.
-        
-        Handles zoom/pan states correctly by using image dimensions directly.
-        Returns None if coordinates are invalid.
-        """
-        # Check if event has valid coordinates
-        if event.xdata is None or event.ydata is None:
-            return None
-        
-        # Check if image data is loaded
-        if self.image_data is None or self.ax_image is None:
-            return None
-        
-        # Get actual image array (handles Data2DScattering objects)
-        image_2d, is_valid, error_msg = validate_and_prepare_image_array(self.image_data)
-        if not is_valid:
-            return None
-        
-        # Get image dimensions (height, width)
-        img_height, img_width = image_2d.shape[:2]
-        
-        try:
-            # Convert to integers and clamp to valid pixel range
-            # Data coordinates from imshow already respect zoom/pan state
-            x = int(event.xdata)
-            y = int(event.ydata)
-            
-            # Clamp to image bounds
-            x = max(0, min(img_width - 1, x))
-            y = max(0, min(img_height - 1, y))
-            
-            return (x, y)
-        except (TypeError, ValueError):
-            return None
-    
-    def _on_canvas_press(self, event):
-        """Handle canvas mouse press event - delegate to drawing tool"""
-        if not self.drawing_mode or not self.drawing_tool:
-            return
-        
-        # Tool handles press event (sets is_dragging, initializes state)
-        self.drawing_tool.on_press(event)
-        
-        # Show initial preview if tool is active
-        if self.drawing_tool.is_dragging and self.drawing_tool.is_active:
-            self._show_preview(event)
-    
-    def _on_canvas_motion(self, event):
-        """Handle canvas mouse motion - delegate to tool and update visualization"""
-        if not self.drawing_mode or not self.drawing_tool:
-            return
-        
-        # Tool handles motion event (state tracking, edge detection, cursor management)
-        self.drawing_tool.on_motion(event)
-        
-        # Update visualization during drag
-        if self.drawing_tool.is_dragging and self.drawing_tool.is_active:
-            if isinstance(self.drawing_tool, BrushDrawingTool):
-                # Brush accumulates strokes on layer during motion
-                self._draw_brush_stroke(event)
-            else:
-                # Line/Rectangle show non-destructive preview
-                self._show_preview(event)
-    
-    def _on_canvas_release(self, event):
-        """Handle canvas mouse release - finalize drawing"""
-        if not self.drawing_tool or not self.drawing_tool.is_dragging:
-            return
-        
-        # Capture state before tool resets
-        was_dragging = self.drawing_tool.is_dragging
-        pointer_left = self.drawing_tool.pointer_left_canvas
-        exit_edge = self.drawing_tool.pointer_exit_edge
-        last_point = self.drawing_tool.last_draw_point
-        
-        # Tool handles release (resets state)
-        self.drawing_tool.on_release(event)
-        
-        if was_dragging and self.drawing_tool.is_active:
-            try:
-                # Get image dimensions
-                image_2d, is_valid, _ = validate_and_prepare_image_array(self.image_data)
-                if not is_valid:
-                    return
-                
-                img_height, img_width = image_2d.shape[:2]
-                
-                # Determine final endpoint
-                if pointer_left and last_point is not None:
-                    # Extend to edge/corner based on detected zone
-                    x, y = self.drawing_tool.get_endpoint_for_edge(exit_edge, last_point[1], last_point[0], img_width, img_height)
-                elif event.inaxes == self.ax_image and event.xdata is not None and event.ydata is not None:
-                    # Normal release inside canvas
-                    x = max(0, min(img_width - 1, int(event.xdata)))
-                    y = max(0, min(img_height - 1, int(event.ydata)))
-                else:
-                    return
-                
-                # Finalize non-brush tools (Line, Rectangle draw on release)
-                # Brush tools finalize immediately during motion
-                if not isinstance(self.drawing_tool, BrushDrawingTool):
-                    current_layer = self._get_active_layer(create_if_missing=True)
-                    if current_layer is None:
-                        return
-                    current_layer.data = self.drawing_tool.finalize(current_layer.data, (y, x))
-                
-                # Rebuild combined mask and update display
-                self._update_combined_mask()
-                
-            except Exception as e:
-                pass  # Finalization failed gracefully
-            finally:
-                self._preview_mask = None
-                self.drawing_tool.reset()
-        
-        # Auto-disable drawing mode if configured
-        if self.auto_disable_drawing_mode:
-            self.drawing_mode = False
-            self.drawing_mode_check.setChecked(False)
-    
-    def _draw_brush_stroke(self, event):
-        """Draw continuously with brush tool during drag"""
-        try:
-            x, y = int(event.xdata), int(event.ydata)
-            current_layer = self._get_active_layer(create_if_missing=True)
-            if current_layer is None:
-                return
-            
-            # Update tool settings
-            self.drawing_tool.brush_size = self.brush_size
-            self.drawing_tool.draw_value = self.draw_add_radio.isChecked()
-            
-            # Finalize on the actual layer to accumulate strokes
-            current_layer.data = self.drawing_tool.finalize(current_layer.data, (y, x))
-            
-            # Update combined mask and display immediately for real-time feedback
-            self._update_combined_mask()
-            
-        except (TypeError, ValueError):
-            pass  # Mouse outside valid coordinates
-    
-    def _show_preview(self, event):
-        """Show preview of what would be drawn without committing to the layer"""
-        try:
-            x, y = int(event.xdata), int(event.ydata)
-            layer_index = self._get_active_layer_index(create_if_missing=True)
-            if layer_index is None:
-                return
-            current_layer = self.mask_layers[layer_index]
-            
-            # Update tool settings
-            self.drawing_tool.brush_size = self.brush_size
-            self.drawing_tool.draw_value = self.draw_add_radio.isChecked()
-            
-            # Get preview from tool (doesn't modify original)
-            preview_data = self.drawing_tool.preview(current_layer.data, (y, x))
-            
-            # Temporarily update combined mask to show preview
-            # Rebuild with preview data
-            temp_combined = None
-            visible_layers = [layer for layer in self.mask_layers if layer.visible]
-            if not visible_layers:
-                temp_combined = preview_data.astype(bool)
-            elif self.combine_method == "OR":
-                temp_combined = np.zeros_like(current_layer.data, dtype=bool)
-                for idx, layer in enumerate(self.mask_layers):
-                    if not layer.visible:
-                        continue
-                    layer_data = preview_data if idx == layer_index else layer.data
-                    temp_combined = np.logical_or(temp_combined, layer_data)
-            else:
-                temp_combined = None
-                for idx, layer in enumerate(self.mask_layers):
-                    if not layer.visible:
-                        continue
-                    layer_data = preview_data if idx == layer_index else layer.data
-                    temp_combined = layer_data.astype(bool) if temp_combined is None else np.logical_and(temp_combined, layer_data)
-                if temp_combined is None:
-                    temp_combined = preview_data.astype(bool)
-            
-            # Save original mask and temporarily set preview
-            self.combined_mask = temp_combined.astype(bool)
-            
-            # Redraw with preview, then restore
-            self.update_plot()
-            
-            # Restore after a brief moment or on next event
-            # Store for restoration in next call or on release
-            self._preview_mask = temp_combined.astype(bool)
-            
-        except (TypeError, ValueError):
-            pass  # Mouse outside valid coordinates
-    
-    def _draw_on_mask(self, event):
-        """Legacy method - kept for backward compatibility
-        
-        Main drawing now happens through:
-        _on_canvas_press → _show_preview/draw → _on_canvas_release → finalize
-        """
-        pass

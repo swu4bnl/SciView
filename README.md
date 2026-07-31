@@ -1,61 +1,41 @@
 # SciView
 
-SciView is a PyQt5 application for interactive 2D X-ray scattering data inspection and analysis. It is designed for beamline workflows where users need fast image loading, calibration, mask editing, and data reduction protocol preview (under development) in one desktop interface.
+SciView is a Python-first desktop workbench for 2D X-ray scattering workflows. It combines local file browsing, Tiled data access, calibration inspection, mask editing, reduction previews, and SciAnalysis-backed protocol experiments in one PyQt5 application.
 
-## Core capabilities
+The project is being refactored toward a backend-first architecture: GUI tabs collect user choices and display results, while reusable logic lives under [src/sciview/](src/sciview). CMS is the first supported beamline profile, but core modules should remain beamline-neutral.
 
-- Image browsing from local files and Tiled data services.
-- Tiled Browser workflow for proposal/cycle search, detector selection, image preview, metadata display, and series playback.
-- Calibration editing for beam center, detector distance, wavelength, and related parameters.
-- Layered mask creation and editing with interactive drawing tools.
-- Protocol preview workflows for SciAnalysis-driven processing (under development).
+## What You Can Do
 
-## Application structure
+- Browse detector images from local folders or configured Tiled catalogs.
+- Preview images with PyQtGraph axes, locked aspect ratio, histogram color limits, colormap controls, and shared display settings.
+- Select a local or Tiled image once and let SciView share it automatically when you switch to analysis tabs.
+- Adjust calibration parameters and inspect beam-center overlays and 1D profiles.
+- Build layered masks with PyQtGraph drawing tools for brush, line, rectangle, circle, and watershed fill workflows.
+- Preview reductions and transforms using shared image, calibration, and mask state.
+- Experiment with SciAnalysis protocol previews while the processing adapter continues to mature.
 
-- [main.py](main.py): application entry point and tab orchestration.
-- [src/sciview/settings/](src/sciview/settings): application runtime settings.
-- [src/sciview/interfaces/theme/](src/sciview/interfaces/theme): UI style definitions.
-- [src/sciview/interfaces/stable_qt/](src/sciview/interfaces/stable_qt): Qt-specific tools and utility modules used by tabs.
-- [tabs/](tabs): main GUI modules (Image Browser, Tiled Browser, Calibration, Mask, Protocol).
-- [src/sciview/](src/sciview): backend package modules and launcher interface.
-- [src/sciview/calibration/](src/sciview/calibration): calibration I/O and diffraction standards.
+For a step-by-step user workflow, see [docs/USER_HOW_TO.md](docs/USER_HOW_TO.md).
 
-## Core dependencies
+## Quick Start
 
-The application depends on a scientific Python stack and the following key project dependencies:
+On Windows, double-click [Launch-SciView-win64.cmd](Launch-SciView-win64.cmd). The first launch uses Pixi to prepare SciView's Python environment automatically, then starts the app. If Windows asks whether to install Pixi, choose `Y`.
 
-- SciAnalysis: https://github.com/CFN-softbio/SciAnalysis
-- tiled: https://github.com/bluesky/tiled
-- PyQt5: https://pypi.org/project/PyQt5/
-- NumPy: https://numpy.org/
-- SciPy: https://scipy.org/
-- Matplotlib: https://matplotlib.org/
-- Pillow: https://python-pillow.org/
-- PyYAML: https://pyyaml.org/
-
-Dependency definitions are managed in [pixi.toml](pixi.toml) and [pyproject.toml](pyproject.toml).
-
-## Quick start
-
-### Recommended (pixi)
-
-Run once from the repository root:
+On Linux or macOS, run once from the repository root to prepare the environment:
 
 ```bash
 ./scripts/bootstrap_env.sh
 ```
 
-Then launch by platform:
+Then launch SciView with the script for your platform:
 
 - Linux: `./Launch-SciView-linux.sh`
 - macOS: `./Launch-SciView-macOS.command`
 - Windows: `Launch-SciView-win64.cmd`
 
-The platform launchers configure the environment and start the application using the standard pixi task.
+The launchers configure the Pixi-managed Python environment and start the application.
 
-### Alternative (local venv)
+For advanced/manual setup, use the fallback virtual environment mode:
 
-If pixi is unavailable, use the fallback bootstrap mode:
 
 ```bash
 ./scripts/bootstrap_env.sh --mode venv
@@ -67,52 +47,56 @@ Then start manually:
 PYTHONPATH=src ./.venv/bin/python main.py
 ```
 
-## User workflow overview
+## Everyday Workflow
 
-### Image Browser
+1. Load a local image in Image Browser or load a scan/frame in Tiled Browser.
+2. Switch to Calibration, Mask Editing, Reduction, or Transform. The current browser image is shared automatically on tab switch.
+3. Adjust shared display settings with the image histogram, `vmin`, `vmax`, colormap, and linear/log scale controls.
+4. Calibrate geometry or load an existing calibration.
+5. Build or load a mask if the analysis needs one.
+6. Preview reductions or transforms, then export data or recipes.
 
-- Load single images and folders.
-- Navigate image sessions and sync selected images to other tabs by clicking "Use This Image".
+## Repository Map
 
-### Tiled Browser
+- [main.py](main.py): application entry point and shared-state tab orchestration.
+- [tabs/](tabs): current PyQt5 tab widgets.
+- [src/sciview/settings/](src/sciview/settings): application, viewer, and runtime configuration.
+- [src/sciview/profiles/](src/sciview/profiles): beamline profiles and detector defaults.
+- [src/sciview/sources/](src/sciview/sources): local file and Tiled source adapters.
+- [src/sciview/processing/](src/sciview/processing): processing request models and SciAnalysis adapter work.
+- [src/sciview/interfaces/stable_qt/](src/sciview/interfaces/stable_qt): reusable Qt viewer, drawing, and utility modules.
+- [tests/](tests): pytest coverage using synthetic data and mocked services.
 
-- Log in to a configured Tiled service and choose a catalog profile.
-- Search by cycle and proposal ID using profile-configured metadata mappings.
-- Apply optional filters such as `measure_type`, `sample_savename`, and experiment alias directory.
-- Select a detector, load image plus metadata on demand, and preview stacked image frames with the frame slider.
-- Use "Use This Image" to sync the selected Tiled frame to the rest of the application.
+## Dependencies
 
-### Calibration
+Dependency definitions are managed in [pixi.toml](pixi.toml) and [pyproject.toml](pyproject.toml). Key runtime dependencies include PyQt5, PyQtGraph, NumPy, SciPy, Matplotlib, Pillow, PyYAML, Tiled, and SciAnalysis.
 
-- Edit geometry and wavelength parameters.
-- Use ring-center tools and profile overlays for validation.
+## Development Checks
 
-### Mask Editing
+When available, run:
 
-- Build masks with multiple layers and drawing tools.
-- Import, combine, and export mask artifacts.
+```bash
+pixi run pytest
+pixi run python -m ruff check src tests
+```
 
-### Protocol Preview (under development)
+Focused GUI migration checks often use:
 
-- Configure and run protocol previews using SciAnalysis-compatible data flow.
+```bash
+pixi run pytest tests/test_image_viewer.py
+```
 
-## Configuration
+## Configuration Notes
 
-Beamline-specific behavior is centralized in [src/sciview/profiles/](src/sciview/profiles) and application runtime settings under [src/sciview/settings/](src/sciview/settings). This includes detector defaults, calibration defaults, file pattern handling, Tiled profile integration, metadata field mappings, and Tiled timeout settings.
+- Beamline-specific behavior belongs in [src/sciview/profiles/](src/sciview/profiles).
+- Application and viewer defaults belong in [src/sciview/settings/](src/sciview/settings).
+- Core modules should not hard-code CMS paths, proposal IDs, filename rules, or mounted beamline storage.
+- GUI-facing angle behavior follows the display convention documented in [docs/ANGLE_CONVENTION_GUIDE.md](docs/ANGLE_CONVENTION_GUIDE.md): `0 deg = right`, positive rotation is counterclockwise, and `+90 deg = up`.
 
 ## Troubleshooting
 
-- If startup fails, run [scripts/bootstrap_env.sh](scripts/bootstrap_env.sh) again to refresh the environment.
-- If Tiled access fails, verify connectivity, login state, and profile settings in [src/sciview/profiles/](src/sciview/profiles) and [src/sciview/settings/app_settings.py](src/sciview/settings/app_settings.py).
-- If SciAnalysis operations fail, verify package availability in the active environment and confirm SciAnalysis import paths.
-- If reduction overlays or angular line cuts do not match what is shown on screen, check [docs/ANGLE_CONVENTION_GUIDE.md](docs/ANGLE_CONVENTION_GUIDE.md) before patching angle offsets.
-
-## Development notes
-
-- Keep UI logic in [tabs/](tabs) and reusable processing logic in [src/sciview/interfaces/stable_qt/](src/sciview/interfaces/stable_qt) or [src/sciview/](src/sciview).
-- Keep shared utilities in [src/sciview/interfaces/stable_qt/utils/](src/sciview/interfaces/stable_qt/utils) and [src/sciview/sources/](src/sciview/sources).
-- Update beamline defaults and Tiled metadata mappings in profile/settings modules rather than hardcoding values in tabs.
-- Use local tests and smoke checks during development, but keep test scripts and private fixtures outside the public release tree.
-
-For additional implementation details, see [docs/](docs).
+- If startup fails, rerun [scripts/bootstrap_env.sh](scripts/bootstrap_env.sh) to refresh the environment.
+- If Tiled access fails, verify connectivity, login state, profile settings, and [src/sciview/settings/app_settings.py](src/sciview/settings/app_settings.py).
+- If SciAnalysis operations fail, verify package availability and the configured SciAnalysis source.
+- If another tab does not show the expected image, return to the browser tab, confirm the desired image/frame is selected or loaded, then switch back to the analysis tab.
 

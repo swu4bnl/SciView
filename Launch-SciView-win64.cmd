@@ -1,25 +1,12 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-set "PYTHONPATH=%CD%\src"
+title SciView Launcher
 
-REM Find pixi: check PATH first, then default install location
-where pixi >nul 2>&1
-if %errorlevel% == 0 (
-    set "PIXI=pixi"
-) else if exist "%USERPROFILE%\AppData\Local\pixi\bin\pixi.exe" (
-    set "PIXI=%USERPROFILE%\AppData\Local\pixi\bin\pixi.exe"
-) else (
-    echo ERROR: pixi not found. Install from https://pixi.sh
-    pause
-    exit /b 1
-)
-
-"%PIXI%" install
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run_sciview_windows.ps1" %*
 if errorlevel 1 (
-    echo ERROR: Failed to configure the pixi environment.
-    pause
+    echo.
+    echo SciView did not start. Review the messages above, then press any key to close this window.
+    pause >nul
     exit /b 1
 )
-
-"%PIXI%" run launch-app
