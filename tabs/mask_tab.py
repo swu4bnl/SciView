@@ -56,7 +56,7 @@ from sciview.masking.io import export_mask_file as backend_export_mask_file
 from sciview.masking.io import load_mask_file as backend_load_mask_file
 from sciview.masking.operations import close_mask_holes, dilate_mask, erode_mask, sobel_edge_mask
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
-from sciview.settings.viewer_config import MASK_DRAWING_DEFAULTS, MASK_TOOL_NAMES
+from sciview.settings.viewer_config import MASK_DRAWING_DEFAULTS, MASK_TOOL_ICON_FILES, MASK_TOOL_NAMES
 
 
 class MaskLayer:
@@ -377,7 +377,7 @@ class MaskApp(BaseImageTab):
         ###### Filter-based mask controls ######
 
         # Filter-based mask
-        filter_group = QGroupBox("Filter")
+        filter_group = QGroupBox("Clean Up Mask")
         filter_layout = QVBoxLayout(filter_group)
         filter_layout.setSpacing(2)
         
@@ -385,13 +385,13 @@ class MaskApp(BaseImageTab):
         filter_grid = QHBoxLayout()
         
         # Type control
-        filter_grid.addWidget(QLabel("Type:"))
+        filter_grid.addWidget(QLabel("Action:"))
         self.filter_type_combo = QComboBox()
         self.filter_type_combo.addItems([
-            "Remove Speckles (Erode)",
-            "Expand Regions (Dilate)",
-            "Close Small Holes",
-            "Sobel Edge Mask",
+            "Shrink mask",
+            "Grow mask",
+            "Fill small gaps",
+            "Find image edges",
         ])
         self.filter_type_combo.setMinimumWidth(100)
         filter_grid.addWidget(self.filter_type_combo)
@@ -407,7 +407,7 @@ class MaskApp(BaseImageTab):
         self.filter_size_spin.setMinimumWidth(100)
         filter_grid.addWidget(self.filter_size_spin)
 
-        filter_grid.addWidget(QLabel("Edge %:"))
+        filter_grid.addWidget(QLabel("Edge strength:"))
         self.filter_percentile_spin = QDoubleSpinBox()
         self.filter_percentile_spin.setRange(50, 99.9)
         self.filter_percentile_spin.setValue(92.0)
@@ -417,12 +417,12 @@ class MaskApp(BaseImageTab):
         
         filter_layout.addLayout(filter_grid)
 
-        filter_info = QLabel("Applies to the selected mask layer. Sobel uses the current image; morphology edits the active mask directly.")
+        filter_info = QLabel("Shrink/grow/fill edit the active layer. Find image edges replaces it from the current image.")
         filter_info.setWordWrap(True)
         apply_info_style(filter_info)
         filter_layout.addWidget(filter_info)
         
-        btn_gen_filter = QPushButton("Apply Filter to Active Layer")
+        btn_gen_filter = QPushButton("Apply to Active Layer")
         btn_gen_filter.clicked.connect(self._generate_filter_mask)
         filter_layout.addWidget(btn_gen_filter)
         
@@ -430,7 +430,7 @@ class MaskApp(BaseImageTab):
         
         ###### Drawing Tools (Photoshop-style, Compact) ######
         drawing_group = QGroupBox("Drawing Tools")
-        drawing_layout = QVBoxLayout(drawing_group)
+        drawing_layout = QHBoxLayout(drawing_group)
         drawing_layout.setSpacing(2)
         drawing_layout.setContentsMargins(6, 6, 6, 6)
         
@@ -438,10 +438,6 @@ class MaskApp(BaseImageTab):
         tool_layout = QHBoxLayout()
         tool_layout.setSpacing(2)
         tool_layout.setContentsMargins(0, 4, 0, 4)
-        tool_label = QLabel("Tool:")
-        apply_body_style(tool_label)
-        tool_layout.addWidget(tool_label)
-
         self.tool_buttons = {}
         tool_specs = (
             ("Brush", "B", "Freehand drawing"),
@@ -452,10 +448,16 @@ class MaskApp(BaseImageTab):
         )
         for tool_name, label, tooltip in tool_specs:
             button = QToolButton()
-            button.setText(label)
+            icon = self._load_tool_icon(tool_name)
+            if not icon.isNull():
+                button.setIcon(icon)
+                button.setIconSize(AppStyle.mask_tool_icon_size())
+            else:
+                button.setText(label)
             button.setToolTip(tooltip)
             button.setCheckable(True)
             button.setAutoRaise(True)
+            button.setFixedSize(AppStyle.mask_tool_button_size())
             button.clicked.connect(lambda checked, name=tool_name: self._activate_drawing_tool(name, checked))
             self.tool_buttons[tool_name] = button
             tool_layout.addWidget(button)
@@ -466,8 +468,12 @@ class MaskApp(BaseImageTab):
         self.tool_circle_radio = self.tool_buttons["Circle"]
         self.tool_fill_radio = self.tool_buttons["Watershed Fill"]
         
-        tool_layout.addStretch()
         drawing_layout.addLayout(tool_layout)
+        drawing_layout.addStretch(1)
+
+        tool_options_layout = QVBoxLayout()
+        tool_options_layout.setSpacing(2)
+        tool_options_layout.setContentsMargins(8, 0, 0, 0)
         
         # Mode selection row (Add/Remove)
         mode_layout = QHBoxLayout()
@@ -492,8 +498,7 @@ class MaskApp(BaseImageTab):
         self.mode_group.addButton(self.draw_remove_radio, 1)
         mode_layout.addWidget(self.draw_remove_radio)
         
-        mode_layout.addStretch()
-        drawing_layout.addLayout(mode_layout)
+        tool_options_layout.addLayout(mode_layout)
         
         # Brush size control (compact)
         brush_layout = QHBoxLayout()
@@ -522,8 +527,8 @@ class MaskApp(BaseImageTab):
         self.brush_size_slider.sliderMoved.connect(lambda v: self.brush_size_spin.setValue(v))
         self.brush_size_spin.valueChanged.connect(lambda v: self.brush_size_slider.blockSignals(True) or self.brush_size_slider.setValue(v) or self.brush_size_slider.blockSignals(False))
         brush_layout.addWidget(self.brush_size_slider)
-        brush_layout.addStretch()
-        drawing_layout.addLayout(brush_layout)
+        tool_options_layout.addLayout(brush_layout)
+        drawing_layout.addLayout(tool_options_layout)
         
         layout.addWidget(drawing_group)
         
@@ -531,6 +536,13 @@ class MaskApp(BaseImageTab):
         
         layout.addStretch()
         return panel
+
+    def _load_tool_icon(self, tool_name: str) -> QIcon:
+        icon_filename = MASK_TOOL_ICON_FILES.get(tool_name)
+        if not icon_filename:
+            return QIcon()
+        workspace_root = getattr(self.parent_app, '_workspace_root', Path(__file__).resolve().parent.parent)
+        return AppStyle.load_icon(workspace_root, icon_filename)
     
     def _create_external_editor_panel(self):
         """Create the external editor integration panel"""
@@ -922,16 +934,16 @@ class MaskApp(BaseImageTab):
             filter_type = self.filter_type_combo.currentText()
             filter_radius = int(self.filter_size_spin.value())
 
-            if filter_type == "Remove Speckles (Erode)":
+            if filter_type == "Shrink mask":
                 active_layer.data = erode_mask(active_layer.data, radius=filter_radius)
-            elif filter_type == "Expand Regions (Dilate)":
+            elif filter_type == "Grow mask":
                 active_layer.data = dilate_mask(active_layer.data, radius=filter_radius)
-            elif filter_type == "Close Small Holes":
+            elif filter_type == "Fill small gaps":
                 active_layer.data = close_mask_holes(active_layer.data, radius=filter_radius)
             else:
                 image_2d, is_valid, error_msg = validate_and_prepare_image_array(self.image_data)
                 if not is_valid:
-                    self.parent_app.show_status(error_msg or "Load an image first. Use 'Sync to Other Tabs' in Image Browser.")
+                    self.parent_app.show_status(error_msg or "Load an image first")
                     return
                 active_layer.data = sobel_edge_mask(
                     image_2d,

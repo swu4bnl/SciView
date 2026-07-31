@@ -306,6 +306,13 @@ class BaseImageTab(QWidget):
         if hasattr(self.parent_app, 'publish_shared_display_settings'):
             self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
 
+    def _on_viewer_colormap_changed(self, cmap: str):
+        """Handle colormap changes made inside the PyQtGraph viewer toolbar."""
+        self.display_settings.update(cmap=cmap)
+        self.sync_display_controls()
+        if hasattr(self.parent_app, 'publish_shared_display_settings'):
+            self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
+
     def _apply_display_settings_to_viewer(self) -> None:
         """Apply contrast and colormap to the existing viewer image without reloading it."""
         if not hasattr(self, 'image_viewer') or self.image_viewer.source_array is None:
@@ -335,6 +342,7 @@ class BaseImageTab(QWidget):
         self.image_viewer = ImageViewer(self)
         self.image_viewer.cursor_moved.connect(self._on_viewer_cursor_moved)
         self.image_viewer.levels_changed.connect(self._on_viewer_levels_changed)
+        self.image_viewer.colormap_changed.connect(self._on_viewer_colormap_changed)
         layout.addWidget(self.image_viewer)
 
         # Image controls - now shared across all tabs
@@ -392,13 +400,7 @@ class BaseImageTab(QWidget):
 
     def _set_initial_image_info_text(self):
         """Set initial text for image info panel"""
-        initial_text = "No image loaded\n\nLoad an image to see detailed information about:\n"
-        initial_text += "• File path and metadata\n"
-        initial_text += "• Image dimensions and statistics\n"
-        initial_text += "• Measurement type (SAXS/WAXS/MAXS)\n"
-        initial_text += "• Detector configuration\n"
-        initial_text += "• Calibration status\n"
-        initial_text += "• Processing parameters"
+        initial_text = "No image loaded\n\nLoad an image to show file, detector, calibration, and processing details."
         self._set_image_info_text(initial_text)
 
     def load_image(self):

@@ -429,7 +429,7 @@ class TiledBrowserTab(BaseImageTab):
         metadata_buttons.addStretch()
         layout.addLayout(metadata_buttons)
 
-        self.search_status_label = QLabel("Find by scan ID range, or by cycle + proposal")
+        self.search_status_label = QLabel("Search by scan ID or proposal.")
         apply_info_style(self.search_status_label)
         layout.addWidget(self.search_status_label)
         return group

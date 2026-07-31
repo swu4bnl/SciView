@@ -2,23 +2,29 @@
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from PyQt5.QtCore import QEvent, QPointF, Qt, pyqtSignal
-from PyQt5.QtWidgets import QFileDialog, QHBoxLayout, QToolButton, QVBoxLayout, QWidget
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 import pyqtgraph as pg
 import pyqtgraph.exporters
 
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
+from sciview.interfaces.theme.app_style import AppStyle
 from sciview.settings.viewer_config import (
+    ARTIST_IMAGE_COLORMAPS,
+    ARTIST_IMAGE_PALETTES,
     SUPPORTED_IMAGE_COLORMAPS,
     SUPPORTED_IMAGE_SCALES,
     VIEWER_BEHAVIOR,
     VIEWER_COLORS,
+    VIEWER_TOOL_ICON_FILES,
     VIEWER_TOOLBAR_ACTIONS,
 )
 
@@ -49,11 +55,12 @@ class ImageViewer(QWidget):
     cursor_moved = pyqtSignal(float, float, object)
     view_changed = pyqtSignal(object)
     levels_changed = pyqtSignal(float, float)
+    colormap_changed = pyqtSignal(str)
     mouse_pressed = pyqtSignal(object)
     mouse_moved = pyqtSignal(object)
     mouse_released = pyqtSignal(object)
 
-    _SUPPORTED_COLORMAPS = set(SUPPORTED_IMAGE_COLORMAPS)
+    _SUPPORTED_COLORMAPS = set(SUPPORTED_IMAGE_COLORMAPS) | set(ARTIST_IMAGE_COLORMAPS)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -99,16 +106,24 @@ class ImageViewer(QWidget):
         self._graphics.viewport().installEventFilter(self)
 
         toolbar_actions = {action.key: action for action in VIEWER_TOOLBAR_ACTIONS}
-        self._pan_button = self._make_tool_button(toolbar_actions["pan"].label, toolbar_actions["pan"].tooltip)
-        self._zoom_button = self._make_tool_button(toolbar_actions["zoom"].label, toolbar_actions["zoom"].tooltip)
-        self._home_button = self._make_tool_button(toolbar_actions["home"].label, toolbar_actions["home"].tooltip)
-        self._save_button = self._make_tool_button(toolbar_actions["save"].label, toolbar_actions["save"].tooltip)
+        self._pan_button = self._make_tool_button(toolbar_actions["pan"], self._load_toolbar_icon("pan"))
+        self._zoom_button = self._make_tool_button(toolbar_actions["zoom"], self._load_toolbar_icon("zoom"))
+        self._home_button = self._make_tool_button(toolbar_actions["home"], self._load_toolbar_icon("home"))
+        self._auto_levels_button = self._make_tool_button(toolbar_actions["auto"], self._load_toolbar_icon("auto"))
+        self._copy_button = self._make_tool_button(toolbar_actions["copy"], self._load_toolbar_icon("copy"))
+        self._save_button = self._make_tool_button(toolbar_actions["save"], self._load_toolbar_icon("save"))
+        self._palette_info_label = QLabel("")
+        self._palette_info_label.setVisible(False)
+        self._palette_info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._palette_info_label.setStyleSheet("color: #4b5563; padding-left: 6px;")
         self._pan_button.setCheckable(True)
         self._zoom_button.setCheckable(True)
         self._pan_button.setChecked(True)
         self._pan_button.clicked.connect(self._activate_pan_mode)
         self._zoom_button.clicked.connect(self._activate_zoom_mode)
         self._home_button.clicked.connect(self.reset_view)
+        self._auto_levels_button.clicked.connect(self._on_auto_levels_clicked)
+        self._copy_button.clicked.connect(self.copy_rendered_view_to_clipboard)
         self._save_button.clicked.connect(self._choose_export_path)
 
         toolbar = QHBoxLayout()
@@ -117,8 +132,10 @@ class ImageViewer(QWidget):
         toolbar.addWidget(self._pan_button)
         toolbar.addWidget(self._zoom_button)
         toolbar.addWidget(self._home_button)
+        toolbar.addWidget(self._auto_levels_button)
+        toolbar.addWidget(self._copy_button)
         toolbar.addWidget(self._save_button)
-        toolbar.addStretch()
+        toolbar.addWidget(self._palette_info_label)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -198,12 +215,56 @@ class ImageViewer(QWidget):
         self._levels = (self._finite_or_none(vmin), self._finite_or_none(vmax))
         self._refresh_display_image(preserve_view=True)
 
+    def auto_levels(self) -> tuple[float, float] | None:
+        """Set robust color limits from the current 2D source image."""
+        if self._source_array is None or self._source_array.ndim != 2:
+            return None
+
+        image = np.asarray(self._source_array, dtype=float)
+        if self._scale == "log":
+            values = image[np.isfinite(image) & (image > 0)]
+        else:
+            values = image[np.isfinite(image)]
+        if values.size == 0:
+            return None
+
+        low_pct, high_pct = VIEWER_BEHAVIOR.auto_level_percentiles
+        vmin, vmax = np.percentile(values, [low_pct, high_pct])
+        vmin = float(vmin)
+        vmax = float(vmax)
+        if not (np.isfinite(vmin) and np.isfinite(vmax)):
+            return None
+        if vmax <= vmin:
+            vmin = float(np.min(values))
+            vmax = float(np.max(values))
+        if vmax <= vmin:
+            delta = max(abs(vmin) * 0.01, 1.0)
+            vmin -= delta
+            vmax += delta
+
+        self._levels = (vmin, vmax)
+        self._refresh_display_image(preserve_view=True)
+        self.levels_changed.emit(vmin, vmax)
+        return vmin, vmax
+
+    def apply_next_artist_palette(self) -> str | None:
+        """Apply a random hidden artist palette and return its colormap key."""
+        if not ARTIST_IMAGE_PALETTES:
+            return None
+
+        candidates = [palette for palette in ARTIST_IMAGE_PALETTES if palette.key != self._colormap_name]
+        palette = random.choice(candidates or list(ARTIST_IMAGE_PALETTES))
+        self.set_colormap(palette.key)
+        self.colormap_changed.emit(palette.key)
+        return palette.key
+
     def set_colormap(self, name: str) -> None:
         if name not in self._SUPPORTED_COLORMAPS:
             raise ValueError(f"Unsupported colormap: {name}")
         self._colormap_name = name
-        lut = self._matplotlib_lut(name)
+        lut = self._artist_palette_lut(name) if name in ARTIST_IMAGE_COLORMAPS else self._matplotlib_lut(name)
         self._image_item.setLookupTable(lut)
+        self._update_palette_info_label(name)
         try:
             self._histogram.gradient.setColorMap(pg.ColorMap(np.linspace(0.0, 1.0, lut.shape[0]), lut))
         except Exception:
@@ -231,6 +292,23 @@ class ImageViewer(QWidget):
             self._zoom_button.setChecked(True)
         else:
             self._pan_button.setChecked(True)
+
+    def _on_auto_levels_clicked(self) -> None:
+        if QApplication.keyboardModifiers() & Qt.AltModifier:
+            self.apply_next_artist_palette()
+        self.auto_levels()
+
+    def _update_palette_info_label(self, name: str) -> None:
+        palette = ARTIST_IMAGE_COLORMAPS.get(name)
+        if palette is None:
+            self._palette_info_label.clear()
+            self._palette_info_label.setVisible(False)
+            return
+
+        text = f"{palette.artist} - {palette.artwork}"
+        self._palette_info_label.setText(text)
+        self._palette_info_label.setToolTip(f"{palette.source}: {text}")
+        self._palette_info_label.setVisible(True)
 
     def reset_view(self) -> None:
         if self._source_array is None:
@@ -407,6 +485,13 @@ class ImageViewer(QWidget):
         exporter = pg.exporters.ImageExporter(self._plot_item)
         exporter.export(str(path))
 
+    def copy_rendered_view_to_clipboard(self) -> bool:
+        pixmap = self._graphics.grab()
+        if pixmap.isNull():
+            return False
+        QApplication.clipboard().setPixmap(pixmap)
+        return True
+
     def eventFilter(self, watched: object, event: QEvent) -> bool:
         if watched is self._graphics.viewport() and event.type() in {
             QEvent.MouseButtonPress,
@@ -515,12 +600,24 @@ class ImageViewer(QWidget):
         if path:
             self.export_rendered_view(path)
 
+    def _load_toolbar_icon(self, key: str) -> QIcon:
+        icon_filename = VIEWER_TOOL_ICON_FILES.get(key)
+        if not icon_filename:
+            return QIcon()
+        workspace_root = Path(__file__).resolve().parents[5]
+        return AppStyle.load_icon(workspace_root, icon_filename)
+
     @staticmethod
-    def _make_tool_button(text: str, tooltip: str) -> QToolButton:
+    def _make_tool_button(action: Any, icon: QIcon) -> QToolButton:
         button = QToolButton()
-        button.setText(text)
-        button.setToolTip(tooltip)
+        if icon.isNull():
+            button.setText(action.label)
+        else:
+            button.setIcon(icon)
+            button.setIconSize(AppStyle.tab_icon_size())
+        button.setToolTip(action.tooltip)
         button.setAutoRaise(True)
+        button.setFixedSize(AppStyle.toolbar_symbol_button_size())
         return button
 
     @staticmethod
@@ -567,6 +664,32 @@ class ImageViewer(QWidget):
 
         colormap = mpl.colormaps[name]
         return (colormap(np.linspace(0.0, 1.0, 256))[:, :3] * 255).astype(np.ubyte)
+
+    @staticmethod
+    def _artist_palette_lut(name: str) -> np.ndarray:
+        import matplotlib.colors as mcolors
+
+        palette = ARTIST_IMAGE_COLORMAPS[name]
+        colors = ImageViewer._ordered_artist_colors(palette.colors)
+        colormap = mcolors.LinearSegmentedColormap.from_list(name, colors, N=256)
+        return (colormap(np.linspace(0.0, 1.0, 256))[:, :3] * 255).astype(np.ubyte)
+
+    @staticmethod
+    def _ordered_artist_colors(colors: tuple[str, ...]) -> tuple[str, ...]:
+        import colorsys
+        import matplotlib.colors as mcolors
+
+        def sort_key(color: str) -> tuple[float, float, float]:
+            red, green, blue = mcolors.to_rgb(color)
+            hue, saturation, _lightness = colorsys.rgb_to_hls(red, green, blue)
+            return (ImageViewer._relative_luminance((red, green, blue)), hue, saturation)
+
+        return tuple(sorted(colors, key=sort_key))
+
+    @staticmethod
+    def _relative_luminance(rgb: tuple[float, float, float]) -> float:
+        red, green, blue = rgb
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 
     @staticmethod
     def _rgba_mask(mask: np.ndarray, color: str, alpha: float) -> np.ndarray:

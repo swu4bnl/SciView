@@ -491,7 +491,7 @@ class ProtocolPreviewApp(BaseImageTab):
         self.param_layout.setSpacing(4)
         
         # Placeholder
-        placeholder = QLabel("Select a protocol in 'Protocols' tab to configure parameters")
+        placeholder = QLabel("Select a protocol to edit parameters.")
         placeholder.setWordWrap(True)
         apply_info_style(placeholder)
         self.param_layout.addWidget(placeholder)

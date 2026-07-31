@@ -360,7 +360,7 @@ class CalibrationApp(BaseImageTab):
         layout.addWidget(self.standards_combo)
 
         # Info label
-        self.standards_info_label = QLabel("Select a material to show its diffraction lines in the 1D plot.")
+        self.standards_info_label = QLabel("Select a standard for reference lines.")
         self.standards_info_label.setWordWrap(True)
         apply_info_style(self.standards_info_label)
         layout.addWidget(self.standards_info_label)

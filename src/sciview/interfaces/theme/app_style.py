@@ -36,6 +36,9 @@ class AppStyle:
     TOOLBAR_BUTTON_UI = {
         'symbol_width': 36,
         'symbol_height': 34,
+        'mask_tool_width': 44,
+        'mask_tool_height': 40,
+        'mask_tool_icon_size': 28,
         'text_min_width': 64,
         'text_height': 34,
         'symbol_font_size': '20px',
@@ -51,20 +54,20 @@ class AppStyle:
     }
 
     CORNER_ICON_FILES = {
-        'refresh': 'refresh.png',
-        'app_update': 'app_update.png',
-        'sci_update': 'sci_update.png',
+        'refresh': 'refresh.svg',
+        'app_update': 'app_update.svg',
+        'sci_update': 'sci_update.svg',
     }
 
     TAB_ICON_FILES = {
-        'image_browser': 'tab_image_browser.png',
-        'tiled_browser': 'tab_tiled_browser.png',
-        'calibration': 'tab_calibration.png',
-        'mask_editing': 'tab_mask_editing.png',
-        'reduction': 'tab_reduction.png',
-        'transform': 'tab_transform.png',
-        'batch': 'tab_batch.png',
-        'info': 'tab_info.png',
+        'image_browser': 'tab_image_browser.svg',
+        'tiled_browser': 'tab_tiled_browser.svg',
+        'calibration': 'tab_calibration.svg',
+        'mask_editing': 'tab_mask_editing.svg',
+        'reduction': 'tab_reduction.svg',
+        'transform': 'tab_transform.svg',
+        'batch': 'tab_batch.svg',
+        'info': 'tab_info.svg',
     }
     
     # Modern color scheme - inspired by VS Code Dark and Material Design
@@ -640,6 +643,17 @@ class AppStyle:
     def toolbar_symbol_button_size(cls):
         """Return standard square toolbar-symbol button size."""
         return QSize(cls.TOOLBAR_BUTTON_UI['symbol_width'], cls.TOOLBAR_BUTTON_UI['symbol_height'])
+
+    @classmethod
+    def mask_tool_button_size(cls):
+        """Return larger button size for mask drawing tool icons."""
+        return QSize(cls.TOOLBAR_BUTTON_UI['mask_tool_width'], cls.TOOLBAR_BUTTON_UI['mask_tool_height'])
+
+    @classmethod
+    def mask_tool_icon_size(cls):
+        """Return larger icon size for mask drawing tools."""
+        size = cls.TOOLBAR_BUTTON_UI['mask_tool_icon_size']
+        return QSize(size, size)
 
     @classmethod
     def toolbar_text_button_height(cls):

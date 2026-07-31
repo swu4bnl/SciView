@@ -89,9 +89,6 @@ class TransformTab(BaseImageTab):
         apply_subtitle_style(title)
         title_row.addWidget(title)
         title_row.addStretch()
-        controls_hint = QLabel("Display controls: use vmin/vmax/cmap/scale above")
-        apply_info_style(controls_hint)
-        title_row.addWidget(controls_hint)
         layout.addLayout(title_row)
 
         self.result_summary = QLabel("No preview yet")
@@ -205,7 +202,7 @@ class TransformTab(BaseImageTab):
         self.phi_max_spin = self._make_double_spin(-360.0, 360.0, 180.0, step=1.0, decimals=2)
         transform_layout.addRow("phi max (deg)", self.phi_max_spin)
 
-        self.operation_hint = QLabel("Q image and Qx-Qz transforms use q binning; Q-Phi uses q and phi bins.")
+        self.operation_hint = QLabel("Bins follow selected transform.")
         apply_info_style(self.operation_hint)
         transform_layout.addRow(self.operation_hint)
 
