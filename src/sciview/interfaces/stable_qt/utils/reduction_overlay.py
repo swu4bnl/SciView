@@ -35,20 +35,6 @@ OVERLAY_STYLE = {
 }
 
 
-def draw_solid_overlay(ax: Any, mask: np.ndarray, color: str, alpha: float) -> Any:
-    """Draw a binary mask as a solid-color RGBA imshow overlay."""
-
-    import matplotlib.colors as _mcolors
-
-    r, g, b = _mcolors.to_rgb(color)
-    rgba = np.zeros((*mask.shape, 4), dtype=np.float32)
-    rgba[mask, 0] = r
-    rgba[mask, 1] = g
-    rgba[mask, 2] = b
-    rgba[mask, 3] = float(alpha)
-    return ax.imshow(rgba, origin="upper", interpolation="nearest")
-
-
 def chi_to_screen_vector(chi_deg: float, calibration: Any | None = None) -> tuple[float, float]:
     """Map display chi to a unit vector in image/screen coordinates."""
 

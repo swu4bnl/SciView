@@ -17,22 +17,16 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT as NavigationToolbar
-)
-
 # Import configuration from package modules.
 from sciview.interfaces.theme.app_style import *
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_detector_config, get_file_status as get_profile_file_status
-from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
+from sciview.settings.app_settings import DEFAULT_DISPLAY_SETTINGS, MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, get_image_info
+from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
+from sciview.settings.viewer_config import SUPPORTED_IMAGE_COLORMAPS, SUPPORTED_IMAGE_SCALES
 
 # Get constants
 HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
-
 
 class BaseImageTab(QWidget):
     """Base class for tabs that work with images and provide status information"""
@@ -48,13 +42,11 @@ class BaseImageTab(QWidget):
         # Initialize calibration from config
         self._init_calibration()
         
-        # Shared display state - all tabs will use these
-        self.display_settings = {
-            'vmin': -2,
-            'vmax': 1000,
-            'cmap': 'gray',
-            'scale': 'linear'
-        }
+        # Shared display state - all tabs use the main app dictionary when available.
+        if hasattr(self.parent_app, 'display_settings'):
+            self.display_settings = self.parent_app.display_settings
+        else:
+            self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
         
         # Image-related attributes that will be set by load_image
         self.export_cali_path = None
@@ -230,15 +222,15 @@ class BaseImageTab(QWidget):
 
     def update_display_settings(self, **kwargs):
         """Update shared display settings and refresh all tabs"""
-        # TODO: This is not working as intended - fix later
         self.display_settings.update(kwargs)
-        
-        # Notify all tabs to update their displays
-        if hasattr(self.parent_app, 'update_all_displays'):
+
+        if hasattr(self.parent_app, 'publish_shared_display_settings'):
+            self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
+            self._apply_display_settings_to_viewer()
+        elif hasattr(self.parent_app, 'update_all_displays'):
             self.parent_app.update_all_displays()
         else:
-            # Fallback: just update this tab
-            self.update_plot()
+            self._apply_display_settings_to_viewer()
 
     def get_display_values(self):
         """Get current display values with validation"""
@@ -281,10 +273,47 @@ class BaseImageTab(QWidget):
 
     def sync_display_controls(self):
         """Sync display controls with current settings"""
+        if not hasattr(self, 'vmin_input'):
+            return
+        self.vmin_input.blockSignals(True)
+        self.vmax_input.blockSignals(True)
+        self.cmap_selector.blockSignals(True)
+        self.img_scale_combo.blockSignals(True)
         self.vmin_input.setText(str(self.display_settings['vmin']))
         self.vmax_input.setText(str(self.display_settings['vmax']))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.img_scale_combo.setCurrentText(self.display_settings['scale'])
+        self.vmin_input.blockSignals(False)
+        self.vmax_input.blockSignals(False)
+        self.cmap_selector.blockSignals(False)
+        self.img_scale_combo.blockSignals(False)
+
+    def apply_shared_display_settings(self, settings):
+        """Receive display settings from the main app and refresh local controls."""
+        if hasattr(self.parent_app, 'display_settings'):
+            self.display_settings = self.parent_app.display_settings
+            if self.display_settings is not settings:
+                self.display_settings.update(settings)
+        else:
+            self.display_settings.update(settings)
+        self.sync_display_controls()
+        self._apply_display_settings_to_viewer()
+
+    def _on_viewer_levels_changed(self, vmin: float, vmax: float):
+        """Handle vmin/vmax changes made with the PyQtGraph histogram handles."""
+        self.display_settings.update(vmin=float(vmin), vmax=float(vmax))
+        self.sync_display_controls()
+        if hasattr(self.parent_app, 'publish_shared_display_settings'):
+            self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
+
+    def _apply_display_settings_to_viewer(self) -> None:
+        """Apply contrast and colormap to the existing viewer image without reloading it."""
+        if not hasattr(self, 'image_viewer') or self.image_viewer.source_array is None:
+            return
+        display_vals = self.get_display_values()
+        self.image_viewer.set_colormap(display_vals['cmap'])
+        self.image_viewer.set_scale(display_vals['scale'])
+        self.image_viewer.set_levels(display_vals['vmin'], display_vals['vmax'])
 
     def _create_image_panel(self):
         """Create the image display panel"""
@@ -303,19 +332,10 @@ class BaseImageTab(QWidget):
         apply_info_style(self.filename_label)
         layout.addWidget(self.filename_label)
 
-        # Create matplotlib figure at 85% zoom for better space utilization
-        self.fig_raw, self.ax_raw = plt.subplots(figsize=(5.1, 6.8))
-        # Reduce margins around the image
-        self.fig_raw.subplots_adjust(left=0.08, bottom=0.08, right=0.99, top=0.92)
-        
-        self.canvas_raw = FigureCanvas(self.fig_raw)
-        layout.addWidget(self.canvas_raw)
-        layout.addStretch()
-        
-        # Compact navigation toolbar
-        toolbar_raw = NavigationToolbar(self.canvas_raw, self)
-        toolbar_raw.setMaximumHeight(25)
-        layout.addWidget(toolbar_raw)
+        self.image_viewer = ImageViewer(self)
+        self.image_viewer.cursor_moved.connect(self._on_viewer_cursor_moved)
+        self.image_viewer.levels_changed.connect(self._on_viewer_levels_changed)
+        layout.addWidget(self.image_viewer)
 
         # Image controls - now shared across all tabs
         img_ctrl = QHBoxLayout()
@@ -331,14 +351,14 @@ class BaseImageTab(QWidget):
         
         img_ctrl.addWidget(QLabel("cmap:"))
         self.cmap_selector = QComboBox()
-        self.cmap_selector.addItems(['gray', 'viridis', 'plasma', 'inferno', 'jet'])
+        self.cmap_selector.addItems(list(SUPPORTED_IMAGE_COLORMAPS))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.cmap_selector.currentTextChanged.connect(self._on_cmap_changed)
         img_ctrl.addWidget(self.cmap_selector)
         
         img_ctrl.addWidget(QLabel("scale:"))
         self.img_scale_combo = QComboBox()
-        self.img_scale_combo.addItems(["linear", "log"])
+        self.img_scale_combo.addItems(list(SUPPORTED_IMAGE_SCALES))
         self.img_scale_combo.setCurrentText(self.display_settings['scale'])
         self.img_scale_combo.currentTextChanged.connect(self._on_scale_changed)
         img_ctrl.addWidget(self.img_scale_combo)
@@ -435,19 +455,9 @@ class BaseImageTab(QWidget):
         if hasattr(self, 'filename_label') and hasattr(display_data, 'name'):
             self.filename_label.setText(f"File Name: {display_data.name}")
 
-        # Store current limits only if they are not default/unset
-        raw_xlim, raw_ylim = self.ax_raw.get_xlim(), self.ax_raw.get_ylim()
-        
-        # Check if limits are meaningful (not default matplotlib values)
-        raw_xlim_valid = not np.allclose(raw_xlim, (0, 1))
-        raw_ylim_valid = not np.allclose(raw_ylim, (0, 1))
-
         # Call pre-display hooks
         for hook in self.pre_display_hooks:
-            hook(self.ax_raw)
-
-        # Update raw image display
-        self.ax_raw.clear()
+            hook(self.image_viewer)
         
         # Get display settings
         display_vals = self.get_display_values()
@@ -463,44 +473,26 @@ class BaseImageTab(QWidget):
             return
 
         current_shape = tuple(img_array.shape)
-        image_shape_changed = self._last_image_shape is not None and self._last_image_shape != current_shape
-        
-        # Apply display settings
-        if scale == 'log':
-            safe_vmin, safe_vmax = self._sanitize_log_limits(img_array, vmin, vmax)
-            if safe_vmin is not None and safe_vmax is not None:
-                self.ax_raw.imshow(img_array, origin='upper', cmap=cmap, norm=LogNorm(vmin=safe_vmin, vmax=safe_vmax))
-            else:
-                self.ax_raw.imshow(img_array, origin='upper', cmap=cmap)
-        else:
-            self.ax_raw.imshow(img_array, origin='upper', cmap=cmap, vmin=vmin, vmax=vmax)
-        
-        # Restore limits only if they were meaningful
-        if raw_xlim_valid and not image_shape_changed:
-            self.ax_raw.set_xlim(raw_xlim)
-        if raw_ylim_valid and not image_shape_changed:
-            self.ax_raw.set_ylim(raw_ylim)
+        preserve_view = self._last_image_shape == current_shape
+        self.image_viewer.set_levels(vmin, vmax)
+        self.image_viewer.set_colormap(cmap)
+        self.image_viewer.set_scale(scale)
+        self.image_viewer.set_image(img_array, preserve_view=preserve_view)
 
         # Call post-display hooks for tab-specific customizations
         for hook in self.post_display_hooks:
-            hook(self.ax_raw)
+            hook(self.image_viewer)
 
-        # Update raw image canvas with custom tight margins
-        self.fig_raw.subplots_adjust(left=0.05, bottom=0.05, right=0.99, top=0.99)
-        self.canvas_raw.draw()
         self._last_image_shape = current_shape
 
     def _reset_canvas_views(self):
         """Reset canvas views to default when loading new image"""
         try:
-            # Reset raw image axes to auto-scale
-            if hasattr(self, 'ax_raw'):
-                self.ax_raw.clear()
-                self.ax_raw.set_xlim(None, None)  # Auto-scale
-                self.ax_raw.set_ylim(None, None)  # Auto-scale
+            # Reset raw image viewer to auto-scale
+            if hasattr(self, 'image_viewer'):
                 self._last_image_shape = None
-                if hasattr(self, 'canvas_raw'):
-                    self.canvas_raw.draw()
+                self.image_viewer.clear_overlays()
+                self.image_viewer.reset_view()
             
             # Reset plot axes to auto-scale  
             if hasattr(self, 'ax_plot'):
@@ -509,13 +501,6 @@ class BaseImageTab(QWidget):
                 self.ax_plot.set_ylim(None, None)  # Auto-scale
                 if hasattr(self, 'canvas_plot'):
                     self.canvas_plot.draw()
-                    
-            # Reset any zoom/pan states in navigation toolbars
-            if hasattr(self, 'canvas_raw') and hasattr(self.canvas_raw, 'toolbar'):
-                try:
-                    self.canvas_raw.toolbar.home()
-                except:
-                    pass
                     
             if hasattr(self, 'canvas_plot') and hasattr(self.canvas_plot, 'toolbar'):
                 try:
@@ -646,21 +631,19 @@ class BaseImageTab(QWidget):
         # Display pixel value or plot coordinates
         if not event.inaxes:
             return
-        if hasattr(self, 'ax_raw') and event.inaxes == self.ax_raw and self.image_data is not None:
-            x, y = int(event.xdata), int(event.ydata)
-            if hasattr(self.image_data, 'data'):
-                h, w = self.image_data.data.shape
-                if 0 <= x < w and 0 <= y < h:
-                    val = self.image_data.data[y, x]
-                    self.parent_app.show_status(f"Raw Pixel (x={x}, y={y}) = {val:.2f}")
-            elif hasattr(self.image_data, 'shape'):
-                h, w = self.image_data.shape
-                if 0 <= x < w and 0 <= y < h:
-                    val = self.image_data[y, x]
-                    self.parent_app.show_status(f"Raw Pixel (x={x}, y={y}) = {val:.2f}")
-        elif hasattr(self, 'ax_plot') and event.inaxes == self.ax_plot:
+        if hasattr(self, 'ax_plot') and event.inaxes == self.ax_plot:
             x, y = event.xdata, event.ydata
             self.parent_app.show_status(f"Q={x:.3f}, I={y:.2f}")
+
+    def _on_viewer_cursor_moved(self, x, y, value):
+        """Handle cursor movement over the PyQtGraph image viewer."""
+        if value is None:
+            return
+        try:
+            value_text = f"{float(value):.2f}"
+        except (TypeError, ValueError):
+            value_text = str(value)
+        self.parent_app.show_status(f"Raw Pixel (x={int(x)}, y={int(y)}) = {value_text}")
 
     def create_filename_label(self, parent_layout=None):
         """Create a standardized filename display label"""

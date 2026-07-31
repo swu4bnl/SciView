@@ -114,3 +114,10 @@ IMAGE_BROWSER_SETTINGS = {
     "tiled_live_auto_load_delay_ms": 2500,
     "tiled_live_auto_load_max_attempts": 5,
 }
+
+DEFAULT_DISPLAY_SETTINGS = {
+    "vmin": -2,
+    "vmax": 1000,
+    "cmap": "gray",
+    "scale": "linear",
+}

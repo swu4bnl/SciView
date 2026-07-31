@@ -22,12 +22,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QPixmap, QIcon
 
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT as NavigationToolbar
-)
-
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
 from sciview.interfaces.theme.app_style import *
@@ -540,10 +534,10 @@ class ImageBrowserApp(BaseImageTab):
         refresh the current image being displayed in the image browser.
         """
         self.display_settings.update(kwargs)
-        
-        # Refresh current image with new display settings
-        if hasattr(self, '_update_display'):
-            self._update_display()
+        if hasattr(self.parent_app, 'publish_shared_display_settings'):
+            self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
+
+        self._apply_display_settings_to_viewer()
 
     def _build_ui(self):
         """Build the main user interface"""
@@ -720,15 +714,6 @@ class ImageBrowserApp(BaseImageTab):
         base_image_panel.setMinimumHeight(400)
         layout.addWidget(base_image_panel)
         
-        # Sync button - the only Image Browser specific control
-        self.sync_button = QPushButton("Use This Image")
-        self.sync_button.setToolTip("Send current image to other tabs in the main application")
-        apply_sync_button_style(self.sync_button)
-        self.sync_button.setFixedHeight(AppStyle.LAYOUT['image_browser_sync_button_height'])
-        self.sync_button.clicked.connect(self._sync_to_parent)
-        self.sync_button.setEnabled(False)
-        layout.addWidget(self.sync_button)
-
         return panel
 
     def _create_session_panel(self):
@@ -843,8 +828,6 @@ class ImageBrowserApp(BaseImageTab):
         
         self.prev_button.setEnabled(current > 0)
         self.next_button.setEnabled(current < count - 1)
-        self.sync_button.setEnabled(count > 0)
-        
         if count > 0:
             self.image_counter_label.setText(f"{current + 1} / {count}")
         else:
@@ -872,20 +855,14 @@ class ImageBrowserApp(BaseImageTab):
         )
         
         if current_image is None:
-            self.ax_raw.clear()
-            self.ax_raw.text(0.5, 0.5, 'No Image Loaded', 
-                        transform=self.ax_raw.transAxes, ha='center', va='center')
+            self.image_viewer.clear_image('No Image Loaded')
             self.current_image_label.setText("No image loaded")
-            self.canvas_raw.draw()
             return
         
         # Check if data is available (might still be None if loading failed)
         if current_image['data'] is None:
-            self.ax_raw.clear()
-            self.ax_raw.text(0.5, 0.5, f"Loading: {current_image['filename']}", 
-                        transform=self.ax_raw.transAxes, ha='center', va='center')
+            self.image_viewer.clear_image(f"Loading: {current_image['filename']}")
             self.current_image_label.setText(f"Loading: {current_image['filename']}")
-            self.canvas_raw.draw()
             return
         
         # Extract data and other info from current_image dict
@@ -899,11 +876,8 @@ class ImageBrowserApp(BaseImageTab):
         self.update_plot(image_data)
         
         # Set title and update current image label
-        self.ax_raw.set_title(filename, fontsize=10)
+        self.image_viewer.set_title(filename)
         self.current_image_label.setText(f"File: {filename} | Source: {source}")
-        
-        # Final canvas refresh
-        self.canvas_raw.draw()
         
         # Explicitly trigger garbage collection to clean up evicted cached images
         # This is important when switching between images in the session
@@ -955,7 +929,7 @@ class ImageBrowserApp(BaseImageTab):
             print(f"Error in lazy load callback: {e}")
             return None
 
-    def _sync_to_parent(self):
+    def _sync_to_parent(self, show_status: bool = True) -> bool:
         """Sync current image to parent application and other tabs
         
         IMPORTANT: For compatibility with tabs that expect SciAnalysis objects,
@@ -969,7 +943,7 @@ class ImageBrowserApp(BaseImageTab):
             loader_callback=self._lazy_load_callback
         )
         if current_image is None or current_image['data'] is None:
-            return
+            return False
         
         # Convert numpy array to SciAnalysis Data2DScattering object if needed
         try:
@@ -997,8 +971,19 @@ class ImageBrowserApp(BaseImageTab):
             # Legacy fallback path.
             self.parent_app.image_data = image_data_obj
             self.parent_app.image_path = current_image['path']
-        
-        self.parent_app.show_status(f"Synced image: {current_image['filename']}")
+
+        if show_status:
+            self.parent_app.show_status(f"Synced image: {current_image['filename']}")
+        return True
+
+    def auto_publish_current_image(self) -> bool:
+        """Publish the current browser image when the user leaves the browser tab."""
+        current_image = self.session_manager.get_current_image(load_data=False)
+        if current_image is None:
+            return False
+        if getattr(self.parent_app, 'image_path', None) == current_image.get('path'):
+            return False
+        return self._sync_to_parent(show_status=False)
     
     def _convert_to_scianalysis_format(self, image_array, image_path):
         """Convert numpy array to SciAnalysis Data2DScattering object using beamline configuration"""
