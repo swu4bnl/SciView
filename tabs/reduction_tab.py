@@ -1038,6 +1038,10 @@ class ReductionTab(BaseImageTab):
         if self.auto_update_check.isChecked():
             self.refresh_preview()
 
+    def on_shared_state_activated(self):
+        """Refresh reduction state when shared image/calibration/mask changes become active."""
+        self.update_plot()
+
     def _add_tab_specific_status(self, info_lines):
         info_lines.append("")
         info_lines.append("=== REDUCTION STATUS ===")

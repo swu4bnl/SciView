@@ -89,7 +89,8 @@ class SciAnaApp(QMainWindow):
         # Tab widget
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
-        self.tab_widget.currentChanged.connect(self._render_current_tab_from_shared)
+        self._last_tab_index = -1
+        self.tab_widget.currentChanged.connect(self._on_current_tab_changed)
         tab_bar = self.tab_widget.tabBar()
         tab_bar.setIconSize(AppStyle.tab_icon_size())
         tab_bar.setExpanding(False)
@@ -219,7 +220,12 @@ class SciAnaApp(QMainWindow):
     def publish_shared_display_settings(self, settings, source_tab=None):
         """Publish image display settings so all image tabs share contrast and colormap."""
         self.display_settings.update(settings)
-        self.update_all_displays(source_tab=source_tab)
+        current_tab = self.tab_widget.currentWidget()
+        if current_tab is not None and current_tab != source_tab and hasattr(current_tab, 'apply_shared_display_settings'):
+            try:
+                current_tab.apply_shared_display_settings(self.display_settings)
+            except Exception as e:
+                print(f"DEBUG: Error applying display settings to current tab: {e}")
 
     def publish_shared_info_text(self, info_text, source_tab=None):
         """Publish image information text to dedicated info consumers."""
@@ -286,6 +292,22 @@ class SciAnaApp(QMainWindow):
         """Display status message"""
         self.status.showMessage(msg)
 
+    def _on_current_tab_changed(self, index):
+        """Publish outgoing tab state and render the newly active tab."""
+        previous_index = self._last_tab_index
+        self._last_tab_index = index
+
+        if 0 <= previous_index < self.tab_widget.count():
+            previous_tab = self.tab_widget.widget(previous_index)
+            if hasattr(previous_tab, 'auto_publish_current_image'):
+                try:
+                    if previous_tab.auto_publish_current_image():
+                        return
+                except Exception as e:
+                    print(f"DEBUG: Error auto-publishing image from previous tab: {e}")
+
+        self._render_current_tab_from_shared()
+
     def _render_current_tab_from_shared(self, *_args):
         """Render shared image data when a tab becomes active."""
         if self.image_data is None:
@@ -306,6 +328,13 @@ class SciAnaApp(QMainWindow):
                     return
                 except Exception as e:
                     print(f"DEBUG: Error rendering active tab: {e}")
+
+        if hasattr(tab, 'on_shared_state_activated'):
+            try:
+                tab.on_shared_state_activated()
+                return
+            except Exception as e:
+                print(f"DEBUG: Error refreshing active tab shared state: {e}")
 
         if hasattr(tab, 'apply_shared_display_settings'):
             try:

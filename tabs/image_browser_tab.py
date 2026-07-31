@@ -714,15 +714,6 @@ class ImageBrowserApp(BaseImageTab):
         base_image_panel.setMinimumHeight(400)
         layout.addWidget(base_image_panel)
         
-        # Sync button - the only Image Browser specific control
-        self.sync_button = QPushButton("Use This Image")
-        self.sync_button.setToolTip("Send current image to other tabs in the main application")
-        apply_sync_button_style(self.sync_button)
-        self.sync_button.setFixedHeight(AppStyle.LAYOUT['image_browser_sync_button_height'])
-        self.sync_button.clicked.connect(self._sync_to_parent)
-        self.sync_button.setEnabled(False)
-        layout.addWidget(self.sync_button)
-
         return panel
 
     def _create_session_panel(self):
@@ -837,8 +828,6 @@ class ImageBrowserApp(BaseImageTab):
         
         self.prev_button.setEnabled(current > 0)
         self.next_button.setEnabled(current < count - 1)
-        self.sync_button.setEnabled(count > 0)
-        
         if count > 0:
             self.image_counter_label.setText(f"{current + 1} / {count}")
         else:
@@ -940,7 +929,7 @@ class ImageBrowserApp(BaseImageTab):
             print(f"Error in lazy load callback: {e}")
             return None
 
-    def _sync_to_parent(self):
+    def _sync_to_parent(self, show_status: bool = True) -> bool:
         """Sync current image to parent application and other tabs
         
         IMPORTANT: For compatibility with tabs that expect SciAnalysis objects,
@@ -954,7 +943,7 @@ class ImageBrowserApp(BaseImageTab):
             loader_callback=self._lazy_load_callback
         )
         if current_image is None or current_image['data'] is None:
-            return
+            return False
         
         # Convert numpy array to SciAnalysis Data2DScattering object if needed
         try:
@@ -982,8 +971,19 @@ class ImageBrowserApp(BaseImageTab):
             # Legacy fallback path.
             self.parent_app.image_data = image_data_obj
             self.parent_app.image_path = current_image['path']
-        
-        self.parent_app.show_status(f"Synced image: {current_image['filename']}")
+
+        if show_status:
+            self.parent_app.show_status(f"Synced image: {current_image['filename']}")
+        return True
+
+    def auto_publish_current_image(self) -> bool:
+        """Publish the current browser image when the user leaves the browser tab."""
+        current_image = self.session_manager.get_current_image(load_data=False)
+        if current_image is None:
+            return False
+        if getattr(self.parent_app, 'image_path', None) == current_image.get('path'):
+            return False
+        return self._sync_to_parent(show_status=False)
     
     def _convert_to_scianalysis_format(self, image_array, image_path):
         """Convert numpy array to SciAnalysis Data2DScattering object using beamline configuration"""

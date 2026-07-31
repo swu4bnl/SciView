@@ -1,4 +1,5 @@
 import os
+from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -173,6 +174,11 @@ class DummyParentApp:
     def publish_shared_info_text(self, text, source_tab=None):
         self.last_info_text = text
 
+    def publish_shared_image(self, image_data, image_path=None, source_tab=None):
+        self.image_data = image_data
+        self.image_path = image_path
+        self.image_source_tab = source_tab
+
     def publish_shared_calibration(self, calibration, source_tab=None):
         self.last_calibration = calibration
 
@@ -315,6 +321,32 @@ def test_switching_to_synced_tab_renders_shared_image(qapp):
         app.close()
 
 
+def test_switching_to_shared_state_tab_uses_activation_hook(qapp):
+    from main import SciAnaApp
+
+    app = SciAnaApp()
+    source = DummyImageTab()
+    active = DummySharedStateTab()
+    try:
+        app.add_tab(source, "Source")
+        app.add_tab(active, "Active")
+        app.tab_widget.setCurrentWidget(source)
+
+        image = np.ones((3, 3), dtype=float)
+        app.publish_shared_image(image, source_tab=source)
+
+        app.tab_widget.setCurrentWidget(active)
+        assert active.activation_count == 1
+
+        app.calibration = object()
+        app.tab_widget.setCurrentWidget(source)
+        app.tab_widget.setCurrentWidget(active)
+
+        assert active.activation_count == 2
+    finally:
+        app.close()
+
+
 def test_switching_to_real_image_tab_loads_blank_viewer(qapp):
     from main import SciAnaApp
     from tabs.calibration_tab import CalibrationApp
@@ -341,6 +373,89 @@ def test_switching_to_real_image_tab_loads_blank_viewer(qapp):
         app.close()
 
 
+def test_display_settings_publish_does_not_update_inactive_tabs(qapp):
+    from main import SciAnaApp
+
+    app = SciAnaApp()
+    active = DummyDisplayTab()
+    inactive = DummyDisplayTab()
+    try:
+        app.add_tab(active, "Active")
+        app.add_tab(inactive, "Inactive")
+        app.tab_widget.setCurrentWidget(active)
+
+        app.publish_shared_display_settings({
+            'vmin': 4.0,
+            'vmax': 44.0,
+            'cmap': 'viridis',
+            'scale': 'linear',
+        }, source_tab=active)
+
+        assert app.display_settings['vmin'] == 4.0
+        assert active.apply_count == 0
+        assert inactive.apply_count == 0
+    finally:
+        app.close()
+
+
+def test_leaving_auto_publish_tab_publishes_current_image(qapp):
+    from main import SciAnaApp
+
+    app = SciAnaApp()
+    image = np.arange(3 * 3, dtype=float).reshape(3, 3)
+    browser = DummyAutoPublishTab(app, image)
+    target = DummyImageTab()
+    try:
+        app.add_tab(browser, "Browser")
+        app.add_tab(target, "Target")
+        app.tab_widget.setCurrentWidget(browser)
+
+        assert app.image_data is None
+
+        app.tab_widget.setCurrentWidget(target)
+
+        assert browser.publish_count == 1
+        assert app.image_data is image
+        assert target.image_data is image
+        assert target.update_count == 1
+    finally:
+        app.close()
+
+
+def test_browser_tabs_do_not_expose_manual_sync_buttons(qapp):
+    from tabs.image_browser_tab import ImageBrowserApp
+    from tabs.tiled_browser_tab import TiledBrowserTab
+
+    parent = DummyParentApp()
+    image_browser = ImageBrowserApp(parent)
+    tiled_browser = TiledBrowserTab(parent)
+    try:
+        assert not hasattr(image_browser, "sync_button")
+        assert not hasattr(tiled_browser, "sync_button")
+    finally:
+        image_browser.close()
+        tiled_browser.close()
+
+
+def test_tiled_browser_auto_publish_uses_shared_image_api(qapp):
+    from tabs.tiled_browser_tab import TiledBrowserTab
+
+    parent = DummyParentApp()
+    tab = TiledBrowserTab.__new__(TiledBrowserTab)
+    image = np.arange(4, dtype=float).reshape(2, 2)
+    converted_image = object()
+    tab.parent_app = parent
+    tab.current_frame_array = image
+    tab.current_scan = SimpleNamespace(scan_id=42)
+    tab.current_image_source = "tiled://scan/42"
+    tab.create_data2d_object = lambda image_array, file_path: converted_image
+
+    assert tab.auto_publish_current_image()
+    assert parent.image_data is converted_image
+    assert parent.image_path == "tiled://scan/42"
+    assert parent.image_source_tab is tab
+
+
 class DummyImageTab(QWidget):
     def __init__(self):
         super().__init__()
@@ -349,6 +464,38 @@ class DummyImageTab(QWidget):
 
     def update_plot(self):
         self.update_count += 1
+
+
+class DummySharedStateTab(DummyImageTab):
+    def __init__(self):
+        super().__init__()
+        self.activation_count = 0
+        self.image_viewer = None
+
+    def on_shared_state_activated(self):
+        self.activation_count += 1
+
+
+class DummyDisplayTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.apply_count = 0
+
+    def apply_shared_display_settings(self, settings):
+        self.apply_count += 1
+
+
+class DummyAutoPublishTab(QWidget):
+    def __init__(self, app, image):
+        super().__init__()
+        self.app = app
+        self.image = image
+        self.publish_count = 0
+
+    def auto_publish_current_image(self):
+        self.publish_count += 1
+        self.app.publish_shared_image(self.image, source_tab=self)
+        return True
 
 
 def test_mask_tool_buttons_toggle_canvas_lock(qapp):
