@@ -40,8 +40,9 @@ from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QCheckBox, QComboBox, QSpinBox, QListWidget, QListWidgetItem,
-    QGroupBox, QSlider, QDoubleSpinBox, QFileDialog, QMessageBox,
-    QScrollArea, QSplitter, QButtonGroup, QRadioButton, QFrame, QMenu, QToolButton
+    QGroupBox, QSlider, QDoubleSpinBox, QFileDialog, QMessageBox, QGridLayout,
+    QScrollArea, QSplitter, QButtonGroup, QRadioButton, QFrame, QMenu, QToolButton,
+    QSizePolicy, QProgressBar
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QIcon, QCursor
@@ -74,6 +75,12 @@ class MaskLayer:
 
 class MaskApp(BaseImageTab):
     """Comprehensive mask editing application with layered approach"""
+
+    @staticmethod
+    def _use_compact_spinbox_width(spinbox):
+        """Keep numeric controls from taking the whole control column."""
+        spinbox.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        spinbox.setMaximumWidth(spinbox.sizeHint().width())
     
     def __init__(self, parent_app):
         super().__init__(parent_app)
@@ -308,11 +315,18 @@ class MaskApp(BaseImageTab):
         combine_layout.addStretch()
         layout.addLayout(combine_layout)
         
-        # Combined mask statistics
-        self.combined_stats_label = QLabel("No layers")
-        self.combined_stats_label.setWordWrap(True)
+        # Combined mask coverage
+        self.combined_stats_label = QLabel("No visible layers")
         apply_info_style(self.combined_stats_label)
         layout.addWidget(self.combined_stats_label)
+
+        self.mask_coverage_bar = QProgressBar()
+        self.mask_coverage_bar.setRange(0, 1000)
+        self.mask_coverage_bar.setValue(0)
+        self.mask_coverage_bar.setFormat("Masked 0.0%")
+        self.mask_coverage_bar.setTextVisible(True)
+        self.mask_coverage_bar.setToolTip("Fraction of visible image pixels included in the combined mask")
+        layout.addWidget(self.mask_coverage_bar)
         
         layout.addStretch()
         return panel
@@ -343,32 +357,33 @@ class MaskApp(BaseImageTab):
         threshold_layout = QVBoxLayout(threshold_group)
         threshold_layout.setSpacing(2)
         
-        # Threshold controls in grid for better alignment
-        thresh_grid = QHBoxLayout()
+        # Threshold controls in one compact row.
+        thresh_grid = QGridLayout()
+        thresh_grid.setHorizontalSpacing(6)
+        thresh_grid.setVerticalSpacing(2)
         
         # Mode control
-        thresh_grid.addWidget(QLabel("Mode:"))
+        thresh_grid.addWidget(QLabel("Mode:"), 0, 0)
         self.threshold_mode_combo = QComboBox()
         self.threshold_mode_combo.addItems(["Above", "Below", "Range"])
         self.threshold_mode_combo.setCurrentIndex(1)
-        self.threshold_mode_combo.setMinimumWidth(100)
-        self.threshold_mode_combo.setMaximumWidth(120)
-        thresh_grid.addWidget(self.threshold_mode_combo)
-        thresh_grid.addStretch()
+        self.threshold_mode_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        thresh_grid.addWidget(self.threshold_mode_combo, 0, 1)
 
         # Value control
-        thresh_grid.addWidget(QLabel("Value:"))
+        thresh_grid.addWidget(QLabel("Value:"), 0, 2)
         self.threshold_spin = QDoubleSpinBox()
         self.threshold_spin.setRange(-1e9, 1e9)
         self.threshold_spin.setValue(10)
         self.threshold_spin.setDecimals(1)
-        self.threshold_spin.setMinimumWidth(100)
-        self.threshold_spin.setMaximumWidth(120)
-        thresh_grid.addWidget(self.threshold_spin)
+        self._use_compact_spinbox_width(self.threshold_spin)
+        thresh_grid.addWidget(self.threshold_spin, 0, 3)
+        thresh_grid.setColumnStretch(1, 1)
         
         threshold_layout.addLayout(thresh_grid)
         
-        btn_gen_threshold = QPushButton("Generate Threshold Mask")
+        btn_gen_threshold = QPushButton("Generate")
+        btn_gen_threshold.setToolTip("Create a new layer from the current threshold settings")
         btn_gen_threshold.clicked.connect(self._generate_threshold_mask)
         threshold_layout.addWidget(btn_gen_threshold)
         
@@ -381,11 +396,13 @@ class MaskApp(BaseImageTab):
         filter_layout = QVBoxLayout(filter_group)
         filter_layout.setSpacing(2)
         
-        # Filter controls in grid
-        filter_grid = QHBoxLayout()
+        # Filter controls in one compact row.
+        filter_grid = QGridLayout()
+        filter_grid.setHorizontalSpacing(6)
+        filter_grid.setVerticalSpacing(2)
         
         # Type control
-        filter_grid.addWidget(QLabel("Action:"))
+        filter_grid.addWidget(QLabel("Action:"), 0, 0)
         self.filter_type_combo = QComboBox()
         self.filter_type_combo.addItems([
             "Shrink mask",
@@ -393,36 +410,36 @@ class MaskApp(BaseImageTab):
             "Fill small gaps",
             "Find image edges",
         ])
-        self.filter_type_combo.setMinimumWidth(100)
-        filter_grid.addWidget(self.filter_type_combo)
-        filter_grid.addStretch()
+        self.filter_type_combo.setItemData(0, "Erode the active layer by the selected radius.", Qt.ToolTipRole)
+        self.filter_type_combo.setItemData(1, "Dilate the active layer by the selected radius.", Qt.ToolTipRole)
+        self.filter_type_combo.setItemData(2, "Close small holes or gaps in the active layer.", Qt.ToolTipRole)
+        self.filter_type_combo.setItemData(3, "Replace the active layer with edges found in the current image.", Qt.ToolTipRole)
+        self.filter_type_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        filter_grid.addWidget(self.filter_type_combo, 0, 1)
         
         # Size control
-        filter_grid.addWidget(QLabel("Radius:"))
+        filter_grid.addWidget(QLabel("Radius:"), 0, 2)
         self.filter_size_spin = QDoubleSpinBox()
         self.filter_size_spin.setRange(1, 21)
         self.filter_size_spin.setValue(3)
         self.filter_size_spin.setDecimals(0)
         self.filter_size_spin.setSingleStep(1)
-        self.filter_size_spin.setMinimumWidth(100)
-        filter_grid.addWidget(self.filter_size_spin)
+        self._use_compact_spinbox_width(self.filter_size_spin)
+        filter_grid.addWidget(self.filter_size_spin, 0, 3)
 
-        filter_grid.addWidget(QLabel("Edge strength:"))
+        filter_grid.addWidget(QLabel("Edge:"), 0, 4)
         self.filter_percentile_spin = QDoubleSpinBox()
         self.filter_percentile_spin.setRange(50, 99.9)
         self.filter_percentile_spin.setValue(92.0)
         self.filter_percentile_spin.setDecimals(1)
-        self.filter_percentile_spin.setMinimumWidth(90)
-        filter_grid.addWidget(self.filter_percentile_spin)
+        self._use_compact_spinbox_width(self.filter_percentile_spin)
+        filter_grid.addWidget(self.filter_percentile_spin, 0, 5)
+        filter_grid.setColumnStretch(1, 1)
         
         filter_layout.addLayout(filter_grid)
-
-        filter_info = QLabel("Shrink/grow/fill edit the active layer. Find image edges replaces it from the current image.")
-        filter_info.setWordWrap(True)
-        apply_info_style(filter_info)
-        filter_layout.addWidget(filter_info)
         
-        btn_gen_filter = QPushButton("Apply to Active Layer")
+        btn_gen_filter = QPushButton("Apply")
+        btn_gen_filter.setToolTip("Apply the selected cleanup action to the active layer")
         btn_gen_filter.clicked.connect(self._generate_filter_mask)
         filter_layout.addWidget(btn_gen_filter)
         
@@ -430,7 +447,7 @@ class MaskApp(BaseImageTab):
         
         ###### Drawing Tools (Photoshop-style, Compact) ######
         drawing_group = QGroupBox("Drawing Tools")
-        drawing_layout = QHBoxLayout(drawing_group)
+        drawing_layout = QVBoxLayout(drawing_group)
         drawing_layout.setSpacing(2)
         drawing_layout.setContentsMargins(6, 6, 6, 6)
         
@@ -469,19 +486,15 @@ class MaskApp(BaseImageTab):
         self.tool_fill_radio = self.tool_buttons["Watershed Fill"]
         
         drawing_layout.addLayout(tool_layout)
-        drawing_layout.addStretch(1)
 
-        tool_options_layout = QVBoxLayout()
+        tool_options_layout = QGridLayout()
         tool_options_layout.setSpacing(2)
-        tool_options_layout.setContentsMargins(8, 0, 0, 0)
+        tool_options_layout.setContentsMargins(0, 0, 0, 0)
         
         # Mode selection row (Add/Remove)
-        mode_layout = QHBoxLayout()
-        mode_layout.setSpacing(2)
-        mode_layout.setContentsMargins(0, 4, 0, 4)
         mode_label = QLabel("Mode:")
         apply_body_style(mode_label)
-        mode_layout.addWidget(mode_label)
+        tool_options_layout.addWidget(mode_label, 0, 0)
         
         # Create button group for mode selection
         self.mode_group = QButtonGroup()
@@ -490,44 +503,38 @@ class MaskApp(BaseImageTab):
         self.draw_add_radio.setToolTip("Add to mask")
         self.draw_add_radio.toggled.connect(lambda checked: checked and self._update_tool_mode())
         self.mode_group.addButton(self.draw_add_radio, 0)
-        mode_layout.addWidget(self.draw_add_radio)
+        tool_options_layout.addWidget(self.draw_add_radio, 0, 1)
         
         self.draw_remove_radio = QRadioButton("Remove")
         self.draw_remove_radio.setToolTip("Remove from mask")
         self.draw_remove_radio.toggled.connect(lambda checked: checked and self._update_tool_mode())
         self.mode_group.addButton(self.draw_remove_radio, 1)
-        mode_layout.addWidget(self.draw_remove_radio)
-        
-        tool_options_layout.addLayout(mode_layout)
+        tool_options_layout.addWidget(self.draw_remove_radio, 0, 2)
         
         # Brush size control (compact)
-        brush_layout = QHBoxLayout()
-        brush_layout.setSpacing(4)
-        brush_layout.setContentsMargins(0, 4, 0, 4)
         brush_label = QLabel("Size:")
         apply_body_style(brush_label)
-        brush_layout.addWidget(brush_label)
+        tool_options_layout.addWidget(brush_label, 1, 0)
         
         self.brush_size_spin = QSpinBox()
         self.brush_size_spin.setRange(1, 50)
         self.brush_size_spin.setValue(5)
-        self.brush_size_spin.setMinimumWidth(50)
-        self.brush_size_spin.setMaximumWidth(70)
         self.brush_size_spin.setSuffix("px")
         self.brush_size_spin.valueChanged.connect(lambda v: self._update_tool_brush_size(v))
         self.brush_size_spin.setToolTip("Brush size for Brush and Line tools")
-        brush_layout.addWidget(self.brush_size_spin)
+        self._use_compact_spinbox_width(self.brush_size_spin)
+        tool_options_layout.addWidget(self.brush_size_spin, 1, 1)
         
         # Slider for brush size
         self.brush_size_slider = QSlider(Qt.Horizontal)
         self.brush_size_slider.setRange(1, 50)
         self.brush_size_slider.setValue(5)
-        self.brush_size_slider.setMaximumWidth(120)
         self.brush_size_slider.setMaximumHeight(18)
         self.brush_size_slider.sliderMoved.connect(lambda v: self.brush_size_spin.setValue(v))
         self.brush_size_spin.valueChanged.connect(lambda v: self.brush_size_slider.blockSignals(True) or self.brush_size_slider.setValue(v) or self.brush_size_slider.blockSignals(False))
-        brush_layout.addWidget(self.brush_size_slider)
-        tool_options_layout.addLayout(brush_layout)
+        self.brush_size_slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        tool_options_layout.addWidget(self.brush_size_slider, 1, 2)
+        tool_options_layout.setColumnStretch(2, 1)
         drawing_layout.addLayout(tool_options_layout)
         
         layout.addWidget(drawing_group)
@@ -588,12 +595,14 @@ class MaskApp(BaseImageTab):
         layout.addWidget(title)
         
         # Export Selected Layer button
-        btn_export_layer = QPushButton("Export Selected Layer")
+        btn_export_layer = QPushButton("Export Layer")
+        btn_export_layer.setToolTip("Export the selected layer")
         btn_export_layer.clicked.connect(self._export_selected_layer)
         layout.addWidget(btn_export_layer)
 
         # Export Combined Mask button (green)
-        btn_export_combined = QPushButton("Export Mask (All Layers)")
+        btn_export_combined = QPushButton("Export Combined")
+        btn_export_combined.setToolTip("Export the combined mask from all visible layers")
         btn_export_combined.clicked.connect(self._export_combined_mask)
         apply_sync_button_style(btn_export_combined)
         layout.addWidget(btn_export_combined)
@@ -831,6 +840,9 @@ class MaskApp(BaseImageTab):
             if hasattr(self.parent_app, 'publish_shared_mask'):
                 self.parent_app.publish_shared_mask(None, source_tab=self)
             self.combined_stats_label.setText("No visible layers")
+            self.mask_coverage_bar.setValue(0)
+            self.mask_coverage_bar.setFormat("Masked 0.0%")
+            self.mask_coverage_bar.setToolTip("No visible mask layers")
             self.update_plot()
             self.update_status_info()
             return
@@ -849,12 +861,10 @@ class MaskApp(BaseImageTab):
         total_pixels = self.combined_mask.size
         mask_percentage = (masked_pixels / total_pixels) * 100
         
-        self.combined_stats_label.setText(
-            f"Combined Mask:\n"
-            f"{len(visible_layers)} layers ({self.combine_method})\n"
-            f"Masked: {masked_pixels:,} pixels\n"
-            f"({mask_percentage:.1f}%)"
-        )
+        self.combined_stats_label.setText("Coverage")
+        self.mask_coverage_bar.setValue(round(mask_percentage * 10))
+        self.mask_coverage_bar.setFormat(f"Masked {mask_percentage:.1f}%")
+        self.mask_coverage_bar.setToolTip(f"{masked_pixels:,} of {total_pixels:,} pixels masked")
         self._refresh_mask_overlay()
 
     def _set_combined_mask_preview(self, mask: np.ndarray) -> None:

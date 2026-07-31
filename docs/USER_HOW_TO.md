@@ -15,7 +15,7 @@ You need:
 
 Launch SciView with the launcher for your platform:
 
-- Windows: `Launch-SciView-win64.cmd`
+- Windows: double-click `Launch-SciView-win64.cmd`. On first launch, choose `Y` if the window asks to install Pixi, the Python environment tool SciView uses.
 - macOS: `Launch-SciView-macOS.command`
 - Linux: `Launch-SciView-linux.sh`
 

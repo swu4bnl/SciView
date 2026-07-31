@@ -18,7 +18,9 @@ For a step-by-step user workflow, see [docs/USER_HOW_TO.md](docs/USER_HOW_TO.md)
 
 ## Quick Start
 
-Run once from the repository root to prepare the environment:
+On Windows, double-click [Launch-SciView-win64.cmd](Launch-SciView-win64.cmd). The first launch uses Pixi to prepare SciView's Python environment automatically, then starts the app. If Windows asks whether to install Pixi, choose `Y`.
+
+On Linux or macOS, run once from the repository root to prepare the environment:
 
 ```bash
 ./scripts/bootstrap_env.sh
@@ -30,9 +32,9 @@ Then launch SciView with the script for your platform:
 - macOS: `./Launch-SciView-macOS.command`
 - Windows: `Launch-SciView-win64.cmd`
 
-The launchers configure the pixi environment and start the application.
+The launchers configure the Pixi-managed Python environment and start the application.
 
-If pixi is unavailable, use the fallback virtual environment mode:
+For advanced/manual setup, use the fallback virtual environment mode:
 
 
 ```bash
