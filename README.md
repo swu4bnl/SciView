@@ -34,6 +34,34 @@ Then launch SciView with the script for your platform:
 
 The launchers configure the Pixi-managed Python environment and start the application.
 
+### Launcher Behavior
+
+All three platform launchers are setup-first launchers intended for end users.
+
+- They check for source updates at startup with git pull --ff-only when the repository is a git checkout.
+- They print terminal progress so users can see update checks and dependency setup.
+- They run pixi install automatically before launching the app.
+
+Platform entry points:
+
+- macOS: [Launch-SciView-macOS.command](Launch-SciView-macOS.command) -> [scripts/run_sciview_unix.sh](scripts/run_sciview_unix.sh)
+- Linux: [Launch-SciView-linux.sh](Launch-SciView-linux.sh) -> [scripts/run_sciview_unix.sh](scripts/run_sciview_unix.sh)
+- Windows: [Launch-SciView-win64.cmd](Launch-SciView-win64.cmd) -> [scripts/run_sciview_windows.ps1](scripts/run_sciview_windows.ps1)
+
+Launcher options:
+
+- Disable source auto-update for one run:
+	- macOS/Linux: --no-auto-pull
+	- Windows: -NoAutoPull
+- Prepare dependencies without launching the GUI:
+	- macOS/Linux: --setup-only
+	- Windows: -SetupOnly
+
+Environment variables:
+
+- SCIVIEW_AUTO_PULL=0 disables source auto-update.
+- SCIVIEW_KEEP_SHELL_OPEN=1 keeps terminal open after app exit (enabled by default in [Launch-SciView-macOS.command](Launch-SciView-macOS.command)).
+
 For advanced/manual setup, use the fallback virtual environment mode:
 
 
