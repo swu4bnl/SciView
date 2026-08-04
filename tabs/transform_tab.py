@@ -30,10 +30,17 @@ from PyQt5.QtWidgets import (
 
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
-from sciview.interfaces.theme.app_style import apply_info_style, apply_subtitle_style, apply_title_style
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_info_style,
+    apply_subtitle_style,
+    apply_title_style,
+    setup_splitter_layout,
+)
 from sciview.masking.io import load_mask_file as backend_load_mask_file
 from sciview.processing.transform import TransformBackend, TransformRequest, save_transform_result
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
+from sciview.settings.viewer_config import VIEWER_BEHAVIOR
 from tabs.base_image_tab import BaseImageTab
 
 
@@ -61,25 +68,24 @@ class TransformTab(BaseImageTab):
     def _build_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        layout_ratios = AppStyle.get_layout_ratios()
 
         main_splitter = QSplitter(Qt.Horizontal)
 
         left_splitter = QSplitter(Qt.Vertical)
         left_splitter.addWidget(self._create_image_panel())
         left_splitter.addWidget(self._create_transform_panel())
-        left_splitter.setStretchFactor(0, 1)
-        left_splitter.setStretchFactor(1, 1)
-        left_splitter.setSizes([560, 560])
+        setup_splitter_layout(left_splitter, layout_ratios['viz_splitter_ratio'])
         main_splitter.addWidget(left_splitter)
 
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(2, 2, 2, 2)
         right_layout.setSpacing(6)
-        right_layout.addWidget(self._create_controls_panel())
+        right_layout.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
         main_splitter.addWidget(right_panel)
 
-        main_splitter.setSizes([980, 420])
+        setup_splitter_layout(main_splitter, layout_ratios['main_splitter_ratio'])
         main_layout.addWidget(main_splitter)
 
     def _create_transform_panel(self):
@@ -137,6 +143,7 @@ class TransformTab(BaseImageTab):
 
         source_group = QGroupBox("Sources")
         source_layout = QFormLayout(source_group)
+        self.configure_adaptive_form_layout(source_layout)
 
         self.calibration_source_combo = QComboBox()
         self.calibration_source_combo.addItems(["From calibration tab", "Custom profile"])
@@ -174,6 +181,7 @@ class TransformTab(BaseImageTab):
 
         transform_group = QGroupBox("Transform")
         transform_layout = QFormLayout(transform_group)
+        self.configure_adaptive_form_layout(transform_layout)
         transform_layout.setLabelAlignment(Qt.AlignRight)
 
         self.operation_combo = QComboBox()
@@ -597,6 +605,33 @@ class TransformTab(BaseImageTab):
             safe_vmin, safe_vmax = self._sanitize_log_limits(image, vmin, vmax)
             if safe_vmin is not None and safe_vmax is not None:
                 norm = LogNorm(vmin=safe_vmin, vmax=safe_vmax)
+
+        finite_min = float(np.min(finite))
+        finite_max = float(np.max(finite))
+        if finite_max <= finite_min:
+            finite_max = finite_min + 1.0
+
+        if vmin is None or vmax is None or vmax <= vmin:
+            low_q, high_q = VIEWER_BEHAVIOR.auto_level_percentiles
+            auto_vmin, auto_vmax = np.percentile(finite, [low_q, high_q])
+            vmin = float(auto_vmin)
+            vmax = float(auto_vmax)
+
+        if scale == "linear":
+            # If global limits are far outside the transform data range, fall back
+            # to robust limits so preview remains readable without per-tab tuning.
+            range_span = max(finite_max - finite_min, 1e-12)
+            visible_span = max(float(vmax) - float(vmin), 1e-12)
+            overlap_min = max(float(vmin), finite_min)
+            overlap_max = min(float(vmax), finite_max)
+            overlap = max(0.0, overlap_max - overlap_min)
+            overlap_ratio = overlap / range_span
+            span_ratio = visible_span / range_span
+            if overlap_ratio < 0.02 or span_ratio > 200.0:
+                low_q, high_q = VIEWER_BEHAVIOR.auto_level_percentiles
+                auto_vmin, auto_vmax = np.percentile(finite, [low_q, high_q])
+                vmin = float(auto_vmin)
+                vmax = float(auto_vmax)
 
         kwargs = {
             "origin": "lower",

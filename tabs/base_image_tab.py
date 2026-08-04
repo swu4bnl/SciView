@@ -13,7 +13,7 @@ import datetime
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QFileDialog,
-    QTextEdit
+    QTextEdit, QFormLayout, QScrollArea
 )
 from PyQt5.QtCore import Qt
 
@@ -67,6 +67,25 @@ class BaseImageTab(QWidget):
         """Update image info text when an info widget is available."""
         if hasattr(self, 'image_info_text') and self.image_info_text is not None:
             self.image_info_text.setPlainText(text)
+
+    @staticmethod
+    def configure_adaptive_form_layout(form_layout: QFormLayout) -> None:
+        """Apply responsive defaults to forms used in side control panels."""
+        form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        form_layout.setRowWrapPolicy(QFormLayout.WrapLongRows)
+        form_layout.setFormAlignment(Qt.AlignTop)
+
+    @staticmethod
+    def make_scrollable_panel(panel: QWidget) -> QScrollArea:
+        """Wrap a panel in a scroll area to keep all controls reachable."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setMinimumHeight(AppStyle.LAYOUT.get('control_panel_min_height', 96))
+        scroll.setWidget(panel)
+        return scroll
 
     def _sanitize_log_limits(self, img_array, vmin, vmax):
         """Return safe positive limits for log display or (None, None) if unavailable."""
@@ -351,19 +370,19 @@ class BaseImageTab(QWidget):
         self.vmin_input = QLineEdit(str(self.display_settings['vmin']))
         self.vmin_input.editingFinished.connect(self._on_vmin_changed)
         img_ctrl.addWidget(self.vmin_input)
-        
+
         img_ctrl.addWidget(QLabel("vmax:"))
         self.vmax_input = QLineEdit(str(self.display_settings['vmax']))
         self.vmax_input.editingFinished.connect(self._on_vmax_changed)
         img_ctrl.addWidget(self.vmax_input)
-        
+
         img_ctrl.addWidget(QLabel("cmap:"))
         self.cmap_selector = QComboBox()
         self.cmap_selector.addItems(list(SUPPORTED_IMAGE_COLORMAPS))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.cmap_selector.currentTextChanged.connect(self._on_cmap_changed)
         img_ctrl.addWidget(self.cmap_selector)
-        
+
         img_ctrl.addWidget(QLabel("scale:"))
         self.img_scale_combo = QComboBox()
         self.img_scale_combo.addItems(list(SUPPORTED_IMAGE_SCALES))

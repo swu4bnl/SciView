@@ -84,6 +84,15 @@ class SciAnaApp(QMainWindow):
         self.setWindowTitle(f"SciView - {BEAMLINE_NAME}")
         self.status = self.statusBar()
         self._workspace_root = Path(__file__).resolve().parent
+
+        # Shared application state
+        self.image_data = None
+        self.image_path = None
+        self.calibration = None
+        self.mask = None
+        self.shared_info_text = None
+        self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
+        self._shared_image_revision = 0
         
         # Tab widget
         self.tab_widget = QTabWidget()
@@ -154,23 +163,8 @@ class SciAnaApp(QMainWindow):
         self._scianalysis_source_mode = SCIANALYSIS_SOURCE_MODE
         self._scianalysis_source_root = Path(SCIANALYSIS_SOURCE_ROOT) if SCIANALYSIS_SOURCE_ROOT else None
         
-        # Shared application state
-        self.image_data = None
-        self.image_path = None
-        self.calibration = None
-        self.mask = None
-        self.shared_info_text = None
-        self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
-        self._shared_image_revision = 0
-        
-        # Set initial window size from config
-        window_size = GUI_SETTINGS['default_window_size']
-        self.resize(*window_size)
-
-        # Keep app usable on small displays by enforcing configurable minimums
-        min_window_size = GUI_SETTINGS.get('minimum_window_size')
-        if min_window_size:
-            self.setMinimumSize(*min_window_size)
+        # Set window sizing from config with screen-aware bounds.
+        self._apply_window_size_from_config()
         
         # Setup resource monitoring
         self._setup_resource_monitor()
@@ -180,6 +174,78 @@ class SciAnaApp(QMainWindow):
         from PyQt5.QtGui import QKeySequence
         self.refresh_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         self.refresh_shortcut.activated.connect(self._refresh_current_tab)
+
+        # Dev tools: hot-reload + style inspector (only when DEV_TOOLS=1)
+        self._style_hot_reloader = None
+        if os.environ.get("DEV_TOOLS") == "1":
+            self._start_dev_tools()
+
+    def _start_dev_tools(self):
+        """Start hot-reloader and register Ctrl+Shift+I for the style inspector."""
+        try:
+            from sciview.dev.style_inspector import StyleHotReloader
+            from PyQt5.QtWidgets import QShortcut
+            from PyQt5.QtGui import QKeySequence
+            self._style_hot_reloader = StyleHotReloader()
+            inspector_shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
+            inspector_shortcut.activated.connect(self._style_hot_reloader.show_inspector)
+            self.show_status("Dev tools active: hot-reload ON  |  Ctrl+Shift+I = Style Inspector")
+        except Exception as exc:
+            print(f"[dev tools] failed to start: {exc}")
+
+    @staticmethod
+    def _pair_from_config(value, fallback):
+        """Parse a 2-item config sequence into numeric pair with fallback."""
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            return fallback
+        try:
+            return float(value[0]), float(value[1])
+        except (TypeError, ValueError):
+            return fallback
+
+    def _apply_window_size_from_config(self):
+        """Apply responsive window size and minimums without hard-coded screen assumptions."""
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            default_size = GUI_SETTINGS.get('default_window_size', (1200, 900))
+            self.resize(*default_size)
+            min_window_size = GUI_SETTINGS.get('minimum_window_size')
+            if min_window_size:
+                self.setMinimumSize(*min_window_size)
+            return
+
+        available = screen.availableGeometry()
+        available_w = max(1, available.width())
+        available_h = max(1, available.height())
+
+        default_size = self._pair_from_config(GUI_SETTINGS.get('default_window_size'), (1200.0, 900.0))
+        default_fraction = self._pair_from_config(
+            GUI_SETTINGS.get('default_window_screen_fraction'),
+            (0.9, 0.88),
+        )
+        target_w = int(default_fraction[0] * available_w)
+        target_h = int(default_fraction[1] * available_h)
+
+        # If configured fraction is invalid, fall back to configured absolute size.
+        if target_w <= 0 or target_h <= 0:
+            target_w, target_h = int(default_size[0]), int(default_size[1])
+
+        target_w = min(max(640, target_w), available_w)
+        target_h = min(max(480, target_h), available_h)
+
+        min_size_cfg = self._pair_from_config(GUI_SETTINGS.get('minimum_window_size'), (1024.0, 768.0))
+        min_size_floor = self._pair_from_config(GUI_SETTINGS.get('minimum_window_floor'), (720.0, 560.0))
+        min_fraction = self._pair_from_config(GUI_SETTINGS.get('minimum_window_screen_fraction'), (0.75, 0.72))
+        min_w_from_fraction = int(min_fraction[0] * available_w)
+        min_h_from_fraction = int(min_fraction[1] * available_h)
+
+        min_w = int(max(min_size_floor[0], min(min_size_cfg[0], min_w_from_fraction)))
+        min_h = int(max(min_size_floor[1], min(min_size_cfg[1], min_h_from_fraction)))
+        min_w = min(min_w, target_w)
+        min_h = min(min_h, target_h)
+
+        self.setMinimumSize(max(480, min_w), max(360, min_h))
+        self.resize(target_w, target_h)
 
     def add_tab(self, widget, name, icon_key=None):
         """Add a tab to the main interface"""
@@ -726,6 +792,9 @@ class SciAnaApp(QMainWindow):
 def create_application():
     """Create and configure the main application"""
     app = QApplication(sys.argv)
+
+    # Load layout/sizing ratios from runtime configuration before creating widgets.
+    AppStyle.apply_gui_settings(GUI_SETTINGS)
     
     # Apply global styling
     AppStyle.apply_global_style(app)

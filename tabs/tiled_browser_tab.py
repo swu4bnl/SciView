@@ -240,10 +240,16 @@ class TiledBrowserTab(BaseImageTab):
         layout_cfg = AppStyle.get_layout_ratios()
 
         controls = QWidget()
-        self._controls_panel = controls
         controls.setMinimumWidth(layout_cfg['tiled_controls_min_width'])
         controls.setMaximumWidth(layout_cfg['tiled_controls_max_width'])
         controls.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+
+        controls_scroll = self.make_scrollable_panel(controls)
+        controls_scroll.setMinimumWidth(layout_cfg['tiled_controls_min_width'])
+        controls_scroll.setMaximumWidth(layout_cfg['tiled_controls_max_width'])
+        controls_scroll.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self._controls_panel = controls_scroll
+
         controls_layout = QVBoxLayout(controls)
         title = QLabel("Tiled Browser")
         apply_title_style(title)
@@ -273,7 +279,7 @@ class TiledBrowserTab(BaseImageTab):
         apply_info_style(self.metadata_text)
         viewer_layout.addWidget(self.metadata_text)
 
-        splitter.addWidget(controls)
+        splitter.addWidget(controls_scroll)
         splitter.addWidget(viewer)
         setup_splitter_layout(splitter, layout_cfg['tiled_main_splitter_ratio'])
         QTimer.singleShot(0, self._apply_tiled_splitter_ratio)
@@ -400,6 +406,7 @@ class TiledBrowserTab(BaseImageTab):
 
         self.advanced_filters_widget = QWidget()
         advanced_filters = QFormLayout(self.advanced_filters_widget)
+        self.configure_adaptive_form_layout(advanced_filters)
         advanced_filters.setContentsMargins(0, 0, 0, 0)
 
         self.measure_type_input = QLineEdit("measure")

@@ -159,19 +159,19 @@ class MaskApp(BaseImageTab):
         
         # Layer management panel
         layer_panel = self._create_layer_panel()
-        controls_splitter.addWidget(layer_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(layer_panel))
         
         # Mask generation panel
         generation_panel = self._create_generation_panel()
-        controls_splitter.addWidget(generation_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(generation_panel))
         
         # External editor panel
         external_panel = self._create_external_editor_panel()
-        controls_splitter.addWidget(external_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(external_panel))
         
         # Export and Apply panel 
         action_panel = self._create_action_panel()
-        controls_splitter.addWidget(action_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(action_panel))
         
         # Set initial sizes for control panels from centralized style config
         mask_control_ratios = AppStyle.get_layout_ratios()['mask_controls_ratio'][1:]

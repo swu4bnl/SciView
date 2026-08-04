@@ -8,7 +8,7 @@ This module provides consistent styling across all tabs and components.
 from pathlib import Path
 
 from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
 from PyQt5.QtGui import QIcon
 
 
@@ -98,37 +98,74 @@ class AppStyle:
         'small': '9px'
     }
     
-    # Layout dimensions
-    LAYOUT = {
-        'main_splitter_ratio': [2, 1],  # 2:1 visualization to controls
-        'viz_splitter_ratio': [4, 1],   # Image to plot ratio
-        'controls_splitter_ratio': [1, 1, 2, 1],  # Calibration panels
-        'browser_controls_ratio': [2, 1],  # Image browser controls
-        'tiled_main_splitter_ratio': [2, 3],  # Tiled controls to preview ratio
+    # ---------------------------------------------------------------------------
+    # CSS_TOKENS — values injected into QSS WIDGET_STYLES strings.
+    # Hot-reloadable: changing these and calling apply_global_style() takes
+    # effect instantly without rebuilding any widgets.
+    # ---------------------------------------------------------------------------
+    CSS_TOKENS: dict = {
+        # Text / label spacing
+        'label_padding_v': 1,     # vertical padding on text labels
+        'label_padding_h': 0,     # horizontal padding on text labels
+        # Button spacing
+        'btn_padding_v': 3,       # vertical padding on buttons
+        'btn_padding_h': 8,       # horizontal padding on buttons
+        # Input / combo spacing
+        'input_padding_v': 2,     # vertical padding on inputs / combos
+        'input_padding_h': 4,     # horizontal padding on inputs / combos
+        # GroupBox spacing
+        'group_margin_top': 6,    # QGroupBox outer top margin
+        'group_padding_top': 10,  # QGroupBox inner top padding
+        'group_title_left': 6,    # QGroupBox title indent
+        'group_title_padding': 3, # QGroupBox title side padding
+        # Dimension hints used as CSS min-height / border-radius
+        'border_radius': 2,
+        'button_height': 26,
+        'input_height': 22,
+    }
+
+    # ---------------------------------------------------------------------------
+    # LAYOUT — Python construction-time parameters.
+    # These are passed to setContentsMargins(), setSpacing(), setHandleWidth(),
+    # setMinimumWidth() etc. at widget build time.
+    # Changing them requires a tab rebuild (Ctrl+R) to take effect.
+    # ---------------------------------------------------------------------------
+    LAYOUT: dict = {
+        # Splitter ratios
+        'main_splitter_ratio': [2, 1],
+        'viz_splitter_ratio': [2, 1],
+        'controls_splitter_ratio': [1, 1, 2, 1],
+        'browser_controls_ratio': [2, 1],
+        'tiled_main_splitter_ratio': [1, 2],
+        # Tiled browser panel constraints
         'tiled_controls_min_width': 280,
         'tiled_controls_max_width': 460,
         'tiled_metadata_max_height': 72,
         'tiled_results_min_height': 260,
         'tiled_results_column_widths': [70, 100, 150, 95, 85, 120, 60, 145],
+        # Mask panel ratios
         'mask_controls_ratio': [10, 15, 12, 10, 10],
-        'splitter_handle_width': 2,  # Thinner, modern splitter
-        'panel_margin': 8,
-        'panel_spacing': 6,
-        'toolbar_spacing': 6,
-        'border_radius': 2,
-        'button_height': 32,
-        'input_height': 28,
+        # Splitter handle (also used in CSS via format_style; kept here so
+        # setup_splitter_layout can read it for setHandleWidth())
+        'splitter_handle_width': 5,
+        # Panel minimums
+        'control_panel_min_height': 80,
+        # Python layout spacing (setContentsMargins / setSpacing)
+        'panel_margin': 4,
+        'panel_spacing': 3,
+        'toolbar_spacing': 4,
+        # Image browser specifics
         'image_browser_current_label_max_height': 30,
         'image_browser_sync_button_height': 60,
     }
     
-    # Widget styles
+    # Widget styles — padding/margin values come from LAYOUT spacing tokens
     WIDGET_STYLES = {
         'title_label': """
             font-weight: 600;
             font-size: {title_font};
             color: {text_primary};
-            padding: 0px 0px;
+            padding: {label_padding_v}px {label_padding_h}px;
             border-bottom: 2px solid {surface_alt};
             margin-bottom: 0px;
         """,
@@ -137,39 +174,39 @@ class AppStyle:
             font-weight: 500;
             font-size: {subtitle_font};
             color: {text_primary};
-            padding: 0px 0px;
+            padding: {label_padding_v}px {label_padding_h}px;
             margin-bottom: 0px;
         """,
 
         'body_text': """
             font-size: {body_font};
             color: {text_primary};
-            padding: 6px 0px;
+            padding: {label_padding_v}px {label_padding_h}px;
         """,
 
         'small_text': """
             font-size: {small};
             color: {text_secondary};
-            padding: 4px 0px;
+            padding: {label_padding_v}px {label_padding_h}px;
         """,
 
         'info_label': """
             font-size: {body_font};
             color: {text_secondary};
-            padding: 4px 0px;
-            line-height: 1.4;
+            padding: {label_padding_v}px {label_padding_h}px;
+            line-height: 1.2;
         """,
-        
+
         'status_label': """
             font-size: {caption_font};
             color: {text_secondary};
             background-color: {surface};
-            padding: 8px 12px;
+            padding: {label_padding_v}px {btn_padding_h}px;
             border: 1px solid {border};
             border-radius: {border_radius}px;
-            margin: 4px 0px;
+            margin: {label_padding_v}px 0px;
         """,
-        
+
         'primary_button': """
             QPushButton {{
                 background-color: {primary};
@@ -177,7 +214,7 @@ class AppStyle:
                 font-weight: 500;
                 font-size: {body_font};
                 border: none;
-                padding: 8px 16px;
+                padding: {btn_padding_v}px {btn_padding_h}px;
                 border-radius: {border_radius}px;
                 min-height: {button_height}px;
             }}
@@ -186,23 +223,22 @@ class AppStyle:
             }}
             QPushButton:pressed {{
                 background-color: {secondary};
-                transform: translateY(1px);
             }}
             QPushButton:disabled {{
                 background-color: {surface_alt};
                 color: {text_muted};
             }}
         """,
-        
+
         'secondary_button': """
             QPushButton {{
                 background-color: {surface};
                 color: {text_primary};
                 font-size: {body_font};
                 border: 1px solid {border};
-                padding: 6px 12px;
+                padding: {btn_padding_v}px {btn_padding_h}px;
                 border-radius: {border_radius}px;
-                min-height: 28px;
+                min-height: {button_height}px;
             }}
             QPushButton:hover {{
                 background-color: {surface_alt};
@@ -212,7 +248,7 @@ class AppStyle:
                 background-color: {border};
             }}
         """,
-        
+
         'sync_button': """
             QPushButton {{
                 background-color: {success};
@@ -220,9 +256,9 @@ class AppStyle:
                 font-weight: 600;
                 font-size: {subtitle_font};
                 border: none;
-                padding: 12px 20px;
+                padding: {btn_padding_v}px {btn_padding_h}px;
                 border-radius: {border_radius}px;
-                min-height: 48px;
+                min-height: {button_height}px;
             }}
             QPushButton:hover {{
                 background-color: #14B10C;
@@ -235,12 +271,12 @@ class AppStyle:
                 color: {text_muted};
             }}
         """,
-        
+
         'input_field': """
             QLineEdit, QSpinBox, QDoubleSpinBox {{
                 border: 1px solid {border};
                 border-radius: 4px;
-                padding: 6px 8px;
+                padding: {input_padding_v}px {input_padding_h}px;
                 font-size: {body_font};
                 background-color: white;
                 min-height: {input_height}px;
@@ -252,7 +288,7 @@ class AppStyle:
             QComboBox {{
                 border: 1px solid {border};
                 border-radius: 4px;
-                padding: 4px 8px;
+                padding: {input_padding_v}px {input_padding_h}px;
                 font-size: {body_font};
                 background-color: white;
                 min-height: {input_height}px;
@@ -269,7 +305,7 @@ class AppStyle:
                 height: 12px;
             }}
         """,
-        
+
         'group_box': """
             QGroupBox {{
                 font-weight: 500;
@@ -277,37 +313,39 @@ class AppStyle:
                 color: {text_primary};
                 border: 1px solid {border};
                 border-radius: {border_radius}px;
-                margin-top: 12px;
-                padding-top: 16px;
+                margin-top: {group_margin_top}px;
+                padding-top: {group_padding_top}px;
                 background-color: {surface};
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 8px 0 8px;
+                left: {group_title_left}px;
+                padding: 0 {group_title_padding}px 0 {group_title_padding}px;
                 background-color: {surface};
             }}
         """,
         
         'splitter': """
             QSplitter::handle {{
-                background-color: {surface_alt};
-                border: none;
+                background-color: {border};
+                border: 1px solid {text_muted};
                 border-radius: 2px;
             }}
             QSplitter::handle:horizontal {{
                 width: {handle_width}px;
-                margin: 2px 0px;
+                margin: 1px 0px;
             }}
             QSplitter::handle:vertical {{
                 height: {handle_width}px;
-                margin: 0px 2px;
+                margin: 0px 1px;
             }}
             QSplitter::handle:hover {{
                 background-color: {border_active};
+                border-color: {border_active};
             }}
             QSplitter::handle:pressed {{
                 background-color: {primary};
+                border-color: {primary};
             }}
         """,
 
@@ -401,11 +439,10 @@ class AppStyle:
             'caption_font': cls.FONTS['caption'],
             'small': cls.FONTS['small'],
             
-            # Layout
+            # LAYOUT: splitter handle width (CSS + Python both need this)
             'handle_width': cls.LAYOUT['splitter_handle_width'],
-            'border_radius': cls.LAYOUT['border_radius'],
-            'button_height': cls.LAYOUT['button_height'],
-            'input_height': cls.LAYOUT['input_height'],
+            # CSS_TOKENS: all spacing / sizing tokens injected into QSS
+            **cls.CSS_TOKENS,
 
             # Toolbar controls
             'toolbar_symbol_font_size': cls.TOOLBAR_BUTTON_UI['symbol_font_size'],
@@ -681,6 +718,27 @@ class AppStyle:
         """Get standard layout ratios for consistent UI"""
         return cls.LAYOUT
 
+    @classmethod
+    def apply_gui_settings(cls, gui_settings):
+        """Apply optional runtime GUI ratio overrides from configuration."""
+        if not gui_settings:
+            return
+
+        def _positive_number(value, fallback):
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError):
+                return fallback
+            return parsed if parsed > 0 else fallback
+
+        viz_ratio = _positive_number(gui_settings.get('visualization_ratio'), cls.LAYOUT['main_splitter_ratio'][0])
+        ctrl_ratio = _positive_number(gui_settings.get('controls_ratio'), cls.LAYOUT['main_splitter_ratio'][1])
+        image_ratio = _positive_number(gui_settings.get('image_plot_ratio'), cls.LAYOUT['viz_splitter_ratio'][0])
+        plot_ratio = _positive_number(gui_settings.get('plot_ratio'), cls.LAYOUT['viz_splitter_ratio'][1])
+
+        cls.LAYOUT['main_splitter_ratio'] = [viz_ratio, ctrl_ratio]
+        cls.LAYOUT['viz_splitter_ratio'] = [image_ratio, plot_ratio]
+
 
 # Convenience functions for applying styles
 def apply_title_style(widget):
@@ -756,9 +814,43 @@ def setup_splitter_layout(splitter, ratios):
 
     factors = [max(1, int(round(value * 100))) for value in normalized]
 
+    def _apply_ratio_sizes_from_geometry():
+        count = splitter.count()
+        if count <= 0:
+            return
+
+        if splitter.orientation() == Qt.Horizontal:
+            total = splitter.width()
+        else:
+            total = splitter.height()
+
+        handle_total = splitter.handleWidth() * max(0, count - 1)
+        usable = max(1, total - handle_total)
+        if usable <= 1:
+            return
+
+        ratio_values = normalized[:count]
+        if len(ratio_values) < count:
+            ratio_values.extend([1.0] * (count - len(ratio_values)))
+
+        ratio_sum = sum(ratio_values)
+        if ratio_sum <= 0:
+            return
+
+        sizes = [max(1, int(round(usable * (value / ratio_sum)))) for value in ratio_values]
+        size_delta = usable - sum(sizes)
+        sizes[-1] = max(1, sizes[-1] + size_delta)
+        splitter.setSizes(sizes)
+
     # Apply both initial size hint and stretch factors for resize behavior.
     splitter.setSizes(factors)
     for index, factor in enumerate(factors):
         splitter.setStretchFactor(index, factor)
+        splitter.setCollapsible(index, False)
 
+    splitter.setChildrenCollapsible(False)
     splitter.setHandleWidth(AppStyle.LAYOUT['splitter_handle_width'])
+
+    # Re-apply ratio once geometry is finalized so size hints do not force 1:1 splits.
+    _apply_ratio_sizes_from_geometry()
+    QTimer.singleShot(0, _apply_ratio_sizes_from_geometry)

@@ -11,7 +11,7 @@ import numpy as np
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox
+    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox, QFormLayout, QScrollArea
 )
 from PyQt5.QtCore import Qt, QTimer
 
@@ -97,15 +97,15 @@ class CalibrationApp(BaseImageTab):
         
         # Ring center calculation panel
         ring_center_panel = self._create_ring_center_panel()
-        controls_splitter.addWidget(ring_center_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(ring_center_panel))
 
         # Calibration parameters panel
         calibration_panel = self._create_calibration_panel()
-        controls_splitter.addWidget(calibration_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(calibration_panel))
         
         # Standards reference panel
         standards_panel = self._create_standards_panel()
-        controls_splitter.addWidget(standards_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(standards_panel))
         
         # Set initial sizes for control panels with ring workflow first.
         control_ratios = [2, 1, 1]
@@ -145,11 +145,11 @@ class CalibrationApp(BaseImageTab):
         self.scale_combo = QComboBox()
         self.scale_combo.addItems(["linear", "logx", "logy", "loglog"])
         self.scale_combo.currentTextChanged.connect(self.update_plot_calibration)
-        self.scale_combo.setMaximumWidth(80)  # Limit width
+        self.scale_combo.setMinimumWidth(88)
         title_layout.addWidget(self.scale_combo)
 
         btn_export_1d = QPushButton("Export 1D")
-        btn_export_1d.setMaximumWidth(80)
+        btn_export_1d.setMinimumWidth(88)
         btn_export_1d.clicked.connect(self.export_1d_profiles)
         title_layout.addWidget(btn_export_1d)
 
@@ -165,7 +165,6 @@ class CalibrationApp(BaseImageTab):
         
         # Use more compact navigation toolbar or remove it
         toolbar = NavigationToolbar(self.canvas_plot, self)
-        toolbar.setMaximumHeight(25)  # Make toolbar smaller
         layout.addWidget(toolbar)
         
         return panel
@@ -182,6 +181,8 @@ class CalibrationApp(BaseImageTab):
         layout.addWidget(title)
         
         # Parameter spinboxes using config defaults
+        params_form = QFormLayout()
+        self.configure_adaptive_form_layout(params_form)
         calibration_params = [
             ("spin_x", ("Beam Center X", -1024, 4096, DEFAULT_CALIBRATION['beam_center_x'], 1)),
             ("spin_y", ("Beam Center Y", -1024, 4096, DEFAULT_CALIBRATION['beam_center_y'], 1)),
@@ -193,7 +194,9 @@ class CalibrationApp(BaseImageTab):
         ]
         
         for attr, params in calibration_params:
-            setattr(self, attr, self._create_spin(*params, parent=layout))
+            setattr(self, attr, self._create_spin(*params, parent=params_form))
+
+        layout.addLayout(params_form)
 
         # Wavelength/Energy section
         wl_layout = QHBoxLayout()
@@ -250,10 +253,8 @@ class CalibrationApp(BaseImageTab):
         layout.addWidget(instructions_label)
         
         # Create scroll area for point inputs
-        from PyQt5.QtWidgets import QScrollArea
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setMaximumHeight(280)  # Show more points with current compact design
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         
@@ -328,7 +329,7 @@ class CalibrationApp(BaseImageTab):
         self.snap_window_spin.setSingleStep(2)
         self.snap_window_spin.setValue(5)
         self.snap_window_spin.setToolTip("Odd-size local search window (3-15 pixels)")
-        self.snap_window_spin.setMaximumWidth(70)
+        self.snap_window_spin.setMinimumWidth(72)
         snap_window_row.addWidget(self.snap_window_spin)
         snap_window_row.addWidget(QLabel("px"))
         snap_window_row.addStretch()
@@ -375,8 +376,15 @@ class CalibrationApp(BaseImageTab):
 
     def _create_spin(self, label, mn, mx, default, step, parent):
         """Create a labeled spin box with status update connection"""
-        lay = QHBoxLayout()
-        lay.addWidget(QLabel(label))
+        form = parent if isinstance(parent, QFormLayout) else None
+        if form is not None:
+            row = QWidget()
+            lay = QHBoxLayout(row)
+            lay.setContentsMargins(0, 0, 0, 0)
+        else:
+            lay = QHBoxLayout()
+            lay.addWidget(QLabel(label))
+
         spin = QDoubleSpinBox()
         spin.setRange(mn, mx)
         spin.setSingleStep(step)
@@ -384,7 +392,11 @@ class CalibrationApp(BaseImageTab):
         spin.setDecimals(4 if step < 0.01 else 2)
         spin.valueChanged.connect(self._schedule_calibration_update)
         lay.addWidget(spin)
-        parent.addLayout(lay)
+
+        if form is not None:
+            form.addRow(QLabel(label), row)
+        else:
+            parent.addLayout(lay)
         return spin
 
     def _schedule_calibration_update(self, *_args):

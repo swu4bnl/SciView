@@ -555,10 +555,10 @@ class ImageBrowserApp(BaseImageTab):
         # Right panel: Image loading options (upper) and session management (lower)
         control_splitter = QSplitter(Qt.Vertical)
         loading_panel = self._create_loading_panel()
-        control_splitter.addWidget(loading_panel)
+        control_splitter.addWidget(self.make_scrollable_panel(loading_panel))
 
         session_panel = self._create_session_panel()
-        control_splitter.addWidget(session_panel)
+        control_splitter.addWidget(self.make_scrollable_panel(session_panel))
 
         # Use consistent layout ratios from global style config
         layout_ratios = AppStyle.get_layout_ratios()
@@ -706,12 +706,10 @@ class ImageBrowserApp(BaseImageTab):
         # Current image info
         self.current_image_label = QLabel("No image loaded")
         apply_info_style(self.current_image_label)
-        self.current_image_label.setMaximumHeight(AppStyle.LAYOUT['image_browser_current_label_max_height'])
         layout.addWidget(self.current_image_label)
         
         # Use the base class image panel
         base_image_panel = self._create_image_panel()
-        base_image_panel.setMinimumHeight(400)
         layout.addWidget(base_image_panel)
         
         return panel
@@ -739,7 +737,6 @@ class ImageBrowserApp(BaseImageTab):
         self.session_table.horizontalHeader().setStretchLastSection(True)
         self.session_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.session_table.itemSelectionChanged.connect(self._on_session_selection_changed)
-        self.session_table.setMinimumHeight(250)
         layout.addWidget(self.session_table, 1)
         
         # Session info
