@@ -174,7 +174,7 @@ class MaskApp(BaseImageTab):
         controls_splitter.addWidget(self.make_scrollable_panel(action_panel))
         
         # Set initial sizes for control panels from centralized style config
-        mask_control_ratios = AppStyle.get_layout_ratios()['mask_controls_ratio'][1:]
+        mask_control_ratios = AppStyle.get_layout_ratios()['mask_controls_ratio']
         setup_splitter_layout(controls_splitter, mask_control_ratios)
         
         main_splitter.addWidget(controls_splitter)
@@ -570,7 +570,7 @@ class MaskApp(BaseImageTab):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
         
         # Title
         title = QLabel("External Editor")
@@ -578,20 +578,26 @@ class MaskApp(BaseImageTab):
         layout.addWidget(title)
         
         # Instructions
-        info = QLabel("Export to GIMP for advanced editing")
+        info = QLabel("Round-trip mask editing with GIMP")
         info.setWordWrap(True)
         apply_info_style(info)
         layout.addWidget(info)
         
+        button_row = QHBoxLayout()
+        button_row.setSpacing(4)
+
         # Export to GIMP button
         btn_gimp = QPushButton("Open in GIMP")
         btn_gimp.clicked.connect(self._open_in_gimp)
-        layout.addWidget(btn_gimp)
+        button_row.addWidget(btn_gimp)
         
         # Reload mask from file
         btn_reload = QPushButton("Import mask")
         btn_reload.clicked.connect(self._import_external_mask)
-        layout.addWidget(btn_reload)
+        button_row.addWidget(btn_reload)
+
+        button_row.addStretch()
+        layout.addLayout(button_row)
         
         layout.addStretch()
         return panel
@@ -601,25 +607,31 @@ class MaskApp(BaseImageTab):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
         
         # Title
         title = QLabel("Actions")
         apply_title_style(title)
         layout.addWidget(title)
         
+        button_row = QHBoxLayout()
+        button_row.setSpacing(4)
+
         # Export Selected Layer button
         btn_export_layer = QPushButton("Export Layer")
         btn_export_layer.setToolTip("Export the selected layer")
         btn_export_layer.clicked.connect(self._export_selected_layer)
-        layout.addWidget(btn_export_layer)
+        button_row.addWidget(btn_export_layer)
 
-        # Export Combined Mask button (green)
+        # Export Combined Mask button (emphasized)
         btn_export_combined = QPushButton("Export Combined")
         btn_export_combined.setToolTip("Export the combined mask from all visible layers")
         btn_export_combined.clicked.connect(self._export_combined_mask)
-        apply_sync_button_style(btn_export_combined)
-        layout.addWidget(btn_export_combined)
+        apply_emphasis_button_style(btn_export_combined)
+        button_row.addWidget(btn_export_combined)
+
+        button_row.addStretch()
+        layout.addLayout(button_row)
         
         # Apply mask button (placeholder for future implementation)
         # btn_apply = QPushButton("Apply Mask to Tabs")

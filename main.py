@@ -111,6 +111,7 @@ class SciAnaApp(QMainWindow):
 
         # Use local transparent icons for platform-consistent button visuals.
         self.refresh_button = QPushButton("")
+        self.refresh_button.setProperty("sciview_compact_button", True)
         self.refresh_button.setIcon(
             AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['refresh'])
         )
@@ -121,6 +122,7 @@ class SciAnaApp(QMainWindow):
         self.refresh_button.clicked.connect(self._refresh_current_tab)
 
         self.update_scianalysis_button = QPushButton("")
+        self.update_scianalysis_button.setProperty("sciview_compact_button", True)
         self.update_scianalysis_button.setIcon(
             AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['sci_update'])
         )
@@ -135,6 +137,7 @@ class SciAnaApp(QMainWindow):
         self.update_scianalysis_button.clicked.connect(self._update_scianalysis_source)
 
         self.update_sciview_button = QPushButton("")
+        self.update_sciview_button.setProperty("sciview_compact_button", True)
         self.update_sciview_button.setIcon(
             AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['app_update'])
         )
@@ -144,6 +147,7 @@ class SciAnaApp(QMainWindow):
         self.update_sciview_button.clicked.connect(self._update_sciview_source)
 
         self.style_inspector_button = QPushButton("I")
+        self.style_inspector_button.setProperty("sciview_compact_button", True)
         self.style_inspector_button.setToolTip("Open Style Inspector [dev] (Ctrl+Shift+I)")
         self.style_inspector_button.setFixedSize(corner_button_size)
         self.style_inspector_button.setEnabled(False)

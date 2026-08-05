@@ -8,7 +8,7 @@ This module provides consistent styling across all tabs and components.
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QPushButton, QToolButton
 from PyQt5.QtCore import Qt, QSize, QTimer
 from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPalette, QPixmap
 from PyQt5.QtSvg import QSvgRenderer
@@ -20,29 +20,34 @@ class AppStyle:
     ASSETS_RELATIVE_DIR = Path("src/sciview/interfaces/theme/assets")
 
     TAB_UI = {
-        'icon_size': 18,
+        'icon_size': 24,
         'min_width': 112,
-        'min_height': 34,
+        'min_height': 48,
         'padding_vertical': 5,
         'padding_horizontal': 10,
         'font_size': 12,
     }
 
-    CORNER_BUTTON_UI = {
-        'icon_size': 20,
-        'button_width': 36,
-        'button_height': 30,
-        'spacing': 4,
-    }
-
-    TOOLBAR_BUTTON_UI = {
-        'symbol_width': 36,
-        'symbol_height': 34,
+    # Single source of truth for button sizing/form-factor across the app.
+    BUTTON_FORM = {
+        'default_height': 34,
+        'default_min_width': 124,
+        'compact_text_height': 34,
+        'compact_text_min_width': 64,
+        'corner_height': 28,
+        'corner_min_width': 28,
+        'corner_icon_size': 14,
+        'symbol_size': 36,
         'mask_tool_width': 44,
         'mask_tool_height': 40,
         'mask_tool_icon_size': 28,
-        'text_min_width': 64,
-        'text_height': 34,
+    }
+
+    CORNER_BUTTON_UI = {
+        'spacing': 2,
+    }
+
+    TOOLBAR_BUTTON_UI = {
         'symbol_font_size': '20px',
         'text_font_size': '11px',
         'font_weight': 400,
@@ -53,6 +58,10 @@ class AppStyle:
         'section_label_width': 58,
         'field_label_width': 48,
         'input_min_width': 92,
+        'wide_input_min_width': 150,
+        'compact_input_min_width': 92,
+        'inline_label_width': 52,
+        'unit_label_width': 18,
     }
 
     CORNER_ICON_FILES = {
@@ -142,7 +151,7 @@ class AppStyle:
         'group_title_padding': 3, # QGroupBox title side padding
         # Dimension hints used as CSS min-height / border-radius
         'border_radius': 2,
-        'button_height': 26,
+        'button_height': BUTTON_FORM['default_height'],
         'input_height': 22,
     }
 
@@ -166,7 +175,7 @@ class AppStyle:
         'tiled_results_min_height': 260,
         'tiled_results_column_widths': [70, 100, 150, 95, 85, 120, 60, 145],
         # Mask panel ratios
-        'mask_controls_ratio': [10, 15, 12, 10, 10],
+        'mask_controls_ratio': [14, 20, 3, 6],
         # Splitter handle (also used in CSS via format_style; kept here so
         # setup_splitter_layout can read it for setHandleWidth())
         'splitter_handle_width': 5,
@@ -465,44 +474,79 @@ class AppStyle:
     @classmethod
     def corner_button_icon_size(cls):
         """Return standard corner-button icon size."""
-        size = max(cls.CORNER_BUTTON_UI['icon_size'], cls.font_px('caption') + 8)
+        size = max(cls.BUTTON_FORM['corner_icon_size'], cls.font_px('caption') + 4)
         return QSize(size, size)
 
     @classmethod
     def corner_button_size(cls):
         """Return standard corner-button size."""
-        height = max(cls.CORNER_BUTTON_UI['button_height'], cls.tab_min_height() - 4)
-        width = max(cls.CORNER_BUTTON_UI['button_width'], height)
+        height = max(cls.BUTTON_FORM['corner_height'], cls.font_px('caption') + 10)
+        width = max(cls.BUTTON_FORM['corner_min_width'], height)
         return QSize(width, height)
 
     @classmethod
     def toolbar_symbol_button_size(cls):
         """Return standard square toolbar-symbol button size."""
-        size = max(cls.TOOLBAR_BUTTON_UI['symbol_width'], cls.font_px('body') + 18)
-        return QSize(size, max(cls.TOOLBAR_BUTTON_UI['symbol_height'], size - 2))
+        size = max(cls.BUTTON_FORM['symbol_size'], cls.font_px('body') + 18)
+        return QSize(size, max(cls.standard_button_min_height(), size - 2))
 
     @classmethod
     def mask_tool_button_size(cls):
         """Return larger button size for mask drawing tool icons."""
-        width = max(cls.TOOLBAR_BUTTON_UI['mask_tool_width'], cls.font_px('body') + 24)
-        height = max(cls.TOOLBAR_BUTTON_UI['mask_tool_height'], cls.font_px('body') + 20)
+        width = max(cls.BUTTON_FORM['mask_tool_width'], cls.font_px('body') + 24)
+        height = max(cls.BUTTON_FORM['mask_tool_height'], cls.font_px('body') + 20)
         return QSize(width, height)
 
     @classmethod
     def mask_tool_icon_size(cls):
         """Return larger icon size for mask drawing tools."""
-        size = max(cls.TOOLBAR_BUTTON_UI['mask_tool_icon_size'], cls.font_px('body') + 6)
+        size = max(cls.BUTTON_FORM['mask_tool_icon_size'], cls.font_px('body') + 6)
         return QSize(size, size)
 
     @classmethod
     def toolbar_text_button_height(cls):
         """Return standard toolbar text-button height."""
-        return cls.TOOLBAR_BUTTON_UI['text_height']
+        return cls.BUTTON_FORM['compact_text_height']
 
     @classmethod
     def toolbar_text_button_min_width(cls):
         """Return standard minimum width for toolbar text buttons."""
-        return cls.TOOLBAR_BUTTON_UI['text_min_width']
+        return cls.BUTTON_FORM['compact_text_min_width']
+
+    @classmethod
+    def wide_input_min_width(cls):
+        """Return standard minimum width for prominent numeric entry fields."""
+        return cls.FORM_UI['wide_input_min_width']
+
+    @classmethod
+    def compact_input_min_width(cls):
+        """Return standard minimum width for compact numeric entry fields."""
+        return cls.FORM_UI['compact_input_min_width']
+
+    @classmethod
+    def inline_label_width(cls):
+        """Return standard inline label width for small control rows."""
+        return cls.FORM_UI['inline_label_width']
+
+    @classmethod
+    def unit_label_width(cls):
+        """Return standard inline unit-label width for small control rows."""
+        return cls.FORM_UI['unit_label_width']
+
+    @classmethod
+    def action_button_min_width(cls):
+        """Return standard minimum width for emphasized action buttons."""
+        return cls.BUTTON_FORM['default_min_width']
+
+    @classmethod
+    def standard_button_min_height(cls):
+        """Return standard minimum height for buttons across the app."""
+        return max(cls.BUTTON_FORM['default_height'], cls.font_px('body') + 14)
+
+    @classmethod
+    def standard_button_min_width(cls):
+        """Return standard minimum width for text buttons across the app."""
+        return cls.BUTTON_FORM['default_min_width']
 
     @classmethod
     def icon_directory(cls, workspace_root: Path) -> Path:
@@ -690,6 +734,41 @@ class AppStyle:
         )
 
     @classmethod
+    def emphasis_button_stylesheet(cls, app=None):
+        """Return a filled accent style for important action buttons."""
+        colors = cls.theme_colors(app)
+        accent = colors['accent'].name()
+        checked_fg = colors['checked_fg'].name()
+        hover = colors['control_hover'].name()
+        border = colors['border'].name()
+        muted = colors['muted'].name()
+        text = colors['text'].name()
+
+        return (
+            "QPushButton {"
+            f"color: {checked_fg};"
+            f"background-color: {accent};"
+            f"border: 1px solid {accent};"
+            "border-radius: 5px;"
+            "padding: 4px 12px;"
+            "}"
+            "QPushButton:hover {"
+            f"background-color: {hover};"
+            f"color: {text};"
+            f"border-color: {border};"
+            "}"
+            "QPushButton:pressed {"
+            f"background-color: {accent};"
+            f"color: {checked_fg};"
+            "}"
+            "QPushButton:disabled {"
+            f"color: {muted};"
+            f"border-color: {muted};"
+            "background-color: transparent;"
+            "}"
+        )
+
+    @classmethod
     def qt_material_readability_stylesheet(cls, app=None):
         """Return dark-theme overrides for qt-material input/widget readability."""
         app = app or QApplication.instance()
@@ -816,6 +895,23 @@ class AppStyle:
             if clear_widget_styles and widget.styleSheet():
                 widget.setStyleSheet("")
             cls.apply_font_role(widget)
+            if isinstance(widget, QPushButton):
+                if widget.property("sciview_compact_button"):
+                    compact_size = cls.corner_button_size()
+                    widget.setMinimumHeight(compact_size.height())
+                    widget.setMinimumWidth(compact_size.width())
+                    widget.setMaximumHeight(compact_size.height())
+                    widget.setMaximumWidth(compact_size.width())
+                elif widget.property("sciview_toolbar_text_button"):
+                    compact_height = cls.toolbar_text_button_height()
+                    widget.setMinimumHeight(compact_height)
+                    widget.setMaximumHeight(compact_height)
+                    widget.setMinimumWidth(cls.toolbar_text_button_min_width())
+                else:
+                    widget.setMinimumHeight(cls.standard_button_min_height())
+                    widget.setMinimumWidth(cls.standard_button_min_width())
+            elif isinstance(widget, QToolButton):
+                widget.setMinimumHeight(cls.standard_button_min_height())
             if hasattr(widget, 'refresh_theme'):
                 widget.refresh_theme()
             elif hasattr(widget, 'figure'):
@@ -929,10 +1025,18 @@ def apply_toolbar_symbol_button_style(widget):
 
 def apply_toolbar_text_button_style(widget):
     """Apply standard style and size to a compact text toolbar button."""
+    widget.setProperty("sciview_toolbar_text_button", True)
     widget.setMinimumWidth(AppStyle.toolbar_text_button_min_width())
     widget.setFixedHeight(AppStyle.toolbar_text_button_height())
     widget.setStyleSheet("")
     AppStyle.set_font_role(widget, 'toolbar_text')
+
+def apply_emphasis_button_style(widget):
+    """Apply accent styling to an important action button."""
+    widget.setStyleSheet(AppStyle.emphasis_button_stylesheet())
+    widget.setFont(AppStyle.make_font('body', weight=600))
+    widget.setMinimumHeight(AppStyle.standard_button_min_height())
+    AppStyle.set_font_role(widget, 'button')
 
 def apply_input_style(widget):
     """Apply input field style to a widget"""

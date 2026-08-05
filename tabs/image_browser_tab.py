@@ -562,7 +562,7 @@ class ImageBrowserApp(BaseImageTab):
 
         # Use consistent layout ratios from global style config
         layout_ratios = AppStyle.get_layout_ratios()
-        setup_splitter_layout(control_splitter, layout_ratios['browser_controls_ratio'])
+        setup_splitter_layout(control_splitter, [4, 1])
 
         main_splitter.addWidget(control_splitter)
         # Set main splitter to match other tabs: 3:1 visualization to controls
@@ -593,8 +593,7 @@ class ImageBrowserApp(BaseImageTab):
         self.loading_status_label = QLabel("Ready to load images")
         apply_info_style(self.loading_status_label)
         layout.addWidget(self.loading_status_label)
-        
-        layout.addStretch()
+
         return panel
 
     def _create_folder_loading_tab(self):
@@ -669,8 +668,7 @@ class ImageBrowserApp(BaseImageTab):
         controls_layout.addWidget(self.folder_auto_refresh_button)
         controls_layout.addStretch()
         layout.addLayout(controls_layout)
-        
-        layout.addStretch()
+
         return tab
 
     def _create_image_browser_panel(self):
@@ -735,8 +733,10 @@ class ImageBrowserApp(BaseImageTab):
         self.session_table.setHorizontalHeaderLabels(["Filename", "Source", "Size"])
         self.session_table.horizontalHeader().setStretchLastSection(True)
         self.session_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.session_table.setMinimumHeight(92)
+        self.session_table.setMaximumHeight(140)
         self.session_table.itemSelectionChanged.connect(self._on_session_selection_changed)
-        layout.addWidget(self.session_table, 1)
+        layout.addWidget(self.session_table)
         
         # Session info
         self.session_info_label = QLabel("0 images loaded")
@@ -753,8 +753,6 @@ class ImageBrowserApp(BaseImageTab):
         btn_export_data.clicked.connect(self._export_session_data)
         export_layout.addWidget(btn_export_data)
         layout.addLayout(export_layout)
-
-        layout.addStretch()
         
         return panel
 
