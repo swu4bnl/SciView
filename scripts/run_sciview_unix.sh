@@ -10,6 +10,7 @@ export PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 SETUP_ONLY=0
 AUTO_PULL="${SCIVIEW_AUTO_PULL:-1}"
 KEEP_SHELL_OPEN="${SCIVIEW_KEEP_SHELL_OPEN:-0}"
+DEV_TOOLS_FLAG="${DEV_TOOLS:-0}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -21,11 +22,27 @@ while [[ $# -gt 0 ]]; do
             AUTO_PULL=0
             shift
             ;;
+        --dev-tools)
+            DEV_TOOLS_FLAG=1
+            shift
+            ;;
+        --no-dev-tools)
+            DEV_TOOLS_FLAG=0
+            shift
+            ;;
         *)
             break
             ;;
     esac
 done
+
+export DEV_TOOLS="$DEV_TOOLS_FLAG"
+
+if [[ "$DEV_TOOLS" == "1" ]]; then
+    echo "Developer tools: ON"
+else
+    echo "Developer tools: OFF"
+fi
 
 echo_step() {
     printf "\n%s\n" "$1"

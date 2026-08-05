@@ -120,13 +120,13 @@ class ReductionTab(BaseImageTab):
         apply_info_style(self.result_summary)
         layout.addWidget(self.result_summary)
 
-        self.fig_plot, self.ax_plot = plt.subplots(figsize=(5.2, 2.8))
+        self.fig_plot, self.ax_plot = plt.subplots(figsize=(6, 4))
         self.fig_plot.subplots_adjust(left=0.10, bottom=0.18, right=0.98, top=0.95)
         self.canvas_plot = FigureCanvas(self.fig_plot)
         layout.addWidget(self.canvas_plot)
 
         toolbar = NavigationToolbar(self.canvas_plot, self)
-        toolbar.setMaximumHeight(25)
+        # toolbar.setMaximumHeight(25)
         layout.addWidget(toolbar)
 
         return panel
@@ -707,6 +707,9 @@ class ReductionTab(BaseImageTab):
 
     def _update_preview_plot(self, result, message: str | None = None):
         self.ax_plot.clear()
+        body_font = AppStyle.matplotlib_font_size('body')
+        caption_font = AppStyle.matplotlib_font_size('caption')
+        small_font = AppStyle.matplotlib_font_size('small')
 
         if result is None:
             self.ax_plot.text(
@@ -716,7 +719,7 @@ class ReductionTab(BaseImageTab):
                 transform=self.ax_plot.transAxes,
                 ha="center",
                 va="center",
-                fontsize=10,
+                fontsize=body_font,
             )
             self.ax_plot.set_axis_off()
             self.canvas_plot.draw()
@@ -738,9 +741,10 @@ class ReductionTab(BaseImageTab):
             self.ax_plot.set_xscale("linear")
             self.ax_plot.set_yscale("linear")
 
-        self.ax_plot.set_xlabel(result.x_label)
-        self.ax_plot.set_ylabel(result.y_label)
-        self.ax_plot.set_title(result.operation.replace("_", " ").title())
+        self.ax_plot.set_xlabel(result.x_label, fontsize=caption_font)
+        self.ax_plot.set_ylabel(result.y_label, fontsize=caption_font)
+        self.ax_plot.set_title(result.operation.replace("_", " ").title(), fontsize=body_font)
+        self.ax_plot.tick_params(labelsize=small_font)
         self.ax_plot.grid(True, alpha=0.2)
         self.ax_plot.set_axis_on()
         self.canvas_plot.draw()

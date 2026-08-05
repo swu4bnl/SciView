@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PyQt5.QtCore import QEvent, QPointF, Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, QPointF, QSize, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
@@ -116,7 +116,7 @@ class ImageViewer(QWidget):
         self._palette_info_label = QLabel("")
         self._palette_info_label.setVisible(False)
         self._palette_info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self._palette_info_label.setStyleSheet("color: #4b5563; padding-left: 6px;")
+        self._palette_info_label.setStyleSheet("")
         self._pan_button.setCheckable(True)
         self._zoom_button.setCheckable(True)
         self._pan_button.setChecked(True)
@@ -144,6 +144,7 @@ class ImageViewer(QWidget):
         layout.addWidget(self._graphics)
         layout.addLayout(toolbar)
 
+        self.refresh_theme()
         self.set_colormap(self._colormap_name)
 
     @property
@@ -618,6 +619,36 @@ class ImageViewer(QWidget):
         if path:
             self.export_rendered_view(path)
 
+    def refresh_theme(self) -> None:
+        """Refresh toolbar icons and pyqtgraph canvas colors for the active theme."""
+        colors = AppStyle.theme_colors()
+        background = colors['base'].name()
+        text_color = colors['text']
+        muted_color = colors['muted']
+
+        self._graphics.setBackground(background)
+        self._view_box.setBackgroundColor(background)
+        self._message_item.setColor(muted_color)
+        self._plot_item.getAxis("left").setPen(text_color)
+        self._plot_item.getAxis("left").setTextPen(text_color)
+        self._plot_item.getAxis("bottom").setPen(text_color)
+        self._plot_item.getAxis("bottom").setTextPen(text_color)
+
+        for key, button in {
+            "pan": self._pan_button,
+            "zoom": self._zoom_button,
+            "home": self._home_button,
+            "auto": self._auto_levels_button,
+            "copy": self._copy_button,
+            "save": self._save_button,
+        }.items():
+            button.setStyleSheet(AppStyle.compact_button_stylesheet())
+            button.setIcon(self._load_toolbar_icon(key))
+            button.setIconSize(AppStyle.tab_icon_size())
+
+        self._palette_info_label.setStyleSheet(f"color: {muted_color.name()};")
+        self.update()
+
     def _load_toolbar_icon(self, key: str) -> QIcon:
         icon_filename = VIEWER_TOOL_ICON_FILES.get(key)
         if not icon_filename:
@@ -628,14 +659,17 @@ class ImageViewer(QWidget):
     @staticmethod
     def _make_tool_button(action: Any, icon: QIcon) -> QToolButton:
         button = QToolButton()
+        button.setAutoRaise(False)
+        button.setFixedSize(AppStyle.toolbar_symbol_button_size())
+        button.setStyleSheet(AppStyle.compact_button_stylesheet())
         if icon.isNull():
             button.setText(action.label)
+            button.setFont(AppStyle.make_font('h3', weight=600))
         else:
             button.setIcon(icon)
-            button.setIconSize(AppStyle.tab_icon_size())
+            icon_size = max(16, min(button.width() - 10, button.height() - 10))
+            button.setIconSize(QSize(icon_size, icon_size))
         button.setToolTip(action.tooltip)
-        button.setAutoRaise(True)
-        button.setFixedSize(AppStyle.toolbar_symbol_button_size())
         return button
 
     @staticmethod

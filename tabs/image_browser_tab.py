@@ -568,8 +568,7 @@ class ImageBrowserApp(BaseImageTab):
         # Set main splitter to match other tabs: 3:1 visualization to controls
         setup_splitter_layout(main_splitter, layout_ratios['main_splitter_ratio'])
         
-        main_layout.addWidget(main_splitter)
-        main_layout.addStretch()
+        main_layout.addWidget(main_splitter, 1)
 
     def _create_loading_panel(self):
         """Create the loading options panel"""
@@ -710,7 +709,7 @@ class ImageBrowserApp(BaseImageTab):
         
         # Use the base class image panel
         base_image_panel = self._create_image_panel()
-        layout.addWidget(base_image_panel)
+        layout.addWidget(base_image_panel, 1)
         
         return panel
 

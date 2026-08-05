@@ -6,10 +6,12 @@ This module provides consistent styling across all tabs and components.
 """
 
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QSize, QTimer
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPalette, QPixmap
+from PyQt5.QtSvg import QSvgRenderer
 
 
 class AppStyle:
@@ -91,11 +93,31 @@ class AppStyle:
     
     # Typography
     FONTS = {
-        'title': '16px',
-        'subtitle': '14px', 
+        'family': "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        'scale_pct': 125,
+        'h1': '18px',
+        'h2': '15px',
+        'h3': '13px',
         'body': '11px',
         'caption': '10px',
         'small': '9px'
+    }
+
+    FONT_ROLE_PROPERTY = "sciview_font_role"
+    THEME_KEY_PROPERTY = "sciview_theme_key"
+
+    FONT_ROLE_MAP = {
+        'title': ('h1', 600),
+        'subtitle': ('h2', 500),
+        'section': ('h3', 500),
+        'body': ('body', 400),
+        'info': ('body', 400),
+        'status': ('caption', 400),
+        'button': ('body', 500),
+        'toolbar_symbol': ('h3', 600),
+        'toolbar_text': ('small', 400),
+        'input': ('body', 400),
+        'group_box': ('h3', 500),
     }
     
     # ---------------------------------------------------------------------------
@@ -411,285 +433,65 @@ class AppStyle:
     @classmethod
     def format_style(cls, style_key, **extra_vars):
         """Format a style string with color and font variables"""
-        style = cls.WIDGET_STYLES[style_key]
-        
-        # Prepare format variables
-        format_vars = {
-            # Colors
-            'primary': cls.COLORS['primary'],
-            'secondary': cls.COLORS['secondary'],
-            'accent': cls.COLORS['accent'],
-            'background': cls.COLORS['background'],
-            'surface': cls.COLORS['surface'],
-            'border': cls.COLORS['border'],
-            'text_primary': cls.COLORS['text_primary'],
-            'text_secondary': cls.COLORS['text_secondary'],
-            
-            # Colors - add new color variables
-            'surface_alt': cls.COLORS['surface_alt'],
-            'border_active': cls.COLORS['border_active'],
-            'text_muted': cls.COLORS['text_muted'],
-            'success': cls.COLORS['success'],
-            'shadow': cls.COLORS['shadow'],
-            
-            # Fonts
-            'title_font': cls.FONTS['title'],
-            'subtitle_font': cls.FONTS['subtitle'],
-            'body_font': cls.FONTS['body'],
-            'caption_font': cls.FONTS['caption'],
-            'small': cls.FONTS['small'],
-            
-            # LAYOUT: splitter handle width (CSS + Python both need this)
-            'handle_width': cls.LAYOUT['splitter_handle_width'],
-            # CSS_TOKENS: all spacing / sizing tokens injected into QSS
-            **cls.CSS_TOKENS,
-
-            # Toolbar controls
-            'toolbar_symbol_font_size': cls.TOOLBAR_BUTTON_UI['symbol_font_size'],
-            'toolbar_text_font_size': cls.TOOLBAR_BUTTON_UI['text_font_size'],
-            'toolbar_font_weight': cls.TOOLBAR_BUTTON_UI['font_weight'],
-            'toolbar_padding_horizontal': cls.TOOLBAR_BUTTON_UI['padding_horizontal'],
-            
-            # Any extra variables
-            **extra_vars
-        }
-        
-        return style.format(**format_vars)
+        return ""
 
     @classmethod
     def apply_global_style(cls, app):
-        """Apply global application stylesheet with modern design"""
-        global_style = f"""
-            /* Base application styling */
-            QMainWindow {{
-                background-color: {cls.COLORS['background']};
-                color: {cls.COLORS['text_primary']};
-                font-size: {cls.FONTS['body']};
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            }}
-            
-            /* Tab widget styling - modern flat design */
-            /* Tab widget pane */
-            QTabWidget::pane {{
-                border: 2px solid {cls.COLORS['border']};
-                background-color: {cls.COLORS['background']};
-                border-radius: 0px 0px 0px 0px;
-                margin-top: 0px;
-            }}
-            
-            /* Tab bar styling */
-            /* Tips: border-radius: top-left, top-right, bottom-right, bottom-left */
-            QTabBar::tab {{
-                background-color: {cls.COLORS['surface']};
-                border: 2px solid {cls.COLORS['border']};
-                padding: 6px 6px 10px 6px;
-                margin-left: 0px;
-                margin-right: 0px;
-                margin-bottom: -6px;
-                font-size: {cls.FONTS['body']};
-                font-weight: 500;
-                border-radius: 8px 8px 0px 0px;
-                min-width: 40px;
-            }}
-            
-            QTabBar::tab:selected {{
-                background-color: {cls.COLORS['primary']};
-                color: white;
-                border-bottom: 2px solid {cls.COLORS['primary']};
-            }}
-            
-            QTabBar::tab:hover:!selected {{
-                background-color: {cls.COLORS['surface_alt']};
-                border-color: {cls.COLORS['border_active']};
-            }}
-            
-            /* Status bar styling */
-            QStatusBar {{
-                background-color: {cls.COLORS['surface']};
-                border-top: 1px solid {cls.COLORS['border']};
-                font-size: {cls.FONTS['caption']};
-                color: {cls.COLORS['text_secondary']};
-                padding: 4px 8px;
-            }}
-            
-            /* Progress bar styling */
-            QProgressBar {{
-                border: 1px solid {cls.COLORS['border']};
-                border-radius: 4px;
-                text-align: center;
-                font-size: {cls.FONTS['caption']};
-                background-color: {cls.COLORS['surface']};
-                height: 20px;
-            }}
-            
-            QProgressBar::chunk {{
-                background-color: {cls.COLORS['primary']};
-                border-radius: 3px;
-                margin: 1px;
-            }}
-            
-            /* List widget styling */
-            QListWidget {{
-                border: 1px solid {cls.COLORS['border']};
-                border-radius: 6px;
-                background-color: white;
-                alternate-background-color: {cls.COLORS['surface']};
-                font-size: {cls.FONTS['body']};
-                outline: none;
-                padding: 4px;
-            }}
-            
-            QListWidget::item {{
-                padding: 6px 8px;
-                border-radius: 4px;
-                margin: 1px 0px;
-            }}
-            
-            QListWidget::item:selected {{
-                background-color: {cls.COLORS['primary']};
-                color: white;
-            }}
-            
-            QListWidget::item:hover:!selected {{
-                background-color: {cls.COLORS['surface_alt']};
-            }}
-            
-            /* Table widget styling */
-            QTableWidget {{
-                border: 1px solid {cls.COLORS['border']};
-                border-radius: 6px;
-                gridline-color: {cls.COLORS['border']};
-                background-color: white;
-                alternate-background-color: {cls.COLORS['surface']};
-                font-size: {cls.FONTS['body']};
-                outline: none;
-            }}
-            
-            QTableWidget::item {{
-                padding: 6px 8px;
-                border: none;
-            }}
-            
-            QTableWidget::item:selected {{
-                background-color: {cls.COLORS['primary']};
-                color: white;
-            }}
-            
-            QTableWidget::item:hover:!selected {{
-                background-color: {cls.COLORS['surface_alt']};
-            }}
-            
-            QHeaderView::section {{
-                background-color: {cls.COLORS['surface']};
-                border: none;
-                border-right: 1px solid {cls.COLORS['border']};
-                border-bottom: 1px solid {cls.COLORS['border']};
-                padding: 6px 8px;
-                font-weight: 500;
-                font-size: {cls.FONTS['body']};
-            }}
-            
-            /* Scrollbar styling - modern thin scrollbars */
-            QScrollBar:vertical {{
-                border: none;
-                background-color: {cls.COLORS['surface']};
-                width: 12px;
-                border-radius: 6px;
-            }}
-            
-            QScrollBar::handle:vertical {{
-                background-color: {cls.COLORS['border']};
-                min-height: 20px;
-                border-radius: 6px;
-                margin: 2px;
-            }}
-            
-            QScrollBar::handle:vertical:hover {{
-                background-color: {cls.COLORS['text_secondary']};
-            }}
-            
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                border: none;
-                background: none;
-            }}
-            
-            QScrollBar:horizontal {{
-                border: none;
-                background-color: {cls.COLORS['surface']};
-                height: 12px;
-                border-radius: 6px;
-            }}
-            
-            QScrollBar::handle:horizontal {{
-                background-color: {cls.COLORS['border']};
-                min-width: 20px;
-                border-radius: 6px;
-                margin: 2px;
-            }}
-            
-            QScrollBar::handle:horizontal:hover {{
-                background-color: {cls.COLORS['text_secondary']};
-            }}
-            
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
-                border: none;
-                background: none;
-            }}
-            
-            /* Checkbox styling */
-            QCheckBox {{
-                font-size: {cls.FONTS['body']};
-                spacing: 8px;
-                color: {cls.COLORS['text_primary']};
-            }}
-            
-            /* Apply splitter styling globally */
-            {cls.format_style('splitter')}
-        """
-        
-        app.setStyleSheet(global_style)
+        """Apply global application stylesheet with Qt defaults."""
+        app.setStyleSheet("")
+        cls.refresh_runtime_theme(app, clear_widget_styles=True)
 
     @classmethod
     def tab_widget_stylesheet(cls):
         """Return stylesheet for top-level tab sizing and typography."""
-        return (
-            "QTabBar::tab { "
-            f"min-width: {cls.TAB_UI['min_width']}px; "
-            f"min-height: {cls.TAB_UI['min_height']}px; "
-            f"padding: {cls.TAB_UI['padding_vertical']}px {cls.TAB_UI['padding_horizontal']}px; "
-            f"font-size: {cls.TAB_UI['font_size']}px; "
-            "}"
-        )
+        return ""
+
+    @classmethod
+    def tab_font(cls):
+        """Return the native tab-bar font, aligned with H2 section headings."""
+        return cls.make_font('h2', weight=500)
+
+    @classmethod
+    def tab_min_height(cls):
+        """Return a native-friendly tab height derived from the H2 font size."""
+        return max(cls.TAB_UI['min_height'], cls.font_px('h2') + (cls.TAB_UI['padding_vertical'] * 2) + 6)
 
     @classmethod
     def tab_icon_size(cls):
         """Return standard tab icon size."""
-        return QSize(cls.TAB_UI['icon_size'], cls.TAB_UI['icon_size'])
+        size = max(cls.TAB_UI['icon_size'], cls.font_px('h2'))
+        return QSize(size, size)
 
     @classmethod
     def corner_button_icon_size(cls):
         """Return standard corner-button icon size."""
-        return QSize(cls.CORNER_BUTTON_UI['icon_size'], cls.CORNER_BUTTON_UI['icon_size'])
+        size = max(cls.CORNER_BUTTON_UI['icon_size'], cls.font_px('caption') + 8)
+        return QSize(size, size)
 
     @classmethod
     def corner_button_size(cls):
         """Return standard corner-button size."""
-        return QSize(cls.CORNER_BUTTON_UI['button_width'], cls.CORNER_BUTTON_UI['button_height'])
+        height = max(cls.CORNER_BUTTON_UI['button_height'], cls.tab_min_height() - 4)
+        width = max(cls.CORNER_BUTTON_UI['button_width'], height)
+        return QSize(width, height)
 
     @classmethod
     def toolbar_symbol_button_size(cls):
         """Return standard square toolbar-symbol button size."""
-        return QSize(cls.TOOLBAR_BUTTON_UI['symbol_width'], cls.TOOLBAR_BUTTON_UI['symbol_height'])
+        size = max(cls.TOOLBAR_BUTTON_UI['symbol_width'], cls.font_px('body') + 18)
+        return QSize(size, max(cls.TOOLBAR_BUTTON_UI['symbol_height'], size - 2))
 
     @classmethod
     def mask_tool_button_size(cls):
         """Return larger button size for mask drawing tool icons."""
-        return QSize(cls.TOOLBAR_BUTTON_UI['mask_tool_width'], cls.TOOLBAR_BUTTON_UI['mask_tool_height'])
+        width = max(cls.TOOLBAR_BUTTON_UI['mask_tool_width'], cls.font_px('body') + 24)
+        height = max(cls.TOOLBAR_BUTTON_UI['mask_tool_height'], cls.font_px('body') + 20)
+        return QSize(width, height)
 
     @classmethod
     def mask_tool_icon_size(cls):
         """Return larger icon size for mask drawing tools."""
-        size = cls.TOOLBAR_BUTTON_UI['mask_tool_icon_size']
+        size = max(cls.TOOLBAR_BUTTON_UI['mask_tool_icon_size'], cls.font_px('body') + 6)
         return QSize(size, size)
 
     @classmethod
@@ -711,7 +513,17 @@ class AppStyle:
     def load_icon(cls, workspace_root: Path, filename: str) -> QIcon:
         """Load a themed icon file if available, else return an empty icon."""
         path = cls.icon_directory(workspace_root) / filename
-        return QIcon(str(path)) if path.exists() else QIcon()
+        if not path.exists():
+            return QIcon()
+        if path.suffix.lower() != '.svg':
+            return QIcon(str(path))
+
+        icon = QIcon()
+        colors = cls.theme_colors()
+        for size in (16, 18, 20, 22, 24, 28, 32):
+            icon.addPixmap(cls._render_svg_pixmap(path, size, colors['icon']))
+            icon.addPixmap(cls._render_svg_pixmap(path, size, colors['muted']), QIcon.Disabled)
+        return icon
 
     @classmethod 
     def get_layout_ratios(cls):
@@ -739,62 +551,398 @@ class AppStyle:
         cls.LAYOUT['main_splitter_ratio'] = [viz_ratio, ctrl_ratio]
         cls.LAYOUT['viz_splitter_ratio'] = [image_ratio, plot_ratio]
 
+    @classmethod
+    def current_theme_key(cls, app=None):
+        """Return the active theme key recorded on the QApplication."""
+        app = app or QApplication.instance()
+        return app.property(cls.THEME_KEY_PROPERTY) if app is not None else None
+
+    @classmethod
+    def theme_is_dark(cls, app=None):
+        """Return True when the current theme should be treated as dark."""
+        theme_key = str(cls.current_theme_key(app) or '').lower()
+        if any(token in theme_key for token in ('qdarkstyle', 'qdarktheme:dark', 'dark_')):
+            return True
+
+        app = app or QApplication.instance()
+        if app is None:
+            return False
+        return app.palette().color(QPalette.Window).lightness() < 128
+
+    @classmethod
+    def theme_colors(cls, app=None):
+        """Return theme-derived colors for icons and plotting surfaces."""
+        app = app or QApplication.instance()
+        theme_key = str(cls.current_theme_key(app) or '')
+        if app is None:
+            return {
+                'window': QColor('#f5f5f5'),
+                'base': QColor('#ffffff'),
+                'text': QColor('#202020'),
+                'muted': QColor('#808080'),
+                'grid': QColor('#c0c0c0'),
+                'accent': QColor('#308cc6'),
+                'border': QColor('#a0a0a0'),
+                'control_bg': QColor('#ffffff'),
+                'control_hover': QColor('#f0f4f8'),
+                'checked_fg': QColor('#ffffff'),
+                'icon': QColor('#202020'),
+            }
+
+        material_theme = cls._qt_material_theme_values(theme_key)
+        if material_theme is not None:
+            accent = QColor(material_theme.get('primaryColor', cls.COLORS['accent']))
+            window = QColor(material_theme.get('secondaryColor', '#f5f5f5'))
+            base = QColor(material_theme.get('secondaryDarkColor', material_theme.get('secondaryLightColor', '#ffffff')))
+            text_name = material_theme.get('secondaryTextColor' if cls.theme_is_dark(app) else 'primaryTextColor', '#202020')
+            text = QColor(text_name)
+            muted = QColor(material_theme.get('secondaryLightColor' if cls.theme_is_dark(app) else 'secondaryTextColor', '#808080'))
+            grid = QColor(material_theme.get('secondaryLightColor' if cls.theme_is_dark(app) else 'secondaryDarkColor', '#c0c0c0'))
+            control_bg = QColor(material_theme.get('secondaryDarkColor' if cls.theme_is_dark(app) else 'secondaryColor', window.name()))
+            control_hover = QColor(material_theme.get('secondaryLightColor' if cls.theme_is_dark(app) else 'secondaryDarkColor', control_bg.name()))
+            border = QColor(material_theme.get('primaryLightColor', accent.name()))
+            checked_fg = QColor(material_theme.get('primaryTextColor', '#ffffff'))
+
+            return {
+                'window': window,
+                'base': base,
+                'text': text,
+                'muted': muted,
+                'grid': grid,
+                'accent': accent,
+                'border': border,
+                'control_bg': control_bg,
+                'control_hover': control_hover,
+                'checked_fg': checked_fg,
+                'icon': text,
+            }
+
+        palette = app.palette()
+        if cls.theme_is_dark(app):
+            window = palette.color(QPalette.Window)
+            text = palette.color(QPalette.WindowText)
+            if window.lightness() >= 128:
+                window = QColor('#232629')
+            if text.lightness() <= 128:
+                text = QColor('#f2f2f2')
+            base = palette.color(QPalette.Base)
+            if base.lightness() >= 128:
+                base = QColor('#1b1e20')
+            muted = palette.color(QPalette.Disabled, QPalette.WindowText)
+            if muted.lightness() <= 96:
+                muted = QColor('#9aa0a6')
+            grid = QColor('#5f6368')
+        else:
+            window = palette.color(QPalette.Window)
+            base = palette.color(QPalette.Base)
+            text = palette.color(QPalette.WindowText)
+            muted = palette.color(QPalette.Disabled, QPalette.WindowText)
+            grid = palette.color(QPalette.Mid)
+
+        accent = palette.color(QPalette.Highlight)
+        if not accent.isValid():
+            accent = QColor(cls.COLORS['accent'])
+        border = accent if cls.theme_is_dark(app) else palette.color(QPalette.Mid)
+        control_bg = base if cls.theme_is_dark(app) else window
+        control_hover = control_bg.lighter(115) if cls.theme_is_dark(app) else control_bg.darker(104)
+        checked_fg = QColor('#ffffff') if accent.lightness() < 170 else QColor('#111111')
+
+        return {
+            'window': window,
+            'base': base,
+            'text': text,
+            'muted': muted,
+            'grid': grid,
+            'accent': accent,
+            'border': border,
+            'control_bg': control_bg,
+            'control_hover': control_hover,
+            'checked_fg': checked_fg,
+            'icon': text,
+        }
+
+    @classmethod
+    def compact_button_stylesheet(cls):
+        """Return a small explicit style for compact toolbar buttons."""
+        colors = cls.theme_colors()
+        return (
+            "QPushButton, QToolButton {"
+            f"color: {colors['text'].name()};"
+            f"background-color: {colors['control_bg'].name()};"
+            f"border: 1px solid {colors['border'].name()};"
+            "border-radius: 4px;"
+            "padding: 0px;"
+            "margin: 0px;"
+            "}"
+            "QPushButton:hover, QToolButton:hover {"
+            f"background-color: {colors['control_hover'].name()};"
+            f"border-color: {colors['accent'].name()};"
+            "}"
+            "QPushButton:checked, QToolButton:checked, QPushButton:pressed, QToolButton:pressed {"
+            f"background-color: {colors['accent'].name()};"
+            f"color: {colors['checked_fg'].name()};"
+            f"border-color: {colors['accent'].name()};"
+            "}"
+            "QPushButton:disabled, QToolButton:disabled {"
+            f"color: {colors['muted'].name()};"
+            f"border-color: {colors['muted'].name()};"
+            "}"
+        )
+
+    @classmethod
+    def qt_material_readability_stylesheet(cls, app=None):
+        """Return dark-theme overrides for qt-material input/widget readability."""
+        app = app or QApplication.instance()
+        theme_key = str(cls.current_theme_key(app) or '')
+        if not theme_key.startswith('qt-material:') or not cls.theme_is_dark(app):
+            return ""
+
+        colors = cls.theme_colors(app)
+        text = colors['text'].name()
+        muted = colors['muted'].name()
+        base = colors['base'].name()
+        window = colors['window'].name()
+        border = colors['border'].name()
+        accent = colors['accent'].name()
+        checked_fg = colors['checked_fg'].name()
+
+        return (
+            "QWidget {"
+            f"color: {text};"
+            "}"
+            "QLabel, QGroupBox, QCheckBox, QRadioButton, QMenu, QMenu::item {"
+            f"color: {text};"
+            "}"
+            "QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox, QSpinBox, QDoubleSpinBox, QComboBox {"
+            f"color: {text};"
+            f"background-color: {base};"
+            f"selection-color: {checked_fg};"
+            f"selection-background-color: {accent};"
+            f"border: 1px solid {border};"
+            "}"
+            "QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QAbstractSpinBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {"
+            f"color: {muted};"
+            f"border: 1px solid {muted};"
+            "}"
+            "QComboBox QAbstractItemView, QListView, QListWidget, QTreeView, QTableView, QHeaderView::section {"
+            f"color: {text};"
+            f"background-color: {window};"
+            f"selection-color: {checked_fg};"
+            f"selection-background-color: {accent};"
+            "}"
+        )
+
+    @classmethod
+    def font_px(cls, token_name, fallback=None):
+        """Return a font size token as integer pixels."""
+        raw_value = cls.FONTS.get(token_name, fallback if fallback is not None else '11px')
+        try:
+            base_px = int(str(raw_value).replace('px', '').strip())
+        except ValueError:
+            base_px = int(str(fallback if fallback is not None else '11px').replace('px', '').strip())
+        return max(1, int(round(base_px * cls.font_scale_factor())))
+
+    @classmethod
+    def font_scale_factor(cls):
+        """Return the configured global font scaling factor."""
+        raw_scale = cls.FONTS.get('scale_pct', 100)
+        try:
+            scale_pct = float(raw_scale)
+        except (TypeError, ValueError):
+            scale_pct = 100.0
+        if scale_pct <= 0:
+            scale_pct = 100.0
+        return scale_pct / 100.0
+
+    @classmethod
+    def make_font(cls, token_name, weight=400):
+        """Build a QFont from the configured token and optional weight."""
+        font = QFont()
+        family = cls.effective_font_family()
+        if family:
+            font.setFamily(family.split(',')[0].strip().strip("'\""))
+        font.setPixelSize(cls.font_px(token_name))
+        font.setWeight(weight)
+        return font
+
+    @classmethod
+    def effective_font_family(cls, app=None):
+        """Return the active font family with theme-specific overrides."""
+        theme_key = str(cls.current_theme_key(app) or '')
+        if theme_key.startswith('qt-material:'):
+            return 'Consolas'
+        return str(cls.FONTS.get('family', '')).strip()
+
+    @classmethod
+    def matplotlib_font_size(cls, token_name, fallback=None):
+        """Return a scaled Matplotlib-friendly font size in points."""
+        px_size = cls.font_px(token_name, fallback=fallback)
+        return max(1.0, round(px_size * 0.75, 1))
+
+    @classmethod
+    def apply_matplotlib_figure_theme(cls, figure):
+        """Apply theme-derived colors to a Matplotlib figure and its axes."""
+        colors = cls.theme_colors()
+        text_color = colors['text'].name()
+        base_color = colors['base'].name()
+        window_color = colors['window'].name()
+        grid_color = colors['grid'].name()
+
+        figure.patch.set_facecolor(window_color)
+        for axis in figure.axes:
+            axis.set_facecolor(base_color)
+            axis.title.set_color(text_color)
+            axis.xaxis.label.set_color(text_color)
+            axis.yaxis.label.set_color(text_color)
+            axis.tick_params(colors=text_color, labelcolor=text_color)
+            for spine in axis.spines.values():
+                spine.set_color(grid_color)
+            for line in axis.get_xgridlines() + axis.get_ygridlines():
+                line.set_color(grid_color)
+                line.set_alpha(0.35)
+
+        if getattr(figure, 'canvas', None) is not None:
+            figure.canvas.draw_idle()
+
+    @classmethod
+    def refresh_runtime_theme(cls, app=None, clear_widget_styles=False):
+        """Re-apply fonts and theme-aware visuals to live widgets."""
+        app = app or QApplication.instance()
+        if app is None:
+            return
+
+        app.setFont(cls.make_font('body'))
+        for widget in app.allWidgets():
+            if clear_widget_styles and widget.styleSheet():
+                widget.setStyleSheet("")
+            cls.apply_font_role(widget)
+            if hasattr(widget, 'refresh_theme'):
+                widget.refresh_theme()
+            elif hasattr(widget, 'figure'):
+                cls.apply_matplotlib_figure_theme(widget.figure)
+
+    @classmethod
+    def set_font_role(cls, widget, role_name):
+        """Record and apply a semantic font role for a widget."""
+        widget.setProperty(cls.FONT_ROLE_PROPERTY, role_name)
+        cls.apply_font_role(widget)
+
+    @classmethod
+    def apply_font_role(cls, widget):
+        """Apply a configured font role to a widget if one is registered."""
+        role_name = widget.property(cls.FONT_ROLE_PROPERTY)
+        if not role_name:
+            return
+
+        token_name, weight = cls.FONT_ROLE_MAP.get(role_name, ('body', 400))
+        widget.setFont(cls.make_font(token_name, weight=weight))
+
+    @classmethod
+    def _render_svg_pixmap(cls, path: Path, size: int, color: QColor) -> QPixmap:
+        """Render an SVG icon to a tinted pixmap for the active theme."""
+        renderer = QSvgRenderer(str(path))
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
+
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        painter.fillRect(pixmap.rect(), color)
+        painter.end()
+        return pixmap
+
+    @classmethod
+    def _qt_material_theme_values(cls, theme_key: str):
+        """Return key colors from a qt-material XML theme when active."""
+        if not theme_key.startswith('qt-material:'):
+            return None
+
+        theme_name = theme_key.split(':', 1)[1]
+        try:
+            qt_material = __import__('qt_material')
+            theme_path = Path(qt_material.__file__).resolve().parent / 'themes' / theme_name
+            root = ET.fromstring(theme_path.read_text(encoding='utf-8'))
+        except Exception:
+            return None
+
+        values = {}
+        for color_node in root.findall('color'):
+            name = color_node.attrib.get('name')
+            if name and color_node.text:
+                values[name] = color_node.text.strip()
+        return values
+
 
 # Convenience functions for applying styles
 def apply_title_style(widget):
     """Apply title style to a widget"""
-    widget.setStyleSheet(AppStyle.format_style('title_label'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'title')
 
 def apply_body_style(widget):
     """Apply body text style to a widget"""
-    widget.setStyleSheet(AppStyle.format_style('body_text'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'body')
 
 def apply_small_text_style(widget):
     """Apply small text style to a widget"""
-    widget.setStyleSheet(AppStyle.format_style('small_text'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'small')
 
 def apply_subtitle_style(widget):
     """Apply subtitle style to a widget"""
-    widget.setStyleSheet(AppStyle.format_style('subtitle_label'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'subtitle')
 
 def apply_info_style(widget):
     """Apply info label style to a widget"""
-    widget.setStyleSheet(AppStyle.format_style('info_label'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'info')
 
 def apply_status_style(widget):
     """Apply status label style to a widget"""
-    widget.setStyleSheet(AppStyle.format_style('status_label'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'status')
 
 def apply_primary_button_style(widget):
     """Apply primary button style to a widget"""
-    widget.setStyleSheet(AppStyle.format_style('primary_button'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'button')
 
 def apply_secondary_button_style(widget):
     """Apply secondary button style to a widget"""
-    widget.setStyleSheet(AppStyle.format_style('secondary_button'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'button')
 
 def apply_sync_button_style(widget):
     """Apply sync button style to a widget"""
-    widget.setStyleSheet(AppStyle.format_style('sync_button'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'button')
 
 def apply_toolbar_symbol_button_style(widget):
     """Apply standard style and size to a symbol-only toolbar button."""
     widget.setFixedSize(AppStyle.toolbar_symbol_button_size())
-    widget.setStyleSheet(AppStyle.format_style('toolbar_symbol_button'))
+    widget.setStyleSheet(AppStyle.compact_button_stylesheet())
+    widget.setMinimumSize(AppStyle.toolbar_symbol_button_size())
+    widget.setFont(AppStyle.make_font('h3', weight=600))
+    widget.setProperty(AppStyle.FONT_ROLE_PROPERTY, 'toolbar_symbol')
 
 def apply_toolbar_text_button_style(widget):
     """Apply standard style and size to a compact text toolbar button."""
     widget.setMinimumWidth(AppStyle.toolbar_text_button_min_width())
     widget.setFixedHeight(AppStyle.toolbar_text_button_height())
-    widget.setStyleSheet(AppStyle.format_style('toolbar_text_button'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'toolbar_text')
 
 def apply_input_style(widget):
     """Apply input field style to a widget"""
-    widget.setStyleSheet(AppStyle.format_style('input_field'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'input')
 
 def apply_group_box_style(widget):
     """Apply group box style to a widget"""
-    widget.setStyleSheet(AppStyle.format_style('group_box'))
+    widget.setStyleSheet("")
+    AppStyle.set_font_role(widget, 'group_box')
 
 def setup_splitter_layout(splitter, ratios):
     """Setup splitter with consistent ratios and responsive stretch behavior."""

@@ -465,6 +465,8 @@ class MaskApp(BaseImageTab):
         )
         for tool_name, label, tooltip in tool_specs:
             button = QToolButton()
+            button.setAutoRaise(False)
+            button.setStyleSheet(AppStyle.compact_button_stylesheet())
             icon = self._load_tool_icon(tool_name)
             if not icon.isNull():
                 button.setIcon(icon)
@@ -473,7 +475,6 @@ class MaskApp(BaseImageTab):
                 button.setText(label)
             button.setToolTip(tooltip)
             button.setCheckable(True)
-            button.setAutoRaise(True)
             button.setFixedSize(AppStyle.mask_tool_button_size())
             button.clicked.connect(lambda checked, name=tool_name: self._activate_drawing_tool(name, checked))
             self.tool_buttons[tool_name] = button
@@ -550,6 +551,19 @@ class MaskApp(BaseImageTab):
             return QIcon()
         workspace_root = getattr(self.parent_app, '_workspace_root', Path(__file__).resolve().parent.parent)
         return AppStyle.load_icon(workspace_root, icon_filename)
+
+    def refresh_theme(self):
+        """Refresh drawing tool icons and sizes for the active theme."""
+        if hasattr(self, 'tool_buttons'):
+            icon_size = AppStyle.mask_tool_icon_size()
+            button_size = AppStyle.mask_tool_button_size()
+            for tool_name, button in self.tool_buttons.items():
+                button.setStyleSheet(AppStyle.compact_button_stylesheet())
+                icon = self._load_tool_icon(tool_name)
+                if not icon.isNull():
+                    button.setIcon(icon)
+                    button.setIconSize(icon_size)
+                button.setFixedSize(button_size)
     
     def _create_external_editor_panel(self):
         """Create the external editor integration panel"""

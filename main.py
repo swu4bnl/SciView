@@ -98,9 +98,12 @@ class SciAnaApp(QMainWindow):
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
         self._last_tab_index = -1
+        self._tab_icon_keys = {}
         self.tab_widget.currentChanged.connect(self._on_current_tab_changed)
         tab_bar = self.tab_widget.tabBar()
+        tab_bar.setFont(AppStyle.tab_font())
         tab_bar.setIconSize(AppStyle.tab_icon_size())
+        tab_bar.setMinimumHeight(AppStyle.tab_min_height())
         tab_bar.setExpanding(False)
         self.tab_widget.setStyleSheet(AppStyle.tab_widget_stylesheet())
         
@@ -139,12 +142,19 @@ class SciAnaApp(QMainWindow):
         self.update_sciview_button.setToolTip("Update the SciView checkout from GitHub (git pull --ff-only)")
         self.update_sciview_button.setFixedSize(corner_button_size)
         self.update_sciview_button.clicked.connect(self._update_sciview_source)
+
+        self.style_inspector_button = QPushButton("I")
+        self.style_inspector_button.setToolTip("Open Style Inspector [dev] (Ctrl+Shift+I)")
+        self.style_inspector_button.setFixedSize(corner_button_size)
+        self.style_inspector_button.setEnabled(False)
+        self.style_inspector_button.clicked.connect(self._show_style_inspector)
         
         corner_widget = QWidget()
         corner_layout = QHBoxLayout(corner_widget)
         corner_layout.setContentsMargins(0, 0, 0, 0)
         corner_layout.setSpacing(AppStyle.CORNER_BUTTON_UI['spacing'])
         corner_layout.addWidget(self.refresh_button)
+        corner_layout.addWidget(self.style_inspector_button)
         corner_layout.addWidget(self.update_sciview_button)
         corner_layout.addWidget(self.update_scianalysis_button)
         corner_layout.addStretch()
@@ -177,8 +187,16 @@ class SciAnaApp(QMainWindow):
 
         # Dev tools: hot-reload + style inspector (only when DEV_TOOLS=1)
         self._style_hot_reloader = None
+        self._inspector_shortcut = None
         if os.environ.get("DEV_TOOLS") == "1":
             self._start_dev_tools()
+
+    def _show_style_inspector(self):
+        """Open the dev style inspector when dev tools are enabled."""
+        if self._style_hot_reloader is None:
+            self.show_status("Style Inspector is available only when DEV_TOOLS=1")
+            return
+        self._style_hot_reloader.show_inspector()
 
     def _start_dev_tools(self):
         """Start hot-reloader and register Ctrl+Shift+I for the style inspector."""
@@ -187,9 +205,11 @@ class SciAnaApp(QMainWindow):
             from PyQt5.QtWidgets import QShortcut
             from PyQt5.QtGui import QKeySequence
             self._style_hot_reloader = StyleHotReloader()
-            inspector_shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
-            inspector_shortcut.activated.connect(self._style_hot_reloader.show_inspector)
-            self.show_status("Dev tools active: hot-reload ON  |  Ctrl+Shift+I = Style Inspector")
+            self._inspector_shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
+            self._inspector_shortcut.setContext(Qt.ApplicationShortcut)
+            self._inspector_shortcut.activated.connect(self._show_style_inspector)
+            self.style_inspector_button.setEnabled(True)
+            self.show_status("Dev tools active: hot-reload ON  |  Ctrl+Shift+I or corner I button = Style Inspector")
         except Exception as exc:
             print(f"[dev tools] failed to start: {exc}")
 
@@ -251,12 +271,42 @@ class SciAnaApp(QMainWindow):
         """Add a tab to the main interface"""
         index = self.tab_widget.addTab(widget, name)
         if icon_key:
+            self._tab_icon_keys[index] = icon_key
             icon_filename = AppStyle.TAB_ICON_FILES.get(icon_key)
             if icon_filename:
                 self.tab_widget.setTabIcon(
                     index,
                     AppStyle.load_icon(self._workspace_root, icon_filename),
                 )
+
+    def refresh_theme(self):
+        """Refresh native sizing and theme-aware icons after a style change."""
+        tab_bar = self.tab_widget.tabBar()
+        tab_bar.setFont(AppStyle.tab_font())
+        tab_bar.setIconSize(AppStyle.tab_icon_size())
+        tab_bar.setMinimumHeight(AppStyle.tab_min_height())
+
+        for index, icon_key in self._tab_icon_keys.items():
+            icon_filename = AppStyle.TAB_ICON_FILES.get(icon_key)
+            if icon_filename:
+                self.tab_widget.setTabIcon(index, AppStyle.load_icon(self._workspace_root, icon_filename))
+
+        corner_button_size = AppStyle.corner_button_size()
+        corner_icon_size = AppStyle.corner_button_icon_size()
+
+        self.refresh_button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['refresh']))
+        self.refresh_button.setIconSize(corner_icon_size)
+        self.refresh_button.setFixedSize(corner_button_size)
+
+        self.update_sciview_button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['app_update']))
+        self.update_sciview_button.setIconSize(corner_icon_size)
+        self.update_sciview_button.setFixedSize(corner_button_size)
+
+        self.update_scianalysis_button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['sci_update']))
+        self.update_scianalysis_button.setIconSize(corner_icon_size)
+        self.update_scianalysis_button.setFixedSize(corner_button_size)
+
+        self.style_inspector_button.setFixedSize(corner_button_size)
 
     def publish_shared_image(self, image_data, image_path=None, source_tab=None):
         """Publish active image into shared app state and propagate to tabs."""

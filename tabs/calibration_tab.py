@@ -249,7 +249,7 @@ class CalibrationApp(BaseImageTab):
         # Instructions
         instructions_label = QLabel("Pick points on one ring. 3+ points required.")
         instructions_label.setWordWrap(True)
-        instructions_label.setStyleSheet("font-size: 11px; color: #666;")
+        apply_info_style(instructions_label)
         layout.addWidget(instructions_label)
         
         # Create scroll area for point inputs
@@ -275,10 +275,10 @@ class CalibrationApp(BaseImageTab):
             # Point label with required/optional indicator
             if i < 3:
                 label = QLabel(f"Pt {i+1}*:")  # Asterisk for required
-                label.setStyleSheet("font-size: 10px; font-weight: bold; color: #333;")
+                apply_info_style(label)
             else:
                 label = QLabel(f"Pt {i+1}:")   # Optional points
-                label.setStyleSheet("font-size: 10px; color: #666;")
+                apply_info_style(label)
             # label.setFixedWidth(35)
             point_layout.addWidget(label)
             
@@ -688,20 +688,25 @@ class CalibrationApp(BaseImageTab):
         """Clear 1D plots when SciAnalysis is not available or analysis fails"""
         self.ax_plot.clear()
         self._last_profile_signature = None
+        body_font = AppStyle.matplotlib_font_size('body')
+        caption_font = AppStyle.matplotlib_font_size('caption')
+        small_font = AppStyle.matplotlib_font_size('small')
         self.ax_plot.text(0.5, 0.5, 'No Q-space analysis available\n\nRequires:\n• Valid image data\n• SciAnalysis library\n• Proper calibration parameters', 
                          transform=self.ax_plot.transAxes, 
                          ha='center', va='center', 
-                         fontsize=10, color='gray',
+                         fontsize=body_font, color='gray',
                          bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.7))
-        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=8)
-        self.ax_plot.set_ylabel('Intensity', fontsize=8)
-        self.ax_plot.tick_params(labelsize=7)
+        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=caption_font)
+        self.ax_plot.set_ylabel('Intensity', fontsize=caption_font)
+        self.ax_plot.tick_params(labelsize=small_font)
         self.canvas_plot.draw()
     
     def _draw_1d_plots(self, circ, hor_1, hor_2, ver_1, ver_2, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid):
         """Draw the 1D plots with given data"""
         # Update 1D plot
         self.ax_plot.clear()
+        caption_font = AppStyle.matplotlib_font_size('caption')
+        small_font = AppStyle.matplotlib_font_size('small')
         self.ax_plot.plot(circ.x, circ.y, label='Circular Avg', color='#22BB44', linewidth=1.5)
         self.ax_plot.plot(hor_1.x, hor_1.y, label='Horizontal 0°', color='#BB4422', linewidth=1.2)
         self.ax_plot.plot(hor_2.x, hor_2.y, label='Horizontal 180°', color='#BB2244', linewidth=1.2)
@@ -712,10 +717,10 @@ class CalibrationApp(BaseImageTab):
         self._draw_standard_lines()
 
         # Set labels and legend with smaller fonts
-        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=8)
-        self.ax_plot.set_ylabel('Intensity', fontsize=8)
-        self.ax_plot.legend(fontsize=6, loc='best', frameon=False)
-        self.ax_plot.tick_params(labelsize=7)
+        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=caption_font)
+        self.ax_plot.set_ylabel('Intensity', fontsize=caption_font)
+        self.ax_plot.legend(fontsize=small_font, loc='best', frameon=False)
+        self.ax_plot.tick_params(labelsize=small_font)
         
         # Apply scaling options properly
         ps = self.scale_combo.currentText()

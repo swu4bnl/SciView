@@ -669,7 +669,7 @@ class BaseImageTab(QWidget):
     def create_filename_label(self, parent_layout=None):
         """Create a standardized filename display label"""
         self.filename_label = QLabel("File Name: No image loaded")
-        self.filename_label.setStyleSheet("font-size: 10px;")
+        apply_info_style(self.filename_label)
         if parent_layout:
             parent_layout.addWidget(self.filename_label)
         return self.filename_label

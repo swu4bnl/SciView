@@ -105,13 +105,13 @@ class TransformTab(BaseImageTab):
         apply_info_style(self.result_summary)
         layout.addWidget(self.result_summary)
 
-        self.fig_transform, self.ax_transform = plt.subplots(figsize=(5.2, 3.0))
+        self.fig_transform, self.ax_transform = plt.subplots(figsize=(6, 8))
         self.fig_transform.subplots_adjust(left=0.12, bottom=0.12, right=0.98, top=0.95)
         self.canvas_transform = FigureCanvas(self.fig_transform)
         layout.addWidget(self.canvas_transform)
 
         toolbar = NavigationToolbar(self.canvas_transform, self)
-        toolbar.setMaximumHeight(25)
+        # toolbar.setMaximumHeight(25)
         layout.addWidget(toolbar)
 
         return panel
@@ -561,6 +561,9 @@ class TransformTab(BaseImageTab):
             self._transform_colorbar = None
 
         self.ax_transform.clear()
+        body_font = AppStyle.matplotlib_font_size('body')
+        caption_font = AppStyle.matplotlib_font_size('caption')
+        small_font = AppStyle.matplotlib_font_size('small')
 
         if result is None:
             self.ax_transform.text(
@@ -570,7 +573,7 @@ class TransformTab(BaseImageTab):
                 transform=self.ax_transform.transAxes,
                 ha="center",
                 va="center",
-                fontsize=10,
+                fontsize=body_font,
             )
             self.ax_transform.set_axis_off()
             self.canvas_transform.draw()
@@ -648,9 +651,10 @@ class TransformTab(BaseImageTab):
 
         img_artist = self.ax_transform.imshow(image, **kwargs)
         self._transform_colorbar = self.fig_transform.colorbar(img_artist, ax=self.ax_transform, fraction=0.045, pad=0.03)
-        self.ax_transform.set_xlabel(result.x_label)
-        self.ax_transform.set_ylabel(result.y_label)
-        self.ax_transform.set_title(result.operation.replace("_", " ").title())
+        self.ax_transform.set_xlabel(result.x_label, fontsize=caption_font)
+        self.ax_transform.set_ylabel(result.y_label, fontsize=caption_font)
+        self.ax_transform.set_title(result.operation.replace("_", " ").title(), fontsize=body_font)
+        self.ax_transform.tick_params(labelsize=small_font)
         self.ax_transform.set_axis_on()
         self.canvas_transform.draw()
 
