@@ -599,22 +599,6 @@ class AppStyle:
             return False
 
     @classmethod
-    def apply_qdarktheme(cls, variant: str = 'auto', app=None) -> bool:
-        """Apply qdarktheme dark/light/auto. Returns False if qdarktheme is unavailable."""
-        app = app or QApplication.instance()
-        if app is None:
-            return False
-        try:
-            qdarktheme = __import__('qdarktheme')
-            qdarktheme.setup_theme(variant)
-            actual = qdarktheme.get_theme() if variant == 'auto' else variant
-            app.setProperty(cls.THEME_KEY_PROPERTY, f'qdarktheme:{actual}')
-            cls.refresh_runtime_theme(app)
-            return True
-        except Exception:
-            return False
-
-    @classmethod
     def tab_font(cls):
         """Return the native tab-bar font, aligned with H2 section headings."""
         return cls.make_font('h2', weight=500)
