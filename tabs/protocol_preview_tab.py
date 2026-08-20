@@ -25,7 +25,13 @@ import matplotlib.pyplot as plt
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
-from sciview.interfaces.theme.app_style import *
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_info_style,
+    apply_secondary_button_style,
+    apply_title_style,
+    setup_splitter_layout,
+)
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
 from sciview.settings.app_settings import PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE, SCIANALYSIS_PATH
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
@@ -147,28 +153,20 @@ class ProtocolPreviewApp(BaseImageTab):
         
         main_layout.addWidget(main_splitter)
     
-    def _create_controls_panel(self) -> QWidget:
-        """Create the right controls panel (deprecated - now using tabs)"""
-        # This method is deprecated. Use individual panel creation methods instead.
-        panel = QWidget()
-        layout = QVBoxLayout(panel)
-        layout.addWidget(QLabel("This panel is deprecated"))
-        return panel
-    
     def _create_configuration_panel(self) -> QWidget:
         """Create the configuration panel (Calibration, Mask, Parameters)"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(4)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
+        layout.setSpacing(AppStyle.LAYOUT['panel_margin'])
 
         # Create scrollable content area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setContentsMargins(2, 2, 2, 2)
-        scroll_layout.setSpacing(4)
+        scroll_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
+        scroll_layout.setSpacing(AppStyle.LAYOUT['panel_margin'])
 
         # ===== CALIBRATION & MASK SECTION =====
         cal_title = QLabel("Calibration & Mask")
@@ -178,13 +176,13 @@ class ProtocolPreviewApp(BaseImageTab):
         # Load calibration button
         btn_load_cal = QPushButton("Load Calibration File")
         btn_load_cal.clicked.connect(self._load_calibration_file)
-        apply_sync_button_style(btn_load_cal)
+        apply_secondary_button_style(btn_load_cal)
         scroll_layout.addWidget(btn_load_cal)
 
         # Load mask button
         btn_load_mask = QPushButton("Load Mask File")
         btn_load_mask.clicked.connect(self._load_mask_file)
-        apply_sync_button_style(btn_load_mask)
+        apply_secondary_button_style(btn_load_mask)
         scroll_layout.addWidget(btn_load_mask)
 
         scroll_layout.addSpacing(10)
@@ -349,8 +347,8 @@ class ProtocolPreviewApp(BaseImageTab):
         """Create the info panel (calibration, masks, exports info)"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(4)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
+        layout.setSpacing(AppStyle.LAYOUT['panel_margin'])
         
         
         # Image info text (used by BaseImageTab.update_plot for detailed image stats)
@@ -426,8 +424,8 @@ class ProtocolPreviewApp(BaseImageTab):
         """Create protocol stack management panel (like mask layers)"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(4)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
+        layout.setSpacing(AppStyle.LAYOUT['panel_margin'])
         
         # Title
         title = QLabel("Protocol Stack")
@@ -449,7 +447,7 @@ class ProtocolPreviewApp(BaseImageTab):
         
         # Control buttons
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(4)
+        btn_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         
         btn_add = QPushButton("Add")
         btn_add.clicked.connect(self._show_add_protocol_menu)
@@ -487,8 +485,8 @@ class ProtocolPreviewApp(BaseImageTab):
         
         self.param_widget = QWidget()
         self.param_layout = QVBoxLayout(self.param_widget)
-        self.param_layout.setContentsMargins(4, 4, 4, 4)
-        self.param_layout.setSpacing(4)
+        self.param_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
+        self.param_layout.setSpacing(AppStyle.LAYOUT['panel_margin'])
         
         # Placeholder
         placeholder = QLabel("Select a protocol to edit parameters.")
@@ -553,7 +551,7 @@ class ProtocolPreviewApp(BaseImageTab):
         # Run button (at bottom)
         btn_run = QPushButton("Run Preview")
         btn_run.clicked.connect(self._run_preview)
-        apply_sync_button_style(btn_run)
+        apply_secondary_button_style(btn_run)
         layout.addWidget(btn_run)
         
         return panel

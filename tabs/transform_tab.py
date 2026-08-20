@@ -30,10 +30,17 @@ from PyQt5.QtWidgets import (
 
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
-from sciview.interfaces.theme.app_style import apply_info_style, apply_subtitle_style, apply_title_style
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_info_style,
+    apply_subtitle_style,
+    apply_title_style,
+    setup_splitter_layout,
+)
 from sciview.masking.io import load_mask_file as backend_load_mask_file
 from sciview.processing.transform import TransformBackend, TransformRequest, save_transform_result
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
+from sciview.settings.viewer_config import VIEWER_BEHAVIOR
 from tabs.base_image_tab import BaseImageTab
 
 
@@ -61,25 +68,24 @@ class TransformTab(BaseImageTab):
     def _build_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        layout_ratios = AppStyle.get_layout_ratios()
 
         main_splitter = QSplitter(Qt.Horizontal)
 
         left_splitter = QSplitter(Qt.Vertical)
         left_splitter.addWidget(self._create_image_panel())
         left_splitter.addWidget(self._create_transform_panel())
-        left_splitter.setStretchFactor(0, 1)
-        left_splitter.setStretchFactor(1, 1)
-        left_splitter.setSizes([560, 560])
+        setup_splitter_layout(left_splitter, layout_ratios['viz_splitter_ratio'])
         main_splitter.addWidget(left_splitter)
 
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(2, 2, 2, 2)
-        right_layout.setSpacing(6)
-        right_layout.addWidget(self._create_controls_panel())
+        right_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
+        right_layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
+        right_layout.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
         main_splitter.addWidget(right_panel)
 
-        main_splitter.setSizes([980, 420])
+        setup_splitter_layout(main_splitter, layout_ratios['main_splitter_ratio'])
         main_layout.addWidget(main_splitter)
 
     def _create_transform_panel(self):
@@ -99,13 +105,13 @@ class TransformTab(BaseImageTab):
         apply_info_style(self.result_summary)
         layout.addWidget(self.result_summary)
 
-        self.fig_transform, self.ax_transform = plt.subplots(figsize=(5.2, 3.0))
+        self.fig_transform, self.ax_transform = plt.subplots(figsize=(6, 8))
         self.fig_transform.subplots_adjust(left=0.12, bottom=0.12, right=0.98, top=0.95)
         self.canvas_transform = FigureCanvas(self.fig_transform)
         layout.addWidget(self.canvas_transform)
 
         toolbar = NavigationToolbar(self.canvas_transform, self)
-        toolbar.setMaximumHeight(25)
+        # toolbar.setMaximumHeight(25)
         layout.addWidget(toolbar)
 
         return panel
@@ -128,8 +134,8 @@ class TransformTab(BaseImageTab):
     def _create_controls_panel(self):
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(6)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
+        layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
 
         title = QLabel("Controls")
         apply_title_style(title)
@@ -137,13 +143,14 @@ class TransformTab(BaseImageTab):
 
         source_group = QGroupBox("Sources")
         source_layout = QFormLayout(source_group)
+        self.configure_adaptive_form_layout(source_layout)
 
         self.calibration_source_combo = QComboBox()
         self.calibration_source_combo.addItems(["From calibration tab", "Custom profile"])
         cal_row_widget = QWidget()
         cal_btn_row = QHBoxLayout(cal_row_widget)
         cal_btn_row.setContentsMargins(0, 0, 0, 0)
-        cal_btn_row.setSpacing(6)
+        cal_btn_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
         cal_btn_row.addWidget(self.calibration_source_combo, stretch=1)
         self.load_calibration_button = QPushButton("Load Calibration")
         self.load_calibration_button.clicked.connect(self._load_custom_calibration)
@@ -155,7 +162,7 @@ class TransformTab(BaseImageTab):
         mask_row_widget = QWidget()
         mask_btn_row = QHBoxLayout(mask_row_widget)
         mask_btn_row.setContentsMargins(0, 0, 0, 0)
-        mask_btn_row.setSpacing(6)
+        mask_btn_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
         mask_btn_row.addWidget(self.mask_source_combo, stretch=1)
         self.load_mask_button = QPushButton("Load Mask")
         self.load_mask_button.clicked.connect(self._load_custom_mask)
@@ -174,6 +181,7 @@ class TransformTab(BaseImageTab):
 
         transform_group = QGroupBox("Transform")
         transform_layout = QFormLayout(transform_group)
+        self.configure_adaptive_form_layout(transform_layout)
         transform_layout.setLabelAlignment(Qt.AlignRight)
 
         self.operation_combo = QComboBox()
@@ -553,6 +561,9 @@ class TransformTab(BaseImageTab):
             self._transform_colorbar = None
 
         self.ax_transform.clear()
+        body_font = AppStyle.matplotlib_font_size('body')
+        caption_font = AppStyle.matplotlib_font_size('caption')
+        small_font = AppStyle.matplotlib_font_size('small')
 
         if result is None:
             self.ax_transform.text(
@@ -562,7 +573,7 @@ class TransformTab(BaseImageTab):
                 transform=self.ax_transform.transAxes,
                 ha="center",
                 va="center",
-                fontsize=10,
+                fontsize=body_font,
             )
             self.ax_transform.set_axis_off()
             self.canvas_transform.draw()
@@ -598,6 +609,33 @@ class TransformTab(BaseImageTab):
             if safe_vmin is not None and safe_vmax is not None:
                 norm = LogNorm(vmin=safe_vmin, vmax=safe_vmax)
 
+        finite_min = float(np.min(finite))
+        finite_max = float(np.max(finite))
+        if finite_max <= finite_min:
+            finite_max = finite_min + 1.0
+
+        if vmin is None or vmax is None or vmax <= vmin:
+            low_q, high_q = VIEWER_BEHAVIOR.auto_level_percentiles
+            auto_vmin, auto_vmax = np.percentile(finite, [low_q, high_q])
+            vmin = float(auto_vmin)
+            vmax = float(auto_vmax)
+
+        if scale == "linear":
+            # If global limits are far outside the transform data range, fall back
+            # to robust limits so preview remains readable without per-tab tuning.
+            range_span = max(finite_max - finite_min, 1e-12)
+            visible_span = max(float(vmax) - float(vmin), 1e-12)
+            overlap_min = max(float(vmin), finite_min)
+            overlap_max = min(float(vmax), finite_max)
+            overlap = max(0.0, overlap_max - overlap_min)
+            overlap_ratio = overlap / range_span
+            span_ratio = visible_span / range_span
+            if overlap_ratio < 0.02 or span_ratio > 200.0:
+                low_q, high_q = VIEWER_BEHAVIOR.auto_level_percentiles
+                auto_vmin, auto_vmax = np.percentile(finite, [low_q, high_q])
+                vmin = float(auto_vmin)
+                vmax = float(auto_vmax)
+
         kwargs = {
             "origin": "lower",
             "cmap": cmap,
@@ -613,9 +651,10 @@ class TransformTab(BaseImageTab):
 
         img_artist = self.ax_transform.imshow(image, **kwargs)
         self._transform_colorbar = self.fig_transform.colorbar(img_artist, ax=self.ax_transform, fraction=0.045, pad=0.03)
-        self.ax_transform.set_xlabel(result.x_label)
-        self.ax_transform.set_ylabel(result.y_label)
-        self.ax_transform.set_title(result.operation.replace("_", " ").title())
+        self.ax_transform.set_xlabel(result.x_label, fontsize=caption_font)
+        self.ax_transform.set_ylabel(result.y_label, fontsize=caption_font)
+        self.ax_transform.set_title(result.operation.replace("_", " ").title(), fontsize=body_font)
+        self.ax_transform.tick_params(labelsize=small_font)
         self.ax_transform.set_axis_on()
         self.canvas_transform.draw()
 

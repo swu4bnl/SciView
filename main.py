@@ -84,60 +84,63 @@ class SciAnaApp(QMainWindow):
         self.setWindowTitle(f"SciView - {BEAMLINE_NAME}")
         self.status = self.statusBar()
         self._workspace_root = Path(__file__).resolve().parent
+
+        # Shared application state
+        self.image_data = None
+        self.image_path = None
+        self.calibration = None
+        self.mask = None
+        self.shared_info_text = None
+        self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
+        self._shared_image_revision = 0
         
         # Tab widget
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
         self._last_tab_index = -1
+        self._tab_icon_keys = {}
         self.tab_widget.currentChanged.connect(self._on_current_tab_changed)
         tab_bar = self.tab_widget.tabBar()
+        tab_bar.setFont(AppStyle.tab_font())
         tab_bar.setIconSize(AppStyle.tab_icon_size())
+        tab_bar.setMinimumHeight(AppStyle.tab_min_height())
         tab_bar.setExpanding(False)
         self.tab_widget.setStyleSheet(AppStyle.tab_widget_stylesheet())
         
         self._icon_dir = AppStyle.icon_directory(self._workspace_root)
 
         # Use local transparent icons for platform-consistent button visuals.
+        corner_button_size = AppStyle.corner_button_size()
         self.refresh_button = QPushButton("")
+        self.refresh_button.setProperty("sciview_compact_button", True)
         self.refresh_button.setIcon(
             AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['refresh'])
         )
         self.refresh_button.setIconSize(AppStyle.corner_button_icon_size())
         self.refresh_button.setToolTip("Reload current tab and clear cache (Ctrl+R)")
-        corner_button_size = AppStyle.corner_button_size()
         self.refresh_button.setFixedSize(corner_button_size)
         self.refresh_button.clicked.connect(self._refresh_current_tab)
 
-        self.update_scianalysis_button = QPushButton("")
-        self.update_scianalysis_button.setIcon(
-            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['sci_update'])
-        )
-        self.update_scianalysis_button.setIconSize(AppStyle.corner_button_icon_size())
-        source_label = {
-            "pixi": "Pixi package",
-            "local": "local SciAnalysis checkout",
-            "custom": "custom SciAnalysis checkout",
-        }.get(SCIANALYSIS_SOURCE_MODE, "selected SciAnalysis source")
-        self.update_scianalysis_button.setToolTip(f"Update the {source_label} (restart after it finishes)")
-        self.update_scianalysis_button.setFixedSize(corner_button_size)
-        self.update_scianalysis_button.clicked.connect(self._update_scianalysis_source)
+        self.style_inspector_button = QPushButton("I")
+        self.style_inspector_button.setProperty("sciview_compact_button", True)
+        self.style_inspector_button.setToolTip("Open Style Inspector [dev] (Ctrl+Shift+I)")
+        self.style_inspector_button.setFixedSize(corner_button_size)
+        self.style_inspector_button.setEnabled(False)
+        self.style_inspector_button.clicked.connect(self._show_style_inspector)
 
-        self.update_sciview_button = QPushButton("")
-        self.update_sciview_button.setIcon(
-            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['app_update'])
-        )
-        self.update_sciview_button.setIconSize(AppStyle.corner_button_icon_size())
-        self.update_sciview_button.setToolTip("Update the SciView checkout from GitHub (git pull --ff-only)")
-        self.update_sciview_button.setFixedSize(corner_button_size)
-        self.update_sciview_button.clicked.connect(self._update_sciview_source)
-        
+        self.theme_toggle_button = QPushButton()
+        self.theme_toggle_button.setProperty("sciview_compact_button", True)
+        self.theme_toggle_button.setFixedSize(corner_button_size)
+        self.theme_toggle_button.clicked.connect(self._toggle_dark_light_theme)
+        self._update_theme_toggle_icon()
+
         corner_widget = QWidget()
         corner_layout = QHBoxLayout(corner_widget)
         corner_layout.setContentsMargins(0, 0, 0, 0)
         corner_layout.setSpacing(AppStyle.CORNER_BUTTON_UI['spacing'])
+        corner_layout.addWidget(self.theme_toggle_button)
         corner_layout.addWidget(self.refresh_button)
-        corner_layout.addWidget(self.update_sciview_button)
-        corner_layout.addWidget(self.update_scianalysis_button)
+        corner_layout.addWidget(self.style_inspector_button)
         corner_layout.addStretch()
 
         # Use QTabWidget's corner widget feature to place buttons on same line as tabs
@@ -154,23 +157,8 @@ class SciAnaApp(QMainWindow):
         self._scianalysis_source_mode = SCIANALYSIS_SOURCE_MODE
         self._scianalysis_source_root = Path(SCIANALYSIS_SOURCE_ROOT) if SCIANALYSIS_SOURCE_ROOT else None
         
-        # Shared application state
-        self.image_data = None
-        self.image_path = None
-        self.calibration = None
-        self.mask = None
-        self.shared_info_text = None
-        self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
-        self._shared_image_revision = 0
-        
-        # Set initial window size from config
-        window_size = GUI_SETTINGS['default_window_size']
-        self.resize(*window_size)
-
-        # Keep app usable on small displays by enforcing configurable minimums
-        min_window_size = GUI_SETTINGS.get('minimum_window_size')
-        if min_window_size:
-            self.setMinimumSize(*min_window_size)
+        # Set window sizing from config with screen-aware bounds.
+        self._apply_window_size_from_config()
         
         # Setup resource monitoring
         self._setup_resource_monitor()
@@ -180,17 +168,141 @@ class SciAnaApp(QMainWindow):
         from PyQt5.QtGui import QKeySequence
         self.refresh_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         self.refresh_shortcut.activated.connect(self._refresh_current_tab)
+        self.theme_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
+        self.theme_shortcut.activated.connect(self._toggle_dark_light_theme)
+
+        # Dev tools: hot-reload + style inspector (only when DEV_TOOLS=1)
+        self._style_hot_reloader = None
+        self._inspector_shortcut = None
+        if os.environ.get("DEV_TOOLS") == "1":
+            self._start_dev_tools()
+
+    def _toggle_dark_light_theme(self):
+        """Switch between qdarktheme dark and light."""
+        if AppStyle.theme_is_dark():
+            AppStyle.apply_qdarktheme('light')
+        else:
+            AppStyle.apply_qdarktheme('dark')
+
+    def _update_theme_toggle_icon(self):
+        if AppStyle.theme_is_dark():
+            self.theme_toggle_button.setText("\u2600")  # sun = click to go light
+            self.theme_toggle_button.setToolTip("Switch to light mode (Ctrl+D)")
+        else:
+            self.theme_toggle_button.setText("\U0001f319")  # moon = click to go dark
+            self.theme_toggle_button.setToolTip("Switch to dark mode (Ctrl+D)")
+
+    def _show_style_inspector(self):
+        """Open the dev style inspector when dev tools are enabled."""
+        if self._style_hot_reloader is None:
+            self.show_status("Style Inspector is available only when DEV_TOOLS=1")
+            return
+        self._style_hot_reloader.show_inspector()
+
+    def _start_dev_tools(self):
+        """Start hot-reloader and register Ctrl+Shift+I for the style inspector."""
+        try:
+            from sciview.dev.style_inspector import StyleHotReloader
+            from PyQt5.QtWidgets import QShortcut
+            from PyQt5.QtGui import QKeySequence
+            self._style_hot_reloader = StyleHotReloader()
+            self._inspector_shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
+            self._inspector_shortcut.setContext(Qt.ApplicationShortcut)
+            self._inspector_shortcut.activated.connect(self._show_style_inspector)
+            self.style_inspector_button.setEnabled(True)
+            self.show_status("Dev tools active: hot-reload ON  |  Ctrl+Shift+I or corner I button = Style Inspector")
+        except Exception as exc:
+            print(f"[dev tools] failed to start: {exc}")
+
+    @staticmethod
+    def _pair_from_config(value, fallback):
+        """Parse a 2-item config sequence into numeric pair with fallback."""
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            return fallback
+        try:
+            return float(value[0]), float(value[1])
+        except (TypeError, ValueError):
+            return fallback
+
+    def _apply_window_size_from_config(self):
+        """Apply responsive window size and minimums without hard-coded screen assumptions."""
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            default_size = GUI_SETTINGS.get('default_window_size', (1200, 900))
+            self.resize(*default_size)
+            min_window_size = GUI_SETTINGS.get('minimum_window_size')
+            if min_window_size:
+                self.setMinimumSize(*min_window_size)
+            return
+
+        available = screen.availableGeometry()
+        available_w = max(1, available.width())
+        available_h = max(1, available.height())
+
+        default_size = self._pair_from_config(GUI_SETTINGS.get('default_window_size'), (1200.0, 900.0))
+        default_fraction = self._pair_from_config(
+            GUI_SETTINGS.get('default_window_screen_fraction'),
+            (0.9, 0.88),
+        )
+        target_w = int(default_fraction[0] * available_w)
+        target_h = int(default_fraction[1] * available_h)
+
+        # If configured fraction is invalid, fall back to configured absolute size.
+        if target_w <= 0 or target_h <= 0:
+            target_w, target_h = int(default_size[0]), int(default_size[1])
+
+        target_w = min(max(640, target_w), available_w)
+        target_h = min(max(480, target_h), available_h)
+
+        min_size_cfg = self._pair_from_config(GUI_SETTINGS.get('minimum_window_size'), (1024.0, 768.0))
+        min_size_floor = self._pair_from_config(GUI_SETTINGS.get('minimum_window_floor'), (720.0, 560.0))
+        min_fraction = self._pair_from_config(GUI_SETTINGS.get('minimum_window_screen_fraction'), (0.75, 0.72))
+        min_w_from_fraction = int(min_fraction[0] * available_w)
+        min_h_from_fraction = int(min_fraction[1] * available_h)
+
+        min_w = int(max(min_size_floor[0], min(min_size_cfg[0], min_w_from_fraction)))
+        min_h = int(max(min_size_floor[1], min(min_size_cfg[1], min_h_from_fraction)))
+        min_w = min(min_w, target_w)
+        min_h = min(min_h, target_h)
+
+        self.setMinimumSize(max(480, min_w), max(360, min_h))
+        self.resize(target_w, target_h)
 
     def add_tab(self, widget, name, icon_key=None):
         """Add a tab to the main interface"""
         index = self.tab_widget.addTab(widget, name)
         if icon_key:
+            self._tab_icon_keys[index] = icon_key
             icon_filename = AppStyle.TAB_ICON_FILES.get(icon_key)
             if icon_filename:
                 self.tab_widget.setTabIcon(
                     index,
                     AppStyle.load_icon(self._workspace_root, icon_filename),
                 )
+
+    def refresh_theme(self):
+        """Refresh native sizing and theme-aware icons after a style change."""
+        self.tab_widget.setStyleSheet(AppStyle.tab_widget_stylesheet())
+        self._update_theme_toggle_icon()
+        tab_bar = self.tab_widget.tabBar()
+        tab_bar.setFont(AppStyle.tab_font())
+        tab_bar.setIconSize(AppStyle.tab_icon_size())
+        tab_bar.setMinimumHeight(AppStyle.tab_min_height())
+
+        for index, icon_key in self._tab_icon_keys.items():
+            icon_filename = AppStyle.TAB_ICON_FILES.get(icon_key)
+            if icon_filename:
+                self.tab_widget.setTabIcon(index, AppStyle.load_icon(self._workspace_root, icon_filename))
+
+        corner_button_size = AppStyle.corner_button_size()
+        corner_icon_size = AppStyle.corner_button_icon_size()
+
+        self.refresh_button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['refresh']))
+        self.refresh_button.setIconSize(corner_icon_size)
+        self.refresh_button.setFixedSize(corner_button_size)
+
+        self.style_inspector_button.setFixedSize(corner_button_size)
+        self.theme_toggle_button.setFixedSize(corner_button_size)
 
     def publish_shared_image(self, image_data, image_path=None, source_tab=None):
         """Publish active image into shared app state and propagate to tabs."""
@@ -515,8 +627,6 @@ class SciAnaApp(QMainWindow):
 
     def _set_update_ui_enabled(self, enabled: bool):
         self.refresh_button.setEnabled(enabled)
-        self.update_sciview_button.setEnabled(enabled)
-        self.update_scianalysis_button.setEnabled(enabled)
 
     def _start_update_process(
         self,
@@ -726,6 +836,9 @@ class SciAnaApp(QMainWindow):
 def create_application():
     """Create and configure the main application"""
     app = QApplication(sys.argv)
+
+    # Load layout/sizing ratios from runtime configuration before creating widgets.
+    AppStyle.apply_gui_settings(GUI_SETTINGS)
     
     # Apply global styling
     AppStyle.apply_global_style(app)
@@ -820,7 +933,11 @@ def create_application():
         print(f"Warning: Could not load info tab: {e}")
         placeholder = _build_placeholder_tab(f"Info Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Info", icon_key="info")
-    
+
+    # Apply system-preferred dark/light theme; fall back to plain refresh if unavailable.
+    if not AppStyle.apply_qdarktheme('auto', app):
+        AppStyle.refresh_runtime_theme(app)
+
     return app, main_window
 
 

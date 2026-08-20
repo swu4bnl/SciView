@@ -11,7 +11,7 @@ import numpy as np
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox
+    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox, QFormLayout, QScrollArea
 )
 from PyQt5.QtCore import Qt, QTimer
 
@@ -24,7 +24,14 @@ from matplotlib.backends.backend_qt5agg import (
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
-from sciview.interfaces.theme.app_style import *
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_emphasis_button_style,
+    apply_info_style,
+    apply_subtitle_style,
+    apply_title_style,
+    setup_splitter_layout,
+)
 from sciview.calibration.standards_db import STANDARDS
 from sciview.interfaces.stable_qt.tools.ring_center import RingCenterCalculator
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_select_directory, dialog_save_file
@@ -97,18 +104,18 @@ class CalibrationApp(BaseImageTab):
         
         # Ring center calculation panel
         ring_center_panel = self._create_ring_center_panel()
-        controls_splitter.addWidget(ring_center_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(ring_center_panel))
 
         # Calibration parameters panel
         calibration_panel = self._create_calibration_panel()
-        controls_splitter.addWidget(calibration_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(calibration_panel))
         
         # Standards reference panel
         standards_panel = self._create_standards_panel()
-        controls_splitter.addWidget(standards_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(standards_panel))
         
         # Set initial sizes for control panels with ring workflow first.
-        control_ratios = [2, 1, 1]
+        control_ratios = [2, 4, 1]
         setup_splitter_layout(controls_splitter, control_ratios)
         
         main_splitter.addWidget(controls_splitter)
@@ -133,9 +140,12 @@ class CalibrationApp(BaseImageTab):
         title_layout = QHBoxLayout()
         title_layout.setContentsMargins(0, 0, 0, 0)
         
-        title = QLabel("1D Profiles")
+        title = QLabel("1D Profiles ")
         apply_subtitle_style(title)
         title_layout.addWidget(title)
+
+        tip_label = QLabel("Tweak beam center to align peaks")
+        title_layout.addWidget(tip_label)
         
         title_layout.addStretch()  # Push scale controls to the right
         
@@ -145,11 +155,11 @@ class CalibrationApp(BaseImageTab):
         self.scale_combo = QComboBox()
         self.scale_combo.addItems(["linear", "logx", "logy", "loglog"])
         self.scale_combo.currentTextChanged.connect(self.update_plot_calibration)
-        self.scale_combo.setMaximumWidth(80)  # Limit width
+        self.scale_combo.setMinimumWidth(88)
         title_layout.addWidget(self.scale_combo)
 
         btn_export_1d = QPushButton("Export 1D")
-        btn_export_1d.setMaximumWidth(80)
+        btn_export_1d.setMinimumWidth(88)
         btn_export_1d.clicked.connect(self.export_1d_profiles)
         title_layout.addWidget(btn_export_1d)
 
@@ -165,7 +175,6 @@ class CalibrationApp(BaseImageTab):
         
         # Use more compact navigation toolbar or remove it
         toolbar = NavigationToolbar(self.canvas_plot, self)
-        toolbar.setMaximumHeight(25)  # Make toolbar smaller
         layout.addWidget(toolbar)
         
         return panel
@@ -174,7 +183,7 @@ class CalibrationApp(BaseImageTab):
         """Create the calibration parameters panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         
         # Title
         title = QLabel("Calibration Parameters")
@@ -182,6 +191,8 @@ class CalibrationApp(BaseImageTab):
         layout.addWidget(title)
         
         # Parameter spinboxes using config defaults
+        params_form = QFormLayout()
+        self.configure_adaptive_form_layout(params_form)
         calibration_params = [
             ("spin_x", ("Beam Center X", -1024, 4096, DEFAULT_CALIBRATION['beam_center_x'], 1)),
             ("spin_y", ("Beam Center Y", -1024, 4096, DEFAULT_CALIBRATION['beam_center_y'], 1)),
@@ -193,34 +204,36 @@ class CalibrationApp(BaseImageTab):
         ]
         
         for attr, params in calibration_params:
-            setattr(self, attr, self._create_spin(*params, parent=layout))
+            setattr(self, attr, self._create_spin(*params, parent=params_form))
 
         # Wavelength/Energy section
-        wl_layout = QHBoxLayout()
-        wl_layout.addWidget(QLabel("Wavelength (Å):"))
         self.spin_wl_ang = QDoubleSpinBox()
         self.spin_wl_ang.setRange(0.01, 10.0)
         self.spin_wl_ang.setSingleStep(0.001)
         self.spin_wl_ang.setDecimals(4)
         self.spin_wl_ang.setValue(DEFAULT_CALIBRATION['wavelength_A'])
+        self.spin_wl_ang.setAlignment(Qt.AlignRight)
+        self.spin_wl_ang.setMinimumWidth(AppStyle.wide_input_min_width())
         self.spin_wl_ang.valueChanged.connect(self.on_wavelength_changed)
-        wl_layout.addWidget(self.spin_wl_ang)
-        layout.addLayout(wl_layout)
-        
-        energy_layout = QHBoxLayout()
-        energy_layout.addWidget(QLabel("Energy (eV):"))
+        params_form.addRow(QLabel("Wavelength (Å):"), self._right_aligned_field_row(self.spin_wl_ang))
+
         self.spin_energy_ev = QDoubleSpinBox()
         self.spin_energy_ev.setRange(100.0, 50000.0)
         self.spin_energy_ev.setSingleStep(1.0)
         self.spin_energy_ev.setValue(DEFAULT_CALIBRATION['energy_eV'])
+        self.spin_energy_ev.setAlignment(Qt.AlignRight)
+        self.spin_energy_ev.setMinimumWidth(AppStyle.wide_input_min_width())
         self.spin_energy_ev.valueChanged.connect(self.on_energy_changed)
-        energy_layout.addWidget(self.spin_energy_ev)
-        layout.addLayout(energy_layout)
+        params_form.addRow(QLabel("Energy (eV):"), self._right_aligned_field_row(self.spin_energy_ev))
+
+        layout.addLayout(params_form)
 
         # Action buttons
         btns_layout = QHBoxLayout()
         btn_cal = QPushButton("Calibrate")
         btn_cal.clicked.connect(self.calibrate_and_update_status)
+        btn_cal.setMinimumWidth(AppStyle.action_button_min_width())
+        apply_emphasis_button_style(btn_cal)
         btns_layout.addWidget(btn_cal)
         btn_export = QPushButton("Export")
         btn_export.clicked.connect(self.export_calibration)
@@ -236,7 +249,7 @@ class CalibrationApp(BaseImageTab):
         """Create the ring center calculation panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         
         # Title
         title = QLabel("Ring Center Calculation")
@@ -244,23 +257,60 @@ class CalibrationApp(BaseImageTab):
         layout.addWidget(title)
         
         # Instructions
-        instructions_label = QLabel("Pick points on one ring. 3+ points required.")
+        instructions_label = QLabel("Right-click to pick points on one ring. 3+ points required.")
         instructions_label.setWordWrap(True)
-        instructions_label.setStyleSheet("font-size: 11px; color: #666;")
+        apply_info_style(instructions_label)
         layout.addWidget(instructions_label)
+
+        # Keep the ring-center actions visible above the scrollable points list.
+        controls_row = QHBoxLayout()
+        controls_row.setContentsMargins(0, 0, 0, 0)
+        controls_row.setSpacing(6)
+        calc_button = QPushButton("Calculate")
+        calc_button.clicked.connect(self.calculate_ring_center)
+        calc_button.setMinimumWidth(AppStyle.action_button_min_width())
+        apply_emphasis_button_style(calc_button)
+        controls_row.addWidget(calc_button)
+
+        clear_button = QPushButton("Clear")
+        clear_button.clicked.connect(self.clear_ring_points)
+        controls_row.addWidget(clear_button)
+
+        self.snap_to_max_check = QCheckBox("Local Maximum")
+        self.snap_to_max_check.setChecked(True)
+        controls_row.addWidget(self.snap_to_max_check)
+
+        window_label = QLabel("Window")
+        window_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        window_label.setMinimumWidth(AppStyle.inline_label_width())
+        controls_row.addWidget(window_label)
+
+        self.snap_window_spin = QSpinBox()
+        self.snap_window_spin.setRange(3, 15)
+        self.snap_window_spin.setSingleStep(2)
+        self.snap_window_spin.setValue(5)
+        self.snap_window_spin.setToolTip("Odd-size local search window (3-15 pixels)")
+        self.snap_window_spin.setFixedWidth(AppStyle.compact_input_min_width())
+        controls_row.addWidget(self.snap_window_spin)
+
+        px_label = QLabel("px")
+        px_label.setMinimumWidth(AppStyle.unit_label_width())
+        controls_row.addWidget(px_label)
+        controls_row.addStretch()
+        layout.addLayout(controls_row)
         
         # Create scroll area for point inputs
-        from PyQt5.QtWidgets import QScrollArea
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setMaximumHeight(280)  # Show more points with current compact design
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setMinimumHeight(120)
+        scroll_area.setMaximumHeight(180)
         
         # Create widget to hold all point inputs
         points_widget = QWidget()
         points_layout = QVBoxLayout(points_widget)
-        points_layout.setContentsMargins(2, 2, 2, 2)
+        points_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         points_layout.setSpacing(2)
         
         # Create fixed list of 10 point inputs
@@ -269,28 +319,28 @@ class CalibrationApp(BaseImageTab):
             point_widget = QWidget()
             point_layout = QHBoxLayout(point_widget)
             point_layout.setContentsMargins(0, 0, 0, 0)
-            point_layout.setSpacing(0)
-            
-            # Point label with required/optional indicator
+            point_layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
             if i < 3:
                 label = QLabel(f"Pt {i+1}*:")  # Asterisk for required
-                label.setStyleSheet("font-size: 10px; font-weight: bold; color: #333;")
+                apply_info_style(label)
             else:
                 label = QLabel(f"Pt {i+1}:")   # Optional points
-                label.setStyleSheet("font-size: 10px; color: #666;")
-            # label.setFixedWidth(35)
+                apply_info_style(label)
+            label.setFixedWidth(42)
             point_layout.addWidget(label)
             
             x_spin = QDoubleSpinBox()
             x_spin.setRange(-9999, 9999)
             x_spin.setDecimals(1)
             x_spin.setValue(0)
+            x_spin.setMinimumWidth(AppStyle.compact_input_min_width())
             point_layout.addWidget(x_spin)
             
             y_spin = QDoubleSpinBox()
             y_spin.setRange(-9999, 9999)
             y_spin.setDecimals(1)
             y_spin.setValue(0)
+            y_spin.setMinimumWidth(AppStyle.compact_input_min_width())
             point_layout.addWidget(y_spin)
             
             self.ring_center_inputs.append((x_spin, y_spin))
@@ -300,39 +350,11 @@ class CalibrationApp(BaseImageTab):
         scroll_area.setWidget(points_widget)
         layout.addWidget(scroll_area)
         
-        # Buttons layout
-        btn_layout = QHBoxLayout()
-        calc_button = QPushButton("Calculate")
-        calc_button.clicked.connect(self.calculate_ring_center)
-        btn_layout.addWidget(calc_button)
-        
-        clear_button = QPushButton("Clear")
-        clear_button.clicked.connect(self.clear_ring_points)
-        btn_layout.addWidget(clear_button)
-        layout.addLayout(btn_layout)
-        
         # Result display
         self.ring_result_label = QLabel("Ring center: Not calculated")
         self.ring_result_label.setWordWrap(True)
         apply_info_style(self.ring_result_label)
         layout.addWidget(self.ring_result_label)
-
-        # Right-click assist controls
-        snap_window_row = QHBoxLayout()
-        self.snap_to_max_check = QCheckBox("Local Maximum")
-        self.snap_to_max_check.setChecked(True)
-        snap_window_row.addWidget(self.snap_to_max_check)
-        snap_window_row.addWidget(QLabel("Window"))
-        self.snap_window_spin = QSpinBox()
-        self.snap_window_spin.setRange(3, 15)
-        self.snap_window_spin.setSingleStep(2)
-        self.snap_window_spin.setValue(5)
-        self.snap_window_spin.setToolTip("Odd-size local search window (3-15 pixels)")
-        self.snap_window_spin.setMaximumWidth(70)
-        snap_window_row.addWidget(self.snap_window_spin)
-        snap_window_row.addWidget(QLabel("px"))
-        snap_window_row.addStretch()
-        layout.addLayout(snap_window_row)
         
         # Click instruction
         click_instruction = QLabel("Right-click to fill next point.")
@@ -343,15 +365,14 @@ class CalibrationApp(BaseImageTab):
         # Initialize click tracking
         self.current_point_index = 0
         self.temp_markers = []  # Track temporary yellow markers
-        
-        layout.addStretch()
+
         return panel
 
     def _create_standards_panel(self):
         """Create the standards reference panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
 
         title = QLabel("Standard Materials")
         apply_title_style(title)
@@ -364,6 +385,7 @@ class CalibrationApp(BaseImageTab):
             self.standards_combo.addItem(mat)
         self.standards_combo.currentTextChanged.connect(self.on_standard_selected)
         layout.addWidget(self.standards_combo)
+        self.standards_combo.setMaximumHeight(32)
 
         # Info label
         self.standards_info_label = QLabel("Select a standard for reference lines.")
@@ -371,21 +393,46 @@ class CalibrationApp(BaseImageTab):
         apply_info_style(self.standards_info_label)
         layout.addWidget(self.standards_info_label)
 
+        panel.setMaximumHeight(120)
+
         return panel
 
     def _create_spin(self, label, mn, mx, default, step, parent):
         """Create a labeled spin box with status update connection"""
-        lay = QHBoxLayout()
-        lay.addWidget(QLabel(label))
+        form = parent if isinstance(parent, QFormLayout) else None
+        if form is not None:
+            row = None
+            lay = None
+        else:
+            lay = QHBoxLayout()
+            lay.addWidget(QLabel(label))
+
         spin = QDoubleSpinBox()
         spin.setRange(mn, mx)
         spin.setSingleStep(step)
         spin.setValue(default)
         spin.setDecimals(4 if step < 0.01 else 2)
+        spin.setAlignment(Qt.AlignRight)
+        spin.setMinimumWidth(AppStyle.wide_input_min_width())
         spin.valueChanged.connect(self._schedule_calibration_update)
-        lay.addWidget(spin)
-        parent.addLayout(lay)
+
+        if form is not None:
+            form.addRow(QLabel(label), self._right_aligned_field_row(spin))
+        else:
+            lay.addWidget(spin)
+            parent.addLayout(lay)
         return spin
+
+    @staticmethod
+    def _right_aligned_field_row(widget):
+        """Wrap a field widget so it stays aligned to the right edge of the form row."""
+        row = QWidget()
+        lay = QHBoxLayout(row)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addStretch()
+        lay.addWidget(widget)
+        return row
 
     def _schedule_calibration_update(self, *_args):
         self.parent_app.show_status("Calibration update pending...")
@@ -676,20 +723,25 @@ class CalibrationApp(BaseImageTab):
         """Clear 1D plots when SciAnalysis is not available or analysis fails"""
         self.ax_plot.clear()
         self._last_profile_signature = None
+        body_font = AppStyle.matplotlib_font_size('body')
+        caption_font = AppStyle.matplotlib_font_size('caption')
+        small_font = AppStyle.matplotlib_font_size('small')
         self.ax_plot.text(0.5, 0.5, 'No Q-space analysis available\n\nRequires:\n• Valid image data\n• SciAnalysis library\n• Proper calibration parameters', 
                          transform=self.ax_plot.transAxes, 
                          ha='center', va='center', 
-                         fontsize=10, color='gray',
+                         fontsize=body_font, color='gray',
                          bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.7))
-        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=8)
-        self.ax_plot.set_ylabel('Intensity', fontsize=8)
-        self.ax_plot.tick_params(labelsize=7)
+        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=caption_font)
+        self.ax_plot.set_ylabel('Intensity', fontsize=caption_font)
+        self.ax_plot.tick_params(labelsize=small_font)
         self.canvas_plot.draw()
     
     def _draw_1d_plots(self, circ, hor_1, hor_2, ver_1, ver_2, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid):
         """Draw the 1D plots with given data"""
         # Update 1D plot
         self.ax_plot.clear()
+        caption_font = AppStyle.matplotlib_font_size('caption')
+        small_font = AppStyle.matplotlib_font_size('small')
         self.ax_plot.plot(circ.x, circ.y, label='Circular Avg', color='#22BB44', linewidth=1.5)
         self.ax_plot.plot(hor_1.x, hor_1.y, label='Horizontal 0°', color='#BB4422', linewidth=1.2)
         self.ax_plot.plot(hor_2.x, hor_2.y, label='Horizontal 180°', color='#BB2244', linewidth=1.2)
@@ -700,10 +752,10 @@ class CalibrationApp(BaseImageTab):
         self._draw_standard_lines()
 
         # Set labels and legend with smaller fonts
-        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=8)
-        self.ax_plot.set_ylabel('Intensity', fontsize=8)
-        self.ax_plot.legend(fontsize=6, loc='best', frameon=False)
-        self.ax_plot.tick_params(labelsize=7)
+        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=caption_font)
+        self.ax_plot.set_ylabel('Intensity', fontsize=caption_font)
+        self.ax_plot.legend(fontsize=small_font, loc='best', frameon=False)
+        self.ax_plot.tick_params(labelsize=small_font)
         
         # Apply scaling options properly
         ps = self.scale_combo.currentText()

@@ -13,12 +13,17 @@ import datetime
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QFileDialog,
-    QTextEdit
+    QTextEdit, QFormLayout, QScrollArea
 )
 from PyQt5.QtCore import Qt
 
 # Import configuration from package modules.
-from sciview.interfaces.theme.app_style import *
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_info_style,
+    apply_subtitle_style,
+    apply_title_style,
+)
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_detector_config, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import DEFAULT_DISPLAY_SETTINGS, MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, get_image_info
@@ -67,6 +72,25 @@ class BaseImageTab(QWidget):
         """Update image info text when an info widget is available."""
         if hasattr(self, 'image_info_text') and self.image_info_text is not None:
             self.image_info_text.setPlainText(text)
+
+    @staticmethod
+    def configure_adaptive_form_layout(form_layout: QFormLayout) -> None:
+        """Apply responsive defaults to forms used in side control panels."""
+        form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        form_layout.setRowWrapPolicy(QFormLayout.WrapLongRows)
+        form_layout.setFormAlignment(Qt.AlignTop)
+
+    @staticmethod
+    def make_scrollable_panel(panel: QWidget) -> QScrollArea:
+        """Wrap a panel in a scroll area to keep all controls reachable."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setMinimumHeight(AppStyle.LAYOUT.get('control_panel_min_height', 96))
+        scroll.setWidget(panel)
+        return scroll
 
     def _sanitize_log_limits(self, img_array, vmin, vmax):
         """Return safe positive limits for log display or (None, None) if unavailable."""
@@ -322,22 +346,24 @@ class BaseImageTab(QWidget):
         self.image_viewer.set_scale(display_vals['scale'])
         self.image_viewer.set_levels(display_vals['vmin'], display_vals['vmax'])
 
-    def _create_image_panel(self):
+    def _create_image_panel(self, show_header: bool = True):
         """Create the image display panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)  # Remove all spacing
-        
-        # Image display title
-        title = QLabel("Raw Image")
-        apply_subtitle_style(title)
-        layout.addWidget(title)
 
-        # Dynamic filename label
-        self.filename_label = QLabel("File Name: No image loaded")
-        apply_info_style(self.filename_label)
-        layout.addWidget(self.filename_label)
+        if show_header:
+            title = QLabel("Raw Image")
+            apply_subtitle_style(title)
+            layout.addWidget(title)
+
+            self.filename_label = QLabel("File Name: No image loaded")
+            apply_info_style(self.filename_label)
+            layout.addWidget(self.filename_label)
+        else:
+            self.filename_label = QLabel("No image loaded")
+            self.filename_label.setVisible(False)
 
         self.image_viewer = ImageViewer(self)
         self.image_viewer.cursor_moved.connect(self._on_viewer_cursor_moved)
@@ -351,19 +377,19 @@ class BaseImageTab(QWidget):
         self.vmin_input = QLineEdit(str(self.display_settings['vmin']))
         self.vmin_input.editingFinished.connect(self._on_vmin_changed)
         img_ctrl.addWidget(self.vmin_input)
-        
+
         img_ctrl.addWidget(QLabel("vmax:"))
         self.vmax_input = QLineEdit(str(self.display_settings['vmax']))
         self.vmax_input.editingFinished.connect(self._on_vmax_changed)
         img_ctrl.addWidget(self.vmax_input)
-        
+
         img_ctrl.addWidget(QLabel("cmap:"))
         self.cmap_selector = QComboBox()
         self.cmap_selector.addItems(list(SUPPORTED_IMAGE_COLORMAPS))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.cmap_selector.currentTextChanged.connect(self._on_cmap_changed)
         img_ctrl.addWidget(self.cmap_selector)
-        
+
         img_ctrl.addWidget(QLabel("scale:"))
         self.img_scale_combo = QComboBox()
         self.img_scale_combo.addItems(list(SUPPORTED_IMAGE_SCALES))
@@ -378,7 +404,7 @@ class BaseImageTab(QWidget):
         """Create the image information display panel (reusable across tabs)"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         layout.setSpacing(1)
 
         # Title
@@ -650,7 +676,7 @@ class BaseImageTab(QWidget):
     def create_filename_label(self, parent_layout=None):
         """Create a standardized filename display label"""
         self.filename_label = QLabel("File Name: No image loaded")
-        self.filename_label.setStyleSheet("font-size: 10px;")
+        apply_info_style(self.filename_label)
         if parent_layout:
             parent_layout.addWidget(self.filename_label)
         return self.filename_label

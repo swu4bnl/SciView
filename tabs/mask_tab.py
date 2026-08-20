@@ -49,7 +49,15 @@ from PyQt5.QtGui import QIcon, QCursor
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
-from sciview.interfaces.theme.app_style import *
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_body_style,
+    apply_emphasis_button_style,
+    apply_info_style,
+    apply_subtitle_style,
+    apply_title_style,
+    setup_splitter_layout,
+)
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, DETECTOR_CONFIGS, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, ImageShapeConverter
@@ -159,22 +167,22 @@ class MaskApp(BaseImageTab):
         
         # Layer management panel
         layer_panel = self._create_layer_panel()
-        controls_splitter.addWidget(layer_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(layer_panel))
         
         # Mask generation panel
         generation_panel = self._create_generation_panel()
-        controls_splitter.addWidget(generation_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(generation_panel))
         
         # External editor panel
         external_panel = self._create_external_editor_panel()
-        controls_splitter.addWidget(external_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(external_panel))
         
         # Export and Apply panel 
         action_panel = self._create_action_panel()
-        controls_splitter.addWidget(action_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(action_panel))
         
         # Set initial sizes for control panels from centralized style config
-        mask_control_ratios = AppStyle.get_layout_ratios()['mask_controls_ratio'][1:]
+        mask_control_ratios = AppStyle.get_layout_ratios()['mask_controls_ratio']
         setup_splitter_layout(controls_splitter, mask_control_ratios)
         
         main_splitter.addWidget(controls_splitter)
@@ -261,7 +269,7 @@ class MaskApp(BaseImageTab):
         layout.setSpacing(4)
         
         # Title
-        title = QLabel("Mask Layers")
+        title = QLabel("Layers")
         apply_title_style(title)
         layout.addWidget(title)
         
@@ -278,6 +286,7 @@ class MaskApp(BaseImageTab):
         
         btn_add = QPushButton("Add")
         btn_add.clicked.connect(self._add_layer_menu)
+        apply_emphasis_button_style(btn_add)
         btn_layout.addWidget(btn_add)
         
         btn_remove = QPushButton("Remove")
@@ -346,7 +355,7 @@ class MaskApp(BaseImageTab):
         layout.setSpacing(2)
         
         # Title
-        title = QLabel("Mask Generation")
+        title = QLabel("Tools")
         apply_title_style(title)
         layout.addWidget(title)
 
@@ -385,6 +394,7 @@ class MaskApp(BaseImageTab):
         btn_gen_threshold = QPushButton("Generate")
         btn_gen_threshold.setToolTip("Create a new layer from the current threshold settings")
         btn_gen_threshold.clicked.connect(self._generate_threshold_mask)
+        apply_emphasis_button_style(btn_gen_threshold)
         threshold_layout.addWidget(btn_gen_threshold)
         
         layout.addWidget(threshold_group)
@@ -445,7 +455,7 @@ class MaskApp(BaseImageTab):
         
         layout.addWidget(filter_group)
         
-        ###### Drawing Tools (Photoshop-style, Compact) ######
+        ###### Drawing Tools ######
         drawing_group = QGroupBox("Drawing Tools")
         drawing_layout = QVBoxLayout(drawing_group)
         drawing_layout.setSpacing(2)
@@ -465,6 +475,8 @@ class MaskApp(BaseImageTab):
         )
         for tool_name, label, tooltip in tool_specs:
             button = QToolButton()
+            button.setAutoRaise(False)
+            AppStyle.apply_widget_style(button, 'compact_button')
             icon = self._load_tool_icon(tool_name)
             if not icon.isNull():
                 button.setIcon(icon)
@@ -473,7 +485,6 @@ class MaskApp(BaseImageTab):
                 button.setText(label)
             button.setToolTip(tooltip)
             button.setCheckable(True)
-            button.setAutoRaise(True)
             button.setFixedSize(AppStyle.mask_tool_button_size())
             button.clicked.connect(lambda checked, name=tool_name: self._activate_drawing_tool(name, checked))
             self.tool_buttons[tool_name] = button
@@ -498,14 +509,14 @@ class MaskApp(BaseImageTab):
         
         # Create button group for mode selection
         self.mode_group = QButtonGroup()
-        self.draw_add_radio = QRadioButton("Add")
+        self.draw_add_radio = QRadioButton("+Add")
         self.draw_add_radio.setChecked(True)
         self.draw_add_radio.setToolTip("Add to mask")
         self.draw_add_radio.toggled.connect(lambda checked: checked and self._update_tool_mode())
         self.mode_group.addButton(self.draw_add_radio, 0)
         tool_options_layout.addWidget(self.draw_add_radio, 0, 1)
         
-        self.draw_remove_radio = QRadioButton("Remove")
+        self.draw_remove_radio = QRadioButton("-Remove")
         self.draw_remove_radio.setToolTip("Remove from mask")
         self.draw_remove_radio.toggled.connect(lambda checked: checked and self._update_tool_mode())
         self.mode_group.addButton(self.draw_remove_radio, 1)
@@ -550,34 +561,56 @@ class MaskApp(BaseImageTab):
             return QIcon()
         workspace_root = getattr(self.parent_app, '_workspace_root', Path(__file__).resolve().parent.parent)
         return AppStyle.load_icon(workspace_root, icon_filename)
+
+    def refresh_theme(self):
+        """Refresh drawing tool icons and sizes for the active theme."""
+        if hasattr(self, 'tool_buttons'):
+            icon_size = AppStyle.mask_tool_icon_size()
+            button_size = AppStyle.mask_tool_button_size()
+            for tool_name, button in self.tool_buttons.items():
+                AppStyle.apply_widget_style(button, 'compact_button')
+                icon = self._load_tool_icon(tool_name)
+                if not icon.isNull():
+                    button.setIcon(icon)
+                    button.setIconSize(icon_size)
+                button.setFixedSize(button_size)
     
     def _create_external_editor_panel(self):
         """Create the external editor integration panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
         
         # Title
-        title = QLabel("External Editor")
-        apply_title_style(title)
+        title = QLabel("Transfer")
+        apply_subtitle_style(title)
+        # apply_title_style(title)
         layout.addWidget(title)
         
         # Instructions
-        info = QLabel("Export to GIMP for advanced editing")
+        info = QLabel("Edit Mask with GIMP (External Editor)")
         info.setWordWrap(True)
         apply_info_style(info)
         layout.addWidget(info)
         
+        button_row = QVBoxLayout()
+        button_row.setSpacing(4)
+
         # Export to GIMP button
         btn_gimp = QPushButton("Open in GIMP")
         btn_gimp.clicked.connect(self._open_in_gimp)
-        layout.addWidget(btn_gimp)
+        button_row.addWidget(btn_gimp)
         
         # Reload mask from file
-        btn_reload = QPushButton("Import mask")
-        btn_reload.clicked.connect(self._import_external_mask)
-        layout.addWidget(btn_reload)
+        # DEPRECATED
+
+        # btn_reload = QPushButton("Import mask")
+        # btn_reload.clicked.connect(self._import_external_mask)
+        # button_row.addWidget(btn_reload)
+
+        button_row.addStretch()
+        layout.addLayout(button_row)
         
         layout.addStretch()
         return panel
@@ -587,25 +620,32 @@ class MaskApp(BaseImageTab):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
         
         # Title
-        title = QLabel("Actions")
+        title = QLabel("Export")
         apply_title_style(title)
         layout.addWidget(title)
         
-        # Export Selected Layer button
-        btn_export_layer = QPushButton("Export Layer")
-        btn_export_layer.setToolTip("Export the selected layer")
-        btn_export_layer.clicked.connect(self._export_selected_layer)
-        layout.addWidget(btn_export_layer)
+        button_row = QVBoxLayout()
+        button_row.setSpacing(4)
 
-        # Export Combined Mask button (green)
-        btn_export_combined = QPushButton("Export Combined")
+        # Export Selected Layer button
+        btn_export_layer = QPushButton("Single Layer")
+        btn_export_layer.setToolTip("Export the selected layer")
+        btn_export_layer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        btn_export_layer.clicked.connect(self._export_selected_layer)
+        button_row.addWidget(btn_export_layer)
+
+        # Export Combined Mask button (emphasized)
+        btn_export_combined = QPushButton("All Layers")
         btn_export_combined.setToolTip("Export the combined mask from all visible layers")
+        btn_export_combined.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         btn_export_combined.clicked.connect(self._export_combined_mask)
-        apply_sync_button_style(btn_export_combined)
-        layout.addWidget(btn_export_combined)
+        apply_emphasis_button_style(btn_export_combined)
+        button_row.addWidget(btn_export_combined)
+
+        layout.addLayout(button_row)
         
         # Apply mask button (placeholder for future implementation)
         # btn_apply = QPushButton("Apply Mask to Tabs")

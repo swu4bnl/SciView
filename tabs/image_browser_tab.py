@@ -19,12 +19,19 @@ from PyQt5.QtWidgets import (
     QFileDialog, QMessageBox, QScrollArea, QGridLayout, QTableWidget, QSplitter,
     QTableWidgetItem, QHeaderView, QFrame
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
 from PyQt5.QtGui import QPixmap, QIcon
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
-from sciview.interfaces.theme.app_style import *
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_emphasis_button_style,
+    apply_info_style,
+    apply_title_style,
+    apply_toolbar_symbol_button_style,
+    setup_splitter_layout,
+)
 from sciview.settings.app_settings import SUPPORTED_FORMATS
 
 # Import centralized tiled client manager
@@ -36,18 +43,6 @@ from sciview.interfaces.stable_qt.utils.file_dialog_state import (
     dialog_save_file,
     dialog_select_directory,
 )
-
-
-# Compatibility shim for older SciAnalysis code paths that still reference
-# deprecated NumPy aliases removed in NumPy 2.x.
-if not hasattr(np, "float"):
-    np.float = float
-if not hasattr(np, "int"):
-    np.int = int
-if not hasattr(np, "bool"):
-    np.bool = bool
-if not hasattr(np, "complex"):
-    np.complex = complex
 
 
 class ImageLoadWorker(QThread):
@@ -555,21 +550,20 @@ class ImageBrowserApp(BaseImageTab):
         # Right panel: Image loading options (upper) and session management (lower)
         control_splitter = QSplitter(Qt.Vertical)
         loading_panel = self._create_loading_panel()
-        control_splitter.addWidget(loading_panel)
+        control_splitter.addWidget(self.make_scrollable_panel(loading_panel))
 
         session_panel = self._create_session_panel()
-        control_splitter.addWidget(session_panel)
+        control_splitter.addWidget(self.make_scrollable_panel(session_panel))
 
         # Use consistent layout ratios from global style config
         layout_ratios = AppStyle.get_layout_ratios()
-        setup_splitter_layout(control_splitter, layout_ratios['browser_controls_ratio'])
+        setup_splitter_layout(control_splitter, [4, 1])
 
         main_splitter.addWidget(control_splitter)
         # Set main splitter to match other tabs: 3:1 visualization to controls
         setup_splitter_layout(main_splitter, layout_ratios['main_splitter_ratio'])
         
-        main_layout.addWidget(main_splitter)
-        main_layout.addStretch()
+        main_layout.addWidget(main_splitter, 1)
 
     def _create_loading_panel(self):
         """Create the loading options panel"""
@@ -577,7 +571,7 @@ class ImageBrowserApp(BaseImageTab):
         layout = QVBoxLayout(panel)
         
         # Title
-        title = QLabel("Image Loading Options")
+        title = QLabel("Browse Images")
         apply_title_style(title)
         layout.addWidget(title)
         
@@ -594,8 +588,7 @@ class ImageBrowserApp(BaseImageTab):
         self.loading_status_label = QLabel("Ready to load images")
         apply_info_style(self.loading_status_label)
         layout.addWidget(self.loading_status_label)
-        
-        layout.addStretch()
+
         return panel
 
     def _create_folder_loading_tab(self):
@@ -611,6 +604,7 @@ class ImageBrowserApp(BaseImageTab):
         
         btn_browse_folder = QPushButton("Open Folder")
         btn_browse_folder.clicked.connect(self._browse_folder)
+        apply_emphasis_button_style(btn_browse_folder)
         folder_layout.addWidget(btn_browse_folder)
         layout.addLayout(folder_layout)
         
@@ -639,12 +633,14 @@ class ImageBrowserApp(BaseImageTab):
         self.add_all_folder_button = QPushButton("+")
         self.add_all_folder_button.setToolTip("Add all visible folder images to the session")
         apply_toolbar_symbol_button_style(self.add_all_folder_button)
+        self._apply_tool_icon(self.add_all_folder_button, 'tool_add_all.svg')
         self.add_all_folder_button.clicked.connect(self._load_from_folder)
         controls_layout.addWidget(self.add_all_folder_button)
 
         self.folder_play_button = QPushButton("▶")
         self.folder_play_button.setToolTip("Play through the visible folder images")
         apply_toolbar_symbol_button_style(self.folder_play_button)
+        self._apply_tool_icon(self.folder_play_button, 'tool_play.svg')
         self.folder_play_button.setCheckable(True)
         self.folder_play_button.clicked.connect(self._toggle_folder_playback)
         controls_layout.addWidget(self.folder_play_button)
@@ -652,6 +648,7 @@ class ImageBrowserApp(BaseImageTab):
         self.folder_stop_button = QPushButton("■")
         self.folder_stop_button.setToolTip("Stop playback")
         apply_toolbar_symbol_button_style(self.folder_stop_button)
+        self._apply_tool_icon(self.folder_stop_button, 'tool_pause.svg')
         self.folder_stop_button.clicked.connect(self._stop_folder_playback)
         controls_layout.addWidget(self.folder_stop_button)
 
@@ -659,6 +656,7 @@ class ImageBrowserApp(BaseImageTab):
         self.folder_loop_button.setToolTip("Loop playback")
         self.folder_loop_button.setCheckable(True)
         apply_toolbar_symbol_button_style(self.folder_loop_button)
+        self._apply_tool_icon(self.folder_loop_button, 'tool_infinite.svg')
         controls_layout.addWidget(self.folder_loop_button)
 
         self.folder_auto_refresh_button = QPushButton("⟳")
@@ -666,54 +664,24 @@ class ImageBrowserApp(BaseImageTab):
         self.folder_auto_refresh_button.setCheckable(True)
         self.folder_auto_refresh_button.setChecked(True)
         apply_toolbar_symbol_button_style(self.folder_auto_refresh_button)
+        self._apply_tool_icon(self.folder_auto_refresh_button, 'tool_reload.svg')
         self.folder_auto_refresh_button.toggled.connect(self._update_folder_auto_refresh)
         controls_layout.addWidget(self.folder_auto_refresh_button)
         controls_layout.addStretch()
         layout.addLayout(controls_layout)
-        
-        layout.addStretch()
+
         return tab
 
     def _create_image_browser_panel(self):
-        """Create image browser panel that extends the base image panel with navigation controls"""
+        """Create image browser panel with viewer only — nav controls are in the folder toolbar."""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Navigation header
-        header_layout = QHBoxLayout()
-        title = QLabel("Image Browser")
-        apply_title_style(title)
-        header_layout.addWidget(title)
-        
-        # Navigation controls
-        self.prev_button = QPushButton("◀ Prev")
-        self.prev_button.clicked.connect(self._prev_image)
-        self.prev_button.setEnabled(False)
-        header_layout.addWidget(self.prev_button)
-        
-        self.image_counter_label = QLabel("0 / 0")
-        header_layout.addWidget(self.image_counter_label)
-        
-        self.next_button = QPushButton("Next ▶")
-        self.next_button.clicked.connect(self._next_image)
-        self.next_button.setEnabled(False)
-        header_layout.addWidget(self.next_button)
-        
-        header_layout.addStretch()
-        layout.addLayout(header_layout)
-        
-        # Current image info
-        self.current_image_label = QLabel("No image loaded")
-        apply_info_style(self.current_image_label)
-        self.current_image_label.setMaximumHeight(AppStyle.LAYOUT['image_browser_current_label_max_height'])
-        layout.addWidget(self.current_image_label)
-        
-        # Use the base class image panel
-        base_image_panel = self._create_image_panel()
-        base_image_panel.setMinimumHeight(400)
-        layout.addWidget(base_image_panel)
-        
+
+        # Use base image panel without the redundant 'Raw Image' title and filename label.
+        base_image_panel = self._create_image_panel(show_header=False)
+        layout.addWidget(base_image_panel, 1)
+
         return panel
 
     def _create_session_panel(self):
@@ -723,9 +691,32 @@ class ImageBrowserApp(BaseImageTab):
         
         # Title and controls
         header_layout = QHBoxLayout()
-        title = QLabel("Session Images")
+        title = QLabel("Loaded Images")
         apply_title_style(title)
         header_layout.addWidget(title)
+
+        # pLayback controls for navigating through the session images
+        # DEPRECATED
+        controls_layout = QHBoxLayout()
+        controls_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
+
+        self.prev_button = QPushButton("\u25c0")
+        self.prev_button.setToolTip("Previous image")
+        apply_toolbar_symbol_button_style(self.prev_button)
+        self.prev_button.clicked.connect(self._prev_image)
+        self.prev_button.setEnabled(False)
+        controls_layout.addWidget(self.prev_button)
+
+        self.image_counter_label = QLabel("0/0")
+        apply_info_style(self.image_counter_label)
+        controls_layout.addWidget(self.image_counter_label)
+
+        self.next_button = QPushButton("\u25b6")
+        self.next_button.setToolTip("Next image")
+        apply_toolbar_symbol_button_style(self.next_button)
+        self.next_button.clicked.connect(self._next_image)
+        self.next_button.setEnabled(False)
+        controls_layout.addWidget(self.next_button)
         
         btn_clear_session = QPushButton("Clear")
         btn_clear_session.clicked.connect(self._clear_session)
@@ -738,9 +729,10 @@ class ImageBrowserApp(BaseImageTab):
         self.session_table.setHorizontalHeaderLabels(["Filename", "Source", "Size"])
         self.session_table.horizontalHeader().setStretchLastSection(True)
         self.session_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.session_table.setMinimumHeight(92)
+        self.session_table.setMaximumHeight(140)
         self.session_table.itemSelectionChanged.connect(self._on_session_selection_changed)
-        self.session_table.setMinimumHeight(250)
-        layout.addWidget(self.session_table, 1)
+        layout.addWidget(self.session_table)
         
         # Session info
         self.session_info_label = QLabel("0 images loaded")
@@ -748,17 +740,15 @@ class ImageBrowserApp(BaseImageTab):
         layout.addWidget(self.session_info_label)
         
         # Export options
-        export_layout = QHBoxLayout()
-        btn_export_list = QPushButton("Export List")
-        btn_export_list.clicked.connect(self._export_session_list)
-        export_layout.addWidget(btn_export_list)
+        # export_layout = QHBoxLayout()
+        # btn_export_list = QPushButton("Export List")
+        # btn_export_list.clicked.connect(self._export_session_list)
+        # export_layout.addWidget(btn_export_list)
         
-        btn_export_data = QPushButton("Export Data")
-        btn_export_data.clicked.connect(self._export_session_data)
-        export_layout.addWidget(btn_export_data)
-        layout.addLayout(export_layout)
-
-        layout.addStretch()
+        # btn_export_data = QPushButton("Export Data")
+        # btn_export_data.clicked.connect(self._export_session_data)
+        # export_layout.addWidget(btn_export_data)
+        # layout.addLayout(export_layout)
         
         return panel
 
@@ -856,13 +846,13 @@ class ImageBrowserApp(BaseImageTab):
         
         if current_image is None:
             self.image_viewer.clear_image('No Image Loaded')
-            self.current_image_label.setText("No image loaded")
+            self.filename_label.setText("No image loaded")
             return
         
         # Check if data is available (might still be None if loading failed)
         if current_image['data'] is None:
             self.image_viewer.clear_image(f"Loading: {current_image['filename']}")
-            self.current_image_label.setText(f"Loading: {current_image['filename']}")
+            self.filename_label.setText(f"Loading: {current_image['filename']}")
             return
         
         # Extract data and other info from current_image dict
@@ -877,7 +867,7 @@ class ImageBrowserApp(BaseImageTab):
         
         # Set title and update current image label
         self.image_viewer.set_title(filename)
-        self.current_image_label.setText(f"File: {filename} | Source: {source}")
+        self.filename_label.setText(f"{filename}  \u2502  {source}")
         
         # Explicitly trigger garbage collection to clean up evicted cached images
         # This is important when switching between images in the session
@@ -1164,7 +1154,34 @@ class ImageBrowserApp(BaseImageTab):
             self.folder_play_timer.stop()
         if hasattr(self, 'folder_play_button'):
             self.folder_play_button.setChecked(False)
-            self.folder_play_button.setText("▶")
+            if self.folder_play_button.icon().isNull():
+                self.folder_play_button.setText("▶")
+
+    def _load_browser_icon(self, filename: str):
+        workspace_root = getattr(self.parent_app, '_workspace_root', Path(__file__).resolve().parent.parent.parent)
+        return AppStyle.load_icon(workspace_root, filename)
+
+    def _apply_tool_icon(self, button, filename: str) -> None:
+        icon = self._load_browser_icon(filename)
+        if not icon.isNull():
+            size = AppStyle.toolbar_symbol_button_size()
+            icon_px = max(16, min(size.width() - 8, size.height() - 8))
+            button.setIcon(icon)
+            button.setIconSize(QSize(icon_px, icon_px))
+            button.setText("")
+
+    def refresh_theme(self) -> None:
+        """Re-tint toolbar icons for the active dark/light theme."""
+        pairs = [
+            (getattr(self, 'add_all_folder_button', None), 'tool_add_all.svg'),
+            (getattr(self, 'folder_play_button', None),    'tool_play.svg'),
+            (getattr(self, 'folder_stop_button', None),    'tool_pause.svg'),
+            (getattr(self, 'folder_loop_button', None),    'tool_infinite.svg'),
+            (getattr(self, 'folder_auto_refresh_button', None), 'tool_reload.svg'),
+        ]
+        for button, filename in pairs:
+            if button is not None:
+                self._apply_tool_icon(button, filename)
 
     def _advance_folder_playback(self):
         """Advance to the next visible folder image during playback."""

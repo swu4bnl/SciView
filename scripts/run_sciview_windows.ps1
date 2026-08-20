@@ -102,7 +102,7 @@ function Install-ManagedPythonTool {
     $env:Path = "$env:LOCALAPPDATA\pixi\bin;$env:USERPROFILE\.pixi\bin;$env:Path"
     $tool = Find-ManagedPythonTool
     if ($null -eq $tool) {
-        throw "Pixi was installed, but this launcher could not find it. Close this window and launch SciView again."
+        throw "Pixi was installed. Close this window and launch SciView again."
     }
     return $tool
 }

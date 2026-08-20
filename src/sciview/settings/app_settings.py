@@ -94,8 +94,11 @@ EXPORT_SETTINGS = {
 
 GUI_SETTINGS = {
     "default_window_size": (1200, 900),
+    "default_window_screen_fraction": (0.9, 0.88),
     "minimum_window_size": (1024, 768),
-    "visualization_ratio": 3,
+    "minimum_window_screen_fraction": (0.75, 0.72),
+    "minimum_window_floor": (720, 560),
+    "visualization_ratio": 2,
     "controls_ratio": 1,
     "image_plot_ratio": 3,
     "plot_ratio": 1,

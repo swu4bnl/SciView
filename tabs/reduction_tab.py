@@ -40,7 +40,13 @@ from sciview.interfaces.stable_qt.utils.reduction_overlay import (
     line_q_roi_mask,
     sector_roi_mask,
 )
-from sciview.interfaces.theme.app_style import apply_info_style, apply_subtitle_style, apply_title_style
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_info_style,
+    apply_subtitle_style,
+    apply_title_style,
+    setup_splitter_layout,
+)
 from sciview.masking.io import load_mask_file as backend_load_mask_file
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
 from sciview.processing.reduction import ReductionBackend, ReductionRequest, save_reduction_result
@@ -69,23 +75,24 @@ class ReductionTab(BaseImageTab):
     def _build_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        layout_ratios = AppStyle.get_layout_ratios()
 
         main_splitter = QSplitter(Qt.Horizontal)
 
         left_splitter = QSplitter(Qt.Vertical)
         left_splitter.addWidget(self._create_image_panel())
         left_splitter.addWidget(self._create_preview_panel())
-        left_splitter.setSizes([780, 340])
+        setup_splitter_layout(left_splitter, layout_ratios['viz_splitter_ratio'])
         main_splitter.addWidget(left_splitter)
 
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(2, 2, 2, 2)
-        right_layout.setSpacing(6)
-        right_layout.addWidget(self._create_controls_panel())
+        right_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
+        right_layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
+        right_layout.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
         main_splitter.addWidget(right_panel)
 
-        main_splitter.setSizes([980, 420])
+        setup_splitter_layout(main_splitter, layout_ratios['main_splitter_ratio'])
         main_layout.addWidget(main_splitter)
 
         self.canvas_plot.mpl_connect("motion_notify_event", self.on_mouse_move)
@@ -113,13 +120,13 @@ class ReductionTab(BaseImageTab):
         apply_info_style(self.result_summary)
         layout.addWidget(self.result_summary)
 
-        self.fig_plot, self.ax_plot = plt.subplots(figsize=(5.2, 2.8))
+        self.fig_plot, self.ax_plot = plt.subplots(figsize=(6, 4))
         self.fig_plot.subplots_adjust(left=0.10, bottom=0.18, right=0.98, top=0.95)
         self.canvas_plot = FigureCanvas(self.fig_plot)
         layout.addWidget(self.canvas_plot)
 
         toolbar = NavigationToolbar(self.canvas_plot, self)
-        toolbar.setMaximumHeight(25)
+        # toolbar.setMaximumHeight(25)
         layout.addWidget(toolbar)
 
         return panel
@@ -142,8 +149,8 @@ class ReductionTab(BaseImageTab):
     def _create_controls_panel(self):
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(6)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
+        layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
 
         title = QLabel("Controls")
         apply_title_style(title)
@@ -151,13 +158,14 @@ class ReductionTab(BaseImageTab):
 
         source_group = QGroupBox("Sources")
         source_layout = QFormLayout(source_group)
+        self.configure_adaptive_form_layout(source_layout)
 
         self.calibration_source_combo = QComboBox()
         self.calibration_source_combo.addItems(["From calibration tab", "Custom profile"])
         cal_row_widget = QWidget()
         cal_btn_row = QHBoxLayout(cal_row_widget)
         cal_btn_row.setContentsMargins(0, 0, 0, 0)
-        cal_btn_row.setSpacing(6)
+        cal_btn_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
         cal_btn_row.addWidget(self.calibration_source_combo, stretch=1)
         self.load_calibration_button = QPushButton("Load Calibration")
         self.load_calibration_button.clicked.connect(self._load_custom_calibration)
@@ -169,7 +177,7 @@ class ReductionTab(BaseImageTab):
         mask_row_widget = QWidget()
         mask_btn_row = QHBoxLayout(mask_row_widget)
         mask_btn_row.setContentsMargins(0, 0, 0, 0)
-        mask_btn_row.setSpacing(6)
+        mask_btn_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
         mask_btn_row.addWidget(self.mask_source_combo, stretch=1)
         self.load_mask_button = QPushButton("Load Mask")
         self.load_mask_button.clicked.connect(self._load_custom_mask)
@@ -188,6 +196,7 @@ class ReductionTab(BaseImageTab):
 
         common_group = QGroupBox("Common")
         common_layout = QFormLayout(common_group)
+        self.configure_adaptive_form_layout(common_layout)
         common_layout.setLabelAlignment(Qt.AlignRight)
 
         self.operation_combo = QComboBox()
@@ -214,6 +223,7 @@ class ReductionTab(BaseImageTab):
 
         self.circular_group = QGroupBox("Circular average")
         circular_layout = QFormLayout(self.circular_group)
+        self.configure_adaptive_form_layout(circular_layout)
         self.circular_hint = QLabel("Uses q max")
         apply_info_style(self.circular_hint)
         circular_layout.addRow(self.circular_hint)
@@ -221,6 +231,7 @@ class ReductionTab(BaseImageTab):
 
         self.sector_group = QGroupBox("Sector average")
         sector_layout = QFormLayout(self.sector_group)
+        self.configure_adaptive_form_layout(sector_layout)
         self.sector_start_spin = self._make_double_spin(0.0, 360.0, 0.0, step=1.0, decimals=1)
         self.sector_end_spin = self._make_double_spin(0.0, 360.0, 30.0, step=1.0, decimals=1)
         self.sector_hint = QLabel("Uses q max")
@@ -232,6 +243,7 @@ class ReductionTab(BaseImageTab):
 
         self.line_group = QGroupBox("Line Profile")
         line_layout = QFormLayout(self.line_group)
+        self.configure_adaptive_form_layout(line_layout)
 
         self.line_value_label = QLabel("Reference")
         apply_info_style(self.line_value_label)
@@ -695,6 +707,9 @@ class ReductionTab(BaseImageTab):
 
     def _update_preview_plot(self, result, message: str | None = None):
         self.ax_plot.clear()
+        body_font = AppStyle.matplotlib_font_size('body')
+        caption_font = AppStyle.matplotlib_font_size('caption')
+        small_font = AppStyle.matplotlib_font_size('small')
 
         if result is None:
             self.ax_plot.text(
@@ -704,7 +719,7 @@ class ReductionTab(BaseImageTab):
                 transform=self.ax_plot.transAxes,
                 ha="center",
                 va="center",
-                fontsize=10,
+                fontsize=body_font,
             )
             self.ax_plot.set_axis_off()
             self.canvas_plot.draw()
@@ -726,9 +741,10 @@ class ReductionTab(BaseImageTab):
             self.ax_plot.set_xscale("linear")
             self.ax_plot.set_yscale("linear")
 
-        self.ax_plot.set_xlabel(result.x_label)
-        self.ax_plot.set_ylabel(result.y_label)
-        self.ax_plot.set_title(result.operation.replace("_", " ").title())
+        self.ax_plot.set_xlabel(result.x_label, fontsize=caption_font)
+        self.ax_plot.set_ylabel(result.y_label, fontsize=caption_font)
+        self.ax_plot.set_title(result.operation.replace("_", " ").title(), fontsize=body_font)
+        self.ax_plot.tick_params(labelsize=small_font)
         self.ax_plot.grid(True, alpha=0.2)
         self.ax_plot.set_axis_on()
         self.canvas_plot.draw()
