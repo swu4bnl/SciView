@@ -87,8 +87,8 @@ class ReductionTab(BaseImageTab):
 
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(2, 2, 2, 2)
-        right_layout.setSpacing(6)
+        right_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
+        right_layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
         right_layout.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
         main_splitter.addWidget(right_panel)
 
@@ -149,8 +149,8 @@ class ReductionTab(BaseImageTab):
     def _create_controls_panel(self):
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(6)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
+        layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
 
         title = QLabel("Controls")
         apply_title_style(title)
@@ -165,7 +165,7 @@ class ReductionTab(BaseImageTab):
         cal_row_widget = QWidget()
         cal_btn_row = QHBoxLayout(cal_row_widget)
         cal_btn_row.setContentsMargins(0, 0, 0, 0)
-        cal_btn_row.setSpacing(6)
+        cal_btn_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
         cal_btn_row.addWidget(self.calibration_source_combo, stretch=1)
         self.load_calibration_button = QPushButton("Load Calibration")
         self.load_calibration_button.clicked.connect(self._load_custom_calibration)
@@ -177,7 +177,7 @@ class ReductionTab(BaseImageTab):
         mask_row_widget = QWidget()
         mask_btn_row = QHBoxLayout(mask_row_widget)
         mask_btn_row.setContentsMargins(0, 0, 0, 0)
-        mask_btn_row.setSpacing(6)
+        mask_btn_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
         mask_btn_row.addWidget(self.mask_source_combo, stretch=1)
         self.load_mask_button = QPushButton("Load Mask")
         self.load_mask_button.clicked.connect(self._load_custom_mask)

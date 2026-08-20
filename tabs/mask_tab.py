@@ -49,7 +49,15 @@ from PyQt5.QtGui import QIcon, QCursor
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
-from sciview.interfaces.theme.app_style import *
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_body_style,
+    apply_emphasis_button_style,
+    apply_info_style,
+    apply_subtitle_style,
+    apply_title_style,
+    setup_splitter_layout,
+)
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, DETECTOR_CONFIGS, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, ImageShapeConverter
@@ -261,7 +269,7 @@ class MaskApp(BaseImageTab):
         layout.setSpacing(4)
         
         # Title
-        title = QLabel("Mask Layers")
+        title = QLabel("Layers")
         apply_title_style(title)
         layout.addWidget(title)
         
@@ -278,6 +286,7 @@ class MaskApp(BaseImageTab):
         
         btn_add = QPushButton("Add")
         btn_add.clicked.connect(self._add_layer_menu)
+        apply_emphasis_button_style(btn_add)
         btn_layout.addWidget(btn_add)
         
         btn_remove = QPushButton("Remove")
@@ -346,7 +355,7 @@ class MaskApp(BaseImageTab):
         layout.setSpacing(2)
         
         # Title
-        title = QLabel("Mask Generation")
+        title = QLabel("Tools")
         apply_title_style(title)
         layout.addWidget(title)
 
@@ -385,6 +394,7 @@ class MaskApp(BaseImageTab):
         btn_gen_threshold = QPushButton("Generate")
         btn_gen_threshold.setToolTip("Create a new layer from the current threshold settings")
         btn_gen_threshold.clicked.connect(self._generate_threshold_mask)
+        apply_emphasis_button_style(btn_gen_threshold)
         threshold_layout.addWidget(btn_gen_threshold)
         
         layout.addWidget(threshold_group)
@@ -445,7 +455,7 @@ class MaskApp(BaseImageTab):
         
         layout.addWidget(filter_group)
         
-        ###### Drawing Tools (Photoshop-style, Compact) ######
+        ###### Drawing Tools ######
         drawing_group = QGroupBox("Drawing Tools")
         drawing_layout = QVBoxLayout(drawing_group)
         drawing_layout.setSpacing(2)
@@ -466,7 +476,7 @@ class MaskApp(BaseImageTab):
         for tool_name, label, tooltip in tool_specs:
             button = QToolButton()
             button.setAutoRaise(False)
-            button.setStyleSheet(AppStyle.compact_button_stylesheet())
+            AppStyle.apply_widget_style(button, 'compact_button')
             icon = self._load_tool_icon(tool_name)
             if not icon.isNull():
                 button.setIcon(icon)
@@ -499,14 +509,14 @@ class MaskApp(BaseImageTab):
         
         # Create button group for mode selection
         self.mode_group = QButtonGroup()
-        self.draw_add_radio = QRadioButton("Add")
+        self.draw_add_radio = QRadioButton("+Add")
         self.draw_add_radio.setChecked(True)
         self.draw_add_radio.setToolTip("Add to mask")
         self.draw_add_radio.toggled.connect(lambda checked: checked and self._update_tool_mode())
         self.mode_group.addButton(self.draw_add_radio, 0)
         tool_options_layout.addWidget(self.draw_add_radio, 0, 1)
         
-        self.draw_remove_radio = QRadioButton("Remove")
+        self.draw_remove_radio = QRadioButton("-Remove")
         self.draw_remove_radio.setToolTip("Remove from mask")
         self.draw_remove_radio.toggled.connect(lambda checked: checked and self._update_tool_mode())
         self.mode_group.addButton(self.draw_remove_radio, 1)
@@ -558,7 +568,7 @@ class MaskApp(BaseImageTab):
             icon_size = AppStyle.mask_tool_icon_size()
             button_size = AppStyle.mask_tool_button_size()
             for tool_name, button in self.tool_buttons.items():
-                button.setStyleSheet(AppStyle.compact_button_stylesheet())
+                AppStyle.apply_widget_style(button, 'compact_button')
                 icon = self._load_tool_icon(tool_name)
                 if not icon.isNull():
                     button.setIcon(icon)
@@ -573,17 +583,18 @@ class MaskApp(BaseImageTab):
         layout.setSpacing(3)
         
         # Title
-        title = QLabel("External Editor")
-        apply_title_style(title)
+        title = QLabel("Transfer")
+        apply_subtitle_style(title)
+        # apply_title_style(title)
         layout.addWidget(title)
         
         # Instructions
-        info = QLabel("Round-trip mask editing with GIMP")
+        info = QLabel("Edit Mask with GIMP (External Editor)")
         info.setWordWrap(True)
         apply_info_style(info)
         layout.addWidget(info)
         
-        button_row = QHBoxLayout()
+        button_row = QVBoxLayout()
         button_row.setSpacing(4)
 
         # Export to GIMP button
@@ -592,9 +603,11 @@ class MaskApp(BaseImageTab):
         button_row.addWidget(btn_gimp)
         
         # Reload mask from file
-        btn_reload = QPushButton("Import mask")
-        btn_reload.clicked.connect(self._import_external_mask)
-        button_row.addWidget(btn_reload)
+        # DEPRECATED
+
+        # btn_reload = QPushButton("Import mask")
+        # btn_reload.clicked.connect(self._import_external_mask)
+        # button_row.addWidget(btn_reload)
 
         button_row.addStretch()
         layout.addLayout(button_row)
@@ -610,27 +623,28 @@ class MaskApp(BaseImageTab):
         layout.setSpacing(3)
         
         # Title
-        title = QLabel("Actions")
+        title = QLabel("Export")
         apply_title_style(title)
         layout.addWidget(title)
         
-        button_row = QHBoxLayout()
+        button_row = QVBoxLayout()
         button_row.setSpacing(4)
 
         # Export Selected Layer button
-        btn_export_layer = QPushButton("Export Layer")
+        btn_export_layer = QPushButton("Single Layer")
         btn_export_layer.setToolTip("Export the selected layer")
+        btn_export_layer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         btn_export_layer.clicked.connect(self._export_selected_layer)
         button_row.addWidget(btn_export_layer)
 
         # Export Combined Mask button (emphasized)
-        btn_export_combined = QPushButton("Export Combined")
+        btn_export_combined = QPushButton("All Layers")
         btn_export_combined.setToolTip("Export the combined mask from all visible layers")
+        btn_export_combined.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         btn_export_combined.clicked.connect(self._export_combined_mask)
         apply_emphasis_button_style(btn_export_combined)
         button_row.addWidget(btn_export_combined)
 
-        button_row.addStretch()
         layout.addLayout(button_row)
         
         # Apply mask button (placeholder for future implementation)

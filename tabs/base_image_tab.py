@@ -18,7 +18,12 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 # Import configuration from package modules.
-from sciview.interfaces.theme.app_style import *
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_info_style,
+    apply_subtitle_style,
+    apply_title_style,
+)
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_detector_config, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import DEFAULT_DISPLAY_SETTINGS, MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, get_image_info
@@ -341,22 +346,24 @@ class BaseImageTab(QWidget):
         self.image_viewer.set_scale(display_vals['scale'])
         self.image_viewer.set_levels(display_vals['vmin'], display_vals['vmax'])
 
-    def _create_image_panel(self):
+    def _create_image_panel(self, show_header: bool = True):
         """Create the image display panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)  # Remove all spacing
-        
-        # Image display title
-        title = QLabel("Raw Image")
-        apply_subtitle_style(title)
-        layout.addWidget(title)
 
-        # Dynamic filename label
-        self.filename_label = QLabel("File Name: No image loaded")
-        apply_info_style(self.filename_label)
-        layout.addWidget(self.filename_label)
+        if show_header:
+            title = QLabel("Raw Image")
+            apply_subtitle_style(title)
+            layout.addWidget(title)
+
+            self.filename_label = QLabel("File Name: No image loaded")
+            apply_info_style(self.filename_label)
+            layout.addWidget(self.filename_label)
+        else:
+            self.filename_label = QLabel("No image loaded")
+            self.filename_label.setVisible(False)
 
         self.image_viewer = ImageViewer(self)
         self.image_viewer.cursor_moved.connect(self._on_viewer_cursor_moved)
@@ -397,7 +404,7 @@ class BaseImageTab(QWidget):
         """Create the image information display panel (reusable across tabs)"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         layout.setSpacing(1)
 
         # Title

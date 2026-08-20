@@ -2,6 +2,7 @@
 
 from PyQt5.QtWidgets import QVBoxLayout
 
+from sciview.interfaces.theme.app_style import AppStyle
 from tabs.base_image_tab import BaseImageTab
 
 
@@ -14,7 +15,7 @@ class InfoTab(BaseImageTab):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         layout.addWidget(self._create_image_info_panel())
 
     def set_shared_info_text(self, info_text):

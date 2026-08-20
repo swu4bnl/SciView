@@ -6,6 +6,7 @@ This module provides consistent styling across all tabs and components.
 """
 
 from pathlib import Path
+from copy import deepcopy
 import xml.etree.ElementTree as ET
 
 from PyQt5.QtWidgets import QApplication, QPushButton, QToolButton
@@ -21,11 +22,9 @@ class AppStyle:
 
     TAB_UI = {
         'icon_size': 24,
-        'min_width': 112,
+        'min_width': 88,   # reduced from 112 — short tabs (Info, Batch) were forced too wide
         'min_height': 48,
         'padding_vertical': 5,
-        'padding_horizontal': 10,
-        'font_size': 12,
     }
 
     # Single source of truth for button sizing/form-factor across the app.
@@ -47,19 +46,12 @@ class AppStyle:
         'spacing': 2,
     }
 
-    TOOLBAR_BUTTON_UI = {
-        'symbol_font_size': '20px',
-        'text_font_size': '11px',
-        'font_weight': 400,
-        'padding_horizontal': 8,
-    }
-
     FORM_UI = {
         'section_label_width': 58,
         'field_label_width': 48,
-        'input_min_width': 92,
+        'input_min_width': 92,          # used by tiled_browser form fields
         'wide_input_min_width': 150,
-        'compact_input_min_width': 92,
+        'compact_input_min_width': 92,  # same value; distinct semantic role
         'inline_label_width': 52,
         'unit_label_width': 18,
     }
@@ -81,7 +73,8 @@ class AppStyle:
         'info': 'tab_info.svg',
     }
     
-    # Modern color scheme - inspired by VS Code Dark and Material Design
+    # Fallback color palette — consumed internally by theme_colors() only.
+    # Templates must not reference COLORS directly; use resolved_colors() instead.
     COLORS = {
         'primary': '#0078D4',      # Microsoft Blue
         'secondary': '#106EBE',    # Darker blue
@@ -114,6 +107,7 @@ class AppStyle:
 
     FONT_ROLE_PROPERTY = "sciview_font_role"
     THEME_KEY_PROPERTY = "sciview_theme_key"
+    STYLE_KEY_PROPERTY = "sciview_style_key"
 
     FONT_ROLE_MAP = {
         'title': ('h1', 600),
@@ -123,6 +117,7 @@ class AppStyle:
         'info': ('body', 400),
         'status': ('caption', 400),
         'button': ('body', 500),
+        'button_emphasis': ('body', 600),  # distinct role so refresh restores the heavier weight
         'toolbar_symbol': ('h3', 600),
         'toolbar_text': ('small', 400),
         'input': ('body', 400),
@@ -151,8 +146,12 @@ class AppStyle:
         'group_title_padding': 3, # QGroupBox title side padding
         # Dimension hints used as CSS min-height / border-radius
         'border_radius': 2,
-        'button_height': BUTTON_FORM['default_height'],
+        'button_height': 22,    # keep in sync with BUTTON_FORM['default_height']
         'input_height': 22,
+        'tab_padding_h': 10,    # horizontal padding inside tab bar tabs
+        # Toolbar button internals — hot-editable in style inspector
+        'toolbar_font_weight': 400,
+        'toolbar_padding_horizontal': 8,
     }
 
     # ---------------------------------------------------------------------------
@@ -166,7 +165,6 @@ class AppStyle:
         'main_splitter_ratio': [2, 1],
         'viz_splitter_ratio': [2, 1],
         'controls_splitter_ratio': [1, 1, 2, 1],
-        'browser_controls_ratio': [2, 1],
         'tiled_main_splitter_ratio': [1, 2],
         # Tiled browser panel constraints
         'tiled_controls_min_width': 280,
@@ -182,16 +180,22 @@ class AppStyle:
         # Panel minimums
         'control_panel_min_height': 80,
         # Python layout spacing (setContentsMargins / setSpacing)
-        'panel_margin': 4,
+        'panel_margin': 4,       # outer margins of panel sections
+        'panel_inner_margin': 2, # inner margins of content sub-panels
         'panel_spacing': 3,
-        'toolbar_spacing': 4,
+        'toolbar_spacing': 4,    # spacing inside icon/button toolbars
+        'section_spacing': 6,    # spacing between major items in right-panel layouts
         # Image browser specifics
         'image_browser_current_label_max_height': 30,
-        'image_browser_sync_button_height': 60,
     }
+    _BASE_LAYOUT: dict = deepcopy(LAYOUT)
     
-    # Widget styles — padding/margin values come from LAYOUT spacing tokens
+    # Widget styles grouped by scope:
+    #   Text atoms   — title_label, subtitle_label, body_text, small_text, info_label, status_label
+    #   Interactive  — primary_button, secondary_button, toolbar_symbol_button, toolbar_text_button
+    #   Structural   — input_field, group_box, splitter
     WIDGET_STYLES = {
+        # ── Text atoms ────────────────────────────────────────────────────────
         'title_label': """
             font-weight: 600;
             font-size: {title_font};
@@ -238,6 +242,7 @@ class AppStyle:
             margin: {label_padding_v}px 0px;
         """,
 
+        # ── Interactive components ───────────────────────────────────────────
         'primary_button': """
             QPushButton {{
                 background-color: {primary};
@@ -280,29 +285,7 @@ class AppStyle:
             }}
         """,
 
-        'sync_button': """
-            QPushButton {{
-                background-color: {success};
-                color: white;
-                font-weight: 600;
-                font-size: {subtitle_font};
-                border: none;
-                padding: {btn_padding_v}px {btn_padding_h}px;
-                border-radius: {border_radius}px;
-                min-height: {button_height}px;
-            }}
-            QPushButton:hover {{
-                background-color: #14B10C;
-            }}
-            QPushButton:pressed {{
-                background-color: #12A00B;
-            }}
-            QPushButton:disabled {{
-                background-color: {surface_alt};
-                color: {text_muted};
-            }}
-        """,
-
+        # ── Structural components ───────────────────────────────────────────
         'input_field': """
             QLineEdit, QSpinBox, QDoubleSpinBox {{
                 border: 1px solid {border};
@@ -440,20 +423,196 @@ class AppStyle:
     }
 
     @classmethod
+    def resolved_colors(cls) -> dict:
+        """Single resolved variable dict for QSS template substitution.
+
+        All templates must read from here only — never from COLORS directly.
+        COLORS is a static fallback palette consumed internally by theme_colors().
+        """
+        theme = cls.theme_colors()
+
+        success = QColor(cls.COLORS['success'])
+
+        return {
+            # --- semantic roles from active theme ---
+            'primary':        theme['accent'].name(),
+            'secondary':      theme['control_hover'].name(),
+            'surface':        theme['window'].name(),
+            'surface_alt':    theme['control_hover'].name(),
+            'border':         theme['border'].name(),
+            'border_active':  theme['accent'].name(),
+            'text_primary':   theme['text'].name(),
+            'text_secondary': theme['muted'].name(),   # muted but legible
+            'text_muted':     theme['muted'].name(),   # disabled / very quiet
+            # --- non-theme semantic colors from COLORS palette ---
+            'success':        cls.COLORS['success'],
+            'success_hover':  success.darker(108).name(),
+            'success_pressed': success.darker(116).name(),
+            'warning':        cls.COLORS['warning'],
+            'error':          cls.COLORS['error'],
+            'shadow':         cls.COLORS['shadow'],
+            # --- typography (scaled) ---
+            'title_font':     f"{cls.font_px('h1')}px",
+            'subtitle_font':  f"{cls.font_px('h2')}px",
+            'body_font':      f"{cls.font_px('body')}px",
+            'caption_font':   f"{cls.font_px('caption')}px",
+            'small':          f"{cls.font_px('small')}px",
+            'toolbar_symbol_font_size': f"{cls.font_px('h3')}px",
+            'toolbar_text_font_size':   f"{cls.font_px('small')}px",
+            # --- CSS_TOKENS pass-through ---
+            **cls.CSS_TOKENS,
+            # --- layout scalars used in QSS ---
+            'handle_width': cls.LAYOUT['splitter_handle_width'],
+        }
+
+    @classmethod
     def format_style(cls, style_key, **extra_vars):
-        """Format a style string with color and font variables"""
-        return ""
+        """Format a named WIDGET_STYLES template with resolved design tokens."""
+        style_template = cls.WIDGET_STYLES.get(style_key)
+        if not style_template:
+            return ""
+        variables = cls.resolved_colors()
+        variables.update(extra_vars)
+        return style_template.format(**variables)
 
     @classmethod
     def apply_global_style(cls, app):
         """Apply global application stylesheet with Qt defaults."""
-        app.setStyleSheet("")
-        cls.refresh_runtime_theme(app, clear_widget_styles=True)
+        base_styles = [
+            cls.tab_widget_stylesheet(),
+            cls.format_style('input_field'),
+            cls.format_style('group_box'),
+            cls.format_style('splitter'),
+        ]
+        app.setStyleSheet("\n".join(style for style in base_styles if style.strip()))
+        cls.refresh_runtime_theme(app, clear_widget_styles=False)
 
     @classmethod
     def tab_widget_stylesheet(cls):
         """Return stylesheet for top-level tab sizing and typography."""
-        return ""
+        colors = cls.theme_colors()
+        return (
+            "QTabWidget::pane {"
+            f"border: 1px solid {colors['border'].name()};"
+            "border-top: none;"
+            f"background: {colors['window'].name()};"
+            "}"
+            "QTabBar::tab {"
+            f"background: {colors['control_bg'].name()};"
+            f"color: {colors['text'].name()};"
+            f"border: 1px solid {colors['border'].name()};"
+            "border-bottom: none;"
+            f"padding: {cls.TAB_UI['padding_vertical']}px {cls.CSS_TOKENS['tab_padding_h']}px;"
+            f"min-height: {cls.tab_min_height()}px;"
+            f"min-width: {cls.TAB_UI['min_width']}px;"
+            "margin-right: 2px;"
+            "margin-bottom: -1px;"
+            "}"
+            "QTabBar::tab:selected {"
+            f"background: {colors['window'].name()};"
+            f"border-color: {colors['accent'].name()};"
+            "border-bottom: none;"
+            "}"
+            "QTabBar::tab:hover:!selected {"
+            f"background: {colors['control_hover'].name()};"
+            "}"
+        )
+
+    @classmethod
+    def update_css_tokens(cls, token_values):
+        """Apply numeric CSS token updates with validation."""
+        for key, value in token_values.items():
+            if key not in cls.CSS_TOKENS:
+                continue
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                continue
+            cls.CSS_TOKENS[key] = max(0, parsed)
+
+    @classmethod
+    def update_font_tokens(cls, token_values):
+        """Apply font-token updates with basic validation."""
+        for key, value in token_values.items():
+            if key not in cls.FONTS and key != 'family':
+                continue
+            if key == 'family':
+                family = str(value).strip()
+                if family:
+                    cls.FONTS['family'] = family
+                elif 'family' in cls.FONTS:
+                    del cls.FONTS['family']
+                continue
+
+            if key == 'scale_pct':
+                try:
+                    cls.FONTS[key] = max(50, min(250, int(value)))
+                except (TypeError, ValueError):
+                    continue
+                continue
+
+            try:
+                px_value = max(6, int(value))
+            except (TypeError, ValueError):
+                continue
+            cls.FONTS[key] = f"{px_value}px"
+
+    @classmethod
+    def update_layout_tokens(cls, token_values):
+        """Apply validated construction-time layout overrides."""
+        for key, value in token_values.items():
+            if key not in cls.LAYOUT:
+                continue
+            current = cls.LAYOUT[key]
+            if isinstance(current, list):
+                if isinstance(value, (list, tuple)) and len(value) == len(current):
+                    try:
+                        cls.LAYOUT[key] = [max(0.1, float(v)) for v in value]
+                    except (TypeError, ValueError):
+                        continue
+                continue
+
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError):
+                continue
+
+            if isinstance(current, int):
+                cls.LAYOUT[key] = max(0, int(parsed))
+            else:
+                cls.LAYOUT[key] = max(0.0, parsed)
+
+    @classmethod
+    def apply_qdarktheme(cls, variant: str = 'auto', app=None) -> bool:
+        """Apply qdarktheme dark/light/auto. Returns False if qdarktheme is unavailable."""
+        app = app or QApplication.instance()
+        if app is None:
+            return False
+        try:
+            qdarktheme = __import__('qdarktheme')
+            qdarktheme.setup_theme(variant)
+            actual = qdarktheme.get_theme() if variant == 'auto' else variant
+            app.setProperty(cls.THEME_KEY_PROPERTY, f'qdarktheme:{actual}')
+            cls.refresh_runtime_theme(app)
+            return True
+        except Exception:
+            return False
+
+    @classmethod
+    def apply_qdarktheme(cls, variant: str = 'auto', app=None) -> bool:
+        """Apply qdarktheme dark/light/auto. Returns False if qdarktheme is unavailable."""
+        app = app or QApplication.instance()
+        if app is None:
+            return False
+        try:
+            qdarktheme = __import__('qdarktheme')
+            qdarktheme.setup_theme(variant)
+            actual = qdarktheme.get_theme() if variant == 'auto' else variant
+            app.setProperty(cls.THEME_KEY_PROPERTY, f'qdarktheme:{actual}')
+            cls.refresh_runtime_theme(app)
+            return True
+        except Exception:
+            return False
 
     @classmethod
     def tab_font(cls):
@@ -592,8 +751,13 @@ class AppStyle:
         image_ratio = _positive_number(gui_settings.get('image_plot_ratio'), cls.LAYOUT['viz_splitter_ratio'][0])
         plot_ratio = _positive_number(gui_settings.get('plot_ratio'), cls.LAYOUT['viz_splitter_ratio'][1])
 
-        cls.LAYOUT['main_splitter_ratio'] = [viz_ratio, ctrl_ratio]
-        cls.LAYOUT['viz_splitter_ratio'] = [image_ratio, plot_ratio]
+        cls.LAYOUT = deepcopy(cls._BASE_LAYOUT)
+        cls.update_layout_tokens(
+            {
+                'main_splitter_ratio': [viz_ratio, ctrl_ratio],
+                'viz_splitter_ratio': [image_ratio, plot_ratio],
+            }
+        )
 
     @classmethod
     def current_theme_key(cls, app=None):
@@ -751,6 +915,7 @@ class AppStyle:
             f"border: 1px solid {accent};"
             "border-radius: 5px;"
             "padding: 4px 12px;"
+            f"min-height: {cls.CSS_TOKENS['button_height']}px;"
             "}"
             "QPushButton:hover {"
             f"background-color: {hover};"
@@ -892,8 +1057,9 @@ class AppStyle:
 
         app.setFont(cls.make_font('body'))
         for widget in app.allWidgets():
-            if clear_widget_styles and widget.styleSheet():
-                widget.setStyleSheet("")
+            style_key = widget.property(cls.STYLE_KEY_PROPERTY)
+            if isinstance(style_key, str) and style_key:
+                cls.apply_widget_style(widget, style_key, remember=False)
             cls.apply_font_role(widget)
             if isinstance(widget, QPushButton):
                 if widget.property("sciview_compact_button"):
@@ -907,7 +1073,18 @@ class AppStyle:
                     widget.setMinimumHeight(compact_height)
                     widget.setMaximumHeight(compact_height)
                     widget.setMinimumWidth(cls.toolbar_text_button_min_width())
+                elif widget.property(cls.STYLE_KEY_PROPERTY) == 'compact_button':
+                    # toolbar symbol button — re-apply its fixed size so min-width
+                    # from the generic branch never overrides the intended compact size
+                    size = cls.toolbar_symbol_button_size()
+                    widget.setFixedSize(size)
+                    widget.setMinimumSize(size)
                 else:
+                    if not style_key:
+                        theme_key_check = str(cls.current_theme_key(app) or '')
+                        if not theme_key_check.startswith('qt:'):
+                            # Only auto-register on styled themes; native themes render natively.
+                            cls.apply_widget_style(widget, 'secondary_button', remember=True)
                     widget.setMinimumHeight(cls.standard_button_min_height())
                     widget.setMinimumWidth(cls.standard_button_min_width())
             elif isinstance(widget, QToolButton):
@@ -916,6 +1093,38 @@ class AppStyle:
                 widget.refresh_theme()
             elif hasattr(widget, 'figure'):
                 cls.apply_matplotlib_figure_theme(widget.figure)
+
+    @classmethod
+    def apply_widget_style(cls, widget, style_key, remember=True):
+        """Apply a registered style key to a widget."""
+        if remember:
+            widget.setProperty(cls.STYLE_KEY_PROPERTY, style_key)
+
+        if style_key == 'compact_button':
+            widget.setStyleSheet(cls.compact_button_stylesheet())
+            return
+        if style_key == 'emphasis_button':
+            # Native Qt themes: let the platform render the default-button highlight.
+            # External themes (qdarkstyle, qt-material, etc.): use our custom accent QSS.
+            theme_key = str(cls.current_theme_key() or '')
+            if theme_key.startswith('qt:'):
+                widget.setStyleSheet('')
+                if isinstance(widget, QPushButton):
+                    widget.setDefault(True)
+            else:
+                if isinstance(widget, QPushButton):
+                    widget.setDefault(False)
+                widget.setStyleSheet(cls.emphasis_button_stylesheet())
+            return
+
+        # Content-button styles pass through to native rendering on native Qt themes.
+        if style_key in ('primary_button', 'secondary_button', 'toolbar_text_button'):
+            theme_key = str(cls.current_theme_key() or '')
+            if theme_key.startswith('qt:'):
+                widget.setStyleSheet('')
+                return
+
+        widget.setStyleSheet(cls.format_style(style_key))
 
     @classmethod
     def set_font_role(cls, widget, role_name):
@@ -972,53 +1181,48 @@ class AppStyle:
 # Convenience functions for applying styles
 def apply_title_style(widget):
     """Apply title style to a widget"""
-    widget.setStyleSheet("")
+    AppStyle.apply_widget_style(widget, 'title_label')
     AppStyle.set_font_role(widget, 'title')
 
 def apply_body_style(widget):
     """Apply body text style to a widget"""
-    widget.setStyleSheet("")
+    AppStyle.apply_widget_style(widget, 'body_text')
     AppStyle.set_font_role(widget, 'body')
 
 def apply_small_text_style(widget):
     """Apply small text style to a widget"""
-    widget.setStyleSheet("")
+    AppStyle.apply_widget_style(widget, 'small_text')
     AppStyle.set_font_role(widget, 'small')
 
 def apply_subtitle_style(widget):
     """Apply subtitle style to a widget"""
-    widget.setStyleSheet("")
+    AppStyle.apply_widget_style(widget, 'subtitle_label')
     AppStyle.set_font_role(widget, 'subtitle')
 
 def apply_info_style(widget):
     """Apply info label style to a widget"""
-    widget.setStyleSheet("")
+    AppStyle.apply_widget_style(widget, 'info_label')
     AppStyle.set_font_role(widget, 'info')
 
 def apply_status_style(widget):
     """Apply status label style to a widget"""
-    widget.setStyleSheet("")
+    AppStyle.apply_widget_style(widget, 'status_label')
     AppStyle.set_font_role(widget, 'status')
 
 def apply_primary_button_style(widget):
     """Apply primary button style to a widget"""
-    widget.setStyleSheet("")
+    AppStyle.apply_widget_style(widget, 'primary_button')
     AppStyle.set_font_role(widget, 'button')
 
 def apply_secondary_button_style(widget):
     """Apply secondary button style to a widget"""
-    widget.setStyleSheet("")
-    AppStyle.set_font_role(widget, 'button')
-
-def apply_sync_button_style(widget):
-    """Apply sync button style to a widget"""
-    widget.setStyleSheet("")
+    AppStyle.apply_widget_style(widget, 'secondary_button')
     AppStyle.set_font_role(widget, 'button')
 
 def apply_toolbar_symbol_button_style(widget):
     """Apply standard style and size to a symbol-only toolbar button."""
     widget.setFixedSize(AppStyle.toolbar_symbol_button_size())
-    widget.setStyleSheet(AppStyle.compact_button_stylesheet())
+    AppStyle.apply_widget_style(widget, 'compact_button')
     widget.setMinimumSize(AppStyle.toolbar_symbol_button_size())
     widget.setFont(AppStyle.make_font('h3', weight=600))
     widget.setProperty(AppStyle.FONT_ROLE_PROPERTY, 'toolbar_symbol')
@@ -1028,24 +1232,23 @@ def apply_toolbar_text_button_style(widget):
     widget.setProperty("sciview_toolbar_text_button", True)
     widget.setMinimumWidth(AppStyle.toolbar_text_button_min_width())
     widget.setFixedHeight(AppStyle.toolbar_text_button_height())
-    widget.setStyleSheet("")
+    AppStyle.apply_widget_style(widget, 'toolbar_text_button')
     AppStyle.set_font_role(widget, 'toolbar_text')
 
 def apply_emphasis_button_style(widget):
     """Apply accent styling to an important action button."""
-    widget.setStyleSheet(AppStyle.emphasis_button_stylesheet())
-    widget.setFont(AppStyle.make_font('body', weight=600))
+    AppStyle.apply_widget_style(widget, 'emphasis_button')
     widget.setMinimumHeight(AppStyle.standard_button_min_height())
-    AppStyle.set_font_role(widget, 'button')
+    AppStyle.set_font_role(widget, 'button_emphasis')
 
 def apply_input_style(widget):
     """Apply input field style to a widget"""
-    widget.setStyleSheet("")
+    AppStyle.apply_widget_style(widget, 'input_field')
     AppStyle.set_font_role(widget, 'input')
 
 def apply_group_box_style(widget):
     """Apply group box style to a widget"""
-    widget.setStyleSheet("")
+    AppStyle.apply_widget_style(widget, 'group_box')
     AppStyle.set_font_role(widget, 'group_box')
 
 def setup_splitter_layout(splitter, ratios):

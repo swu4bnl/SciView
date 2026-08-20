@@ -110,6 +110,7 @@ class SciAnaApp(QMainWindow):
         self._icon_dir = AppStyle.icon_directory(self._workspace_root)
 
         # Use local transparent icons for platform-consistent button visuals.
+        corner_button_size = AppStyle.corner_button_size()
         self.refresh_button = QPushButton("")
         self.refresh_button.setProperty("sciview_compact_button", True)
         self.refresh_button.setIcon(
@@ -117,34 +118,8 @@ class SciAnaApp(QMainWindow):
         )
         self.refresh_button.setIconSize(AppStyle.corner_button_icon_size())
         self.refresh_button.setToolTip("Reload current tab and clear cache (Ctrl+R)")
-        corner_button_size = AppStyle.corner_button_size()
         self.refresh_button.setFixedSize(corner_button_size)
         self.refresh_button.clicked.connect(self._refresh_current_tab)
-
-        self.update_scianalysis_button = QPushButton("")
-        self.update_scianalysis_button.setProperty("sciview_compact_button", True)
-        self.update_scianalysis_button.setIcon(
-            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['sci_update'])
-        )
-        self.update_scianalysis_button.setIconSize(AppStyle.corner_button_icon_size())
-        source_label = {
-            "pixi": "Pixi package",
-            "local": "local SciAnalysis checkout",
-            "custom": "custom SciAnalysis checkout",
-        }.get(SCIANALYSIS_SOURCE_MODE, "selected SciAnalysis source")
-        self.update_scianalysis_button.setToolTip(f"Update the {source_label} (restart after it finishes)")
-        self.update_scianalysis_button.setFixedSize(corner_button_size)
-        self.update_scianalysis_button.clicked.connect(self._update_scianalysis_source)
-
-        self.update_sciview_button = QPushButton("")
-        self.update_sciview_button.setProperty("sciview_compact_button", True)
-        self.update_sciview_button.setIcon(
-            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['app_update'])
-        )
-        self.update_sciview_button.setIconSize(AppStyle.corner_button_icon_size())
-        self.update_sciview_button.setToolTip("Update the SciView checkout from GitHub (git pull --ff-only)")
-        self.update_sciview_button.setFixedSize(corner_button_size)
-        self.update_sciview_button.clicked.connect(self._update_sciview_source)
 
         self.style_inspector_button = QPushButton("I")
         self.style_inspector_button.setProperty("sciview_compact_button", True)
@@ -152,15 +127,20 @@ class SciAnaApp(QMainWindow):
         self.style_inspector_button.setFixedSize(corner_button_size)
         self.style_inspector_button.setEnabled(False)
         self.style_inspector_button.clicked.connect(self._show_style_inspector)
-        
+
+        self.theme_toggle_button = QPushButton()
+        self.theme_toggle_button.setProperty("sciview_compact_button", True)
+        self.theme_toggle_button.setFixedSize(corner_button_size)
+        self.theme_toggle_button.clicked.connect(self._toggle_dark_light_theme)
+        self._update_theme_toggle_icon()
+
         corner_widget = QWidget()
         corner_layout = QHBoxLayout(corner_widget)
         corner_layout.setContentsMargins(0, 0, 0, 0)
         corner_layout.setSpacing(AppStyle.CORNER_BUTTON_UI['spacing'])
+        corner_layout.addWidget(self.theme_toggle_button)
         corner_layout.addWidget(self.refresh_button)
         corner_layout.addWidget(self.style_inspector_button)
-        corner_layout.addWidget(self.update_sciview_button)
-        corner_layout.addWidget(self.update_scianalysis_button)
         corner_layout.addStretch()
 
         # Use QTabWidget's corner widget feature to place buttons on same line as tabs
@@ -188,12 +168,29 @@ class SciAnaApp(QMainWindow):
         from PyQt5.QtGui import QKeySequence
         self.refresh_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         self.refresh_shortcut.activated.connect(self._refresh_current_tab)
+        self.theme_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
+        self.theme_shortcut.activated.connect(self._toggle_dark_light_theme)
 
         # Dev tools: hot-reload + style inspector (only when DEV_TOOLS=1)
         self._style_hot_reloader = None
         self._inspector_shortcut = None
         if os.environ.get("DEV_TOOLS") == "1":
             self._start_dev_tools()
+
+    def _toggle_dark_light_theme(self):
+        """Switch between qdarktheme dark and light."""
+        if AppStyle.theme_is_dark():
+            AppStyle.apply_qdarktheme('light')
+        else:
+            AppStyle.apply_qdarktheme('dark')
+
+    def _update_theme_toggle_icon(self):
+        if AppStyle.theme_is_dark():
+            self.theme_toggle_button.setText("\u2600")  # sun = click to go light
+            self.theme_toggle_button.setToolTip("Switch to light mode (Ctrl+D)")
+        else:
+            self.theme_toggle_button.setText("\U0001f319")  # moon = click to go dark
+            self.theme_toggle_button.setToolTip("Switch to dark mode (Ctrl+D)")
 
     def _show_style_inspector(self):
         """Open the dev style inspector when dev tools are enabled."""
@@ -285,6 +282,8 @@ class SciAnaApp(QMainWindow):
 
     def refresh_theme(self):
         """Refresh native sizing and theme-aware icons after a style change."""
+        self.tab_widget.setStyleSheet(AppStyle.tab_widget_stylesheet())
+        self._update_theme_toggle_icon()
         tab_bar = self.tab_widget.tabBar()
         tab_bar.setFont(AppStyle.tab_font())
         tab_bar.setIconSize(AppStyle.tab_icon_size())
@@ -302,15 +301,8 @@ class SciAnaApp(QMainWindow):
         self.refresh_button.setIconSize(corner_icon_size)
         self.refresh_button.setFixedSize(corner_button_size)
 
-        self.update_sciview_button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['app_update']))
-        self.update_sciview_button.setIconSize(corner_icon_size)
-        self.update_sciview_button.setFixedSize(corner_button_size)
-
-        self.update_scianalysis_button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['sci_update']))
-        self.update_scianalysis_button.setIconSize(corner_icon_size)
-        self.update_scianalysis_button.setFixedSize(corner_button_size)
-
         self.style_inspector_button.setFixedSize(corner_button_size)
+        self.theme_toggle_button.setFixedSize(corner_button_size)
 
     def publish_shared_image(self, image_data, image_path=None, source_tab=None):
         """Publish active image into shared app state and propagate to tabs."""
@@ -635,8 +627,6 @@ class SciAnaApp(QMainWindow):
 
     def _set_update_ui_enabled(self, enabled: bool):
         self.refresh_button.setEnabled(enabled)
-        self.update_sciview_button.setEnabled(enabled)
-        self.update_scianalysis_button.setEnabled(enabled)
 
     def _start_update_process(
         self,
@@ -943,7 +933,11 @@ def create_application():
         print(f"Warning: Could not load info tab: {e}")
         placeholder = _build_placeholder_tab(f"Info Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Info", icon_key="info")
-    
+
+    # Apply system-preferred dark/light theme; fall back to plain refresh if unavailable.
+    if not AppStyle.apply_qdarktheme('auto', app):
+        AppStyle.refresh_runtime_theme(app)
+
     return app, main_window
 
 

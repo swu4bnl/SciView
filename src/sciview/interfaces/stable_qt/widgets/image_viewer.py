@@ -642,11 +642,12 @@ class ImageViewer(QWidget):
             "copy": self._copy_button,
             "save": self._save_button,
         }.items():
-            button.setStyleSheet(AppStyle.compact_button_stylesheet())
+            AppStyle.apply_widget_style(button, 'compact_button')
             button.setIcon(self._load_toolbar_icon(key))
             button.setIconSize(AppStyle.tab_icon_size())
 
         self._palette_info_label.setStyleSheet(f"color: {muted_color.name()};")
+        self._graphics.update()
         self.update()
 
     def _load_toolbar_icon(self, key: str) -> QIcon:
@@ -661,7 +662,7 @@ class ImageViewer(QWidget):
         button = QToolButton()
         button.setAutoRaise(False)
         button.setFixedSize(AppStyle.toolbar_symbol_button_size())
-        button.setStyleSheet(AppStyle.compact_button_stylesheet())
+        AppStyle.apply_widget_style(button, 'compact_button')
         if icon.isNull():
             button.setText(action.label)
             button.setFont(AppStyle.make_font('h3', weight=600))

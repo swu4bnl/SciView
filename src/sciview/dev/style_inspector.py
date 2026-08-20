@@ -290,8 +290,9 @@ class StyleInspector(QWidget):
 
         # ── Live CSS section ──────────────────────────────────────────────────
         css_group = QGroupBox("Live  (stylesheet re-applies instantly)")
+        css_heading_color = AppStyle.COLORS.get("primary", "#0078D4")
         css_group.setStyleSheet(
-            "QGroupBox { font-weight: 600; color: #0078D4; margin-top: 8px; "
+            f"QGroupBox {{ font-weight: 600; color: {css_heading_color}; margin-top: 8px; "
             "padding-top: 12px; } QGroupBox::title { left: 8px; }"
         )
         css_form = QFormLayout(css_group)
@@ -310,8 +311,9 @@ class StyleInspector(QWidget):
 
         # ── Live typography section ──────────────────────────────────────────
         font_group = QGroupBox("Live Typography  (applies instantly)")
+        font_heading_color = AppStyle.COLORS.get("success", "#0E8A16")
         font_group.setStyleSheet(
-            "QGroupBox { font-weight: 600; color: #0E8A16; margin-top: 8px; "
+            f"QGroupBox {{ font-weight: 600; color: {font_heading_color}; margin-top: 8px; "
             "padding-top: 12px; } QGroupBox::title { left: 8px; }"
         )
         font_form = QFormLayout(font_group)
@@ -342,8 +344,9 @@ class StyleInspector(QWidget):
 
         # ── Construction-time LAYOUT section ─────────────────────────────────
         layout_group = QGroupBox("Construction-time  (Ctrl+R to apply)")
+        layout_heading_color = AppStyle.COLORS.get("text_secondary", "#6C757D")
         layout_group.setStyleSheet(
-            "QGroupBox { font-weight: 600; color: #6C757D; margin-top: 8px; "
+            f"QGroupBox {{ font-weight: 600; color: {layout_heading_color}; margin-top: 8px; "
             "padding-top: 12px; } QGroupBox::title { left: 8px; }"
         )
         layout_form = QFormLayout(layout_group)
@@ -377,7 +380,7 @@ class StyleInspector(QWidget):
 
         # ── Bottom buttons ────────────────────────────────────────────────────
         note = QLabel("'Write to file' persists values into app_style.py")
-        note.setStyleSheet("color: #888;")
+        note.setStyleSheet(f"color: {AppStyle.COLORS.get('text_secondary', '#6C757D')};")
         AppStyle.set_font_role(note, 'status')
         root.addWidget(note)
 
@@ -410,8 +413,7 @@ class StyleInspector(QWidget):
         if self._suppress:
             return
         AppStyle = _reload_app_style()
-        for key, spin in self._css_spins.items():
-            AppStyle.CSS_TOKENS[key] = spin.value()
+        AppStyle.update_css_tokens({key: spin.value() for key, spin in self._css_spins.items()})
         _apply_stylesheet(AppStyle)
         self.setWindowTitle("Style Inspector  [dev]  •")
 
@@ -420,17 +422,9 @@ class StyleInspector(QWidget):
         if self._suppress:
             return
         AppStyle = _reload_app_style()
-        for key, spin in self._font_spins.items():
-            if key == "scale_pct":
-                AppStyle.FONTS[key] = int(spin.value())
-            else:
-                AppStyle.FONTS[key] = f"{spin.value()}px"
+        AppStyle.update_font_tokens({key: spin.value() for key, spin in self._font_spins.items()})
         if self._font_family_input is not None:
-            family = self._font_family_input.text().strip()
-            if family:
-                AppStyle.FONTS["family"] = family
-            elif "family" in AppStyle.FONTS:
-                del AppStyle.FONTS["family"]
+            AppStyle.update_font_tokens({"family": self._font_family_input.text().strip()})
         _apply_stylesheet(AppStyle)
         self.setWindowTitle("Style Inspector  [dev]  •")
 

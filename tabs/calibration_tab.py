@@ -24,7 +24,14 @@ from matplotlib.backends.backend_qt5agg import (
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
-from sciview.interfaces.theme.app_style import *
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_emphasis_button_style,
+    apply_info_style,
+    apply_subtitle_style,
+    apply_title_style,
+    setup_splitter_layout,
+)
 from sciview.calibration.standards_db import STANDARDS
 from sciview.interfaces.stable_qt.tools.ring_center import RingCenterCalculator
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_select_directory, dialog_save_file
@@ -133,9 +140,12 @@ class CalibrationApp(BaseImageTab):
         title_layout = QHBoxLayout()
         title_layout.setContentsMargins(0, 0, 0, 0)
         
-        title = QLabel("1D Profiles")
+        title = QLabel("1D Profiles ")
         apply_subtitle_style(title)
         title_layout.addWidget(title)
+
+        tip_label = QLabel("Tweak beam center to align peaks")
+        title_layout.addWidget(tip_label)
         
         title_layout.addStretch()  # Push scale controls to the right
         
@@ -173,7 +183,7 @@ class CalibrationApp(BaseImageTab):
         """Create the calibration parameters panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         
         # Title
         title = QLabel("Calibration Parameters")
@@ -239,7 +249,7 @@ class CalibrationApp(BaseImageTab):
         """Create the ring center calculation panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         
         # Title
         title = QLabel("Ring Center Calculation")
@@ -247,7 +257,7 @@ class CalibrationApp(BaseImageTab):
         layout.addWidget(title)
         
         # Instructions
-        instructions_label = QLabel("Pick points on one ring. 3+ points required.")
+        instructions_label = QLabel("Right-click to pick points on one ring. 3+ points required.")
         instructions_label.setWordWrap(True)
         apply_info_style(instructions_label)
         layout.addWidget(instructions_label)
@@ -300,7 +310,7 @@ class CalibrationApp(BaseImageTab):
         # Create widget to hold all point inputs
         points_widget = QWidget()
         points_layout = QVBoxLayout(points_widget)
-        points_layout.setContentsMargins(2, 2, 2, 2)
+        points_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         points_layout.setSpacing(2)
         
         # Create fixed list of 10 point inputs
@@ -309,9 +319,7 @@ class CalibrationApp(BaseImageTab):
             point_widget = QWidget()
             point_layout = QHBoxLayout(point_widget)
             point_layout.setContentsMargins(0, 0, 0, 0)
-            point_layout.setSpacing(6)
-            
-            # Point label with required/optional indicator
+            point_layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
             if i < 3:
                 label = QLabel(f"Pt {i+1}*:")  # Asterisk for required
                 apply_info_style(label)
@@ -364,7 +372,7 @@ class CalibrationApp(BaseImageTab):
         """Create the standards reference panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
 
         title = QLabel("Standard Materials")
         apply_title_style(title)
