@@ -93,6 +93,7 @@ class SciAnaApp(QMainWindow):
         self.shared_info_text = None
         self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
         self._shared_image_revision = 0
+        self._batch_recipe_bus: dict = {}
         
         # Tab widget
         self.tab_widget = QTabWidget()
@@ -353,6 +354,18 @@ class SciAnaApp(QMainWindow):
                 except Exception as e:
                     print(f"DEBUG: Error syncing shared info for tab {i}: {e}")
 
+    def push_recipe_to_batch(self, recipe_payload: dict, source: str = "") -> None:
+        """Register a protocol recipe from a processing tab and forward to the batch tab."""
+        key = recipe_payload.get("name") or source or recipe_payload.get("operation", "recipe")
+        recipe_payload = dict(recipe_payload)
+        recipe_payload.setdefault("source", source)
+        self._batch_recipe_bus[key] = recipe_payload
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            if hasattr(tab, "receive_recipe"):
+                tab.receive_recipe(key, recipe_payload)
+                break
+
     def get_shared_calibration(self, fallback_image_data=None):
         """Return shared calibration, with optional image calibration fallback."""
         if self.calibration is not None:
@@ -594,6 +607,7 @@ class SciAnaApp(QMainWindow):
                     "Mask Editing": "tabs.mask_tab.MaskApp",
                     "Reduction": "tabs.reduction_tab.ReductionTab",
                     "Transform": "tabs.transform_tab.TransformTab",
+                    "Batch": "tabs.batch_tab.BatchTab",
                 }
                 
                 if tab_name not in module_map:
@@ -918,11 +932,15 @@ def create_application():
         placeholder = _build_placeholder_tab(f"Transform Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Transform", icon_key="transform")
 
-    # Batch tab placeholder (reserved for future development)
-    batch_placeholder = _build_placeholder_tab(
-        "Batch Tab\\n(Placeholder for future batch processing workflows)"
-    )
-    main_window.add_tab(batch_placeholder, "Batch", icon_key="batch")
+    # Batch tab
+    try:
+        from tabs.batch_tab import BatchTab
+        batch_tab = BatchTab(main_window)
+        main_window.add_tab(batch_tab, "Batch", icon_key="batch")
+    except ImportError as e:
+        print(f"Warning: Could not load batch tab: {e}")
+        placeholder = _build_placeholder_tab(f"Batch Tab\\n(Import error: {e})")
+        main_window.add_tab(placeholder, "Batch", icon_key="batch")
 
     # Info tab
     try:

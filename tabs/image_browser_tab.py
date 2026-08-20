@@ -974,6 +974,26 @@ class ImageBrowserApp(BaseImageTab):
         if getattr(self.parent_app, 'image_path', None) == current_image.get('path'):
             return False
         return self._sync_to_parent(show_status=False)
+
+    def get_current_file_list(self) -> list[str]:
+        """Return local file paths from the folder browser and/or loaded session."""
+        seen: set[str] = set()
+        result: list[str] = []
+
+        # Prefer the folder browser list — it represents a full directory scan.
+        for p in self._folder_browser_paths:
+            if os.path.isfile(p) and p not in seen:
+                seen.add(p)
+                result.append(p)
+
+        # Also include any file-backed session entries (e.g. loaded via drag-drop or file dialog).
+        for img in self.session_manager.images:
+            p = img.get("path", "")
+            if img.get("source") == "file" and os.path.isfile(p) and p not in seen:
+                seen.add(p)
+                result.append(p)
+
+        return result
     
     def _convert_to_scianalysis_format(self, image_array, image_path):
         """Convert numpy array to SciAnalysis Data2DScattering object using beamline configuration"""

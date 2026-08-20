@@ -225,8 +225,12 @@ class TransformTab(BaseImageTab):
         self.preview_button.clicked.connect(self.refresh_preview)
         self.export_button = QPushButton("Export Transform")
         self.export_button.clicked.connect(self.export_result)
+        self.send_to_batch_button = QPushButton("Send to Batch")
+        self.send_to_batch_button.setToolTip("Push current settings as a protocol to the Batch tab")
+        self.send_to_batch_button.clicked.connect(self._send_to_batch)
         button_row.addWidget(self.preview_button)
         button_row.addWidget(self.export_button)
+        button_row.addWidget(self.send_to_batch_button)
         layout.addLayout(button_row)
 
         self.status_label = QLabel("Ready")
@@ -680,6 +684,30 @@ class TransformTab(BaseImageTab):
 
         written_path = save_transform_result(self._current_result, file_path)
         self.parent_app.show_status(f"Transformed image exported to {written_path}")
+
+    def _build_recipe_payload(self) -> dict:
+        return {
+            "operation": self._selected_operation(),
+            "bins_q": int(self.bins_q_spin.value()),
+            "bins_phi": int(self.bins_phi_spin.value()),
+            "q_min": float(self.q_min_spin.value()),
+            "q_max": float(self.q_max_spin.value()),
+            "phi_min_deg": float(self.phi_min_spin.value()),
+            "phi_max_deg": float(self.phi_max_spin.value()),
+            "auto_q_range": bool(self.auto_qrange_check.isChecked()),
+            "calibration_source": self.calibration_source_combo.currentText(),
+            "mask_source": self.mask_source_combo.currentText(),
+            "use_mask": self._use_mask_enabled(),
+            "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
+        }
+
+    def _send_to_batch(self):
+        payload = self._build_recipe_payload()
+        payload["name"] = self.operation_combo.currentText()
+        if hasattr(self.parent_app, "push_recipe_to_batch"):
+            self.parent_app.push_recipe_to_batch(payload, source="transform_tab")
+        else:
+            self.parent_app.show_status("Batch tab not available")
 
     def _schedule_preview(self):
         self.status_label.setText("Preview pending...")

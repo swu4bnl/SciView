@@ -269,9 +269,13 @@ class ReductionTab(BaseImageTab):
         self.export_button.clicked.connect(self.export_result)
         self.export_recipe_button = QPushButton("Export Recipe")
         self.export_recipe_button.clicked.connect(self.export_recipe)
+        self.send_to_batch_button = QPushButton("Send to Batch")
+        self.send_to_batch_button.setToolTip("Push current settings as a protocol to the Batch tab")
+        self.send_to_batch_button.clicked.connect(self._send_to_batch)
         button_row.addWidget(self.preview_button)
         button_row.addWidget(self.export_button)
         button_row.addWidget(self.export_recipe_button)
+        button_row.addWidget(self.send_to_batch_button)
         layout.addLayout(button_row)
 
         self.status_label = QLabel("Ready")
@@ -811,6 +815,14 @@ class ReductionTab(BaseImageTab):
             else:
                 yaml.safe_dump(payload, handle, sort_keys=False)
         self.parent_app.show_status(f"Reduction recipe exported to {path}")
+
+    def _send_to_batch(self):
+        payload = self._build_recipe_payload()
+        payload["name"] = self.operation_combo.currentText()
+        if hasattr(self.parent_app, "push_recipe_to_batch"):
+            self.parent_app.push_recipe_to_batch(payload, source="reduction_tab")
+        else:
+            self.parent_app.show_status("Batch tab not available")
 
     def _remove_overlay_artists(self):
         if hasattr(self, 'image_viewer'):
