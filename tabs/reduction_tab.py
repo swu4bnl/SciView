@@ -691,8 +691,7 @@ class ReductionTab(BaseImageTab):
         if op == "circular_average":
             return {
                 "operation": op, "name": name,
-                "bins_relative": 1.0,
-                "ylog": True, "gridlines": True,
+                "bins_relative": int(self.bins_spin.value()) / 100.0,
                 "save_results": ["plots", "txt"],
             }
 
