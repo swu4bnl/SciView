@@ -58,10 +58,6 @@ from sciview.settings.app_settings import (
     SCIANALYSIS_SOURCE_ROOT,
 )
 
-# Import SciAnalysis dependencies only if available  
-if SCIANALYSIS_AVAILABLE:
-    from SciAnalysis.XSAnalysis.Data import Data2DScattering
-    from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
 from sciview.interfaces.stable_qt.utils.resource_monitor import get_resource_monitor
 from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file
 
@@ -602,6 +598,9 @@ class SciAnaApp(QMainWindow):
             
         try:
             # Use provided calibration or create a default one
+            if SCIANALYSIS_AVAILABLE:
+                from SciAnalysis.XSAnalysis.Data import Data2DScattering
+                from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
             if calibration is None:
                 calibration = CalibrationRQconv(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
                 calibration.set_pixel_size(pixel_size_um=DEFAULT_CALIBRATION['pixel_size_um'])
@@ -905,6 +904,7 @@ class SciAnaApp(QMainWindow):
 
 def create_application():
     """Create and configure the main application"""
+    print("[SciView] Starting up...")
     app = QApplication(sys.argv)
 
     # Load layout/sizing ratios from runtime configuration before creating widgets.
@@ -919,92 +919,124 @@ def create_application():
     app.setOrganizationName(BEAMLINE_NAME)
     
     # Create main window
+    print("[SciView] Initializing main window...")
     main_window = SciAnaApp()
     
     # Add tabs
-    
-    # Image Browser tab (first tab for primary image loading)
+    import time as _time
+
+    _TAB_TOTAL = 8
+    _tab_idx = 0
+
+    def _tab_start(name):
+        nonlocal _tab_idx
+        _tab_idx += 1
+        print(f"[SciView]  [{_tab_idx}/{_TAB_TOTAL}] Loading {name}...", end="", flush=True)
+        return _time.perf_counter()
+
+    def _tab_done(t0, *, failed=False):
+        elapsed = (_time.perf_counter() - t0) * 1000
+        status = "FAILED" if failed else "ok"
+        print(f" {status} ({elapsed:.0f}ms)")
+
+    # Image Browser
+    t0 = _tab_start("Image Browser")
     try:
         from tabs.image_browser_tab import ImageBrowserApp
         image_browser_tab = ImageBrowserApp(main_window)
         main_window.add_tab(image_browser_tab, "Image Browser", icon_key="image_browser")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load image browser tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Image Browser Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Image Browser", icon_key="image_browser")
 
-    # Tiled Browser tab (metadata-first browsing and Tiled scan preview)
+    # Tiled Browser
+    t0 = _tab_start("Tiled Browser")
     try:
         from tabs.tiled_browser_tab import TiledBrowserTab
         tiled_browser_tab = TiledBrowserTab(main_window)
         main_window.add_tab(tiled_browser_tab, "Tiled Browser", icon_key="tiled_browser")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load tiled browser tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Tiled Browser Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Tiled Browser", icon_key="tiled_browser")
-    
-    # Calibration tab
+
+    # Calibration
+    t0 = _tab_start("Calibration")
     try:
         if SCIANALYSIS_AVAILABLE:
             from tabs.calibration_tab import CalibrationApp
             calibration_tab = CalibrationApp(main_window)
             main_window.add_tab(calibration_tab, "Calibration", icon_key="calibration")
+            _tab_done(t0)
         else:
+            _tab_done(t0, failed=True)
             placeholder = _build_placeholder_tab("Calibration Tab\\n(SciAnalysis not available)")
             main_window.add_tab(placeholder, "Calibration", icon_key="calibration")
-    
     except ImportError as e:
-        print(f"Warning: Could not load calibration tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Calibration Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Calibration", icon_key="calibration")
-    
-    # Mask editing tab
+
+    # Mask Editing
+    t0 = _tab_start("Mask Editing")
     try:
         from tabs.mask_tab import MaskApp
         mask_tab = MaskApp(main_window)
         main_window.add_tab(mask_tab, "Mask Editing", icon_key="mask_editing")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load mask tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Mask Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Mask Editing", icon_key="mask_editing")
 
-    # Reduction tab
+    # Reduction
+    t0 = _tab_start("Reduction")
     try:
         from tabs.reduction_tab import ReductionTab
         reduction_tab = ReductionTab(main_window)
         main_window.add_tab(reduction_tab, "Reduction", icon_key="reduction")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load reduction tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Reduction Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Reduction", icon_key="reduction")
 
-    # Transform tab
+    # Transform
+    t0 = _tab_start("Transform")
     try:
         from tabs.transform_tab import TransformTab
         transform_tab = TransformTab(main_window)
         main_window.add_tab(transform_tab, "Transform", icon_key="transform")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load transform tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Transform Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Transform", icon_key="transform")
 
-    # Batch tab
+    # Batch
+    t0 = _tab_start("Batch")
     try:
         from tabs.batch_tab import BatchTab
         batch_tab = BatchTab(main_window)
         main_window.add_tab(batch_tab, "Batch", icon_key="batch")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load batch tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Batch Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Batch", icon_key="batch")
 
-    # Info tab
+    # Info
+    t0 = _tab_start("Info")
     try:
         from tabs.info_tab import InfoTab
         info_tab = InfoTab(main_window)
         main_window.add_tab(info_tab, "Info", icon_key="info")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load info tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Info Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Info", icon_key="info")
 
@@ -1012,6 +1044,7 @@ def create_application():
     if not AppStyle.apply_qdarktheme('auto', app):
         AppStyle.refresh_runtime_theme(app)
 
+    print("[SciView] All tabs loaded. Launching window...")
     return app, main_window
 
 
@@ -1021,18 +1054,22 @@ def main():
         app, main_window = create_application()
         main_window.show()
         
-        # Show startup status
+        # Show startup status in GUI status bar
         status_msg = f"SciAnalysis GUI started for {BEAMLINE_NAME}"
         if SCIANALYSIS_AVAILABLE:
             status_msg += " - SciAnalysis loaded successfully"
         else:
             status_msg += " - SciAnalysis not available"
         main_window.show_status(status_msg)
+
+        sa_status = "available" if SCIANALYSIS_AVAILABLE else "NOT available"
+        print(f"[SciView] Ready  |  Beamline: {BEAMLINE_NAME}  |  SciAnalysis: {sa_status}")
+        print("[SciView] *** Do not close this window — it keeps the app running ***")
         
         sys.exit(app.exec_())
         
     except Exception as e:
-        print(f"Fatal error starting application: {e}")
+        print(f"[SciView] Fatal error starting application: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
