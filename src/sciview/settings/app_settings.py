@@ -124,3 +124,20 @@ DEFAULT_DISPLAY_SETTINGS = {
     "cmap": "gray",
     "scale": "linear",
 }
+
+# Spin-box configuration for tabs that share similar controls.
+# Each entry: (min, max, default, step, decimals)
+SPINBOX_CONFIG = {
+    "q_min":   (0.0,    100.0, 0.0,    0.01, 4),
+    "q_max":   (0.001,  100.0, 2.0,    0.01, 4),
+    "phi_min": (-360.0, 360.0, -180.0, 1.0,  2),
+    "phi_max": (-360.0, 360.0,  180.0, 1.0,  2),
+    "bins_q":  (16,     4096,  320,    1,    None),  # int spin — no decimals
+    "bins_phi": (16,    1440,  360,    1,    None),
+    "bins_1d": (8,      4096,  256,    1,    None),
+    "sector_start": (0.0,  360.0,  0.0, 1.0, 1),
+    "sector_end":   (0.0,  360.0, 30.0, 1.0, 1),
+    "line_chi0":    (-180.0, 180.0, 0.0, 1.0, 2),
+    "line_dq":      (0.0001, 100.0, 0.01, 0.001, 4),
+    "line_value":   (-10.0,  10.0,  0.0, 0.01,  4),
+}

@@ -94,6 +94,12 @@ class SciAnaApp(QMainWindow):
         self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
         self._shared_image_revision = 0
         self._batch_recipe_bus: dict = {}
+        self.shared_file_list: list[str] = []
+        self.shared_file_list_info: dict[str, str] = {
+            "folder": "",
+            "pattern": "*",
+            "source": "",
+        }
         
         # Tab widget
         self.tab_widget = QTabWidget()
@@ -366,6 +372,51 @@ class SciAnaApp(QMainWindow):
                 tab.receive_recipe(key, recipe_payload)
                 break
 
+    def publish_shared_file_list(
+        self,
+        file_paths,
+        *,
+        folder: str = "",
+        pattern: str = "*",
+        source: str = "",
+        source_tab=None,
+    ) -> None:
+        """Publish a canonical file-backed image list shared across tabs."""
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for item in file_paths or []:
+            token = str(item).strip()
+            if not token:
+                continue
+            if token not in seen:
+                seen.add(token)
+                normalized.append(token)
+
+        self.shared_file_list = normalized
+        self.shared_file_list_info = {
+            "folder": str(folder or ""),
+            "pattern": str(pattern or "*"),
+            "source": str(source or ""),
+        }
+
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            if tab == source_tab:
+                continue
+            if hasattr(tab, "on_shared_file_list_changed"):
+                try:
+                    tab.on_shared_file_list_changed(list(self.shared_file_list), dict(self.shared_file_list_info))
+                except Exception as exc:
+                    print(f"DEBUG: Error syncing shared file list for tab {i}: {exc}")
+
+    def get_shared_file_list(self) -> list[str]:
+        """Return the current shared local file list published by source tabs."""
+        return list(self.shared_file_list)
+
+    def get_shared_file_list_info(self) -> dict[str, str]:
+        """Return metadata associated with the shared local file list."""
+        return dict(self.shared_file_list_info)
+
     def get_shared_calibration(self, fallback_image_data=None):
         """Return shared calibration, with optional image calibration fallback."""
         if self.calibration is not None:
@@ -426,6 +477,11 @@ class SciAnaApp(QMainWindow):
 
         if 0 <= previous_index < self.tab_widget.count():
             previous_tab = self.tab_widget.widget(previous_index)
+            if hasattr(previous_tab, 'auto_publish_current_file_list'):
+                try:
+                    previous_tab.auto_publish_current_file_list()
+                except Exception as e:
+                    print(f"DEBUG: Error auto-publishing file list from previous tab: {e}")
             if hasattr(previous_tab, 'auto_publish_current_image'):
                 try:
                     if previous_tab.auto_publish_current_image():
