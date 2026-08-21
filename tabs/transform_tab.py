@@ -629,7 +629,7 @@ class TransformTab(BaseImageTab):
         bins_relative = int(self.bins_q_spin.value()) / 400.0
 
         if op == "q_image":
-            return {"operation": op, "name": name, "save_results": ["plots", "npz"]}
+            return {"operation": op, "name": name, "bins_relative": bins_relative, "save_results": ["plots", "npz"]}
 
         if op == "q_phi_image":
             return {
