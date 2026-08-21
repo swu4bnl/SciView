@@ -470,13 +470,11 @@ def run_batch(
     Raises on import or setup errors so callers see the problem immediately.
     Returns (ok_count, err_count).
     """
-    from SciAnalysis.XSAnalysis import Protocols as _SAProtos  # noqa: F401
-
-    # numpy 2.x removed np.float, np.int etc. used by older SA versions.
     if not hasattr(np, 'float'):
         np.float = float  # type: ignore[attr-defined]
     if not hasattr(np, 'int'):
         np.int = int  # type: ignore[attr-defined]
+    from SciAnalysis.XSAnalysis import Protocols as _SAProtos  # noqa: F401
 
     # Backward-compat patch: older SA calls histogram2d(normed=) which numpy 2.x removed.
     _orig_h2d = np.histogram2d
