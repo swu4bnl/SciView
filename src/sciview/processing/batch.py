@@ -500,7 +500,8 @@ def run_batch(
         raise ValueError("No input files in job")
 
     # Compute q bounds from calibration and inject plot_range into each protocol.
-    bounds = compute_q_bounds(job.calibration)
+    from sciview.masking.io import coerce_mask_to_bool
+    bounds = compute_q_bounds(job.calibration, coerce_mask_to_bool(job.mask))
     active = [apply_q_bounds_to_protocol(p, bounds) for p in active]
 
     sa_protocols = [build_protocol(p) for p in active]
