@@ -777,10 +777,23 @@ class ImageBrowserApp(BaseImageTab):
         """Handle session changes"""
         self._update_session_table()
         self._update_navigation_controls()
+        self._publish_shared_file_list()
         # Only update display if we're not in the middle of batch loading
         # This prevents triggering data loads for every reference added
         if not self.is_batch_loading:
             self._update_display()
+
+    def _publish_shared_file_list(self) -> None:
+        """Publish the current file-backed image list into app shared state."""
+        if not hasattr(self.parent_app, "publish_shared_file_list"):
+            return
+        self.parent_app.publish_shared_file_list(
+            self.get_current_file_list(),
+            folder=self.folder_path_input.text().strip() if hasattr(self, "folder_path_input") else "",
+            pattern=self.pattern_input.text().strip() if hasattr(self, "pattern_input") else "*",
+            source="image_browser",
+            source_tab=self,
+        )
 
     def _update_session_table(self):
         """Update the session table display"""
@@ -974,6 +987,30 @@ class ImageBrowserApp(BaseImageTab):
         if getattr(self.parent_app, 'image_path', None) == current_image.get('path'):
             return False
         return self._sync_to_parent(show_status=False)
+
+    def auto_publish_current_file_list(self) -> None:
+        """Publish the current browser file-backed list when leaving the tab."""
+        self._publish_shared_file_list()
+
+    def get_current_file_list(self) -> list[str]:
+        """Return local file paths from the folder browser and/or loaded session."""
+        seen: set[str] = set()
+        result: list[str] = []
+
+        # Prefer the folder browser list — it represents a full directory scan.
+        for p in self._folder_browser_paths:
+            if os.path.isfile(p) and p not in seen:
+                seen.add(p)
+                result.append(p)
+
+        # Also include any file-backed session entries (e.g. loaded via drag-drop or file dialog).
+        for img in self.session_manager.images:
+            p = img.get("path", "")
+            if img.get("source") == "file" and os.path.isfile(p) and p not in seen:
+                seen.add(p)
+                result.append(p)
+
+        return result
     
     def _convert_to_scianalysis_format(self, image_array, image_path):
         """Convert numpy array to SciAnalysis Data2DScattering object using beamline configuration"""
@@ -1077,6 +1114,7 @@ class ImageBrowserApp(BaseImageTab):
         if not force and path_strings == self._folder_browser_paths:
             if self.folder_path_input.text() and hasattr(self, 'loading_status_label'):
                 self.loading_status_label.setText(f"Found {len(file_paths)} images")
+            self._publish_shared_file_list()
             return
 
         current_item = self.folder_files_list.currentItem()
@@ -1096,6 +1134,8 @@ class ImageBrowserApp(BaseImageTab):
 
         if self.folder_path_input.text() and hasattr(self, 'loading_status_label'):
             self.loading_status_label.setText(f"Found {len(file_paths)} images")
+
+        self._publish_shared_file_list()
 
     def _auto_refresh_folder_browser(self):
         """Poll the selected folder so newly created images appear in the list."""

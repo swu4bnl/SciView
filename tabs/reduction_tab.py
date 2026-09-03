@@ -48,9 +48,20 @@ from sciview.interfaces.theme.app_style import (
     setup_splitter_layout,
 )
 from sciview.masking.io import load_mask_file as backend_load_mask_file
-from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
+from sciview.processing.angle_conventions import display_chi_to_scianalysis_sector_chi
 from sciview.processing.reduction import ReductionBackend, ReductionRequest, save_reduction_result
+from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
+from sciview.settings.app_settings import SPINBOX_CONFIG
 from tabs.base_image_tab import BaseImageTab
+
+
+def _spin(key):
+    mn, mx, default, step, decimals = SPINBOX_CONFIG[key]
+    if decimals is None:
+        w = QSpinBox(); w.setRange(int(mn), int(mx)); w.setSingleStep(int(step)); w.setValue(int(default))
+    else:
+        w = QDoubleSpinBox(); w.setRange(mn, mx); w.setDecimals(decimals); w.setSingleStep(step); w.setValue(default)
+    return w
 
 
 class ReductionTab(BaseImageTab):
@@ -131,21 +142,6 @@ class ReductionTab(BaseImageTab):
 
         return panel
 
-    def _make_double_spin(self, minimum: float, maximum: float, value: float, step: float = 1.0, decimals: int = 2):
-        spin = QDoubleSpinBox()
-        spin.setRange(minimum, maximum)
-        spin.setDecimals(decimals)
-        spin.setSingleStep(step)
-        spin.setValue(value)
-        return spin
-
-    def _make_int_spin(self, minimum: int, maximum: int, value: int, step: int = 1):
-        spin = QSpinBox()
-        spin.setRange(minimum, maximum)
-        spin.setSingleStep(step)
-        spin.setValue(value)
-        return spin
-
     def _create_controls_panel(self):
         panel = QWidget()
         layout = QVBoxLayout(panel)
@@ -207,17 +203,17 @@ class ReductionTab(BaseImageTab):
         self.auto_update_check.setChecked(True)
         common_layout.addRow(self.auto_update_check)
 
-        self.bins_spin = self._make_int_spin(8, 4096, 256)
+        self.bins_spin = _spin("bins_1d")
         common_layout.addRow("Bins", self.bins_spin)
 
         self.auto_qrange_check = QCheckBox("Auto q-range")
         self.auto_qrange_check.setChecked(True)
         common_layout.addRow(self.auto_qrange_check)
 
-        self.q_min_spin = self._make_double_spin(0.0, 100.0, 0.0, step=0.01, decimals=4)
+        self.q_min_spin = _spin("q_min")
         common_layout.addRow("q min (1/A)", self.q_min_spin)
 
-        self.q_max_spin = self._make_double_spin(0.001, 100.0, 2.0, step=0.01, decimals=4)
+        self.q_max_spin = _spin("q_max")
         common_layout.addRow("q max (1/A)", self.q_max_spin)
         layout.addWidget(common_group)
 
@@ -232,8 +228,8 @@ class ReductionTab(BaseImageTab):
         self.sector_group = QGroupBox("Sector average")
         sector_layout = QFormLayout(self.sector_group)
         self.configure_adaptive_form_layout(sector_layout)
-        self.sector_start_spin = self._make_double_spin(0.0, 360.0, 0.0, step=1.0, decimals=1)
-        self.sector_end_spin = self._make_double_spin(0.0, 360.0, 30.0, step=1.0, decimals=1)
+        self.sector_start_spin = _spin("sector_start")
+        self.sector_end_spin   = _spin("sector_end")
         self.sector_hint = QLabel("Uses q max")
         apply_info_style(self.sector_hint)
         sector_layout.addRow(self.sector_hint)
@@ -249,14 +245,14 @@ class ReductionTab(BaseImageTab):
         apply_info_style(self.line_value_label)
         line_layout.addRow(self.line_value_label)
 
-        self.line_value_spin = self._make_double_spin(-10.0, 10.0, 0.0, step=0.01, decimals=4)
+        self.line_value_spin = _spin("line_value")
         line_layout.addRow("Reference", self.line_value_spin)
 
-        self.line_chi0_spin = self._make_double_spin(-180.0, 180.0, 0.0, step=1.0, decimals=2)
-        self.line_dq_spin = self._make_double_spin(0.0001, 100.0, 0.01, step=0.001, decimals=4)
+        self.line_chi0_spin = _spin("line_chi0")
+        self.line_dq_spin   = _spin("line_dq")
         self.line_dq_label = QLabel("Half-width dq (1/\u00c5)")
         line_layout.addRow("chi0 (\u00b0)", self.line_chi0_spin)
-        self.line_chi0_hint = QLabel("chi: 0 right, +90 up")
+        self.line_chi0_hint = QLabel("chi: 0\u00b0 right, +90\u00b0 up")
         apply_info_style(self.line_chi0_hint)
         line_layout.addRow(self.line_chi0_hint)
         line_layout.addRow(self.line_dq_label, self.line_dq_spin)
@@ -269,9 +265,13 @@ class ReductionTab(BaseImageTab):
         self.export_button.clicked.connect(self.export_result)
         self.export_recipe_button = QPushButton("Export Recipe")
         self.export_recipe_button.clicked.connect(self.export_recipe)
+        self.send_to_batch_button = QPushButton("Send to Batch")
+        self.send_to_batch_button.setToolTip("Push current settings as a protocol to the Batch tab")
+        self.send_to_batch_button.clicked.connect(self._send_to_batch)
         button_row.addWidget(self.preview_button)
         button_row.addWidget(self.export_button)
         button_row.addWidget(self.export_recipe_button)
+        button_row.addWidget(self.send_to_batch_button)
         layout.addLayout(button_row)
 
         self.status_label = QLabel("Ready")
@@ -350,82 +350,20 @@ class ReductionTab(BaseImageTab):
             return None
         return None
 
-    def _estimate_q_max(self, image_shape: tuple[int, int]):
-        calibration = self._selected_calibration()
-        if calibration is not None and hasattr(calibration, "q_map"):
-            try:
-                q_map = np.asarray(calibration.q_map(), dtype=float)
-                finite = q_map[np.isfinite(q_map)]
-                if finite.size:
-                    return float(np.max(finite))
-            except Exception:
-                pass
-
-        dq = self._q_per_pixel()
-        if dq is not None:
-            height, width = image_shape
-            max_r = float(np.hypot(width, height))
-            return max_r * dq
-
-        return 2.0
-
-    def _estimate_q_range(self, image_shape: tuple[int, int]):
-        if self._q_bounds:
-            q_min = float(self._q_bounds.get("q_min", 0.0))
-            q_max = float(self._q_bounds.get("q_max", 0.0))
-            if q_max > q_min:
-                return q_min, q_max
-
-        q_max = self._estimate_q_max(image_shape)
-        return 0.0, q_max
-
     def _compute_q_bounds(self, image_shape: tuple[int, int]):
-        calibration = self._selected_calibration()
-        if calibration is None:
-            self._q_bounds = {}
-            return
-
-        try:
-            q_map = np.asarray(calibration.q_map(), dtype=float)
-            qx_map = np.asarray(calibration.qx_map(), dtype=float)
-            qz_map = np.asarray(calibration.qz_map(), dtype=float)
-        except Exception:
-            self._q_bounds = {}
-            return
-
-        valid = np.isfinite(q_map) & np.isfinite(qx_map) & np.isfinite(qz_map)
-        if self._use_mask_enabled():
-            mask = self._get_mask_array(image_shape)
-            if mask is not None and mask.shape == q_map.shape:
-                valid &= ~mask
-
-        if not np.any(valid):
-            self._q_bounds = {}
-            return
-
-        q_vals = q_map[valid]
-        qx_vals = qx_map[valid]
-        qz_vals = qz_map[valid]
-        self._q_bounds = {
-            "q_min": float(np.min(q_vals)),
-            "q_max": float(np.max(q_vals)),
-            "qx_min": float(np.min(qx_vals)),
-            "qx_max": float(np.max(qx_vals)),
-            "qz_min": float(np.min(qz_vals)),
-            "qz_max": float(np.max(qz_vals)),
-        }
+        from sciview.processing.batch import compute_q_bounds
+        mask = self._get_mask_array(image_shape) if self._use_mask_enabled() else None
+        self._q_bounds = compute_q_bounds(self._selected_calibration(), mask)
 
     def _refresh_auto_q_range(self, image_shape: tuple[int, int]):
-        if not self.auto_qrange_check.isChecked():
+        if not self.auto_qrange_check.isChecked() or not self._q_bounds:
             return
-        q_min, q_max = self._estimate_q_range(image_shape)
-        if q_max <= q_min:
-            q_min, q_max = 0.0, max(0.001, q_max)
-
+        q_min = self._q_bounds["q_min"]
+        q_max = self._q_bounds["q_max"]
         self.q_min_spin.blockSignals(True)
         self.q_max_spin.blockSignals(True)
-        self.q_min_spin.setValue(max(0.0, q_min))
-        self.q_max_spin.setValue(max(q_min + 0.001, q_max))
+        self.q_min_spin.setValue(q_min)
+        self.q_max_spin.setValue(q_max)
         self.q_min_spin.blockSignals(False)
         self.q_max_spin.blockSignals(False)
 
@@ -446,21 +384,6 @@ class ReductionTab(BaseImageTab):
         self._refresh_source_status()
         self._on_parameters_changed()
 
-    def _try_get_scianalysis_calibration_class(self):
-        try:
-            rqconv_module = import_module("SciAnalysis.XSAnalysis.DataRQconv")
-            calibration_cls = getattr(rqconv_module, "CalibrationRQconv", None)
-            if calibration_cls is not None:
-                return calibration_cls
-        except Exception:
-            pass
-
-        try:
-            data_module = import_module("SciAnalysis.XSAnalysis.Data")
-            return getattr(data_module, "Calibration", None)
-        except Exception:
-            return None
-
     def _load_custom_calibration(self):
         file_path, _ = dialog_open_file(
             self,
@@ -473,7 +396,7 @@ class ReductionTab(BaseImageTab):
 
         try:
             payload = yaml.safe_load(open(file_path, "r", encoding="utf-8")) or {}
-            calibration_cls = self._try_get_scianalysis_calibration_class()
+            calibration_cls = _get_calibration_class()
             if calibration_cls is None:
                 raise RuntimeError("SciAnalysis calibration class not available")
 
@@ -573,7 +496,7 @@ class ReductionTab(BaseImageTab):
         operation = self._selected_operation()
         self.circular_group.setVisible(operation == "circular_average")
         self.sector_group.setVisible(operation == "sector_average")
-        self.line_group.setVisible(operation == "line_profile")
+        self.line_group.setVisible(operation in ("linecut_q", "linecut_angle"))
         self._on_line_mode_changed()
         self._on_parameters_changed()
 
@@ -590,8 +513,8 @@ class ReductionTab(BaseImageTab):
         return {
             "Circular Average": "circular_average",
             "Sector Average": "sector_average",
-            "Line I(q) at Chi": "line_profile",
-            "Line I(chi) at Q": "line_profile",
+            "Line I(q) at Chi": "linecut_q",
+            "Line I(chi) at Q": "linecut_angle",
         }[text]
 
     def _get_image_array(self):
@@ -611,27 +534,12 @@ class ReductionTab(BaseImageTab):
         return array
 
     def _get_mask_array(self, shape: tuple[int, int]):
-        mask = self._selected_mask()
-        if mask is None:
-            return None
-
-        from_scianalysis_mask = hasattr(mask, "data") and not isinstance(mask, np.ndarray)
-        if hasattr(mask, "data") and not isinstance(mask, np.ndarray):
-            mask = mask.data
-
-        array_raw = np.asarray(mask)
-        if array_raw.dtype == bool:
-            array = array_raw
-        elif from_scianalysis_mask:
-            # SciAnalysis masks use 1 for valid pixels and 0 for masked pixels.
-            array = array_raw <= 0
-        else:
-            array = array_raw.astype(bool)
-
-        if array.shape != shape:
+        from sciview.masking.io import coerce_mask_to_bool
+        raw = self._selected_mask()
+        result = coerce_mask_to_bool(raw, shape)
+        if result is None and raw is not None:
             self.parent_app.show_status("Mask shape does not match the active image; ignoring mask for preview")
-            return None
-        return np.asarray(array, dtype=bool)
+        return result
 
     def _sync_geometry_controls(self, image_shape: tuple[int, int]):
         self._last_control_shape = image_shape
@@ -772,23 +680,66 @@ class ReductionTab(BaseImageTab):
         written_path = save_reduction_result(self._current_result, file_path)
         self.parent_app.show_status(f"Reduction 1D data exported to {written_path}")
 
-    def _build_recipe_payload(self):
+    def _build_batch_payload(self) -> dict:
+        """Build SA-compatible protocol recipe for push to batch.
+
+        Does NOT include plot_range — batch.run_batch injects that from calibration
+        at execution time via compute_q_bounds + apply_q_bounds_to_protocol.
+        """
+        op = self._selected_operation()
+        name = self.operation_combo.currentText()
+
+        if op == "circular_average":
+            return {
+                "operation": op, "name": name,
+                "bins_relative": max(0.1, int(self.bins_spin.value()) / 100.0),
+                "save_results": ["plots", "txt"],
+            }
+
+        if op == "sector_average":
+            a_start = float(self.sector_start_spin.value())
+            a_end   = float(self.sector_end_spin.value())
+            span = (a_end - a_start) % 360.0
+            dangle = 360.0 if np.isclose(span, 0.0) else span
+            display_angle = (a_start + 0.5 * dangle) % 360.0
+            cal = self._selected_calibration()
+            angle = float(display_chi_to_scianalysis_sector_chi(display_angle, cal))
+            return {
+                "operation": op, "name": name,
+                "angle":  angle,
+                "dangle": float(dangle),
+                "bins_relative": max(0.1, int(self.bins_spin.value()) / 100.0),
+                "ylog": True,
+                "save_results": ["plots", "txt"],
+            }
+
+        line_mode = self._selected_line_mode()
+        if op == "linecut_q" or line_mode == "q":
+            chi0 = float(self.line_chi0_spin.value())
+            return {
+                "operation": "linecut_q", "name": name,
+                "chi0": chi0,
+                "dq":   float(self.line_dq_spin.value()),
+                "save_results": ["plots", "txt"],
+            }
+
+        if op == "linecut_angle" or line_mode == "angle":
+            return {
+                "operation": "linecut_angle", "name": name,
+                "q0": float(self.line_value_spin.value()),
+                "dq": float(self.line_dq_spin.value()),
+                "save_results": ["plots", "txt"],
+            }
+
+        return {"operation": op, "name": name, "save_results": ["plots", "txt"]}
+
+    def _build_recipe_payload(self) -> dict:
+        """Full recipe for Export Recipe: SA-compatible params + context metadata."""
         return {
-            "operation": self._selected_operation(),
-            "bins": int(self.bins_spin.value()),
-            "q_min": float(self.q_min_spin.value()),
-            "q_max": float(self.q_max_spin.value()),
-            "auto_q_range": bool(self.auto_qrange_check.isChecked()),
+            **self._build_batch_payload(),
+            "q_bounds": dict(self._q_bounds),
             "calibration_source": self.calibration_source_combo.currentText(),
             "mask_source": self.mask_source_combo.currentText(),
-            "use_mask": self._use_mask_enabled(),
-            "line_mode": self._selected_line_mode(),
-            "line_value": float(self.line_value_spin.value()),
-            "line_dq": float(self.line_dq_spin.value()),
-            "line_chi0_deg": float(self.line_chi0_spin.value()),
-            "angle_start_deg": float(self.sector_start_spin.value()),
-            "angle_end_deg": float(self.sector_end_spin.value()),
-            "q_bounds": dict(self._q_bounds),
             "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
         }
 
@@ -811,6 +762,13 @@ class ReductionTab(BaseImageTab):
             else:
                 yaml.safe_dump(payload, handle, sort_keys=False)
         self.parent_app.show_status(f"Reduction recipe exported to {path}")
+
+    def _send_to_batch(self):
+        payload = self._build_batch_payload()
+        if hasattr(self.parent_app, "push_recipe_to_batch"):
+            self.parent_app.push_recipe_to_batch(payload, source="reduction_tab")
+        else:
+            self.parent_app.show_status("Batch tab not available")
 
     def _remove_overlay_artists(self):
         if hasattr(self, 'image_viewer'):

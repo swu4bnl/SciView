@@ -615,6 +615,20 @@ class CalibrationApp(BaseImageTab):
         except Exception as e:
             print(f"Error updating standards status: {e}")
 
+    def update_plot(self, image_data=None):
+        """Update 2D image viewer and 1D calibration plots/crosshair."""
+        super().update_plot(image_data)
+        if self.image_data is not None:
+            plot_xlim, plot_ylim = self.ax_plot.get_xlim(), self.ax_plot.get_ylim()
+            plot_xlim_valid = not np.allclose(plot_xlim, (0, 1))
+            plot_ylim_valid = not np.allclose(plot_ylim, (0, 1))
+            self._refresh_calibration_crosshair()
+            self._update_1d_plots(plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
+
+    def on_shared_state_activated(self):
+        """Refresh calibration tab state when tab becomes active."""
+        self.update_plot_calibration()
+
     def update_plot_calibration(self):
         """Update plots based on current calibration and image data"""
         if self.image_data is None:
@@ -626,7 +640,7 @@ class CalibrationApp(BaseImageTab):
         plot_ylim_valid = not np.allclose(plot_ylim, (0, 1))
 
         if getattr(self.image_viewer, 'source_array', None) is None:
-            self.update_plot()
+            super().update_plot()
         else:
             self._refresh_calibration_crosshair()
         
@@ -636,7 +650,16 @@ class CalibrationApp(BaseImageTab):
     def _update_1d_plots(self, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid):
         """Update the 1D analysis plots"""
         # Update calibration if SciAnalysis is available
-        if self.scianalysis_available and self.image_data.calibration:
+        if self.scianalysis_available and self.image_data:
+            if not hasattr(self.image_data, 'calibration') or self.image_data.calibration is None:
+                if hasattr(self.parent_app, 'calibration') and self.parent_app.calibration is not None:
+                    self.image_data.calibration = self.parent_app.calibration
+                elif hasattr(self, 'calibration') and self.calibration is not None:
+                    self.image_data.calibration = self.calibration
+                else:
+                    from sciview.profiles.cms_profile import get_calibration_class
+                    cal_cls = get_calibration_class()
+                    self.image_data.calibration = cal_cls(wavelength_A=self.spin_wl_ang.value())
 
             height, width = self.image_data.data.shape
             self.image_data.calibration.width = width

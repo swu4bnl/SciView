@@ -22,6 +22,9 @@ tests/
 tests/*
 /docs/*.md
 
+# VSCode settings
+.vscode/
+
 # pixi environments
 .pixi/*
 !.pixi/config.toml
