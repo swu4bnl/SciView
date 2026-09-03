@@ -36,13 +36,13 @@ OVERLAY_STYLE = {
 
 
 def chi_to_screen_vector(chi_deg: float, calibration: Any | None = None) -> tuple[float, float]:
-    """Map display chi to a unit vector in image/screen coordinates."""
-
-    return display_chi_to_screen_vector(chi_deg)
+    """Map display chi (0=right, +90=up) to screen coordinates where y increases down."""
+    chi_rad = np.radians(float(chi_deg))
+    return float(np.cos(chi_rad)), float(-np.sin(chi_rad))
 
 
 def chi_convention_text(calibration: Any | None = None) -> str:
-    return "chi: 0 right, +90 up"
+    return "chi: 0\u00b0 right, +90\u00b0 up"
 
 
 def _angle_delta_deg(a: np.ndarray, b_deg: float) -> np.ndarray:
@@ -148,7 +148,7 @@ def line_q_roi_mask(
     chi = display_chi_to_scianalysis_chi(float(chi0_deg))
     dq_val = float(dq)
 
-    if np.isclose(chi, 0.0):
+    if np.isclose(chi, 0.0) or np.isclose(chi, 180.0) or np.isclose(chi, -180.0):
         roi = np.abs(qx) < dq_val
     elif np.isclose(chi, 90.0) or np.isclose(chi, -90.0):
         roi = np.abs(qz) < dq_val

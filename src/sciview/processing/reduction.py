@@ -19,7 +19,7 @@ from sciview.processing.angle_conventions import (
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
 
 
-ReductionOperation = Literal["circular_average", "sector_average", "line_profile"]
+ReductionOperation = Literal["circular_average", "sector_average", "linecut_q", "linecut_angle"]
 LineMode = Literal["q", "angle", "qr", "qz"]
 
 @dataclass(slots=True)
@@ -373,7 +373,7 @@ class ReductionBackend:
         if scianalysis_data is not None:
             return self._run_scianalysis(scianalysis_data, request)
 
-        if request.operation == "line_profile":
+        if request.operation in ("linecut_q", "linecut_angle"):
             if request.line_mode != "q":
                 raise ValueError("Advanced line modes require SciAnalysis")
             if request.line_start is None or request.line_end is None:
@@ -472,9 +472,13 @@ class ReductionBackend:
             result = _result_from_line(request.operation, line, metadata)
             return _clip_result_by_q_window(result, request.q_min, request.q_max)
 
-        if request.operation == "line_profile":
+        if request.operation in ("linecut_q", "linecut_angle"):
             dq = float(request.line_dq)
             mode = request.line_mode
+            if request.operation == "linecut_q":
+                mode = "q"
+            elif request.operation == "linecut_angle":
+                mode = "angle"
 
             if mode == "q":
                 if request.line_chi0_deg is not None:

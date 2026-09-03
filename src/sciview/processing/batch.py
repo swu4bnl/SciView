@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any, Callable, Literal
 
 import numpy as np
+
+from sciview.processing.angle_conventions import display_chi_to_scianalysis_chi
 try:
     from PyQt5.QtCore import QThread, pyqtSignal
 except Exception:  # pragma: no cover - fallback for headless/backend-only environments
@@ -44,7 +46,7 @@ except Exception:  # pragma: no cover - fallback for headless/backend-only envir
 
 ProtocolKind = Literal["reduction", "transform"]
 
-REDUCTION_OPERATIONS = ("circular_average", "sector_average", "line_profile")
+REDUCTION_OPERATIONS = ("circular_average", "sector_average", "linecut_q", "linecut_angle")
 TRANSFORM_OPERATIONS = ("q_image", "q_phi_image", "qr_qz_image", "thumbnails")
 
 _OPERATION_KIND: dict[str, ProtocolKind] = {
@@ -307,6 +309,10 @@ def apply_q_bounds_to_protocol(proto: "BatchProtocol", bounds: dict[str, float])
         params["plot_range"] = [q_min, q_max, 0, None]
     elif op == "sector_average":
         params["plot_range"] = [q_min, q_max, None, None]
+    elif op == "linecut_q":
+        params["plot_range"] = [q_min, q_max, 0, None]
+    elif op == "linecut_angle":
+        params["plot_range"] = [-180, 180, 0, None]
     elif op in ("q_image",):
         params["plot_range"] = [qx_min, qx_max, qz_min, qz_max]
     elif op == "q_phi_image":
@@ -350,11 +356,19 @@ def _build_sector_average(p: dict) -> Any:
     return Protocols.sector_average(**p)
 
 
-@_reg("line_profile")
-def _build_line_profile(p: dict) -> Any:
-    # line_profile maps to SA's linecut_q; params must use SA names (chi0, dq).
+@_reg("linecut_q")
+def _build_linecut_q(p: dict) -> Any:
     from SciAnalysis.XSAnalysis import Protocols
-    return Protocols.linecut_q(**p)
+    params = dict(p)
+    if "chi0" in params:
+        params["chi0"] = display_chi_to_scianalysis_chi(float(params["chi0"]))
+    return Protocols.linecut_q(**params)
+
+
+@_reg("linecut_angle")
+def _build_linecut_angle(p: dict) -> Any:
+    from SciAnalysis.XSAnalysis import Protocols
+    return Protocols.linecut_angle(**p)
 
 
 @_reg("q_image")

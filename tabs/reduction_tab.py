@@ -252,7 +252,7 @@ class ReductionTab(BaseImageTab):
         self.line_dq_spin   = _spin("line_dq")
         self.line_dq_label = QLabel("Half-width dq (1/\u00c5)")
         line_layout.addRow("chi0 (\u00b0)", self.line_chi0_spin)
-        self.line_chi0_hint = QLabel("chi: 0 right, +90 up")
+        self.line_chi0_hint = QLabel("chi: 0\u00b0 right, +90\u00b0 up")
         apply_info_style(self.line_chi0_hint)
         line_layout.addRow(self.line_chi0_hint)
         line_layout.addRow(self.line_dq_label, self.line_dq_spin)
@@ -496,7 +496,7 @@ class ReductionTab(BaseImageTab):
         operation = self._selected_operation()
         self.circular_group.setVisible(operation == "circular_average")
         self.sector_group.setVisible(operation == "sector_average")
-        self.line_group.setVisible(operation == "line_profile")
+        self.line_group.setVisible(operation in ("linecut_q", "linecut_angle"))
         self._on_line_mode_changed()
         self._on_parameters_changed()
 
@@ -513,8 +513,8 @@ class ReductionTab(BaseImageTab):
         return {
             "Circular Average": "circular_average",
             "Sector Average": "sector_average",
-            "Line I(q) at Chi": "line_profile",
-            "Line I(chi) at Q": "line_profile",
+            "Line I(q) at Chi": "linecut_q",
+            "Line I(chi) at Q": "linecut_angle",
         }[text]
 
     def _get_image_array(self):
@@ -713,11 +713,21 @@ class ReductionTab(BaseImageTab):
                 "save_results": ["plots", "txt"],
             }
 
-        if op == "line_profile":
+        line_mode = self._selected_line_mode()
+        if op == "linecut_q" or line_mode == "q":
+            chi0 = float(self.line_chi0_spin.value())
             return {
-                "operation": op, "name": name,
-                "chi0": float(self.line_chi0_spin.value()),
+                "operation": "linecut_q", "name": name,
+                "chi0": chi0,
                 "dq":   float(self.line_dq_spin.value()),
+                "save_results": ["plots", "txt"],
+            }
+
+        if op == "linecut_angle" or line_mode == "angle":
+            return {
+                "operation": "linecut_angle", "name": name,
+                "q0": float(self.line_value_spin.value()),
+                "dq": float(self.line_dq_spin.value()),
                 "save_results": ["plots", "txt"],
             }
 

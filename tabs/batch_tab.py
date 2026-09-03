@@ -47,8 +47,13 @@ _DEFAULT_PARAMS: dict[str, dict[str, Any]] = {
         "ylog": True,
         "save_results": ["plots", "txt"],
     },
-    "line_profile": {
+    "linecut_q": {
         "chi0": 0.0,       # azimuthal angle (deg)
+        "dq": 0.01,        # q half-width (1/Å)
+        "save_results": ["plots", "txt"],
+    },
+    "linecut_angle": {
+        "q0": 0.1,         # q reference ring (1/Å)
         "dq": 0.01,        # q half-width (1/Å)
         "save_results": ["plots", "txt"],
     },
