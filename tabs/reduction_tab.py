@@ -692,7 +692,7 @@ class ReductionTab(BaseImageTab):
         if op == "circular_average":
             return {
                 "operation": op, "name": name,
-                "bins_relative": int(self.bins_spin.value()) / 100.0,
+                "bins_relative": max(0.1, int(self.bins_spin.value()) / 100.0),
                 "save_results": ["plots", "txt"],
             }
 
@@ -708,7 +708,7 @@ class ReductionTab(BaseImageTab):
                 "operation": op, "name": name,
                 "angle":  angle,
                 "dangle": float(dangle),
-                "bins_relative": 1.0,
+                "bins_relative": max(0.1, int(self.bins_spin.value()) / 100.0),
                 "ylog": True,
                 "save_results": ["plots", "txt"],
             }

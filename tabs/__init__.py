@@ -14,7 +14,6 @@ _TAB_MODULES = {
     "TransformTab":     "transform_tab",
     "BatchTab":         "batch_tab",
     "TiledBrowserTab":  "tiled_browser_tab",
-    "ProtocolPreviewTab": "protocol_preview_tab",
     "InfoTab":          "info_tab",
     "BaseImageTab":     "base_image_tab",
 }

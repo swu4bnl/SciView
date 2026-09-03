@@ -113,10 +113,15 @@ class BaseImageTab(QWidget):
 
     def _init_calibration(self):
         """Initialize calibration object"""
+        if hasattr(self, 'parent_app') and hasattr(self.parent_app, 'calibration') and self.parent_app.calibration is not None:
+            self.calibration = self.parent_app.calibration
+            return
+
         if self.scianalysis_available:
             try:
-                from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
-                self.calibration = CalibrationRQconv(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
+                from sciview.profiles.cms_profile import get_calibration_class
+                cal_cls = get_calibration_class()
+                self.calibration = cal_cls(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
                 self.calibration.set_pixel_size(pixel_size_um=DEFAULT_CALIBRATION['pixel_size_um'])
                 self.calibration.set_distance(DEFAULT_CALIBRATION['distance_m'])
                 self.calibration.set_beam_position(
@@ -137,39 +142,43 @@ class BaseImageTab(QWidget):
 
     def _create_calibration_for_detector(self, measurement_type):
         """
-        Create or update calibration object for specific detector type
+        Create or reuse calibration object for specific detector type
         
         Args:
             measurement_type: 'saxs', 'waxs', 'maxs', or None
             
         Returns:
-            CalibrationRQconv object configured for the detector
+            Calibration object configured for the detector
         """
         if not self.scianalysis_available:
             return None
             
         try:
-            from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
+            # 1. Prefer shared calibration from parent_app if already active
+            if hasattr(self, 'parent_app') and hasattr(self.parent_app, 'calibration') and self.parent_app.calibration is not None:
+                return self.parent_app.calibration
 
-            detector_config = get_detector_config(measurement_type or 'waxs')
-            
-            # Use existing calibration if available, or create new one
+            # 2. Or reuse local calibration if available
             if hasattr(self, 'calibration') and self.calibration is not None:
-                calibration = self.calibration
-            else:
-                calibration = CalibrationRQconv(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
-            
-            # Update with detector-specific parameters
+                return self.calibration
+
+            # 3. Otherwise create initial calibration from detector defaults
+            from sciview.profiles.cms_profile import get_calibration_class
+            cal_cls = get_calibration_class()
+            detector_config = get_detector_config(measurement_type or 'waxs')
+
+            calibration = cal_cls(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
             calibration.set_pixel_size(pixel_size_um=detector_config['pixel_size_um'])
             calibration.set_distance(detector_config['default_distance_m'])
             calibration.set_beam_position(detector_config['beam_center_x'], detector_config['beam_center_y'])
             
-            # Set angles to prevent None values - this is the missing piece!
-            calibration.set_angles(
-                det_orient=DEFAULT_CALIBRATION['detector_orient_deg'],
-                det_tilt=DEFAULT_CALIBRATION['detector_tilt_deg'], 
-                det_phi=DEFAULT_CALIBRATION['detector_phi_deg']
-            )
+            # Set angles to prevent None values
+            if hasattr(calibration, 'set_angles'):
+                calibration.set_angles(
+                    det_orient=DEFAULT_CALIBRATION['detector_orient_deg'],
+                    det_tilt=DEFAULT_CALIBRATION['detector_tilt_deg'], 
+                    det_phi=DEFAULT_CALIBRATION['detector_phi_deg']
+                )
             
             return calibration
             

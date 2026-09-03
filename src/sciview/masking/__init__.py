@@ -11,6 +11,7 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
+	"coerce_mask_to_bool",
 	"load_mask_file",
 	"export_mask_file",
 	"erode_mask",

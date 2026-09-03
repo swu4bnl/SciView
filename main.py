@@ -49,7 +49,7 @@ from PyQt5.QtCore import Qt, QTimer
 
 # Import configuration from package modules.
 from sciview.interfaces.theme.app_style import AppStyle, apply_info_style
-from sciview.profiles.cms_profile import BEAMLINE_NAME, DEFAULT_CALIBRATION
+from sciview.profiles.cms_profile import BEAMLINE_NAME, DEFAULT_CALIBRATION, get_calibration_class
 from sciview.settings.app_settings import (
     DEFAULT_DISPLAY_SETTINGS,
     GUI_SETTINGS,
@@ -597,16 +597,27 @@ class SciAnaApp(QMainWindow):
             return None, None
             
         try:
-            # Use provided calibration or create a default one
+            # Use provided calibration, active shared calibration, or create a default one
+            if calibration is None:
+                if self.calibration is not None:
+                    calibration = self.calibration
+                else:
+                    cal_cls = get_calibration_class()
+                    calibration = cal_cls(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
+                    calibration.set_pixel_size(pixel_size_um=DEFAULT_CALIBRATION['pixel_size_um'])
+                    calibration.set_distance(DEFAULT_CALIBRATION['distance_m'])
+                    if hasattr(calibration, 'set_angles'):
+                        calibration.set_angles(
+                            det_orient=DEFAULT_CALIBRATION['detector_orient_deg'],
+                            det_tilt=DEFAULT_CALIBRATION['detector_tilt_deg'],
+                            det_phi=DEFAULT_CALIBRATION['detector_phi_deg'],
+                        )
+            
             if SCIANALYSIS_AVAILABLE:
                 from SciAnalysis.XSAnalysis.Data import Data2DScattering
-                from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
-            if calibration is None:
-                calibration = CalibrationRQconv(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
-                calibration.set_pixel_size(pixel_size_um=DEFAULT_CALIBRATION['pixel_size_um'])
-                calibration.set_distance(DEFAULT_CALIBRATION['distance_m'])
-            
-            image_data = Data2DScattering(path, calibration=calibration)
+                image_data = Data2DScattering(path, calibration=calibration)
+            else:
+                image_data = None
             
             # Store and propagate shared state
             self.publish_shared_image(image_data, image_path=path)

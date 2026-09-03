@@ -250,6 +250,7 @@ def new_files_in_folder(
 def compute_q_bounds(
     calibration: Any,
     mask_array: "np.ndarray | None" = None,
+    image_shape: tuple[int, int] | None = None,
 ) -> dict[str, float]:
     """Compute q/qx/qz/qr bounds from a calibration object.
 
@@ -258,30 +259,72 @@ def compute_q_bounds(
     """
     if calibration is None:
         return {}
-    q_map  = np.asarray(calibration.q_map(),  dtype=float)
-    qx_map = np.asarray(calibration.qx_map(), dtype=float)
-    qz_map = np.asarray(calibration.qz_map(), dtype=float)
-    qr_map = np.asarray(calibration.qr_map(), dtype=float)
-    valid  = (
-        np.isfinite(q_map)  &
-        np.isfinite(qx_map) &
-        np.isfinite(qz_map) &
-        np.isfinite(qr_map)
-    )
-    if mask_array is not None and mask_array.shape == q_map.shape:
-        valid &= ~mask_array  # True=masked → exclude
-    if not np.any(valid):
+
+    try:
+        if image_shape is not None and hasattr(calibration, "set_image_size"):
+            h, w = image_shape
+            calibration.set_image_size(w, height=h)
+
+        q_fn = getattr(calibration, "q_map", None)
+        if q_fn is None:
+            return {}
+        q_raw = q_fn()
+        if q_raw is None:
+            return {}
+        q_map = np.asarray(q_raw, dtype=float)
+        valid = np.isfinite(q_map)
+
+        qx_map = None
+        qx_fn = getattr(calibration, "qx_map", None)
+        if qx_fn is not None:
+            try:
+                qx_raw = qx_fn()
+                if qx_raw is not None:
+                    qx_map = np.asarray(qx_raw, dtype=float)
+                    valid &= np.isfinite(qx_map)
+            except Exception:
+                pass
+
+        qz_map = None
+        qz_fn = getattr(calibration, "qz_map", None)
+        if qz_fn is not None:
+            try:
+                qz_raw = qz_fn()
+                if qz_raw is not None:
+                    qz_map = np.asarray(qz_raw, dtype=float)
+                    valid &= np.isfinite(qz_map)
+            except Exception:
+                pass
+
+        qr_map = None
+        qr_fn = getattr(calibration, "qr_map", None)
+        if qr_fn is not None:
+            try:
+                qr_raw = qr_fn()
+                if qr_raw is not None:
+                    qr_map = np.asarray(qr_raw, dtype=float)
+                    valid &= np.isfinite(qr_map)
+            except Exception:
+                pass
+
+        if mask_array is not None and mask_array.shape == q_map.shape:
+            valid &= ~mask_array  # True=masked → exclude
+
+        if not np.any(valid):
+            return {}
+
+        return {
+            "q_min": float(np.min(q_map[valid])),
+            "q_max": float(np.max(q_map[valid])),
+            "qx_min": float(np.min(qx_map[valid])) if qx_map is not None else float(np.min(q_map[valid])),
+            "qx_max": float(np.max(qx_map[valid])) if qx_map is not None else float(np.max(q_map[valid])),
+            "qz_min": float(np.min(qz_map[valid])) if qz_map is not None else 0.0,
+            "qz_max": float(np.max(qz_map[valid])) if qz_map is not None else float(np.max(q_map[valid])),
+            "qr_min": float(np.min(qr_map[valid])) if qr_map is not None else float(np.min(q_map[valid])),
+            "qr_max": float(np.max(qr_map[valid])) if qr_map is not None else float(np.max(q_map[valid])),
+        }
+    except Exception:
         return {}
-    return {
-        "q_min":  float(np.min(q_map[valid])),
-        "q_max":  float(np.max(q_map[valid])),
-        "qx_min": float(np.min(qx_map[valid])),
-        "qx_max": float(np.max(qx_map[valid])),
-        "qz_min": float(np.min(qz_map[valid])),
-        "qz_max": float(np.max(qz_map[valid])),
-        "qr_min": float(np.min(qr_map[valid])),
-        "qr_max": float(np.max(qr_map[valid])),
-    }
 
 
 def apply_q_bounds_to_protocol(proto: "BatchProtocol", bounds: dict[str, float]) -> "BatchProtocol":
@@ -301,6 +344,8 @@ def apply_q_bounds_to_protocol(proto: "BatchProtocol", bounds: dict[str, float])
     qx_max = bounds["qx_max"]
     qz_min = bounds["qz_min"]
     qz_max = bounds["qz_max"]
+    qr_min = bounds.get("qr_min", qx_min)
+    qr_max = bounds.get("qr_max", qx_max)
 
     params = dict(proto.params)
     op     = proto.operation
@@ -315,6 +360,8 @@ def apply_q_bounds_to_protocol(proto: "BatchProtocol", bounds: dict[str, float])
         params["plot_range"] = [-180, 180, 0, None]
     elif op in ("q_image",):
         params["plot_range"] = [qx_min, qx_max, qz_min, qz_max]
+    elif op == "qr_qz_image":
+        params["plot_range"] = [qr_min, qr_max, qz_min, qz_max]
     elif op == "q_phi_image":
         phi_min = params.pop("phi_min", -180.0)
         phi_max = params.pop("phi_max",  180.0)
@@ -428,13 +475,13 @@ def _run_file_with_protocol(
     # coerce_mask_to_bool gives bool where True=masked; SA needs float where 1=valid.
     if mask is not None:
         from sciview.masking.io import coerce_mask_to_bool
-        bool_mask = coerce_mask_to_bool(mask)
+        bool_mask = coerce_mask_to_bool(mask, shape=image.shape)
         if bool_mask is not None:
             sa_mask = SAMask()
             sa_mask.data = (~bool_mask).astype(float)
             mask = sa_mask
-        elif not isinstance(mask, SAMask):
-            mask = None  # unusable mask — don't pass garbage to SA
+        else:
+            mask = None  # mask doesn't match image shape or is unusable
 
     data = Data2DScattering(
         infile=None,
@@ -496,84 +543,89 @@ def run_batch(
         return _orig_h2d(*args, **kwargs)
     np.histogram2d = _h2d_compat
 
+    _sa_tools = None
+    _orig_suppress = None
     try:
-        import SciAnalysis.tools as _sa_tools
-        _orig_suppress = _sa_tools.SUPPRESS_EXCEPTIONS
-        _sa_tools.SUPPRESS_EXCEPTIONS = False
-    except Exception:
-        _sa_tools = None
-        _orig_suppress = None
+        try:
+            import SciAnalysis.tools as _sa_tools
+            _orig_suppress = _sa_tools.SUPPRESS_EXCEPTIONS
+            _sa_tools.SUPPRESS_EXCEPTIONS = False
+        except Exception:
+            _sa_tools = None
+            _orig_suppress = None
 
-    active = [p for p in job.protocols if p.enabled]
-    if not active:
-        raise ValueError("No enabled protocols in job")
-    if not job.file_paths:
-        raise ValueError("No input files in job")
+        active = [p for p in job.protocols if p.enabled]
+        if not active:
+            raise ValueError("No enabled protocols in job")
+        if not job.file_paths:
+            raise ValueError("No input files in job")
 
-    # Compute q bounds from calibration and inject plot_range into each protocol.
-    from sciview.masking.io import coerce_mask_to_bool
-    bounds = compute_q_bounds(job.calibration, coerce_mask_to_bool(job.mask))
-    active = [apply_q_bounds_to_protocol(p, bounds) for p in active]
+        # Compute q bounds from calibration and inject plot_range into each protocol.
+        from sciview.masking.io import coerce_mask_to_bool
+        bounds = compute_q_bounds(job.calibration, coerce_mask_to_bool(job.mask))
+        active = [apply_q_bounds_to_protocol(p, bounds) for p in active]
 
-    sa_protocols = [build_protocol(p) for p in active]
+        sa_protocols = [build_protocol(p) for p in active]
 
-    files = job.file_paths
-    total = len(files) * len(active)
-    done = ok = err = 0
+        files = job.file_paths
+        total = len(files) * len(active)
+        done = ok = err = 0
 
-    def emit_status(msg: str) -> None:
-        if on_status: on_status(msg)
+        def emit_status(msg: str) -> None:
+            if on_status: on_status(msg)
 
-    def emit_progress(d: int, t: int, lbl: str) -> None:
-        if on_progress: on_progress(d, t, lbl)
+        def emit_progress(d: int, t: int, lbl: str) -> None:
+            if on_progress: on_progress(d, t, lbl)
 
-    def emit_file_done(r: BatchFileResult) -> None:
-        if on_file_done: on_file_done(r)
+        def emit_file_done(r: BatchFileResult) -> None:
+            if on_file_done: on_file_done(r)
 
-    def stop_requested() -> bool:
-        return should_stop is not None and should_stop()
+        def stop_requested() -> bool:
+            return should_stop is not None and should_stop()
 
-    emit_status(f"Starting: {len(files)} file(s), {len(active)} protocol(s)")
+        emit_status(f"Starting: {len(files)} file(s), {len(active)} protocol(s)")
 
-    for file_path in files:
-        if stop_requested():
-            emit_status("Stopped by user")
-            break
-
-        out_dir = resolve_output_dir(
-            file_path, job.output_dir, job.input_root, job.mirror_input_structure,
-        )
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        for proto, sa_proto in zip(active, sa_protocols):
+        for file_path in files:
             if stop_requested():
+                emit_status("Stopped by user")
                 break
 
-            label = f"{os.path.basename(file_path)} → {proto.name}"
-            emit_progress(done, total, label)
-            t0 = time.monotonic()
-            try:
-                proto_out = _run_file_with_protocol(
-                    file_path, sa_proto, job.calibration, job.mask, out_dir,
-                )
-                emit_file_done(BatchFileResult(
-                    file_path=file_path, protocol_name=proto.name, status="ok",
-                    output_path=proto_out, elapsed_s=time.monotonic() - t0,
-                ))
-                ok += 1
-            except Exception as exc:
-                emit_file_done(BatchFileResult(
-                    file_path=file_path, protocol_name=proto.name, status="error",
-                    message=str(exc), elapsed_s=time.monotonic() - t0,
-                ))
-                err += 1
-            done += 1
-            emit_progress(done, total, label)
+            out_dir = resolve_output_dir(
+                file_path, job.output_dir, job.input_root, job.mirror_input_structure,
+            )
+            out_dir.mkdir(parents=True, exist_ok=True)
 
-    emit_status(f"Done — {ok} succeeded, {err} failed")
-    if _sa_tools is not None:
-        _sa_tools.SUPPRESS_EXCEPTIONS = _orig_suppress
-    return ok, err
+            for proto, sa_proto in zip(active, sa_protocols):
+                if stop_requested():
+                    break
+
+                label = f"{os.path.basename(file_path)} → {proto.name}"
+                emit_progress(done, total, label)
+                t0 = time.monotonic()
+                try:
+                    proto_out = _run_file_with_protocol(
+                        file_path, sa_proto, job.calibration, job.mask, out_dir,
+                    )
+                    emit_file_done(BatchFileResult(
+                        file_path=file_path, protocol_name=proto.name, status="ok",
+                        output_path=proto_out, elapsed_s=time.monotonic() - t0,
+                    ))
+                    ok += 1
+                except Exception as exc:
+                    emit_file_done(BatchFileResult(
+                        file_path=file_path, protocol_name=proto.name, status="error",
+                        message=str(exc), elapsed_s=time.monotonic() - t0,
+                    ))
+                    err += 1
+                done += 1
+                emit_progress(done, total, label)
+
+        emit_status(f"Done — {ok} succeeded, {err} failed")
+        return ok, err
+    finally:
+        np.histogram2d = _orig_h2d
+        if _sa_tools is not None and _orig_suppress is not None:
+            _sa_tools.SUPPRESS_EXCEPTIONS = _orig_suppress
 
 
 # Backward-compatible alias; callers should prefer run_batch.

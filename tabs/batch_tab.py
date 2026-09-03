@@ -113,17 +113,26 @@ class BatchTab(QWidget):
         return None
 
     def _load_from_session(self) -> None:
-        """Copy file paths from Image Browser session into Batch's own list."""
-        browser = self._find_image_browser()
-        if browser is None:
-            self.parent_app.show_status("Batch: Image Browser tab not found")
-            return
-
+        """Copy file paths from shared file list or Image Browser session into Batch's own list."""
         paths = []
-        for img in browser.session_manager.images:
-            p = str(img.get("path", "")).strip()
-            if p and not p.startswith("tiled://"):
-                paths.append(p)
+        if hasattr(self.parent_app, "get_shared_file_list"):
+            shared = self.parent_app.get_shared_file_list()
+            for p in shared:
+                p_str = str(p).strip()
+                if p_str and not p_str.startswith("tiled://"):
+                    paths.append(p_str)
+
+        if not paths:
+            browser = self._find_image_browser()
+            if browser is not None and hasattr(browser, "session_manager"):
+                for img in browser.session_manager.images:
+                    p = str(img.get("path", "")).strip()
+                    if p and not p.startswith("tiled://"):
+                        paths.append(p)
+
+        if not paths:
+            self.parent_app.show_status("Batch: No local image files found in Image Browser session/folder")
+            return
 
         self._file_paths = paths
         self._file_list_widget.clear()
@@ -131,7 +140,7 @@ class BatchTab(QWidget):
             self._file_list_widget.addItem(os.path.basename(p))
 
         self._file_count_label.setText(f"{len(paths)} file(s) loaded")
-        self.parent_app.show_status(f"Batch: {len(paths)} file(s) loaded from Image Browser session")
+        self.parent_app.show_status(f"Batch: {len(paths)} file(s) loaded from Image Browser")
 
     # ------------------------------------------------------------------
     # UI
@@ -590,6 +599,8 @@ class BatchTab(QWidget):
             if shared_mask is not None:
                 mask = shared_mask
 
+        self._clear_log()
+
         job = BatchJob(
             file_paths=list(self._file_paths),
             protocols=active,
@@ -597,7 +608,7 @@ class BatchTab(QWidget):
             output_formats=self._selected_formats(),
             calibration=cal,
             mask=mask,
-            mirror_input_structure=True,
+            mirror_input_structure=self.mirror_check.isChecked(),
             input_root=str(Path(self._file_paths[0]).parent),
         )
 
