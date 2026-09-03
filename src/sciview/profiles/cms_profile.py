@@ -3,10 +3,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+
+def get_calibration_class():
+    """Return CalibrationRQconv, falling back to Calibration if DataRQconv is unavailable."""
+    try:
+        m = import_module("SciAnalysis.XSAnalysis.DataRQconv")
+        cls = getattr(m, "CalibrationRQconv", None)
+        if cls is not None:
+            return cls
+    except ImportError:
+        pass
+    m = import_module("SciAnalysis.XSAnalysis.Data")
+    return getattr(m, "Calibration")
 
 
 BEAMLINE_NAME = "CMS (11-BM)"

@@ -39,7 +39,17 @@ from sciview.interfaces.theme.app_style import (
 )
 from sciview.masking.io import load_mask_file as backend_load_mask_file
 from sciview.processing.transform import TransformBackend, TransformRequest, save_transform_result
-from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
+from sciview.settings.app_settings import SPINBOX_CONFIG
+
+
+def _spin(key):
+    mn, mx, default, step, decimals = SPINBOX_CONFIG[key]
+    if decimals is None:
+        w = QSpinBox(); w.setRange(int(mn), int(mx)); w.setSingleStep(int(step)); w.setValue(int(default))
+    else:
+        w = QDoubleSpinBox(); w.setRange(mn, mx); w.setDecimals(decimals); w.setSingleStep(step); w.setValue(default)
+    return w
+from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
 from sciview.settings.viewer_config import VIEWER_BEHAVIOR
 from tabs.base_image_tab import BaseImageTab
 
@@ -116,21 +126,6 @@ class TransformTab(BaseImageTab):
 
         return panel
 
-    def _make_double_spin(self, minimum: float, maximum: float, value: float, step: float = 1.0, decimals: int = 3):
-        spin = QDoubleSpinBox()
-        spin.setRange(minimum, maximum)
-        spin.setDecimals(decimals)
-        spin.setSingleStep(step)
-        spin.setValue(value)
-        return spin
-
-    def _make_int_spin(self, minimum: int, maximum: int, value: int, step: int = 1):
-        spin = QSpinBox()
-        spin.setRange(minimum, maximum)
-        spin.setSingleStep(step)
-        spin.setValue(value)
-        return spin
-
     def _create_controls_panel(self):
         panel = QWidget()
         layout = QVBoxLayout(panel)
@@ -192,26 +187,26 @@ class TransformTab(BaseImageTab):
         self.auto_update_check.setChecked(True)
         transform_layout.addRow(self.auto_update_check)
 
-        self.bins_q_spin = self._make_int_spin(16, 4096, 320)
+        self.bins_q_spin   = _spin("bins_q")
         transform_layout.addRow("Q bins", self.bins_q_spin)
 
-        self.bins_phi_spin = self._make_int_spin(16, 1440, 360)
+        self.bins_phi_spin = _spin("bins_phi")
         transform_layout.addRow("Phi bins", self.bins_phi_spin)
 
         self.auto_qrange_check = QCheckBox("Auto q-range")
         self.auto_qrange_check.setChecked(True)
         transform_layout.addRow(self.auto_qrange_check)
 
-        self.q_min_spin = self._make_double_spin(0.0, 100.0, 0.0, step=0.01, decimals=4)
+        self.q_min_spin = _spin("q_min")
         transform_layout.addRow("q min (1/A)", self.q_min_spin)
 
-        self.q_max_spin = self._make_double_spin(0.001, 100.0, 2.0, step=0.01, decimals=4)
+        self.q_max_spin = _spin("q_max")
         transform_layout.addRow("q max (1/A)", self.q_max_spin)
 
-        self.phi_min_spin = self._make_double_spin(-360.0, 360.0, -180.0, step=1.0, decimals=2)
+        self.phi_min_spin = _spin("phi_min")
         transform_layout.addRow("phi min (deg)", self.phi_min_spin)
 
-        self.phi_max_spin = self._make_double_spin(-360.0, 360.0, 180.0, step=1.0, decimals=2)
+        self.phi_max_spin = _spin("phi_max")
         transform_layout.addRow("phi max (deg)", self.phi_max_spin)
 
         self.operation_hint = QLabel("Bins follow selected transform.")
@@ -225,8 +220,12 @@ class TransformTab(BaseImageTab):
         self.preview_button.clicked.connect(self.refresh_preview)
         self.export_button = QPushButton("Export Transform")
         self.export_button.clicked.connect(self.export_result)
+        self.send_to_batch_button = QPushButton("Send to Batch")
+        self.send_to_batch_button.setToolTip("Push current settings as a protocol to the Batch tab")
+        self.send_to_batch_button.clicked.connect(self._send_to_batch)
         button_row.addWidget(self.preview_button)
         button_row.addWidget(self.export_button)
+        button_row.addWidget(self.send_to_batch_button)
         layout.addLayout(button_row)
 
         self.status_label = QLabel("Ready")
@@ -307,21 +306,6 @@ class TransformTab(BaseImageTab):
                 return shared_mask
         return getattr(self.parent_app, "mask", getattr(self.parent_app, "current_mask", None))
 
-    def _try_get_scianalysis_calibration_class(self):
-        try:
-            rqconv_module = import_module("SciAnalysis.XSAnalysis.DataRQconv")
-            calibration_cls = getattr(rqconv_module, "CalibrationRQconv", None)
-            if calibration_cls is not None:
-                return calibration_cls
-        except Exception:
-            pass
-
-        try:
-            data_module = import_module("SciAnalysis.XSAnalysis.Data")
-            return getattr(data_module, "Calibration", None)
-        except Exception:
-            return None
-
     def _load_custom_calibration(self):
         file_path, _ = dialog_open_file(
             self,
@@ -334,7 +318,7 @@ class TransformTab(BaseImageTab):
 
         try:
             payload = yaml.safe_load(open(file_path, "r", encoding="utf-8")) or {}
-            calibration_cls = self._try_get_scianalysis_calibration_class()
+            calibration_cls = _get_calibration_class()
             if calibration_cls is None:
                 raise RuntimeError("SciAnalysis calibration class not available")
 
@@ -421,75 +405,27 @@ class TransformTab(BaseImageTab):
         return array
 
     def _get_mask_array(self, shape: tuple[int, int]):
-        mask = self._selected_mask()
-        if mask is None:
-            return None
-
-        from_scianalysis_mask = hasattr(mask, "data") and not isinstance(mask, np.ndarray)
-        if hasattr(mask, "data") and not isinstance(mask, np.ndarray):
-            mask = mask.data
-
-        array_raw = np.asarray(mask)
-        if array_raw.dtype == bool:
-            array = array_raw
-        elif from_scianalysis_mask:
-            # SciAnalysis masks use 1 for valid pixels and 0 for masked pixels.
-            array = array_raw <= 0
-        else:
-            array = array_raw.astype(bool)
-
-        if array.shape != shape:
+        from sciview.masking.io import coerce_mask_to_bool
+        raw = self._selected_mask()
+        result = coerce_mask_to_bool(raw, shape)
+        if result is None and raw is not None:
             self.parent_app.show_status("Mask shape does not match the active image; ignoring mask for preview")
-            return None
-        return np.asarray(array, dtype=bool)
+        return result
 
     def _compute_q_bounds(self, image_shape: tuple[int, int]):
-        calibration = self._selected_calibration()
-        if calibration is None:
-            self._q_bounds = {}
-            return
-
-        try:
-            q_map = np.asarray(calibration.q_map(), dtype=float)
-        except Exception:
-            self._q_bounds = {}
-            return
-
-        valid = np.isfinite(q_map)
-        if self._use_mask_enabled():
-            mask = self._get_mask_array(image_shape)
-            if mask is not None and mask.shape == q_map.shape:
-                valid &= ~mask
-
-        if not np.any(valid):
-            self._q_bounds = {}
-            return
-
-        q_vals = q_map[valid]
-        self._q_bounds = {
-            "q_min": float(np.min(q_vals)),
-            "q_max": float(np.max(q_vals)),
-        }
-
-    def _estimate_q_range(self):
-        if self._q_bounds:
-            q_min = float(self._q_bounds.get("q_min", 0.0))
-            q_max = float(self._q_bounds.get("q_max", 0.0))
-            if q_max > q_min:
-                return q_min, q_max
-        return 0.0, max(0.001, float(self.q_max_spin.value()))
+        from sciview.processing.batch import compute_q_bounds
+        mask = self._get_mask_array(image_shape) if self._use_mask_enabled() else None
+        self._q_bounds = compute_q_bounds(self._selected_calibration(), mask)
 
     def _refresh_auto_q_range(self):
-        if not self.auto_qrange_check.isChecked():
+        if not self.auto_qrange_check.isChecked() or not self._q_bounds:
             return
-        q_min, q_max = self._estimate_q_range()
-        if q_max <= q_min:
-            q_min, q_max = 0.0, max(0.001, q_max)
-
+        q_min = self._q_bounds["q_min"]
+        q_max = self._q_bounds["q_max"]
         self.q_min_spin.blockSignals(True)
         self.q_max_spin.blockSignals(True)
-        self.q_min_spin.setValue(max(0.0, q_min))
-        self.q_max_spin.setValue(max(q_min + 0.001, q_max))
+        self.q_min_spin.setValue(q_min)
+        self.q_max_spin.setValue(q_max)
         self.q_min_spin.blockSignals(False)
         self.q_max_spin.blockSignals(False)
 
@@ -681,6 +617,55 @@ class TransformTab(BaseImageTab):
         written_path = save_transform_result(self._current_result, file_path)
         self.parent_app.show_status(f"Transformed image exported to {written_path}")
 
+    def _build_batch_payload(self) -> dict:
+        """Build SA-compatible protocol recipe for push to batch.
+
+        Does NOT include plot_range (batch injects it from calibration at run time).
+        For q_phi_image the phi range is included as phi_min/phi_max and is consumed
+        by apply_q_bounds_to_protocol when building the final plot_range.
+        """
+        op   = self._selected_operation()
+        name = self.operation_combo.currentText()
+        bins_relative = int(self.bins_q_spin.value()) / 400.0
+
+        if op == "q_image":
+            return {"operation": op, "name": name, "bins_relative": bins_relative, "save_results": ["plots", "npz"]}
+
+        if op == "q_phi_image":
+            return {
+                "operation": op, "name": name,
+                "bins_relative": bins_relative,
+                "phi_min": float(self.phi_min_spin.value()),
+                "phi_max": float(self.phi_max_spin.value()),
+                "save_results": ["plots", "npz"],
+            }
+
+        if op == "qr_qz_image":
+            return {
+                "operation": op, "name": name,
+                "bins_relative": bins_relative,
+                "save_results": ["plots", "npz"],
+            }
+
+        return {"operation": op, "name": name, "save_results": ["plots", "npz"]}
+
+    def _build_recipe_payload(self) -> dict:
+        """Full recipe for Export Recipe: SA-compatible params + context metadata."""
+        return {
+            **self._build_batch_payload(),
+            "q_bounds": dict(self._q_bounds),
+            "calibration_source": self.calibration_source_combo.currentText(),
+            "mask_source": self.mask_source_combo.currentText(),
+            "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
+        }
+
+    def _send_to_batch(self):
+        payload = self._build_batch_payload()
+        if hasattr(self.parent_app, "push_recipe_to_batch"):
+            self.parent_app.push_recipe_to_batch(payload, source="transform_tab")
+        else:
+            self.parent_app.show_status("Batch tab not available")
+
     def _schedule_preview(self):
         self.status_label.setText("Preview pending...")
         self._preview_timer.start(self._preview_delay_ms)
@@ -704,9 +689,8 @@ class TransformTab(BaseImageTab):
 
         self.result_summary.setText(f"Image loaded: {image_array.shape[1]}x{image_array.shape[0]}")
 
-        if self._selected_operation() != "qr_qz_image":
-            self._compute_q_bounds(image_array.shape)
-            self._refresh_auto_q_range()
+        self._compute_q_bounds(image_array.shape)
+        self._refresh_auto_q_range()
         self._refresh_source_status()
         super().update_plot(display_data)
 
