@@ -336,11 +336,22 @@ class BatchTab(QWidget):
     def _proto_label(p: BatchProtocol) -> str:
         return f"[{p.kind()[:3].upper()}] {p.name}"
 
-    def _add_protocol(self, proto: BatchProtocol) -> None:
+    def _show_protocol_params(self, row: int) -> None:
+        if 0 <= row < len(self._protocols):
+            proto = self._protocols[row]
+            self._selected_proto_row = row
+            self.param_name_label.setText(f"{proto.name}  ({proto.operation})")
+            self.param_editor.setPlainText(yaml.safe_dump(proto.params, sort_keys=False))
+
+    def _add_protocol(self, proto: BatchProtocol, select: bool = True) -> None:
         self._protocols.append(proto)
         item = QListWidgetItem(self._proto_label(proto))
         item.setCheckState(Qt.Checked)
         self.protocol_list.addItem(item)
+        if select:
+            new_row = len(self._protocols) - 1
+            self.protocol_list.setCurrentRow(new_row)
+            self._show_protocol_params(new_row)
 
     def _add_protocol_from_combo(self) -> None:
         op = self.proto_combo.currentText()
@@ -348,7 +359,7 @@ class BatchTab(QWidget):
             name=op, operation=op,
             params=dict(_DEFAULT_PARAMS.get(op, {})),
             source="manual",
-        ))
+        ), select=True)
 
     def receive_recipe(self, key: str, payload: dict[str, Any]) -> None:
         op = payload.get("operation", "")
@@ -365,37 +376,49 @@ class BatchTab(QWidget):
             if ex.name == proto.name:
                 self._protocols[i] = proto
                 self.protocol_list.item(i).setText(self._proto_label(proto))
+                self.protocol_list.setCurrentRow(i)
+                self._show_protocol_params(i)
                 self.parent_app.show_status(f"Batch: updated '{proto.name}'")
                 return
-        self._add_protocol(proto)
+        self._add_protocol(proto, select=True)
         self.parent_app.show_status(f"Batch: added '{proto.name}'")
 
     def _remove_protocol(self) -> None:
         row = self.protocol_list.currentRow()
         if row < 0:
             return
+        self._selected_proto_row = -1
         self.protocol_list.takeItem(row)
         del self._protocols[row]
-        self.param_name_label.setText("No protocol selected")
-        self.param_editor.clear()
+        if self._protocols:
+            new_row = min(row, len(self._protocols) - 1)
+            self.protocol_list.setCurrentRow(new_row)
+            self._show_protocol_params(new_row)
+        else:
+            self.param_name_label.setText("No protocol selected")
+            self.param_editor.clear()
 
     def _move_up(self) -> None:
         row = self.protocol_list.currentRow()
         if row <= 0:
             return
+        self._selected_proto_row = -1
         self._protocols[row - 1], self._protocols[row] = self._protocols[row], self._protocols[row - 1]
         item = self.protocol_list.takeItem(row)
         self.protocol_list.insertItem(row - 1, item)
         self.protocol_list.setCurrentRow(row - 1)
+        self._show_protocol_params(row - 1)
 
     def _move_down(self) -> None:
         row = self.protocol_list.currentRow()
         if row < 0 or row >= len(self._protocols) - 1:
             return
+        self._selected_proto_row = -1
         self._protocols[row], self._protocols[row + 1] = self._protocols[row + 1], self._protocols[row]
         item = self.protocol_list.takeItem(row)
         self.protocol_list.insertItem(row + 1, item)
         self.protocol_list.setCurrentRow(row + 1)
+        self._show_protocol_params(row + 1)
 
     def _sync_protocol_order(self) -> None:
         new_order: list[BatchProtocol] = []
@@ -407,11 +430,15 @@ class BatchTab(QWidget):
                     break
         if len(new_order) == len(self._protocols):
             self._protocols = new_order
+            row = self.protocol_list.currentRow()
+            if 0 <= row < len(self._protocols):
+                self._show_protocol_params(row)
 
     def _on_protocol_selected(self) -> None:
         # Auto-save edits for the protocol that was just deselected.
         prev = self._selected_proto_row
-        if 0 <= prev < len(self._protocols):
+        row = self.protocol_list.currentRow()
+        if 0 <= prev < len(self._protocols) and prev != row:
             try:
                 saved = yaml.safe_load(self.param_editor.toPlainText()) or {}
                 if isinstance(saved, dict):
@@ -419,15 +446,13 @@ class BatchTab(QWidget):
             except Exception:
                 pass  # skip invalid YAML mid-edit
 
-        row = self.protocol_list.currentRow()
-        self._selected_proto_row = row
         if row < 0 or row >= len(self._protocols):
+            self._selected_proto_row = -1
             self.param_name_label.setText("No protocol selected")
             self.param_editor.clear()
             return
-        proto = self._protocols[row]
-        self.param_name_label.setText(f"{proto.name}  ({proto.operation})")
-        self.param_editor.setPlainText(yaml.safe_dump(proto.params, sort_keys=False))
+
+        self._show_protocol_params(row)
 
     def _apply_params(self) -> None:
         row = self.protocol_list.currentRow()
@@ -495,10 +520,17 @@ class BatchTab(QWidget):
         try:
             raw = Path(path).read_text(encoding="utf-8")
             payload = yaml.safe_load(raw) if path.endswith((".yaml", ".yml")) else __import__("json").loads(raw)
+            self._selected_proto_row = -1
             self.protocol_list.clear()
             self._protocols.clear()
             for d in payload.get("protocols", []):
-                self._add_protocol(BatchProtocol.from_dict(d))
+                self._add_protocol(BatchProtocol.from_dict(d), select=False)
+            if self._protocols:
+                self.protocol_list.setCurrentRow(0)
+                self._show_protocol_params(0)
+            else:
+                self.param_name_label.setText("No protocol selected")
+                self.param_editor.clear()
             self.parent_app.show_status(f"Recipe loaded: {len(self._protocols)} protocols")
         except Exception as exc:
             self.parent_app.show_status(f"Batch: load failed — {exc}")
