@@ -48,6 +48,7 @@ from sciview.interfaces.theme.app_style import (
     setup_splitter_layout,
 )
 from sciview.masking.io import load_mask_file as backend_load_mask_file
+from sciview.processing.angle_conventions import display_chi_to_scianalysis_sector_chi
 from sciview.processing.reduction import ReductionBackend, ReductionRequest, save_reduction_result
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
 from sciview.settings.app_settings import SPINBOX_CONFIG
@@ -698,10 +699,15 @@ class ReductionTab(BaseImageTab):
         if op == "sector_average":
             a_start = float(self.sector_start_spin.value())
             a_end   = float(self.sector_end_spin.value())
+            span = (a_end - a_start) % 360.0
+            dangle = 360.0 if np.isclose(span, 0.0) else span
+            display_angle = (a_start + 0.5 * dangle) % 360.0
+            cal = self._selected_calibration()
+            angle = float(display_chi_to_scianalysis_sector_chi(display_angle, cal))
             return {
                 "operation": op, "name": name,
-                "angle":  (a_start + a_end) / 2.0,
-                "dangle": abs(a_end - a_start) / 2.0,
+                "angle":  angle,
+                "dangle": float(dangle),
                 "bins_relative": 1.0,
                 "ylog": True,
                 "save_results": ["plots", "txt"],

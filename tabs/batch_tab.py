@@ -42,7 +42,7 @@ _DEFAULT_PARAMS: dict[str, dict[str, Any]] = {
     },
     "sector_average": {
         "angle": 90.0,     # center angle (deg); 0=horizontal, 90=vertical
-        "dangle": 20.0,    # half-width (deg)
+        "dangle": 20.0,    # full angular width (deg)
         "bins_relative": 1.0,
         "ylog": True,
         "save_results": ["plots", "txt"],
