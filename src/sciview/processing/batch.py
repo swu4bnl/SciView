@@ -313,7 +313,6 @@ def apply_q_bounds_to_protocol(proto: "BatchProtocol", bounds: dict[str, float])
         phi_min = params.pop("phi_min", -180.0)
         phi_max = params.pop("phi_max",  180.0)
         params["plot_range"] = [q_min, q_max, phi_min, phi_max]
-        params["plot_range"] = [bounds["qr_min"], bounds["qr_max"], qz_min, qz_max]
 
     return BatchProtocol(
         name=proto.name, operation=proto.operation,
