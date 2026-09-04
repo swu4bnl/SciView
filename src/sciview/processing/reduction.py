@@ -22,6 +22,10 @@ from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
 ReductionOperation = Literal["circular_average", "sector_average", "linecut_q", "linecut_angle"]
 LineMode = Literal["q", "angle", "qr", "qz"]
 
+# Bin count used by the pure-numpy fallback (no SciAnalysis) when bins_relative
+# is set, mirroring transform.py's identical fallback-scaling convention.
+_FALLBACK_BASE_BINS = 200
+
 @dataclass(slots=True)
 class ReductionRequest:
     """Structured request for a 2D reduction operation."""
@@ -31,6 +35,11 @@ class ReductionRequest:
     center_x: float
     center_y: float
     bins: int = 200
+    # Real SciAnalysis native resolution knob for circular_average_q_bin /
+    # sector_average_q_bin (see TransformRequest.bins_relative for the same
+    # convention). Falls back to a bins-derived estimate when unset, for
+    # backward compatibility with callers that only set `bins`.
+    bins_relative: float | None = None
     q_min: float | None = None
     q_max: float | None = None
     radius_max: float | None = None
@@ -224,42 +233,6 @@ def _result_from_line(operation: ReductionOperation, line: Any, metadata: dict[s
     )
 
 
-def _clip_result_by_q_window(result: ReductionResult, q_min: float | None, q_max: float | None) -> ReductionResult:
-    if q_min is None and q_max is None:
-        return result
-
-    lower = 0.0 if q_min is None else float(q_min)
-    upper = np.inf if q_max is None else float(q_max)
-    if upper <= lower:
-        return result
-
-    metadata = dict(result.metadata)
-    if q_min is not None:
-        metadata["q_min"] = lower
-    if q_max is not None:
-        metadata["q_max"] = upper
-
-    keep = np.isfinite(result.x) & (result.x >= lower) & (result.x <= upper)
-    if not np.any(keep):
-        return ReductionResult(
-            operation=result.operation,
-            x=np.asarray([], dtype=float),
-            y=np.asarray([], dtype=float),
-            x_label=result.x_label,
-            y_label=result.y_label,
-            metadata=metadata,
-        )
-
-    return ReductionResult(
-        operation=result.operation,
-        x=result.x[keep],
-        y=result.y[keep],
-        x_label=result.x_label,
-        y_label=result.y_label,
-        metadata=metadata,
-    )
-
-
 def _valid_pixels(image: np.ndarray, mask: np.ndarray | None, use_mask: bool) -> np.ndarray:
     valid = np.isfinite(image)
     if use_mask and mask is not None:
@@ -368,6 +341,8 @@ class ReductionBackend:
 
         if request.bins < 1:
             raise ValueError("Reduction bins must be at least 1")
+        if request.bins_relative is not None and request.bins_relative <= 0:
+            raise ValueError("bins_relative must be positive")
 
         scianalysis_data = _build_scianalysis_data(request)
         if scianalysis_data is not None:
@@ -405,7 +380,12 @@ class ReductionBackend:
         if request.operation == "sector_average":
             valid &= _angle_in_range(angle, request.angle_start_deg, request.angle_end_deg)
 
-        x, y, counts = _histogram_profile(radius, image, valid, request.bins, request.radius_max)
+        fallback_bins = (
+            max(2, int(round(_FALLBACK_BASE_BINS * request.bins_relative)))
+            if request.bins_relative is not None
+            else request.bins
+        )
+        x, y, counts = _histogram_profile(radius, image, valid, fallback_bins, request.radius_max)
         metadata = {
             **dict(request.metadata),
             "center_x": request.center_x,
@@ -435,7 +415,7 @@ class ReductionBackend:
 
     def _run_scianalysis(self, data_2d: Any, request: ReductionRequest) -> ReductionResult:
         if request.operation == "circular_average":
-            bins_relative = max(0.1, float(request.bins) / 100.0)
+            bins_relative = request.bins_relative if request.bins_relative is not None else max(0.1, float(request.bins) / 100.0)
             line = data_2d.circular_average_q_bin(bins_relative=bins_relative, error=True)
             metadata = {
                 **dict(request.metadata),
@@ -445,8 +425,7 @@ class ReductionBackend:
                 "q_max": request.q_max,
                 "source": "scianalysis",
             }
-            result = _result_from_line(request.operation, line, metadata)
-            return _clip_result_by_q_window(result, request.q_min, request.q_max)
+            return _result_from_line(request.operation, line, metadata)
 
         if request.operation == "sector_average":
             start = float(request.angle_start_deg)
@@ -454,7 +433,7 @@ class ReductionBackend:
             display_angle = _angular_midpoint(start, end)
             angle = display_chi_to_scianalysis_sector_chi(display_angle, request.calibration)
             dangle = _angular_span(start, end)
-            bins_relative = max(0.1, float(request.bins) / 100.0)
+            bins_relative = request.bins_relative if request.bins_relative is not None else max(0.1, float(request.bins) / 100.0)
             line = data_2d.sector_average_q_bin(angle=angle, dangle=dangle, bins_relative=bins_relative, error=True)
             metadata = {
                 **dict(request.metadata),
@@ -469,8 +448,7 @@ class ReductionBackend:
                 "q_max": request.q_max,
                 "source": "scianalysis",
             }
-            result = _result_from_line(request.operation, line, metadata)
-            return _clip_result_by_q_window(result, request.q_min, request.q_max)
+            return _result_from_line(request.operation, line, metadata)
 
         if request.operation in ("linecut_q", "linecut_angle"):
             dq = float(request.line_dq)

@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -195,68 +196,127 @@ class ReductionTab(BaseImageTab):
         self.configure_adaptive_form_layout(common_layout)
         common_layout.setLabelAlignment(Qt.AlignRight)
 
-        self.operation_combo = QComboBox()
-        self.operation_combo.addItems(["Circular Average", "Sector Average", "Line I(q) at Chi", "Line I(chi) at Q"])
-        common_layout.addRow("Operation", self.operation_combo)
-
         self.auto_update_check = QCheckBox("Auto preview")
         self.auto_update_check.setChecked(True)
         common_layout.addRow(self.auto_update_check)
-
-        self.bins_spin = _spin("bins_1d")
-        common_layout.addRow("Bins", self.bins_spin)
-
-        self.auto_qrange_check = QCheckBox("Auto q-range")
-        self.auto_qrange_check.setChecked(True)
-        common_layout.addRow(self.auto_qrange_check)
-
-        self.q_min_spin = _spin("q_min")
-        common_layout.addRow("q min (1/A)", self.q_min_spin)
-
-        self.q_max_spin = _spin("q_max")
-        common_layout.addRow("q max (1/A)", self.q_max_spin)
         layout.addWidget(common_group)
 
-        self.circular_group = QGroupBox("Circular average")
-        circular_layout = QFormLayout(self.circular_group)
-        self.configure_adaptive_form_layout(circular_layout)
-        self.circular_hint = QLabel("Uses q max")
-        apply_info_style(self.circular_hint)
-        circular_layout.addRow(self.circular_hint)
+        # Each operation is its own checkable group with its own parameter
+        # space, so every option is visible up front instead of hidden behind
+        # a dropdown (matching the Transform tab's convention). Checking a
+        # group selects it; the others gray out (but stay visible) via Qt's
+        # native checkable-groupbox behavior.
+        #
+        # q min/max are display-only crops applied to the preview plot's x
+        # axis (see _apply_display_crop), matching SciAnalysis's own
+        # plot_range convention used by batch processing
+        # (apply_q_bounds_to_protocol) for these operations — they are never
+        # sent to SciAnalysis itself (circular_average_q_bin/sector_average_q_bin
+        # always cover the full calibration q range).
+        self.circular_group = QGroupBox("Circular Average")
+        self.circular_group.setCheckable(True)
+        circular_layout = QGridLayout(self.circular_group)
+        self.circular_bins_relative_spin = _spin("bins_relative")
+        self._add_grid_field(circular_layout, 0, 0, "Bins (relative)", self.circular_bins_relative_spin)
+        self.circular_auto_crop_check = QCheckBox("Auto crop to calibration")
+        self.circular_auto_crop_check.setChecked(True)
+        circular_layout.addWidget(self.circular_auto_crop_check, 0, 2, 1, 2)
+        self.circular_q_min_spin = _spin("q_min")
+        self._add_grid_field(circular_layout, 1, 0, "q min crop (1/A)", self.circular_q_min_spin)
+        self.circular_q_max_spin = _spin("q_max")
+        self._add_grid_field(circular_layout, 1, 1, "q max crop (1/A)", self.circular_q_max_spin)
         layout.addWidget(self.circular_group)
 
-        self.sector_group = QGroupBox("Sector average")
-        sector_layout = QFormLayout(self.sector_group)
-        self.configure_adaptive_form_layout(sector_layout)
+        self.sector_group = QGroupBox("Sector Average")
+        self.sector_group.setCheckable(True)
+        sector_layout = QGridLayout(self.sector_group)
+        self.sector_bins_relative_spin = _spin("bins_relative")
+        self._add_grid_field(sector_layout, 0, 0, "Bins (relative)", self.sector_bins_relative_spin)
+        self.sector_auto_crop_check = QCheckBox("Auto crop to calibration")
+        self.sector_auto_crop_check.setChecked(True)
+        sector_layout.addWidget(self.sector_auto_crop_check, 0, 2, 1, 2)
         self.sector_start_spin = _spin("sector_start")
-        self.sector_end_spin   = _spin("sector_end")
-        self.sector_hint = QLabel("Uses q max")
-        apply_info_style(self.sector_hint)
-        sector_layout.addRow(self.sector_hint)
-        sector_layout.addRow("Angle start", self.sector_start_spin)
-        sector_layout.addRow("Angle end", self.sector_end_spin)
+        self._add_grid_field(sector_layout, 1, 0, "Angle start (\u00b0)", self.sector_start_spin)
+        self.sector_end_spin = _spin("sector_end")
+        self._add_grid_field(sector_layout, 1, 1, "Angle end (\u00b0)", self.sector_end_spin)
+        self.sector_q_min_spin = _spin("q_min")
+        self._add_grid_field(sector_layout, 2, 0, "q min crop (1/A)", self.sector_q_min_spin)
+        self.sector_q_max_spin = _spin("q_max")
+        self._add_grid_field(sector_layout, 2, 1, "q max crop (1/A)", self.sector_q_max_spin)
         layout.addWidget(self.sector_group)
 
-        self.line_group = QGroupBox("Line Profile")
-        line_layout = QFormLayout(self.line_group)
-        self.configure_adaptive_form_layout(line_layout)
+        self.linecut_q_group = QGroupBox("Line I(q) at Chi")
+        self.linecut_q_group.setCheckable(True)
+        linecut_q_layout = QGridLayout(self.linecut_q_group)
+        self.linecut_q_chi0_spin = _spin("line_chi0")
+        self._add_grid_field(linecut_q_layout, 0, 0, "chi0 (\u00b0)", self.linecut_q_chi0_spin)
+        self.linecut_q_dq_spin = _spin("line_dq")
+        self._add_grid_field(linecut_q_layout, 0, 1, "Half-width dq (1/\u00c5)", self.linecut_q_dq_spin)
+        linecut_q_hint = QLabel("chi: 0\u00b0 right, +90\u00b0 up")
+        apply_info_style(linecut_q_hint)
+        linecut_q_layout.addWidget(linecut_q_hint, 1, 0, 1, 4)
+        self.linecut_q_auto_crop_check = QCheckBox("Auto crop to calibration")
+        self.linecut_q_auto_crop_check.setChecked(True)
+        linecut_q_layout.addWidget(self.linecut_q_auto_crop_check, 2, 0, 1, 4)
+        self.linecut_q_q_min_spin = _spin("q_min")
+        self._add_grid_field(linecut_q_layout, 3, 0, "q min crop (1/A)", self.linecut_q_q_min_spin)
+        self.linecut_q_q_max_spin = _spin("q_max")
+        self._add_grid_field(linecut_q_layout, 3, 1, "q max crop (1/A)", self.linecut_q_q_max_spin)
+        layout.addWidget(self.linecut_q_group)
 
-        self.line_value_label = QLabel("Reference")
-        apply_info_style(self.line_value_label)
-        line_layout.addRow(self.line_value_label)
+        self.linecut_angle_group = QGroupBox("Line I(chi) at Q")
+        self.linecut_angle_group.setCheckable(True)
+        linecut_angle_layout = QGridLayout(self.linecut_angle_group)
+        self.linecut_angle_q0_spin = _spin("line_value")
+        self._add_grid_field(linecut_angle_layout, 0, 0, "Reference q0 (1/\u00c5)", self.linecut_angle_q0_spin)
+        self.linecut_angle_dq_spin = _spin("line_dq")
+        self._add_grid_field(linecut_angle_layout, 0, 1, "Ring width dq (1/\u00c5)", self.linecut_angle_dq_spin)
+        layout.addWidget(self.linecut_angle_group)
 
-        self.line_value_spin = _spin("line_value")
-        line_layout.addRow("Reference", self.line_value_spin)
+        self.circular_group.setChecked(True)
+        self.sector_group.setChecked(False)
+        self.linecut_q_group.setChecked(False)
+        self.linecut_angle_group.setChecked(False)
 
-        self.line_chi0_spin = _spin("line_chi0")
-        self.line_dq_spin   = _spin("line_dq")
-        self.line_dq_label = QLabel("Half-width dq (1/\u00c5)")
-        line_layout.addRow("chi0 (\u00b0)", self.line_chi0_spin)
-        self.line_chi0_hint = QLabel("chi: 0\u00b0 right, +90\u00b0 up")
-        apply_info_style(self.line_chi0_hint)
-        line_layout.addRow(self.line_chi0_hint)
-        line_layout.addRow(self.line_dq_label, self.line_dq_spin)
-        layout.addWidget(self.line_group)
+        self._operation_groups = {
+            "circular_average": self.circular_group,
+            "sector_average": self.sector_group,
+            "linecut_q": self.linecut_q_group,
+            "linecut_angle": self.linecut_angle_group,
+        }
+        self._operation_labels = {
+            "circular_average": "Circular Average",
+            "sector_average": "Sector Average",
+            "linecut_q": "Line I(q) at Chi",
+            "linecut_angle": "Line I(chi) at Q",
+        }
+        self._operation_param_widgets = {
+            "circular_average": {
+                "bins_relative": self.circular_bins_relative_spin,
+                "auto_crop": self.circular_auto_crop_check,
+                "q_min": self.circular_q_min_spin,
+                "q_max": self.circular_q_max_spin,
+            },
+            "sector_average": {
+                "bins_relative": self.sector_bins_relative_spin,
+                "angle_start": self.sector_start_spin,
+                "angle_end": self.sector_end_spin,
+                "auto_crop": self.sector_auto_crop_check,
+                "q_min": self.sector_q_min_spin,
+                "q_max": self.sector_q_max_spin,
+            },
+            "linecut_q": {
+                "chi0": self.linecut_q_chi0_spin,
+                "dq": self.linecut_q_dq_spin,
+                "auto_crop": self.linecut_q_auto_crop_check,
+                "q_min": self.linecut_q_q_min_spin,
+                "q_max": self.linecut_q_q_max_spin,
+            },
+            "linecut_angle": {
+                "q0": self.linecut_angle_q0_spin,
+                "dq": self.linecut_angle_dq_spin,
+            },
+        }
 
         button_row = QHBoxLayout()
         self.preview_button = QPushButton("Preview")
@@ -279,58 +339,75 @@ class ReductionTab(BaseImageTab):
         layout.addWidget(self.status_label)
         layout.addStretch()
 
-        self.operation_combo.currentTextChanged.connect(self._on_operation_changed)
-        for widget in (
-            self.auto_update_check,
-            self.auto_qrange_check,
-            self.bins_spin,
-            self.q_min_spin,
-            self.q_max_spin,
-            self.sector_start_spin,
-            self.sector_end_spin,
-            self.line_value_spin,
-            self.line_chi0_spin,
-            self.line_dq_spin,
-        ):
-            if hasattr(widget, "stateChanged"):
-                widget.stateChanged.connect(self._on_parameters_changed)
-            elif hasattr(widget, "currentTextChanged"):
-                widget.currentTextChanged.connect(self._on_parameters_changed)
-            elif hasattr(widget, "valueChanged"):
-                widget.valueChanged.connect(self._on_parameters_changed)
+        for operation, group in self._operation_groups.items():
+            group.toggled.connect(lambda checked, op=operation: self._on_operation_group_toggled(op, checked))
+
+        for widgets in self._operation_param_widgets.values():
+            for widget in widgets.values():
+                if hasattr(widget, "stateChanged"):
+                    widget.stateChanged.connect(self._on_parameters_changed)
+                elif hasattr(widget, "valueChanged"):
+                    widget.valueChanged.connect(self._on_parameters_changed)
+
+        self.auto_update_check.stateChanged.connect(self._on_parameters_changed)
 
         self.calibration_source_combo.currentTextChanged.connect(self._on_source_changed)
         self.mask_source_combo.currentTextChanged.connect(self._on_source_changed)
 
-        self._on_operation_changed(self.operation_combo.currentText())
-        self._on_line_mode_changed()
+        self._on_parameters_changed()
         self._refresh_source_status()
         return panel
 
-    def _on_line_mode_changed(self, _text: str | None = None):
-        mode = self._selected_line_mode()
-        is_line_geom = mode == "q"
-        self.line_chi0_spin.setVisible(is_line_geom)
-        self.line_chi0_hint.setVisible(is_line_geom)
-        self.line_value_spin.setEnabled(not is_line_geom)
+    @staticmethod
+    def _add_grid_field(grid: QGridLayout, row: int, col: int, label_text: str, widget: QWidget) -> None:
+        """Place a label+field pair in a 2-column QGridLayout (each column uses 2 grid columns)."""
+        grid.addWidget(QLabel(label_text), row, col * 2)
+        grid.addWidget(widget, row, col * 2 + 1)
 
-        if mode == "q":
-            self.line_value_label.setText("Reference")
-            self.line_dq_label.setText("Half-width dq (1/\u00c5)")
-        elif mode == "angle":
-            self.line_value_label.setText("Reference: q0 (1/\u00c5)")
-            self.line_dq_label.setText("Ring width dq (1/\u00c5)")
-        else:
-            self.line_value_label.setText("Reference")
-            self.line_dq_label.setText("Half-width dq (1/\u00c5)")
+    def _on_operation_group_toggled(self, operation: str, checked: bool):
+        if self._building_controls:
+            return
+        if not checked:
+            # Keep exactly one operation selected at all times.
+            if not any(group.isChecked() for group in self._operation_groups.values()):
+                group = self._operation_groups[operation]
+                group.blockSignals(True)
+                group.setChecked(True)
+                group.blockSignals(False)
+            return
+
+        for other_operation, group in self._operation_groups.items():
+            if other_operation != operation and group.isChecked():
+                group.blockSignals(True)
+                group.setChecked(False)
+                group.blockSignals(False)
 
         self._on_parameters_changed()
 
+    def _selected_operation(self):
+        for operation, group in self._operation_groups.items():
+            if group.isChecked():
+                return operation
+        return "circular_average"
+
+    def _op_widget(self, key):
+        return self._operation_param_widgets.get(self._selected_operation(), {}).get(key)
+
+    def _op_bool(self, key, default=False):
+        widget = self._op_widget(key)
+        return widget.isChecked() if widget is not None else default
+
+    def _op_int(self, key, default=0):
+        widget = self._op_widget(key)
+        return int(widget.value()) if widget is not None else default
+
+    def _op_float(self, key, default=None):
+        widget = self._op_widget(key)
+        return float(widget.value()) if widget is not None else default
+
+
     def _selected_line_mode(self):
-        return {
-            "Line I(q) at Chi": "q",
-            "Line I(chi) at Q": "angle",
-        }.get(self.operation_combo.currentText(), "q")
+        return {"linecut_q": "q", "linecut_angle": "angle"}.get(self._selected_operation(), "q")
 
     def _use_mask_enabled(self):
         return self.mask_source_combo.currentText() != "No mask"
@@ -356,16 +433,19 @@ class ReductionTab(BaseImageTab):
         self._q_bounds = compute_q_bounds(self._selected_calibration(), mask)
 
     def _refresh_auto_q_range(self, image_shape: tuple[int, int]):
-        if not self.auto_qrange_check.isChecked() or not self._q_bounds:
+        if not self._q_bounds:
             return
         q_min = self._q_bounds["q_min"]
         q_max = self._q_bounds["q_max"]
-        self.q_min_spin.blockSignals(True)
-        self.q_max_spin.blockSignals(True)
-        self.q_min_spin.setValue(q_min)
-        self.q_max_spin.setValue(q_max)
-        self.q_min_spin.blockSignals(False)
-        self.q_max_spin.blockSignals(False)
+        for operation in ("circular_average", "sector_average", "linecut_q"):
+            widgets = self._operation_param_widgets[operation]
+            if not widgets["auto_crop"].isChecked():
+                continue
+            for key, value in (("q_min", q_min), ("q_max", q_max)):
+                widget = widgets[key]
+                widget.blockSignals(True)
+                widget.setValue(value)
+                widget.blockSignals(False)
 
     def _q_to_pixels(self, q_value: float):
         dq = self._q_per_pixel()
@@ -492,30 +572,15 @@ class ReductionTab(BaseImageTab):
         self.calibration_status_label.setText(cal_text)
         self.mask_status_label.setText(mask_text)
 
-    def _on_operation_changed(self, _text: str):
-        operation = self._selected_operation()
-        self.circular_group.setVisible(operation == "circular_average")
-        self.sector_group.setVisible(operation == "sector_average")
-        self.line_group.setVisible(operation in ("linecut_q", "linecut_angle"))
-        self._on_line_mode_changed()
-        self._on_parameters_changed()
-
     def _on_parameters_changed(self, *args):
         if self._building_controls:
             return
-        manual_q = not self.auto_qrange_check.isChecked()
-        self.q_min_spin.setEnabled(manual_q)
-        self.q_max_spin.setEnabled(manual_q)
+        for operation in ("circular_average", "sector_average", "linecut_q"):
+            widgets = self._operation_param_widgets[operation]
+            manual_crop = not widgets["auto_crop"].isChecked()
+            widgets["q_min"].setEnabled(manual_crop)
+            widgets["q_max"].setEnabled(manual_crop)
         self.update_plot()
-
-    def _selected_operation(self):
-        text = self.operation_combo.currentText()
-        return {
-            "Circular Average": "circular_average",
-            "Sector Average": "sector_average",
-            "Line I(q) at Chi": "linecut_q",
-            "Line I(chi) at Q": "linecut_angle",
-        }[text]
 
     def _get_image_array(self):
         display_data = self.image_data if self.image_data is not None else getattr(self.parent_app, "image_data", None)
@@ -551,22 +616,24 @@ class ReductionTab(BaseImageTab):
 
         operation = self._selected_operation()
         mask = self._get_mask_array(image.shape)
+        q_min = self._op_float("q_min")
+        q_max = self._op_float("q_max")
 
         kwargs = dict(
             image=image,
             operation=operation,
             center_x=float(self._active_center(image.shape)[0]),
             center_y=float(self._active_center(image.shape)[1]),
-            bins=int(self.bins_spin.value()),
-            q_min=float(self.q_min_spin.value()),
-            q_max=float(self.q_max_spin.value()),
+            bins_relative=self._op_float("bins_relative"),
+            q_min=q_min,
+            q_max=q_max,
             radius_max=None,
-            angle_start_deg=float(self.sector_start_spin.value()),
-            angle_end_deg=float(self.sector_end_spin.value()),
-            line_chi0_deg=float(self.line_chi0_spin.value()),
-            line_dq=float(self.line_dq_spin.value()),
+            angle_start_deg=self._op_float("angle_start", 0.0),
+            angle_end_deg=self._op_float("angle_end", 360.0),
+            line_chi0_deg=self._op_float("chi0"),
+            line_dq=self._op_float("dq", 0.01),
             line_mode=self._selected_line_mode(),
-            line_value=float(self.line_value_spin.value()),
+            line_value=self._op_float("q0"),
             use_mask=self._use_mask_enabled(),
             calibration=self._selected_calibration(),
             mask=mask,
@@ -581,8 +648,8 @@ class ReductionTab(BaseImageTab):
             },
         )
 
-        if operation in {"circular_average", "sector_average"}:
-            kwargs["radius_max"] = float(self._q_to_pixels(float(self.q_max_spin.value())))
+        if operation in {"circular_average", "sector_average"} and q_max is not None:
+            kwargs["radius_max"] = float(self._q_to_pixels(q_max))
 
         return ReductionRequest(**kwargs)
 
@@ -655,7 +722,25 @@ class ReductionTab(BaseImageTab):
         self.ax_plot.tick_params(labelsize=small_font)
         self.ax_plot.grid(True, alpha=0.2)
         self.ax_plot.set_axis_on()
+        self._apply_display_crop(scale)
+        self._apply_display_crop(scale)
         self.canvas_plot.draw()
+
+    def _apply_display_crop(self, scale: str):
+        """Crop the preview's x axis to the selected operation's q window,
+        matching SciAnalysis's own plot_range convention used by batch
+        processing (apply_q_bounds_to_protocol) — circular_average_q_bin /
+        sector_average_q_bin / linecut_q always compute over the full
+        calibration range regardless of this display-only crop."""
+        if self._selected_operation() not in ("circular_average", "sector_average", "linecut_q"):
+            return
+        q_min = self._op_float("q_min")
+        q_max = self._op_float("q_max")
+        if q_min is None or q_max is None or q_max <= q_min:
+            return
+        if scale in ("logx", "loglog") and q_min <= 0:
+            return
+        self.ax_plot.set_xlim(q_min, q_max)
 
     def export_result(self):
         if self._current_result is None:
@@ -687,18 +772,18 @@ class ReductionTab(BaseImageTab):
         at execution time via compute_q_bounds + apply_q_bounds_to_protocol.
         """
         op = self._selected_operation()
-        name = self.operation_combo.currentText()
+        name = self._operation_labels[op]
 
         if op == "circular_average":
             return {
                 "operation": op, "name": name,
-                "bins_relative": max(0.1, int(self.bins_spin.value()) / 100.0),
+                "bins_relative": self._op_float("bins_relative", 1.0),
                 "save_results": ["plots", "txt"],
             }
 
         if op == "sector_average":
-            a_start = float(self.sector_start_spin.value())
-            a_end   = float(self.sector_end_spin.value())
+            a_start = self._op_float("angle_start", 0.0)
+            a_end   = self._op_float("angle_end", 360.0)
             span = (a_end - a_start) % 360.0
             dangle = 360.0 if np.isclose(span, 0.0) else span
             display_angle = (a_start + 0.5 * dangle) % 360.0
@@ -708,26 +793,24 @@ class ReductionTab(BaseImageTab):
                 "operation": op, "name": name,
                 "angle":  angle,
                 "dangle": float(dangle),
-                "bins_relative": max(0.1, int(self.bins_spin.value()) / 100.0),
+                "bins_relative": self._op_float("bins_relative", 1.0),
                 "ylog": True,
                 "save_results": ["plots", "txt"],
             }
 
-        line_mode = self._selected_line_mode()
-        if op == "linecut_q" or line_mode == "q":
-            chi0 = float(self.line_chi0_spin.value())
+        if op == "linecut_q":
             return {
-                "operation": "linecut_q", "name": name,
-                "chi0": chi0,
-                "dq":   float(self.line_dq_spin.value()),
+                "operation": op, "name": name,
+                "chi0": self._op_float("chi0", 0.0),
+                "dq":   self._op_float("dq", 0.01),
                 "save_results": ["plots", "txt"],
             }
 
-        if op == "linecut_angle" or line_mode == "angle":
+        if op == "linecut_angle":
             return {
-                "operation": "linecut_angle", "name": name,
-                "q0": float(self.line_value_spin.value()),
-                "dq": float(self.line_dq_spin.value()),
+                "operation": op, "name": name,
+                "q0": self._op_float("q0", 0.1),
+                "dq": self._op_float("dq", 0.01),
                 "save_results": ["plots", "txt"],
             }
 
@@ -786,8 +869,8 @@ class ReductionTab(BaseImageTab):
         cx, cy = self._active_center(image.shape)
         calibration = self._selected_calibration()
         overlay_note = ""
-        q_min = float(self.q_min_spin.value())
-        q_max = float(self.q_max_spin.value())
+        q_min = self._op_float("q_min", 0.0)
+        q_max = self._op_float("q_max", 0.1)
         styles = OVERLAY_STYLE
         angle_text = chi_convention_text(calibration)
 
@@ -866,8 +949,8 @@ class ReductionTab(BaseImageTab):
             _draw_q_label(0.0, q_max, f"qmax={q_max:.3f}")
             overlay_note = f"Circular average: q <= {q_max:.4f} 1/A"
         elif operation == "sector_average":
-            start = float(self.sector_start_spin.value())
-            end = float(self.sector_end_spin.value())
+            start = self._op_float("angle_start", 0.0)
+            end = self._op_float("angle_end", 360.0)
             span = (end - start) % 360.0
             dangle = 360.0 if np.isclose(span, 0.0) else span
             center = (start + 0.5 * dangle) % 360.0
@@ -890,8 +973,8 @@ class ReductionTab(BaseImageTab):
         else:
             line_mode = self._selected_line_mode()
             if line_mode == "angle":
-                q0 = float(self.line_value_spin.value())
-                dq = float(self.line_dq_spin.value())
+                q0 = self._op_float("q0", 0.1)
+                dq = self._op_float("dq", 0.01)
                 r_inner = max(0.0, self._q_to_pixels(max(0.0, q0 - dq)))
                 r_outer = max(r_inner + 1e-6, self._q_to_pixels(max(0.0, q0 + dq)))
                 ring_mask = self._screen_ring_mask(image.shape, cx, cy, r_inner, r_outer)
@@ -904,8 +987,8 @@ class ReductionTab(BaseImageTab):
                 overlay_note = f"I(chi) at q: q0={q0:.4f} 1/A, dq={dq:.4f} 1/A"
             else:
                 # I(q) along line: radial stripe at azimuthal angle chi0 with half-width dq (Å⁻¹).
-                chi0 = float(self.line_chi0_spin.value())
-                dq_val = float(self.line_dq_spin.value())
+                chi0 = self._op_float("chi0", 0.0)
+                dq_val = self._op_float("dq", 0.01)
                 roi = line_q_roi_mask(calibration, chi0, dq_val, q_min, q_max)
                 draw_guides = roi is None
                 if roi is not None:
@@ -1019,9 +1102,12 @@ class ReductionTab(BaseImageTab):
     def _add_tab_specific_status(self, info_lines):
         info_lines.append("")
         info_lines.append("=== REDUCTION STATUS ===")
-        info_lines.append(f"Operation: {self.operation_combo.currentText()}")
+        info_lines.append(f"Operation: {self._operation_labels[self._selected_operation()]}")
         info_lines.append(f"Mask enabled: {'Yes' if self._use_mask_enabled() else 'No'}")
-        info_lines.append(f"q range: {self.q_min_spin.value():.4f} to {self.q_max_spin.value():.4f} 1/A")
+        q_min = self._op_float("q_min")
+        q_max = self._op_float("q_max")
+        if q_min is not None and q_max is not None:
+            info_lines.append(f"q crop: {q_min:.4f} to {q_max:.4f} 1/A")
         if self._q_bounds:
             info_lines.append(
                 f"qx range: {self._q_bounds['qx_min']:.4f} to {self._q_bounds['qx_max']:.4f} 1/A"

@@ -148,8 +148,7 @@ SPINBOX_CONFIG = {
     "line_chi0":    (-180.0, 180.0, 0.0, 1.0, 2),
     # Bin counts.
     "bins_phi": (16, 1440, 360, 1, None),
-    "bins_1d":  (8,  4096, 256, 1, None),
-    "bins_relative": (0.1, 3.0, 1.0, 0.05, 2),  # SciAnalysis's native bins_relative (all 3 transforms)
+    "bins_relative": (0.1, 3.0, 1.0, 0.05, 2),  # SciAnalysis's native bins_relative (circular/sector/all 3 transforms)
     # Line-cut params.
     "line_dq":    (0.0001, 100.0, 0.01, 0.001, 4),
     "line_value": (-10.0,  10.0,  0.0, 0.01,  4),
