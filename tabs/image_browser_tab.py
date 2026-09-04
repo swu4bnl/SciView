@@ -1183,7 +1183,6 @@ class ImageBrowserApp(BaseImageTab):
         if self.folder_play_button.isChecked():
             if self.folder_files_list.currentRow() < 0:
                 self._select_folder_browser_row(0)
-            self.folder_play_button.setText("⏸")
             self.folder_play_timer.start(500)
         else:
             self._stop_folder_playback()
