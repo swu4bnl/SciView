@@ -127,17 +127,30 @@ DEFAULT_DISPLAY_SETTINGS = {
 
 # Spin-box configuration for tabs that share similar controls.
 # Each entry: (min, max, default, step, decimals)
+#
+# Grouped by *shape* (the value's valid sign/range), not by which tab uses
+# it — reuse a key only if its shape actually matches (e.g. don't reuse a
+# non-negative "magnitude" range for a signed axis; that caused a bug where
+# Q Image's qx/qz min spinboxes couldn't go negative and clamped to 0).
 SPINBOX_CONFIG = {
-    "q_min":   (0.0,    100.0, 0.0,    0.01, 4),
-    "q_max":   (0.001,  100.0, 2.0,    0.01, 4),
-    "phi_min": (-360.0, 360.0, -180.0, 1.0,  2),
-    "phi_max": (-360.0, 360.0,  180.0, 1.0,  2),
-    "bins_q":  (16,     4096,  320,    1,    None),  # int spin — no decimals
-    "bins_phi": (16,    1440,  360,    1,    None),
-    "bins_1d": (8,      4096,  256,    1,    None),
-    "sector_start": (0.0,  360.0,  0.0, 1.0, 1),
-    "sector_end":   (0.0,  360.0, 30.0, 1.0, 1),
+    # Non-negative |q| magnitude (radial q, or q-phi's q axis).
+    "q_min": (0.0,   100.0, 0.0, 0.01, 4),
+    "q_max": (0.001, 100.0, 2.0, 0.01, 4),
+    # Signed axis crop for qx/qz/qr, which straddle zero — used by Q Image
+    # and Qr-Qz Image crops.
+    "crop_min": (-100.0, 100.0, -2.0, 0.01, 4),
+    "crop_max": (-100.0, 100.0,  2.0, 0.01, 4),
+    # Angles in degrees.
+    "phi_min": (-360.0, 360.0, -180.0, 1.0, 2),
+    "phi_max": (-360.0, 360.0,  180.0, 1.0, 2),
+    "sector_start": (0.0, 360.0,  0.0, 1.0, 1),
+    "sector_end":   (0.0, 360.0, 30.0, 1.0, 1),
     "line_chi0":    (-180.0, 180.0, 0.0, 1.0, 2),
-    "line_dq":      (0.0001, 100.0, 0.01, 0.001, 4),
-    "line_value":   (-10.0,  10.0,  0.0, 0.01,  4),
+    # Bin counts.
+    "bins_phi": (16, 1440, 360, 1, None),
+    "bins_1d":  (8,  4096, 256, 1, None),
+    "bins_relative": (0.1, 3.0, 1.0, 0.05, 2),  # SciAnalysis's native bins_relative (all 3 transforms)
+    # Line-cut params.
+    "line_dq":    (0.0001, 100.0, 0.01, 0.001, 4),
+    "line_value": (-10.0,  10.0,  0.0, 0.01,  4),
 }

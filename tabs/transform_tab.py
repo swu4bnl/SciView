@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
+                                                                                    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -174,46 +175,120 @@ class TransformTab(BaseImageTab):
 
         layout.addWidget(source_group)
 
-        transform_group = QGroupBox("Transform")
-        transform_layout = QFormLayout(transform_group)
-        self.configure_adaptive_form_layout(transform_layout)
-        transform_layout.setLabelAlignment(Qt.AlignRight)
-
-        self.operation_combo = QComboBox()
-        self.operation_combo.addItems(["Q Image", "Q-Phi Image", "Qr-Qz Image"])
-        transform_layout.addRow("Operation", self.operation_combo)
-
         self.auto_update_check = QCheckBox("Auto preview")
         self.auto_update_check.setChecked(True)
-        transform_layout.addRow(self.auto_update_check)
+        layout.addWidget(self.auto_update_check)
 
-        self.bins_q_spin   = _spin("bins_q")
-        transform_layout.addRow("Q bins", self.bins_q_spin)
+        # Each transform is its own checkable group with its own parameters, so
+        # every option (and what it needs) is visible up front instead of
+        # hidden behind a dropdown. Checking a group selects it; the others
+        # gray out (but stay visible) via Qt's native checkable-groupbox behavior.
+        #
+        # All three call SciAnalysis the same way: only bins_relative (plus
+        # bins_phi for Q-Phi) is a real SciAnalysis parameter — remesh_q_bin /
+        # remesh_q_phi / remesh_qr_bin always cover the full calibration extent.
+        # The crop fields below (labeled per operation's own axes) are
+        # display-only, applied as matplotlib axis limits in
+        # _apply_display_crop, matching SciAnalysis's own universal
+        # plot_range=[x_min, x_max, y_min, y_max] convention (Data2D.plot()) —
+        # not sent to SciAnalysis here (see _run_scianalysis).
+        self.q_image_group = QGroupBox("Q Image")
+        self.q_image_group.setCheckable(True)
+        q_image_layout = QGridLayout(self.q_image_group)
+        self.q_bins_relative_spin = _spin("bins_relative")
+        self._add_grid_field(q_image_layout, 0, 0, "Bins (relative)", self.q_bins_relative_spin)
+        self.q_auto_crop_check = QCheckBox("Auto crop to calibration")
+        self.q_auto_crop_check.setChecked(True)
+        q_image_layout.addWidget(self.q_auto_crop_check, 0, 2, 1, 2)
+        self.q_x_min_spin = _spin("crop_min")
+        self._add_grid_field(q_image_layout, 1, 0, "qx min crop (1/A)", self.q_x_min_spin)
+        self.q_x_max_spin = _spin("crop_max")
+        self._add_grid_field(q_image_layout, 1, 1, "qx max crop (1/A)", self.q_x_max_spin)
+        self.q_y_min_spin = _spin("crop_min")
+        self._add_grid_field(q_image_layout, 2, 0, "qz min crop (1/A)", self.q_y_min_spin)
+        self.q_y_max_spin = _spin("crop_max")
+        self._add_grid_field(q_image_layout, 2, 1, "qz max crop (1/A)", self.q_y_max_spin)
+        layout.addWidget(self.q_image_group)
 
-        self.bins_phi_spin = _spin("bins_phi")
-        transform_layout.addRow("Phi bins", self.bins_phi_spin)
+        self.q_phi_group = QGroupBox("Q-Phi Image")
+        self.q_phi_group.setCheckable(True)
+        q_phi_layout = QGridLayout(self.q_phi_group)
+        self.qphi_bins_relative_spin = _spin("bins_relative")
+        self._add_grid_field(q_phi_layout, 0, 0, "Bins (relative)", self.qphi_bins_relative_spin)
+        self.qphi_bins_phi_spin = _spin("bins_phi")
+        self._add_grid_field(q_phi_layout, 0, 1, "Phi bins", self.qphi_bins_phi_spin)
+        self.qphi_auto_crop_check = QCheckBox("Auto crop q range to calibration")
+        self.qphi_auto_crop_check.setChecked(True)
+        q_phi_layout.addWidget(self.qphi_auto_crop_check, 1, 0, 1, 4)
+        self.qphi_x_min_spin = _spin("q_min")
+        self._add_grid_field(q_phi_layout, 2, 0, "q min crop (1/A)", self.qphi_x_min_spin)
+        self.qphi_x_max_spin = _spin("q_max")
+        self._add_grid_field(q_phi_layout, 2, 1, "q max crop (1/A)", self.qphi_x_max_spin)
+        self.qphi_y_min_spin = _spin("phi_min")
+        self._add_grid_field(q_phi_layout, 3, 0, "phi min crop (deg)", self.qphi_y_min_spin)
+        self.qphi_y_max_spin = _spin("phi_max")
+        self._add_grid_field(q_phi_layout, 3, 1, "phi max crop (deg)", self.qphi_y_max_spin)
+        layout.addWidget(self.q_phi_group)
 
-        self.auto_qrange_check = QCheckBox("Auto q-range")
-        self.auto_qrange_check.setChecked(True)
-        transform_layout.addRow(self.auto_qrange_check)
+        self.qr_qz_group = QGroupBox("Qr-Qz Image")
+        self.qr_qz_group.setCheckable(True)
+        qr_qz_layout = QGridLayout(self.qr_qz_group)
+        self.qrqz_bins_relative_spin = _spin("bins_relative")
+        self._add_grid_field(qr_qz_layout, 0, 0, "Bins (relative)", self.qrqz_bins_relative_spin)
+        self.qrqz_auto_crop_check = QCheckBox("Auto crop to calibration")
+        self.qrqz_auto_crop_check.setChecked(True)
+        qr_qz_layout.addWidget(self.qrqz_auto_crop_check, 0, 2, 1, 2)
+        self.qrqz_x_min_spin = _spin("crop_min")
+        self._add_grid_field(qr_qz_layout, 1, 0, "qr min crop (1/A)", self.qrqz_x_min_spin)
+        self.qrqz_x_max_spin = _spin("crop_max")
+        self._add_grid_field(qr_qz_layout, 1, 1, "qr max crop (1/A)", self.qrqz_x_max_spin)
+        self.qrqz_y_min_spin = _spin("crop_min")
+        self._add_grid_field(qr_qz_layout, 2, 0, "qz min crop (1/A)", self.qrqz_y_min_spin)
+        self.qrqz_y_max_spin = _spin("crop_max")
+        self._add_grid_field(qr_qz_layout, 2, 1, "qz max crop (1/A)", self.qrqz_y_max_spin)
+        layout.addWidget(self.qr_qz_group)
 
-        self.q_min_spin = _spin("q_min")
-        transform_layout.addRow("q min (1/A)", self.q_min_spin)
+        self.q_image_group.setChecked(True)
+        self.q_phi_group.setChecked(False)
+        self.qr_qz_group.setChecked(False)
 
-        self.q_max_spin = _spin("q_max")
-        transform_layout.addRow("q max (1/A)", self.q_max_spin)
-
-        self.phi_min_spin = _spin("phi_min")
-        transform_layout.addRow("phi min (deg)", self.phi_min_spin)
-
-        self.phi_max_spin = _spin("phi_max")
-        transform_layout.addRow("phi max (deg)", self.phi_max_spin)
-
-        self.operation_hint = QLabel("Bins follow selected transform.")
-        apply_info_style(self.operation_hint)
-        transform_layout.addRow(self.operation_hint)
-
-        layout.addWidget(transform_group)
+        self._operation_groups = {
+            "q_image": self.q_image_group,
+            "q_phi_image": self.q_phi_group,
+            "qr_qz_image": self.qr_qz_group,
+        }
+        self._operation_labels = {
+            "q_image": "Q Image",
+            "q_phi_image": "Q-Phi Image",
+            "qr_qz_image": "Qr-Qz Image",
+        }
+        self._operation_param_widgets = {
+            "q_image": {
+                "bins_relative": self.q_bins_relative_spin,
+                "auto_crop": self.q_auto_crop_check,
+                "x_min": self.q_x_min_spin,
+                "x_max": self.q_x_max_spin,
+                "y_min": self.q_y_min_spin,
+                "y_max": self.q_y_max_spin,
+            },
+            "q_phi_image": {
+                "bins_relative": self.qphi_bins_relative_spin,
+                "bins_phi": self.qphi_bins_phi_spin,
+                "auto_crop": self.qphi_auto_crop_check,
+                "x_min": self.qphi_x_min_spin,
+                "x_max": self.qphi_x_max_spin,
+                "y_min": self.qphi_y_min_spin,
+                "y_max": self.qphi_y_max_spin,
+            },
+            "qr_qz_image": {
+                "bins_relative": self.qrqz_bins_relative_spin,
+                "auto_crop": self.qrqz_auto_crop_check,
+                "x_min": self.qrqz_x_min_spin,
+                "x_max": self.qrqz_x_max_spin,
+                "y_min": self.qrqz_y_min_spin,
+                "y_max": self.qrqz_y_max_spin,
+            },
+        }
 
         button_row = QHBoxLayout()
         self.preview_button = QPushButton("Preview")
@@ -233,56 +308,93 @@ class TransformTab(BaseImageTab):
         layout.addWidget(self.status_label)
         layout.addStretch()
 
-        self.operation_combo.currentTextChanged.connect(self._on_operation_changed)
+        for operation, group in self._operation_groups.items():
+            group.toggled.connect(lambda checked, op=operation: self._on_operation_group_toggled(op, checked))
 
-        for widget in (
-            self.auto_update_check,
-            self.auto_qrange_check,
-            self.bins_q_spin,
-            self.bins_phi_spin,
-            self.q_min_spin,
-            self.q_max_spin,
-            self.phi_min_spin,
-            self.phi_max_spin,
-        ):
-            if hasattr(widget, "stateChanged"):
-                widget.stateChanged.connect(self._on_parameters_changed)
-            elif hasattr(widget, "valueChanged"):
-                widget.valueChanged.connect(self._on_parameters_changed)
+        self.auto_update_check.stateChanged.connect(self._on_parameters_changed)
+        for widgets in self._operation_param_widgets.values():
+            for widget in widgets.values():
+                if hasattr(widget, "stateChanged"):
+                    widget.stateChanged.connect(self._on_parameters_changed)
+                elif hasattr(widget, "valueChanged"):
+                    widget.valueChanged.connect(self._on_parameters_changed)
 
         self.calibration_source_combo.currentTextChanged.connect(self._on_source_changed)
         self.mask_source_combo.currentTextChanged.connect(self._on_source_changed)
 
-        self._on_operation_changed(self.operation_combo.currentText())
+        self._on_parameters_changed()
         self._refresh_source_status()
         return panel
+
+    @staticmethod
+    def _add_grid_field(grid: QGridLayout, row: int, col: int, label_text: str, widget: QWidget) -> None:
+        """Place a label+field pair in a 2-column QGridLayout (each column uses 2 grid columns)."""
+        grid.addWidget(QLabel(label_text), row, col * 2)
+        grid.addWidget(widget, row, col * 2 + 1)
 
     def _on_source_changed(self, _text: str):
         self._refresh_source_status()
         self._on_parameters_changed()
 
-    def _on_operation_changed(self, _text: str):
-        is_qphi = self._selected_operation() == "q_phi_image"
-        self.bins_phi_spin.setEnabled(is_qphi)
-        self.phi_min_spin.setEnabled(is_qphi)
-        self.phi_max_spin.setEnabled(is_qphi)
+    def _on_operation_group_toggled(self, operation: str, checked: bool):
+        if self._building_controls:
+            return
+        if not checked:
+            # Keep exactly one operation selected at all times.
+            if not any(group.isChecked() for group in self._operation_groups.values()):
+                group = self._operation_groups[operation]
+                group.blockSignals(True)
+                group.setChecked(True)
+                group.blockSignals(False)
+            return
+
+        for other_operation, group in self._operation_groups.items():
+            if other_operation != operation and group.isChecked():
+                group.blockSignals(True)
+                group.setChecked(False)
+                group.blockSignals(False)
+
         self._on_parameters_changed()
 
     def _on_parameters_changed(self, *args):
         if self._building_controls:
             return
-        manual_q = not self.auto_qrange_check.isChecked()
-        self.q_min_spin.setEnabled(manual_q)
-        self.q_max_spin.setEnabled(manual_q)
+        for operation, widgets in self._operation_param_widgets.items():
+            auto_check = widgets.get("auto_crop")
+            if auto_check is None:
+                continue
+            manual_crop = not auto_check.isChecked()
+            # Auto crop only covers axes SciAnalysis derives from calibration:
+            # both axes for Q Image/Qr-Qz Image, only x (q) for Q-Phi Image —
+            # phi (y) is always independently editable since SciAnalysis fixes
+            # it at -180/180 by default rather than deriving it from calibration.
+            keys = ("x_min", "x_max") if operation == "q_phi_image" else ("x_min", "x_max", "y_min", "y_max")
+            for key in keys:
+                widget = widgets.get(key)
+                if widget is not None:
+                    widget.setEnabled(manual_crop)
         self.update_plot(schedule_preview=True)
 
     def _selected_operation(self):
-        text = self.operation_combo.currentText()
-        return {
-            "Q Image": "q_image",
-            "Q-Phi Image": "q_phi_image",
-            "Qr-Qz Image": "qr_qz_image",
-        }[text]
+        for operation, group in self._operation_groups.items():
+            if group.isChecked():
+                return operation
+        return "q_image"
+
+    def _op_widget(self, key):
+        return self._operation_param_widgets.get(self._selected_operation(), {}).get(key)
+
+    def _op_bool(self, key, default=False):
+        widget = self._op_widget(key)
+        return widget.isChecked() if widget is not None else default
+
+    def _op_int(self, key, default=0):
+        widget = self._op_widget(key)
+        return int(widget.value()) if widget is not None else default
+
+    def _op_float(self, key, default=None):
+        widget = self._op_widget(key)
+        return float(widget.value()) if widget is not None else default
 
     def _use_mask_enabled(self):
         return self.mask_source_combo.currentText() != "No mask"
@@ -418,16 +530,31 @@ class TransformTab(BaseImageTab):
         self._q_bounds = compute_q_bounds(self._selected_calibration(), mask)
 
     def _refresh_auto_q_range(self):
-        if not self.auto_qrange_check.isChecked() or not self._q_bounds:
+        """Fill each operation's own crop fields from calibration bounds, for
+        whichever operations have "Auto crop" checked. Bounds keys differ per
+        operation's real axes (see sciview.processing.batch.compute_q_bounds);
+        Q-Phi Image's phi (y) axis has no calibration-derived bound, matching
+        SciAnalysis's own hardcoded -180/180 default.
+        """
+        if not self._q_bounds:
             return
-        q_min = self._q_bounds["q_min"]
-        q_max = self._q_bounds["q_max"]
-        self.q_min_spin.blockSignals(True)
-        self.q_max_spin.blockSignals(True)
-        self.q_min_spin.setValue(q_min)
-        self.q_max_spin.setValue(q_max)
-        self.q_min_spin.blockSignals(False)
-        self.q_max_spin.blockSignals(False)
+        bounds_keys_by_operation = {
+            "q_image": {"x_min": "qx_min", "x_max": "qx_max", "y_min": "qz_min", "y_max": "qz_max"},
+            "q_phi_image": {"x_min": "q_min", "x_max": "q_max"},
+            "qr_qz_image": {"x_min": "qr_min", "x_max": "qr_max", "y_min": "qz_min", "y_max": "qz_max"},
+        }
+        for operation, widgets in self._operation_param_widgets.items():
+            auto_check = widgets.get("auto_crop")
+            if auto_check is None or not auto_check.isChecked():
+                continue
+            for widget_key, bounds_key in bounds_keys_by_operation.get(operation, {}).items():
+                widget = widgets.get(widget_key)
+                bound_value = self._q_bounds.get(bounds_key)
+                if widget is None or bound_value is None:
+                    continue
+                widget.blockSignals(True)
+                widget.setValue(bound_value)
+                widget.blockSignals(False)
 
     def _build_request(self):
         image = self._get_image_array()
@@ -445,12 +572,12 @@ class TransformTab(BaseImageTab):
             calibration=calibration,
             mask=self._get_mask_array(image.shape),
             use_mask=self._use_mask_enabled(),
-            bins_q=int(self.bins_q_spin.value()),
-            bins_phi=int(self.bins_phi_spin.value()),
-            q_min=float(self.q_min_spin.value()),
-            q_max=float(self.q_max_spin.value()),
-            phi_min_deg=float(self.phi_min_spin.value()),
-            phi_max_deg=float(self.phi_max_spin.value()),
+            bins_relative=self._op_float("bins_relative", 1.0),
+            bins_phi=self._op_int("bins_phi", 360),
+            x_min=self._op_float("x_min"),
+            x_max=self._op_float("x_max"),
+            y_min=self._op_float("y_min"),
+            y_max=self._op_float("y_max"),
             metadata={
                 "image_shape": tuple(int(v) for v in image.shape),
                 "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
@@ -599,7 +726,22 @@ class TransformTab(BaseImageTab):
         self.ax_transform.set_title(result.operation.replace("_", " ").title(), fontsize=body_font)
         self.ax_transform.tick_params(labelsize=small_font)
         self.ax_transform.set_axis_on()
+        self._apply_display_crop()
         self.canvas_transform.draw()
+
+    def _apply_display_crop(self):
+        """Crop the plot axes to the selected operation's display-only x/y
+        range, matching SciAnalysis's own universal
+        plot_range=[x_min, x_max, y_min, y_max] convention (Data2D.plot()) —
+        remesh_* always covers the full calibration extent regardless."""
+        x_min = self._op_float("x_min")
+        x_max = self._op_float("x_max")
+        if x_min is not None and x_max is not None:
+            self.ax_transform.set_xlim(x_min, x_max)
+        y_min = self._op_float("y_min")
+        y_max = self._op_float("y_max")
+        if y_min is not None and y_max is not None:
+            self.ax_transform.set_ylim(y_min, y_max)
 
     def export_result(self):
         if self._current_result is None:
@@ -632,8 +774,8 @@ class TransformTab(BaseImageTab):
         by apply_q_bounds_to_protocol when building the final plot_range.
         """
         op   = self._selected_operation()
-        name = self.operation_combo.currentText()
-        bins_relative = int(self.bins_q_spin.value()) / 400.0
+        name = self._operation_labels[op]
+        bins_relative = self._op_float("bins_relative", 1.0)
 
         if op == "q_image":
             return {"operation": op, "name": name, "bins_relative": bins_relative, "save_results": ["plots", "npz"]}
@@ -642,8 +784,8 @@ class TransformTab(BaseImageTab):
             return {
                 "operation": op, "name": name,
                 "bins_relative": bins_relative,
-                "phi_min": float(self.phi_min_spin.value()),
-                "phi_max": float(self.phi_max_spin.value()),
+                "phi_min": self._op_float("y_min"),
+                "phi_max": self._op_float("y_max"),
                 "save_results": ["plots", "npz"],
             }
 
@@ -714,9 +856,19 @@ class TransformTab(BaseImageTab):
     def _add_tab_specific_status(self, info_lines):
         info_lines.append("")
         info_lines.append("=== TRANSFORM STATUS ===")
-        info_lines.append(f"Operation: {self.operation_combo.currentText()}")
+        info_lines.append(f"Operation: {self._operation_labels[self._selected_operation()]}")
         info_lines.append(f"Mask enabled: {'Yes' if self._use_mask_enabled() else 'No'}")
-        info_lines.append(f"q range: {self.q_min_spin.value():.4f} to {self.q_max_spin.value():.4f} 1/A")
+        bins_relative = self._op_float("bins_relative")
+        if bins_relative is not None:
+            info_lines.append(f"Bins (relative): {bins_relative:.2f}")
+        x_min = self._op_float("x_min")
+        x_max = self._op_float("x_max")
+        if x_min is not None and x_max is not None:
+            info_lines.append(f"x crop: {x_min:.4f} to {x_max:.4f}")
+        y_min = self._op_float("y_min")
+        y_max = self._op_float("y_max")
+        if y_min is not None and y_max is not None:
+            info_lines.append(f"y crop: {y_min:.4f} to {y_max:.4f}")
         info_lines.append(f"Calibration source: {self.calibration_source_combo.currentText()}")
         info_lines.append(f"Mask source: {self.mask_source_combo.currentText()}")
         if self._current_result is not None:
