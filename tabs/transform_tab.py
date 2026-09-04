@@ -50,7 +50,7 @@ def _spin(key):
         w = QDoubleSpinBox(); w.setRange(mn, mx); w.setDecimals(decimals); w.setSingleStep(step); w.setValue(default)
     return w
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
-from sciview.settings.viewer_config import VIEWER_BEHAVIOR
+from sciview.settings.viewer_config import VIEWER_BEHAVIOR, resolve_matplotlib_colormap
 from tabs.base_image_tab import BaseImageTab
 
 
@@ -479,7 +479,14 @@ class TransformTab(BaseImageTab):
             return
 
         self._current_result = result
-        self._update_transform_plot(result)
+        try:
+            self._update_transform_plot(result)
+        except Exception as exc:
+            # Don't leave the status stuck on "Preview pending..." if rendering itself fails.
+            self.result_summary.setText(f"Preview failed: {exc}")
+            self.status_label.setText(f"Transform failed: {exc}")
+            self.parent_app.show_status(f"Transform failed: {exc}")
+            return
         self.result_summary.setText(
             f"{result.operation.replace('_', ' ').title()} shape: {result.image.shape[1]}x{result.image.shape[0]}"
         )
@@ -536,7 +543,7 @@ class TransformTab(BaseImageTab):
         display_vals = self.get_display_values()
         vmin = display_vals["vmin"]
         vmax = display_vals["vmax"]
-        cmap = display_vals["cmap"]
+        cmap = resolve_matplotlib_colormap(display_vals["cmap"])
         scale = display_vals["scale"]
 
         norm = None
