@@ -54,6 +54,7 @@ class AppStyle:
         'compact_input_min_width': 92,  # same value; distinct semantic role
         'inline_label_width': 52,
         'unit_label_width': 18,
+        'status_led_size': 14,          # small round non-interactive status dot
     }
 
     CORNER_ICON_FILES = {
@@ -339,6 +340,14 @@ class AppStyle:
             }}
         """,
         
+        'status_led': """
+            QLabel {{
+                background-color: {led_color};
+                border: 1px solid {border};
+                border-radius: {led_radius}px;
+            }}
+        """,
+
         'splitter': """
             QSplitter::handle {{
                 background-color: {border};
@@ -675,6 +684,11 @@ class AppStyle:
     def unit_label_width(cls):
         """Return standard inline unit-label width for small control rows."""
         return cls.FORM_UI['unit_label_width']
+
+    @classmethod
+    def status_led_size(cls):
+        """Return standard diameter for a small round non-interactive status dot."""
+        return cls.FORM_UI['status_led_size']
 
     @classmethod
     def action_button_min_width(cls):
@@ -1234,6 +1248,23 @@ def apply_group_box_style(widget):
     """Apply group box style to a widget"""
     AppStyle.apply_widget_style(widget, 'group_box')
     AppStyle.set_font_role(widget, 'group_box')
+
+def apply_status_led_style(widget, state='off'):
+    """Style a small round status dot (non-interactive; not a checkbox/button).
+
+    state: 'off' (unset), 'good', 'warn' (e.g. outlier), or 'error' (e.g. failed).
+    """
+    variables = AppStyle.resolved_colors()
+    led_colors = {
+        'off': variables['border'],
+        'good': variables['success'],
+        'warn': variables['warning'],
+        'error': variables['error'],
+    }
+    led_color = led_colors.get(state, variables['border'])
+    size = AppStyle.status_led_size()
+    widget.setFixedSize(size, size)
+    widget.setStyleSheet(AppStyle.format_style('status_led', led_color=led_color, led_radius=size // 2))
 
 def setup_splitter_layout(splitter, ratios):
     """Setup splitter with consistent ratios and responsive stretch behavior."""

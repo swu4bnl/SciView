@@ -11,7 +11,7 @@ import numpy as np
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox, QFormLayout, QScrollArea
+    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox, QFormLayout
 )
 from PyQt5.QtCore import Qt, QTimer
 
@@ -28,6 +28,7 @@ from sciview.interfaces.theme.app_style import (
     AppStyle,
     apply_emphasis_button_style,
     apply_info_style,
+    apply_status_led_style,
     apply_subtitle_style,
     apply_title_style,
     setup_splitter_layout,
@@ -46,13 +47,21 @@ HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
 
 class CalibrationApp(BaseImageTab):
     """Main calibration application widget"""
-    
+
+    MAX_RING_POINTS = 15  # ring-center pick slots; drives indicator count, cycling, and status text
+
     def __init__(self, parent_app):
         super().__init__(parent_app)
         
         # Initialize ring center calculator
         self.ring_calculator = RingCenterCalculator()
-        
+
+        # Picked ring points live here, not in the UI; the panel only shows pick-state dots.
+        self._ring_points = [None] * self.MAX_RING_POINTS
+        self.current_point_index = 0
+        self.temp_markers = []  # Track temporary yellow markers
+        self.ring_point_indicators = []
+
         # Add crosshair hook to show beam center
         self.add_display_hook(self._add_beam_center_crosshair, 'post')
         
@@ -106,16 +115,17 @@ class CalibrationApp(BaseImageTab):
         ring_center_panel = self._create_ring_center_panel()
         controls_splitter.addWidget(self.make_scrollable_panel(ring_center_panel))
 
+        # Standards reference panel — pick a standard right after finding the ring
+        # center, so its reference lines are up before fine-tuning parameters below.
+        standards_panel = self._create_standards_panel()
+        controls_splitter.addWidget(self.make_scrollable_panel(standards_panel))
+
         # Calibration parameters panel
         calibration_panel = self._create_calibration_panel()
         controls_splitter.addWidget(self.make_scrollable_panel(calibration_panel))
         
-        # Standards reference panel
-        standards_panel = self._create_standards_panel()
-        controls_splitter.addWidget(self.make_scrollable_panel(standards_panel))
-        
         # Set initial sizes for control panels with ring workflow first.
-        control_ratios = [2, 4, 1]
+        control_ratios = [2, 1, 4]
         setup_splitter_layout(controls_splitter, control_ratios)
         
         main_splitter.addWidget(controls_splitter)
@@ -194,12 +204,12 @@ class CalibrationApp(BaseImageTab):
         params_form = QFormLayout()
         self.configure_adaptive_form_layout(params_form)
         calibration_params = [
-            ("spin_x", ("Beam Center X", -1024, 4096, DEFAULT_CALIBRATION['beam_center_x'], 1)),
-            ("spin_y", ("Beam Center Y", -1024, 4096, DEFAULT_CALIBRATION['beam_center_y'], 1)),
+            ("spin_x", ("<u>Beam Center X</u>", -1024, 4096, DEFAULT_CALIBRATION['beam_center_x'], 1)),
+            ("spin_y", ("<u>Beam Center Y</u>", -1024, 4096, DEFAULT_CALIBRATION['beam_center_y'], 1)),
             ("spin_orient", ("Detector Orient (°)", -180, 180, DEFAULT_CALIBRATION['detector_orient_deg'], 1)),
             ("spin_tilt", ("Detector Tilt (°)", -180, 180, DEFAULT_CALIBRATION['detector_tilt_deg'], 1)),
             ("spin_phi", ("Detector Phi (°)", -180, 180, DEFAULT_CALIBRATION['detector_phi_deg'], 1)),
-            ("spin_dist", ("Distance (m)", 0.001, 200, DEFAULT_CALIBRATION['distance_m'], 0.001)),
+            ("spin_dist", ("<u>Distance (m)</u>", 0.001, 200, DEFAULT_CALIBRATION['distance_m'], 0.001)),
             ("spin_pixel", ("Pixel Size (µm)", 0, 5000, DEFAULT_CALIBRATION['pixel_size_um'], 0.1)),
         ]
         
@@ -224,7 +234,8 @@ class CalibrationApp(BaseImageTab):
         self.spin_energy_ev.setAlignment(Qt.AlignRight)
         self.spin_energy_ev.setMinimumWidth(AppStyle.wide_input_min_width())
         self.spin_energy_ev.valueChanged.connect(self.on_energy_changed)
-        params_form.addRow(QLabel("Energy (eV):"), self._right_aligned_field_row(self.spin_energy_ev))
+        energy_label = QLabel("<u>Energy (eV):</u>")
+        params_form.addRow(energy_label, self._right_aligned_field_row(self.spin_energy_ev))
 
         layout.addLayout(params_form)
 
@@ -252,38 +263,29 @@ class CalibrationApp(BaseImageTab):
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         
         # Title
-        title = QLabel("Ring Center Calculation")
+        title = QLabel("Calculate Ring Center")
         apply_title_style(title)
         layout.addWidget(title)
         
         # Instructions
-        instructions_label = QLabel("Right-click to pick points on one ring. 3+ points required.")
+        instructions_label = QLabel("Right-click 3+ points on a ring.")
         instructions_label.setWordWrap(True)
         apply_info_style(instructions_label)
         layout.addWidget(instructions_label)
 
-        # Keep the ring-center actions visible above the scrollable points list.
-        controls_row = QHBoxLayout()
-        controls_row.setContentsMargins(0, 0, 0, 0)
-        controls_row.setSpacing(6)
-        calc_button = QPushButton("Calculate")
-        calc_button.clicked.connect(self.calculate_ring_center)
-        calc_button.setMinimumWidth(AppStyle.action_button_min_width())
-        apply_emphasis_button_style(calc_button)
-        controls_row.addWidget(calc_button)
-
-        clear_button = QPushButton("Clear")
-        clear_button.clicked.connect(self.clear_ring_points)
-        controls_row.addWidget(clear_button)
-
-        self.snap_to_max_check = QCheckBox("Local Maximum")
+        # Snap options come first so they're set before the user starts picking.
+        snap_row = QHBoxLayout()
+        snap_row.setContentsMargins(0, 0, 0, 0)
+        snap_row.setSpacing(6)
+        self.snap_to_max_check = QCheckBox("Snap to Peak")
+        self.snap_to_max_check.setToolTip("Snap each right-click to the brightest nearby pixel")
         self.snap_to_max_check.setChecked(True)
-        controls_row.addWidget(self.snap_to_max_check)
+        snap_row.addWidget(self.snap_to_max_check)
 
         window_label = QLabel("Window")
         window_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         window_label.setMinimumWidth(AppStyle.inline_label_width())
-        controls_row.addWidget(window_label)
+        snap_row.addWidget(window_label)
 
         self.snap_window_spin = QSpinBox()
         self.snap_window_spin.setRange(3, 15)
@@ -291,80 +293,55 @@ class CalibrationApp(BaseImageTab):
         self.snap_window_spin.setValue(5)
         self.snap_window_spin.setToolTip("Odd-size local search window (3-15 pixels)")
         self.snap_window_spin.setFixedWidth(AppStyle.compact_input_min_width())
-        controls_row.addWidget(self.snap_window_spin)
+        snap_row.addWidget(self.snap_window_spin)
 
         px_label = QLabel("px")
         px_label.setMinimumWidth(AppStyle.unit_label_width())
-        controls_row.addWidget(px_label)
+        snap_row.addWidget(px_label)
+        snap_row.addStretch()
+        layout.addLayout(snap_row)
+
+        # Pick-state LEDs sit right under the snap options so picking progress
+        # is visible before the user reaches the Calculate button below.
+        # The actual (x, y) values live in self._ring_points, not in any widget.
+        # Plain QLabel dots: this is a status readout, not a clickable control.
+        indicators_row = QHBoxLayout()
+        indicators_row.setContentsMargins(0, 0, 0, 0)
+        indicators_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
+        self.ring_point_indicators = []
+        for i in range(self.MAX_RING_POINTS):
+            indicator = QLabel()
+            indicator.setToolTip(f"Point {i + 1} ({'required' if i < 3 else 'optional'})")
+            apply_status_led_style(indicator, state='off')
+            self.ring_point_indicators.append(indicator)
+            indicators_row.addWidget(indicator)
+        indicators_row.addStretch()
+        layout.addLayout(indicators_row)
+
+        # Calculate is only clickable once enough points are picked.
+        controls_row = QHBoxLayout()
+        controls_row.setContentsMargins(0, 0, 0, 0)
+        controls_row.setSpacing(6)
+        self.calc_ring_button = QPushButton("Calculate")
+        self.calc_ring_button.clicked.connect(self.calculate_ring_center)
+        self.calc_ring_button.setMinimumWidth(AppStyle.action_button_min_width())
+        self.calc_ring_button.setEnabled(False)
+        apply_emphasis_button_style(self.calc_ring_button)
+        controls_row.addWidget(self.calc_ring_button)
+
+        clear_button = QPushButton("Clear")
+        clear_button.clicked.connect(self.clear_ring_points)
+        controls_row.addWidget(clear_button)
         controls_row.addStretch()
         layout.addLayout(controls_row)
-        
-        # Create scroll area for point inputs
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setMinimumHeight(120)
-        scroll_area.setMaximumHeight(180)
-        
-        # Create widget to hold all point inputs
-        points_widget = QWidget()
-        points_layout = QVBoxLayout(points_widget)
-        points_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
-        points_layout.setSpacing(2)
-        
-        # Create fixed list of 10 point inputs
-        self.ring_center_inputs = []
-        for i in range(10):
-            point_widget = QWidget()
-            point_layout = QHBoxLayout(point_widget)
-            point_layout.setContentsMargins(0, 0, 0, 0)
-            point_layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
-            if i < 3:
-                label = QLabel(f"Pt {i+1}*:")  # Asterisk for required
-                apply_info_style(label)
-            else:
-                label = QLabel(f"Pt {i+1}:")   # Optional points
-                apply_info_style(label)
-            label.setFixedWidth(42)
-            point_layout.addWidget(label)
-            
-            x_spin = QDoubleSpinBox()
-            x_spin.setRange(-9999, 9999)
-            x_spin.setDecimals(1)
-            x_spin.setValue(0)
-            x_spin.setMinimumWidth(AppStyle.compact_input_min_width())
-            point_layout.addWidget(x_spin)
-            
-            y_spin = QDoubleSpinBox()
-            y_spin.setRange(-9999, 9999)
-            y_spin.setDecimals(1)
-            y_spin.setValue(0)
-            y_spin.setMinimumWidth(AppStyle.compact_input_min_width())
-            point_layout.addWidget(y_spin)
-            
-            self.ring_center_inputs.append((x_spin, y_spin))
-            points_layout.addWidget(point_widget)
-        
-        # Set the points widget in the scroll area
-        scroll_area.setWidget(points_widget)
-        layout.addWidget(scroll_area)
-        
+
         # Result display
-        self.ring_result_label = QLabel("Ring center: Not calculated")
+        self.ring_result_label = QLabel("")
         self.ring_result_label.setWordWrap(True)
         apply_info_style(self.ring_result_label)
         layout.addWidget(self.ring_result_label)
-        
-        # Click instruction
-        click_instruction = QLabel("Right-click to fill next point.")
-        click_instruction.setWordWrap(True)
-        apply_info_style(click_instruction)
-        layout.addWidget(click_instruction)
-        
-        # Initialize click tracking
-        self.current_point_index = 0
-        self.temp_markers = []  # Track temporary yellow markers
+
+        self._update_ring_picking_state()
 
         return panel
 
@@ -374,7 +351,7 @@ class CalibrationApp(BaseImageTab):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
 
-        title = QLabel("Standard Materials")
+        title = QLabel("Check Against a Standard")
         apply_title_style(title)
         layout.addWidget(title)
 
@@ -388,7 +365,7 @@ class CalibrationApp(BaseImageTab):
         self.standards_combo.setMaximumHeight(32)
 
         # Info label
-        self.standards_info_label = QLabel("Select a standard for reference lines.")
+        self.standards_info_label = QLabel("Pick a standard above to overlay its reference lines.")
         self.standards_info_label.setWordWrap(True)
         apply_info_style(self.standards_info_label)
         layout.addWidget(self.standards_info_label)
@@ -397,7 +374,7 @@ class CalibrationApp(BaseImageTab):
 
         return panel
 
-    def _create_spin(self, label, mn, mx, default, step, parent):
+    def _create_spin(self, label, mn, mx, default, step, *, parent):
         """Create a labeled spin box with status update connection"""
         form = parent if isinstance(parent, QFormLayout) else None
         if form is not None:
@@ -453,25 +430,31 @@ class CalibrationApp(BaseImageTab):
                 viewer.clear_overlays(group='calibration-crosshair')
                 viewer.add_crosshair('beam-center', center_x, center_y, group='calibration-crosshair', color='#ff0000')
 
+    def _set_ring_point_indicator(self, index, state):
+        """Set a single pick-state LED: 'off', 'good', 'warn' (outlier), or 'error' (fit failed)."""
+        apply_status_led_style(self.ring_point_indicators[index], state=state)
+
+    def _update_ring_picking_state(self):
+        """Gate the Calculate button and show a short picking-progress hint."""
+        picked = sum(1 for point in self._ring_points if point is not None)
+        self.calc_ring_button.setEnabled(picked >= 3)
+        if picked < 3:
+            self.ring_result_label.setText(f"{picked}/{self.MAX_RING_POINTS} points picked (need 3+)")
+        else:
+            self.ring_result_label.setText(f"{picked}/{self.MAX_RING_POINTS} points picked")
+
     def calculate_ring_center(self):
-        """Calculate the center of a circle from multiple points"""
+        """Calculate the center of a circle from multiple points, auto-excluding outliers on failure"""
+        picked_indices = [i for i, point in enumerate(self._ring_points) if point is not None]
+        points = [self._ring_points[i] for i in picked_indices]
+
         try:
-            # Get coordinates from input fields, skipping empty points
-            points = []
-            for i, (x_input, y_input) in enumerate(self.ring_center_inputs):
-                x_val = x_input.value()
-                y_val = y_input.value()
-                # Skip points that are at origin (0,0) as they are likely empty
-                if x_val != 0 or y_val != 0:
-                    points.append((x_val, y_val))
-            
-            if len(points) < 3:
-                self.ring_result_label.setText("Error: Need at least 3 points to calculate ring center")
-                return
-            
-            # Use the enhanced ring center calculator
-            ux, uy, radius = self.ring_calculator.calculate_center(points)
-            
+            # calculate_center_robust retries with the worst point dropped if the plain fit fails.
+            ux, uy, radius, used_positions, dropped_positions = self.ring_calculator.calculate_center_robust(points)
+            used_indices = [picked_indices[p] for p in used_positions]
+            dropped_indices = [picked_indices[p] for p in dropped_positions]
+            used_points = [points[p] for p in used_positions]
+
             # Store the calculated center
             self.calculated_ring_center = (ux, uy)
 
@@ -479,22 +462,31 @@ class CalibrationApp(BaseImageTab):
             self.spin_x.setValue(ux)
             self.spin_y.setValue(uy)
             self.calibrate_and_update_status()
-            
-            # Update result display
-            fit_method = "exact (3 pts)" if len(points) == 3 else "least-squares fit"
-            self.ring_result_label.setText(
-                f"Ring center: ({ux:.2f}, {uy:.2f})\n"
-                f"Radius: {radius:.2f} pixels\n"
-                f"Used {len(points)} points ({fit_method})\n"
-                "Beam center auto-updated"
-            )
+
+            for i in dropped_indices:
+                self._set_ring_point_indicator(i, 'warn')  # auto-excluded outlier
+
+            # Flag any used point whose fit residual stands out from the rest as an outlier,
+            # reusing the calculator's own fit-quality tolerance (single source of truth).
+            outlier_tolerance = radius * self.ring_calculator.max_relative_radius_std
+            for i, (x, y) in zip(used_indices, used_points):
+                residual = abs(((x - ux) ** 2 + (y - uy) ** 2) ** 0.5 - radius)
+                self._set_ring_point_indicator(i, 'warn' if residual > outlier_tolerance else 'good')
+
+            # Fit score reuses the calculator's own quality metric (0-1, higher is better).
+            quality = self.ring_calculator.validate_ring_quality(used_points, (ux, uy))
+            fit_score_pct = quality['quality_score'] * 100.0
+            result_text = f"Center ({ux:.1f}, {uy:.1f}), r={radius:.1f}px, fit={fit_score_pct:.0f}%"
+            if dropped_indices:
+                result_text += f" ({len(dropped_indices)} excluded)"
+            self.ring_result_label.setText(result_text)
             
             # Mark points and center on the raw image
             if hasattr(self, 'image_viewer') and self.image_data is not None:
                 self.image_viewer.clear_overlays(group='ring-center')
 
-                # Plot the input points
-                xs, ys = zip(*points)
+                # Plot the points used in the fit
+                xs, ys = zip(*used_points)
                 self.image_viewer.add_points('ring-points', xs, ys, group='ring-center', color='#00ffff', size=9.0, pen='#0000ff')
                 
                 # Plot the calculated center
@@ -503,16 +495,23 @@ class CalibrationApp(BaseImageTab):
                 # Draw the circle
                 self.image_viewer.add_circle('ring-center-circle', ux, uy, radius, group='ring-center', color='#ff0000', width=2.0)
             
-            self.parent_app.show_status(f"Ring center calculated and applied: ({ux:.2f}, {uy:.2f}) using {len(points)} points")
+            status_message = f"Ring center calculated and applied: ({ux:.2f}, {uy:.2f}) using {len(used_points)} points"
+            if dropped_indices:
+                status_message += f" ({len(dropped_indices)} outliers excluded)"
+            self.parent_app.show_status(status_message)
             
             # Update status info to show ring center calculation
             self.update_status_info()
             
         except ValueError as e:
-            self.ring_result_label.setText(f"Error: {str(e)}")
+            for i in picked_indices:
+                self._set_ring_point_indicator(i, 'error')
+            self.ring_result_label.setText(f"Fit failed: {str(e)}")
             self.parent_app.show_status(f"Error calculating ring center: {str(e)}")
         except Exception as e:
-            self.ring_result_label.setText(f"Unexpected error: {str(e)}")
+            for i in picked_indices:
+                self._set_ring_point_indicator(i, 'error')
+            self.ring_result_label.setText(f"Fit failed: {str(e)}")
             self.parent_app.show_status(f"Unexpected error: {str(e)}")
 
     def update_beam_from_ring(self):
@@ -520,20 +519,19 @@ class CalibrationApp(BaseImageTab):
         self.calculate_ring_center()
 
     def clear_ring_points(self):
-        """Clear all ring coordinate inputs and markers"""
-        for x_input, y_input in self.ring_center_inputs:
-            x_input.setValue(0.0)
-            y_input.setValue(0.0)
-        
+        """Clear all picked ring points, indicators, and markers"""
+        self._ring_points = [None] * self.MAX_RING_POINTS
+        for index in range(len(self.ring_point_indicators)):
+            self._set_ring_point_indicator(index, 'off')
+
         # Clear temporary yellow markers
-        if hasattr(self, 'temp_markers'):
-            self.temp_markers = []
-            if hasattr(self, 'image_viewer'):
-                self.image_viewer.clear_overlays(group='ring-temp')
-        
-        self.ring_result_label.setText("Enter coordinates on a ring and click 'Calculate'")
+        self.temp_markers = []
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.clear_overlays(group='ring-temp')
+
         self.current_point_index = 0
-        self.parent_app.show_status("Ring coordinate inputs cleared")
+        self._update_ring_picking_state()
+        self.parent_app.show_status("Ring points cleared")
 
     def _add_tab_specific_status(self, info_lines):
         """Add calibration-specific status information"""
@@ -541,13 +539,8 @@ class CalibrationApp(BaseImageTab):
         
         # === RING CENTER STATUS ===
         info_lines.append("=== RING CENTER STATUS ===")
-        # Count non-zero ring points
-        ring_points_count = 0
-        for x_input, y_input in self.ring_center_inputs:
-            if x_input.value() != 0 or y_input.value() != 0:
-                ring_points_count += 1
-        
-        info_lines.append(f"Ring points entered: {ring_points_count}/10")
+        ring_points_count = sum(1 for point in self._ring_points if point is not None)
+        info_lines.append(f"Ring points entered: {ring_points_count}/{self.MAX_RING_POINTS}")
         if hasattr(self, 'calculated_ring_center'):
             cx, cy = self.calculated_ring_center
             info_lines.append(f"Calculated center: ({cx:.2f}, {cy:.2f})")
@@ -597,11 +590,11 @@ class CalibrationApp(BaseImageTab):
         """Handle standard material selection"""
         if text == "None":
             self.selected_standard = None
-            self.standards_info_label.setText("No standard selected.")
+            self.standards_info_label.setText("Pick a standard above to overlay its reference lines.")
         else:
             self.selected_standard = text
             qvals = self.standards_db.get(text, [])
-            self.standards_info_label.setText(f"Selected: {text} ({len(qvals)} lines)")
+            self.standards_info_label.setText(f"Showing {len(qvals)} reference lines for {text}.")
         self.update_plot_calibration()
 
         # === STANDARDS STATUS ===
@@ -925,30 +918,27 @@ class CalibrationApp(BaseImageTab):
                     if snapped is not None:
                         display_x, display_y = snapped
 
-                # Fill the next available coordinate field (cycles through 10 points)
-                x_input, y_input = self.ring_center_inputs[self.current_point_index]
-                x_input.setValue(display_x)
-                y_input.setValue(display_y)
-                
+                # Fill the next available point slot (cycles through the point slots)
+                self._ring_points[self.current_point_index] = (display_x, display_y)
+                self._set_ring_point_indicator(self.current_point_index, 'good')
+                self._update_ring_picking_state()
+
                 # Visual feedback - add yellow marker
                 if hasattr(self, 'image_viewer'):
-                    # Add to temp markers list
-                    if not hasattr(self, 'temp_markers'):
-                        self.temp_markers = []
                     marker_id = f"ring-temp-{len(self.temp_markers)}"
                     self.image_viewer.add_points(marker_id, [display_x], [display_y], group='ring-temp', color='#ffff00', size=12.0)
                     self.temp_markers.append(marker_id)
                     
-                    # Remove oldest marker if we exceed 10 markers
-                    if len(self.temp_markers) > 10:
+                    # Remove oldest marker if we exceed the point-slot cap
+                    if len(self.temp_markers) > self.MAX_RING_POINTS:
                         oldest_marker_id = self.temp_markers.pop(0)
                         self.image_viewer.remove_overlay(oldest_marker_id)
                 
-                self.current_point_index = (self.current_point_index + 1) % 10
+                self.current_point_index = (self.current_point_index + 1) % self.MAX_RING_POINTS
                 
                 # Update status
                 if self.current_point_index == 0:
-                    self.parent_app.show_status("All 10 points filled. Click 'Calculate Ring Center' or continue right-clicking to replace points.")
+                    self.parent_app.show_status(f"All {self.MAX_RING_POINTS} points filled. Click 'Calculate Ring Center' or continue right-clicking to replace points.")
                 else:
                     self.parent_app.show_status(f"Point {self.current_point_index} filled. Right-click for point {self.current_point_index + 1}.")
 
