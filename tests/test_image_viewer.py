@@ -5,10 +5,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest
+from matplotlib.figure import Figure
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QApplication, QWidget
 
 import pyqtgraph as pg
 
+from sciview.interfaces.theme.app_style import AppStyle
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
 from sciview.interfaces.stable_qt.tools.mask_drawing_tools import BrushDrawingTool, MaskDrawingSession
 
@@ -24,6 +27,41 @@ def viewer(qapp):
     widget = ImageViewer()
     yield widget
     widget.close()
+
+
+def test_matplotlib_figure_theme_styles_all_text(monkeypatch):
+    text_color = QColor("#f1f3f5")
+    monkeypatch.setattr(
+        AppStyle,
+        "theme_colors",
+        classmethod(
+            lambda cls: {
+                "text": text_color,
+                "base": QColor("#202124"),
+                "window": QColor("#17181a"),
+                "grid": QColor("#5f6368"),
+            }
+        ),
+    )
+
+    figure = Figure()
+    axis = figure.subplots()
+    axis.plot([0, 1], [0, 1], label="Profile")
+    axis.set_xlabel("Q")
+    axis.set_ylabel("Intensity")
+    axis.set_title("Reduction")
+    legend = axis.legend()
+    colorbar = figure.colorbar(axis.imshow([[0, 1], [1, 0]]), ax=axis)
+
+    AppStyle.apply_matplotlib_figure_theme(figure)
+
+    expected = text_color.name()
+    assert axis.xaxis.label.get_color() == expected
+    assert axis.yaxis.label.get_color() == expected
+    assert axis.title.get_color() == expected
+    assert all(label.get_color() == expected for label in axis.get_xticklabels())
+    assert all(label.get_color() == expected for label in legend.get_texts())
+    assert all(label.get_color() == expected for label in colorbar.ax.get_yticklabels())
 
 
 def test_numpy_image_uses_row_column_coordinates(viewer):

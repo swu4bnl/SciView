@@ -1036,7 +1036,16 @@ class AppStyle:
             axis.title.set_color(text_color)
             axis.xaxis.label.set_color(text_color)
             axis.yaxis.label.set_color(text_color)
+            axis.xaxis.get_offset_text().set_color(text_color)
+            axis.yaxis.get_offset_text().set_color(text_color)
             axis.tick_params(colors=text_color, labelcolor=text_color)
+            for text in axis.texts:
+                text.set_color(text_color)
+            legend = axis.get_legend()
+            if legend is not None:
+                legend.get_title().set_color(text_color)
+                for text in legend.get_texts():
+                    text.set_color(text_color)
             for spine in axis.spines.values():
                 spine.set_color(grid_color)
             for line in axis.get_xgridlines() + axis.get_ygridlines():

@@ -646,6 +646,7 @@ class TransformTab(BaseImageTab):
                 fontsize=body_font,
             )
             self.ax_transform.set_axis_off()
+            AppStyle.apply_matplotlib_figure_theme(self.fig_transform)
             self.canvas_transform.draw()
             return
 
@@ -654,6 +655,7 @@ class TransformTab(BaseImageTab):
         if finite.size == 0:
             self.ax_transform.text(0.5, 0.5, "No finite transform values", transform=self.ax_transform.transAxes, ha="center", va="center")
             self.ax_transform.set_axis_off()
+            AppStyle.apply_matplotlib_figure_theme(self.fig_transform)
             self.canvas_transform.draw()
             return
 
@@ -727,6 +729,7 @@ class TransformTab(BaseImageTab):
         self.ax_transform.tick_params(labelsize=small_font)
         self.ax_transform.set_axis_on()
         self._apply_display_crop()
+        AppStyle.apply_matplotlib_figure_theme(self.fig_transform)
         self.canvas_transform.draw()
 
     def _apply_display_crop(self):

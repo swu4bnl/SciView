@@ -697,6 +697,7 @@ class ReductionTab(BaseImageTab):
                 fontsize=body_font,
             )
             self.ax_plot.set_axis_off()
+            AppStyle.apply_matplotlib_figure_theme(self.fig_plot)
             self.canvas_plot.draw()
             return
 
@@ -724,6 +725,7 @@ class ReductionTab(BaseImageTab):
         self.ax_plot.set_axis_on()
         self._apply_display_crop(scale)
         self._apply_display_crop(scale)
+        AppStyle.apply_matplotlib_figure_theme(self.fig_plot)
         self.canvas_plot.draw()
 
     def _apply_display_crop(self, scale: str):

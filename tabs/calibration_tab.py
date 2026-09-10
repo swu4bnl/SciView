@@ -750,6 +750,7 @@ class CalibrationApp(BaseImageTab):
         self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=caption_font)
         self.ax_plot.set_ylabel('Intensity', fontsize=caption_font)
         self.ax_plot.tick_params(labelsize=small_font)
+        AppStyle.apply_matplotlib_figure_theme(self.fig_plot)
         self.canvas_plot.draw()
     
     def _draw_1d_plots(self, circ, hor_1, hor_2, ver_1, ver_2, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid):
@@ -758,11 +759,11 @@ class CalibrationApp(BaseImageTab):
         self.ax_plot.clear()
         caption_font = AppStyle.matplotlib_font_size('caption')
         small_font = AppStyle.matplotlib_font_size('small')
-        self.ax_plot.plot(circ.x, circ.y, label='Circular Avg', color='#22BB44', linewidth=1.5)
-        self.ax_plot.plot(hor_1.x, hor_1.y, label='Horizontal 0°', color='#BB4422', linewidth=1.2)
-        self.ax_plot.plot(hor_2.x, hor_2.y, label='Horizontal 180°', color='#BB2244', linewidth=1.2)
-        self.ax_plot.plot(ver_1.x, ver_1.y, label='Vertical 90°', color='#2244BB', linewidth=1.2)
-        self.ax_plot.plot(ver_2.x, ver_2.y, label='Vertical 270°', color='#4422BB', linewidth=1.2)
+        self.ax_plot.plot(circ.x, circ.y, label='Circular Avg', color='#44EE44', linewidth=1.5)
+        self.ax_plot.plot(hor_1.x, hor_1.y, label='Horizontal 0°', color='#EE6622', linewidth=1.2)
+        self.ax_plot.plot(hor_2.x, hor_2.y, label='Horizontal 180°', color='#EE2266', linewidth=1.2)
+        self.ax_plot.plot(ver_1.x, ver_1.y, label='Vertical 90°', color='#2266EE', linewidth=1.2)
+        self.ax_plot.plot(ver_2.x, ver_2.y, label='Vertical 270°', color='#6622EE', linewidth=1.2)
 
         # Draw standard lines if selected
         self._draw_standard_lines()
@@ -817,6 +818,7 @@ class CalibrationApp(BaseImageTab):
         
         # Ensure plot fills the canvas with custom tight margins
         self.fig_plot.subplots_adjust(left=0.05, bottom=0.10, right=0.99, top=0.99)
+        AppStyle.apply_matplotlib_figure_theme(self.fig_plot)
         self.canvas_plot.draw()
         self._last_profile_signature = profile_signature
 
