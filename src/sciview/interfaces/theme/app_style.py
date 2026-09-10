@@ -195,6 +195,8 @@ class AppStyle:
     #   Text atoms   — title_label, subtitle_label, body_text, small_text, info_label, status_label
     #   Interactive  — primary_button, secondary_button, toolbar_symbol_button, toolbar_text_button
     #   Structural   — input_field, group_box, splitter
+    GLOBAL_STYLE_KEYS = ('input_field', 'tooltip', 'group_box', 'splitter')
+
     WIDGET_STYLES = {
         # ── Text atoms ────────────────────────────────────────────────────────
         'title_label': """
@@ -288,24 +290,26 @@ class AppStyle:
 
         # ── Structural components ───────────────────────────────────────────
         'input_field': """
-            QLineEdit, QSpinBox, QDoubleSpinBox {{
+            QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox {{
                 border: 1px solid {border};
                 border-radius: 4px;
                 padding: {input_padding_v}px {input_padding_h}px;
                 font-size: {body_font};
-                background-color: white;
+                color: {text_primary};
+                background-color: {input_surface};
                 min-height: {input_height}px;
             }}
-            QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+            QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QAbstractSpinBox:focus {{
                 border: 2px solid {border_active};
-                background-color: white;
+                background-color: {input_surface};
             }}
             QComboBox {{
                 border: 1px solid {border};
                 border-radius: 4px;
                 padding: {input_padding_v}px {input_padding_h}px;
                 font-size: {body_font};
-                background-color: white;
+                color: {text_primary};
+                background-color: {input_surface};
                 min-height: {input_height}px;
             }}
             QComboBox:focus {{
@@ -318,6 +322,20 @@ class AppStyle:
             QComboBox::down-arrow {{
                 width: 12px;
                 height: 12px;
+            }}
+            QComboBox QAbstractItemView {{
+                color: {text_primary};
+                background-color: {input_surface};
+                selection-color: {checked_fg};
+                selection-background-color: {border_active};
+            }}
+        """,
+
+        'tooltip': """
+            QToolTip {{
+                color: {text_primary};
+                background-color: {input_surface};
+                border: 1px solid {border};
             }}
         """,
 
@@ -447,12 +465,14 @@ class AppStyle:
             'primary':        theme['accent'].name(),
             'secondary':      theme['control_hover'].name(),
             'surface':        theme['window'].name(),
+            'input_surface':  theme['base'].name(),
             'surface_alt':    theme['control_hover'].name(),
             'border':         theme['border'].name(),
             'border_active':  theme['accent'].name(),
             'text_primary':   theme['text'].name(),
             'text_secondary': theme['muted'].name(),   # muted but legible
             'text_muted':     theme['muted'].name(),   # disabled / very quiet
+            'checked_fg':     theme['checked_fg'].name(),
             # --- non-theme semantic colors from COLORS palette ---
             'success':        cls.COLORS['success'],
             'success_hover':  success.darker(108).name(),
@@ -485,13 +505,12 @@ class AppStyle:
         return style_template.format(**variables)
 
     @classmethod
-    def apply_global_style(cls, app):
-        """Apply global application stylesheet with Qt defaults."""
+    def apply_global_style(cls, app, preserve_existing=False):
+        """Apply SciView's global rules, optionally over an external theme."""
         base_styles = [
+            app.styleSheet() if preserve_existing else "",
             cls.tab_widget_stylesheet(),
-            cls.format_style('input_field'),
-            cls.format_style('group_box'),
-            cls.format_style('splitter'),
+            *(cls.format_style(style_key) for style_key in cls.GLOBAL_STYLE_KEYS),
         ]
         app.setStyleSheet("\n".join(style for style in base_styles if style.strip()))
         cls.refresh_runtime_theme(app, clear_widget_styles=False)
@@ -599,10 +618,13 @@ class AppStyle:
             return False
         try:
             qdarktheme = __import__('qdarktheme')
-            qdarktheme.setup_theme(variant)
-            actual = qdarktheme.get_theme() if variant == 'auto' else variant
+            actual = variant
+            if variant == 'auto':
+                darkdetect = __import__('darkdetect')
+                actual = str(darkdetect.theme() or 'dark').lower()
+            qdarktheme.setup_theme(actual)
             app.setProperty(cls.THEME_KEY_PROPERTY, f'qdarktheme:{actual}')
-            cls.refresh_runtime_theme(app)
+            cls.apply_global_style(app, preserve_existing=True)
             return True
         except Exception:
             return False

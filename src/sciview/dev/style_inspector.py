@@ -155,7 +155,7 @@ def _apply_theme(theme_key: str | None, app_style_cls: type | None = None) -> bo
         qdarkstyle = importlib.import_module("qdarkstyle")
 
         qapp.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
-        app_style_cls.refresh_runtime_theme(qapp)
+        app_style_cls.apply_global_style(qapp, preserve_existing=True)
         _ACTIVE_THEME_KEY = theme_key
         return True
 
@@ -167,16 +167,14 @@ def _apply_theme(theme_key: str | None, app_style_cls: type | None = None) -> bo
         readability_qss = app_style_cls.qt_material_readability_stylesheet(qapp)
         if readability_qss:
             qapp.setStyleSheet(qapp.styleSheet() + readability_qss)
-        app_style_cls.refresh_runtime_theme(qapp)
+        app_style_cls.apply_global_style(qapp, preserve_existing=True)
         _ACTIVE_THEME_KEY = theme_key
         return True
 
     if theme_key.startswith("qdarktheme:"):
-        qdarktheme = importlib.import_module("qdarktheme")
-
         theme_name = theme_key.split(":", 1)[1]
-        qdarktheme.setup_theme(theme_name)
-        app_style_cls.refresh_runtime_theme(qapp)
+        if not app_style_cls.apply_qdarktheme(theme_name, qapp):
+            return False
         _ACTIVE_THEME_KEY = theme_key
         return True
 

@@ -920,9 +920,10 @@ def create_application():
 
     # Load layout/sizing ratios from runtime configuration before creating widgets.
     AppStyle.apply_gui_settings(GUI_SETTINGS)
-    
-    # Apply global styling
-    AppStyle.apply_global_style(app)
+
+    # Resolve the system theme before widgets create palette-derived styles and icons.
+    if not AppStyle.apply_qdarktheme('auto', app):
+        AppStyle.apply_global_style(app)
     
     # Set application properties
     app.setApplicationName("SciAnalysis GUI")
@@ -1050,10 +1051,6 @@ def create_application():
         _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Info Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Info", icon_key="info")
-
-    # Apply system-preferred dark/light theme; fall back to plain refresh if unavailable.
-    if not AppStyle.apply_qdarktheme('auto', app):
-        AppStyle.refresh_runtime_theme(app)
 
     print("[SciView] All tabs loaded. Launching window...")
     return app, main_window
