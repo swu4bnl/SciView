@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import fnmatch
+import multiprocessing
 import os
 import time
+from queue import Empty
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Literal
 
 import numpy as np
+
+from sciview.settings.plot_style import PlotStyle
 
 from sciview.processing.angle_conventions import display_chi_to_scianalysis_chi
 try:
@@ -118,6 +122,80 @@ class BatchJob:
     mask: Any | None = None
     mirror_input_structure: bool = True
     input_root: str = ""  # used when mirror_input_structure=True
+    plot_style: dict[str, Any] = field(default_factory=dict)
+
+    def to_transport(self) -> dict[str, Any]:
+        """Serialize a job without pickling live SciAnalysis objects."""
+        return {
+            "file_paths": list(self.file_paths),
+            "protocols": [protocol.to_dict() for protocol in self.protocols],
+            "output_dir": self.output_dir,
+            "output_formats": list(self.output_formats),
+            "calibration": _serialize_calibration(self.calibration),
+            "mask": _serialize_mask(self.mask),
+            "mirror_input_structure": self.mirror_input_structure,
+            "input_root": self.input_root,
+            "plot_style": dict(self.plot_style),
+        }
+
+    @classmethod
+    def from_transport(cls, payload: dict[str, Any]) -> "BatchJob":
+        return cls(
+            file_paths=[str(path) for path in payload.get("file_paths", [])],
+            protocols=[BatchProtocol.from_dict(item) for item in payload.get("protocols", [])],
+            output_dir=str(payload.get("output_dir", "")),
+            output_formats=[str(item) for item in payload.get("output_formats", [])],
+            calibration=_deserialize_calibration(payload.get("calibration")),
+            mask=payload.get("mask"),
+            mirror_input_structure=bool(payload.get("mirror_input_structure", True)),
+            input_root=str(payload.get("input_root", "")),
+            plot_style=dict(payload.get("plot_style", {})),
+        )
+
+
+def _serialize_calibration(calibration: Any | None) -> dict[str, Any] | None:
+    if calibration is None:
+        return None
+    return {
+        "wavelength_A": float(getattr(calibration, "wavelength_A")),
+        "width": int(getattr(calibration, "width", 0) or 0),
+        "height": int(getattr(calibration, "height", 0) or 0),
+        "pixel_size_um": float(getattr(calibration, "pixel_size_um")),
+        "beam_position": [float(getattr(calibration, "x0")), float(getattr(calibration, "y0"))],
+        "distance_m": float(getattr(calibration, "distance_m")),
+        "det_orient": float(getattr(calibration, "det_orient", 0.0) or 0.0),
+        "det_tilt": float(getattr(calibration, "det_tilt", 0.0) or 0.0),
+        "det_phi": float(getattr(calibration, "det_phi", 0.0) or 0.0),
+    }
+
+
+def _deserialize_calibration(payload: dict[str, Any] | None) -> Any | None:
+    if not payload:
+        return None
+    from sciview.profiles.cms_profile import get_calibration_class
+
+    calibration = get_calibration_class()(wavelength_A=float(payload["wavelength_A"]))
+    width = int(payload.get("width", 0))
+    height = int(payload.get("height", 0))
+    if width > 0 and height > 0:
+        calibration.set_image_size(width, height=height)
+    calibration.set_pixel_size(pixel_size_um=float(payload["pixel_size_um"]))
+    calibration.set_beam_position(*[float(value) for value in payload["beam_position"]])
+    calibration.set_distance(float(payload["distance_m"]))
+    if hasattr(calibration, "set_angles"):
+        calibration.set_angles(
+            det_orient=float(payload.get("det_orient", 0.0)),
+            det_tilt=float(payload.get("det_tilt", 0.0)),
+            det_phi=float(payload.get("det_phi", 0.0)),
+        )
+    return calibration
+
+
+def _serialize_mask(mask: Any | None) -> np.ndarray | None:
+    if mask is None:
+        return None
+    value = mask.data if hasattr(mask, "data") and not isinstance(mask, np.ndarray) else mask
+    return np.asarray(value).copy()
 
 
 # ---------------------------------------------------------------------------
@@ -503,7 +581,23 @@ def _run_file_with_protocol(
     # Create per-protocol subfolder, matching ProcessorXS.access_dir behaviour.
     proto_out_dir = out_dir / sa_proto.name
     proto_out_dir.mkdir(parents=True, exist_ok=True)
-    sa_proto.run(data, str(proto_out_dir), verbosity=0)
+    title_size = getattr(sa_proto, "run_args", {}).get("sciview_title_size")
+    if title_size is None:
+        sa_proto.run(data, str(proto_out_dir), verbosity=0)
+    else:
+        import matplotlib.pyplot as plt
+
+        original_figtext = plt.figtext
+
+        def styled_figtext(*args, **kwargs):
+            kwargs["size"] = title_size
+            return original_figtext(*args, **kwargs)
+
+        plt.figtext = styled_figtext
+        try:
+            sa_proto.run(data, str(proto_out_dir), verbosity=0)
+        finally:
+            plt.figtext = original_figtext
     return str(proto_out_dir)
 
 
@@ -559,6 +653,21 @@ def run_batch(
             raise ValueError("No enabled protocols in job")
         if not job.file_paths:
             raise ValueError("No input files in job")
+
+        style = PlotStyle.from_dict(job.plot_style)
+        active = [
+            BatchProtocol(
+                name=proto.name,
+                operation=proto.operation,
+                params={
+                    **proto.params,
+                    **style.scianalysis_args(image=proto.kind() == "transform"),
+                },
+                enabled=proto.enabled,
+                source=proto.source,
+            )
+            for proto in active
+        ]
 
         # Compute q bounds from calibration and inject plot_range into each protocol.
         from sciview.masking.io import coerce_mask_to_bool
@@ -632,9 +741,34 @@ def run_batch(
 execute_batch_job = run_batch
 
 
+def _batch_process_main(job_payload, message_queue, stop_event) -> None:
+    """Child-process entry point; keep Matplotlib state outside the GUI process."""
+    os.environ["MPLBACKEND"] = "Agg"
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    try:
+        job = BatchJob.from_transport(job_payload)
+        ok, err = run_batch(
+            job,
+            on_progress=lambda done, total, label: message_queue.put(
+                ("progress", (done, total, label))
+            ),
+            on_file_done=lambda result: message_queue.put(
+                ("file_done", result.__dict__)
+            ),
+            on_status=lambda message: message_queue.put(("status", message)),
+            should_stop=stop_event.is_set,
+        )
+        message_queue.put(("finished", (ok, err)))
+    except Exception as exc:
+        message_queue.put(("status", f"Batch error: {exc}"))
+        message_queue.put(("finished", (0, 1)))
+
+
 
 class BatchRunner(QThread):
-    """Run a BatchJob on a worker thread, emitting per-file progress signals."""
+    """Supervise a spawned BatchJob process and relay its progress signals."""
 
     progress = pyqtSignal(int, int, str)
     file_done = pyqtSignal(BatchFileResult)
@@ -645,21 +779,68 @@ class BatchRunner(QThread):
         super().__init__(parent)
         self._job = job
         self._stop_requested = False
+        self._stop_event = None
+        self._process = None
 
     def request_stop(self) -> None:
         self._stop_requested = True
+        if self._stop_event is not None:
+            self._stop_event.set()
 
     def run(self) -> None:
         try:
-            ok, err = run_batch(
-                self._job,
-                on_progress=self.progress.emit,
-                on_file_done=self.file_done.emit,
-                on_status=self.status_changed.emit,
-                should_stop=lambda: self._stop_requested,
+            context = multiprocessing.get_context("spawn")
+            message_queue = context.Queue()
+            self._stop_event = context.Event()
+            if self._stop_requested:
+                self._stop_event.set()
+            self._process = context.Process(
+                target=_batch_process_main,
+                args=(self._job.to_transport(), message_queue, self._stop_event),
+                daemon=True,
             )
+            self._process.start()
+            finished = None
+            completed_ok = completed_err = 0
+            cancel_requested_at = None
+            while self._process.is_alive() or finished is None:
+                if self._stop_requested and cancel_requested_at is None:
+                    cancel_requested_at = time.monotonic()
+                if (
+                    cancel_requested_at is not None
+                    and self._process.is_alive()
+                    and time.monotonic() - cancel_requested_at >= 2.0
+                ):
+                    self.status_changed.emit("Stopping batch process")
+                    self._process.terminate()
+                    finished = (completed_ok, completed_err)
+                    break
+                try:
+                    kind, payload = message_queue.get(timeout=0.1)
+                except Empty:
+                    if not self._process.is_alive():
+                        break
+                    continue
+                if kind == "progress":
+                    self.progress.emit(*payload)
+                elif kind == "file_done":
+                    result = BatchFileResult(**payload)
+                    completed_ok += result.status == "ok"
+                    completed_err += result.status == "error"
+                    self.file_done.emit(result)
+                elif kind == "status":
+                    self.status_changed.emit(payload)
+                elif kind == "finished":
+                    finished = payload
+            self._process.join()
+            if finished is None:
+                raise RuntimeError(f"Batch process exited with code {self._process.exitcode}")
+            ok, err = finished
         except Exception as exc:
             self.status_changed.emit(f"Batch error: {exc}")
             ok, err = 0, 1
+        finally:
+            self._process = None
+            self._stop_event = None
         self.finished_batch.emit(ok, err)
 

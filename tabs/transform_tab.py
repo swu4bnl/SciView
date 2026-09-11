@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from importlib import import_module
 from pathlib import Path
 
@@ -43,6 +44,7 @@ from sciview.interfaces.theme.app_style import (
 from sciview.masking.io import load_mask_file as backend_load_mask_file
 from sciview.processing.transform import TransformBackend, TransformRequest, save_transform_result
 from sciview.settings.app_settings import SPINBOX_CONFIG
+from sciview.settings.plot_style import resolve_plot_style
 
 
 def _spin(key):
@@ -53,7 +55,7 @@ def _spin(key):
         w = QDoubleSpinBox(); w.setRange(mn, mx); w.setDecimals(decimals); w.setSingleStep(step); w.setValue(default)
     return w
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
-from sciview.settings.viewer_config import VIEWER_BEHAVIOR, resolve_matplotlib_colormap
+from sciview.settings.viewer_config import SUPPORTED_IMAGE_COLORMAPS, resolve_matplotlib_colormap
 from tabs.base_image_tab import BaseImageTab
 
 
@@ -71,6 +73,7 @@ class TransformTab(BaseImageTab):
         self._custom_mask = None
         self._custom_mask_label = "None"
         self._building_controls = True
+        self._updating_plot_style_controls = False
         self._preview_delay_ms = 450
         self._preview_timer = QTimer(self)
         self._preview_timer.setSingleShot(True)
@@ -280,6 +283,45 @@ class TransformTab(BaseImageTab):
         }
         self._sync_operation_group_visibility()
 
+        style_group = QGroupBox("Plot Style")
+        style_layout = QGridLayout(style_group)
+        plot_style = resolve_plot_style(self.parent_app)
+        self.plot_title_size_spin = QDoubleSpinBox()
+        self.plot_label_size_spin = QDoubleSpinBox()
+        self.plot_tick_size_spin = QDoubleSpinBox()
+        for index, (label, spin, value) in enumerate((
+            ("Plot title", self.plot_title_size_spin, plot_style.title_size),
+            ("Axis labels", self.plot_label_size_spin, plot_style.label_size),
+            ("Tick labels", self.plot_tick_size_spin, plot_style.tick_size),
+        )):
+            spin.setRange(6.0, 72.0)
+            spin.setValue(value)
+            row, column = divmod(index, 2)
+            style_layout.addWidget(QLabel(label), row, column * 2)
+            style_layout.addWidget(spin, row, column * 2 + 1)
+
+        self.plot_cmap_combo = QComboBox()
+        self.plot_cmap_combo.addItems(SUPPORTED_IMAGE_COLORMAPS)
+        self.plot_cmap_combo.setCurrentText(plot_style.colormap)
+        self.plot_ztrim_low_spin = QDoubleSpinBox()
+        self.plot_ztrim_high_spin = QDoubleSpinBox()
+        for spin, value in (
+            (self.plot_ztrim_low_spin, plot_style.ztrim_low),
+            (self.plot_ztrim_high_spin, plot_style.ztrim_high),
+        ):
+            spin.setRange(0.0, 0.49)
+            spin.setDecimals(3)
+            spin.setSingleStep(0.005)
+            spin.setValue(value)
+        self.plot_dpi_spin = QSpinBox()
+        self.plot_dpi_spin.setRange(72, 1200)
+        self.plot_dpi_spin.setValue(plot_style.dpi)
+        self._add_grid_field(style_layout, 2, 0, "Colormap", self.plot_cmap_combo)
+        self._add_grid_field(style_layout, 2, 1, "Trim low", self.plot_ztrim_low_spin)
+        self._add_grid_field(style_layout, 3, 0, "Trim high", self.plot_ztrim_high_spin)
+        self._add_grid_field(style_layout, 3, 1, "Export DPI", self.plot_dpi_spin)
+        layout.addWidget(style_group)
+
         button_row = QHBoxLayout()
         self.preview_button = QPushButton("Refresh Preview")
         self.preview_button.clicked.connect(self.refresh_preview)
@@ -300,6 +342,16 @@ class TransformTab(BaseImageTab):
             button.toggled.connect(lambda checked, op=operation: self._on_protocol_changed(op, checked))
 
         self.auto_update_check.stateChanged.connect(self._on_parameters_changed)
+        self.plot_cmap_combo.currentTextChanged.connect(self._on_plot_style_controls_changed)
+        for spin in (
+            self.plot_title_size_spin,
+            self.plot_label_size_spin,
+            self.plot_tick_size_spin,
+            self.plot_ztrim_low_spin,
+            self.plot_ztrim_high_spin,
+            self.plot_dpi_spin,
+        ):
+            spin.valueChanged.connect(self._on_plot_style_controls_changed)
         for widgets in self._operation_param_widgets.values():
             for widget in widgets.values():
                 if hasattr(widget, "stateChanged"):
@@ -313,6 +365,40 @@ class TransformTab(BaseImageTab):
         self._on_parameters_changed()
         self._refresh_source_status()
         return panel
+
+    def _on_plot_style_controls_changed(self, *args) -> None:
+        if self._building_controls or self._updating_plot_style_controls:
+            return
+        try:
+            style = replace(
+                resolve_plot_style(self.parent_app),
+                title_size=self.plot_title_size_spin.value(),
+                label_size=self.plot_label_size_spin.value(),
+                tick_size=self.plot_tick_size_spin.value(),
+                colormap=self.plot_cmap_combo.currentText(),
+                ztrim_low=self.plot_ztrim_low_spin.value(),
+                ztrim_high=self.plot_ztrim_high_spin.value(),
+                dpi=self.plot_dpi_spin.value(),
+            )
+        except ValueError as exc:
+            self.parent_app.show_status(f"Invalid plot style: {exc}")
+            return
+        self.parent_app.publish_shared_plot_style(style, source_tab=self)
+        self._update_transform_plot(self._current_result)
+
+    def _sync_plot_style_controls(self) -> None:
+        style = resolve_plot_style(self.parent_app)
+        self._updating_plot_style_controls = True
+        try:
+            self.plot_title_size_spin.setValue(style.title_size)
+            self.plot_label_size_spin.setValue(style.label_size)
+            self.plot_tick_size_spin.setValue(style.tick_size)
+            self.plot_cmap_combo.setCurrentText(style.colormap)
+            self.plot_ztrim_low_spin.setValue(style.ztrim_low)
+            self.plot_ztrim_high_spin.setValue(style.ztrim_high)
+            self.plot_dpi_spin.setValue(style.dpi)
+        finally:
+            self._updating_plot_style_controls = False
 
     @staticmethod
     def _add_grid_field(grid: QGridLayout, row: int, col: int, label_text: str, widget: QWidget) -> None:
@@ -607,9 +693,11 @@ class TransformTab(BaseImageTab):
             self._transform_colorbar = None
 
         self.ax_transform.clear()
-        body_font = AppStyle.matplotlib_font_size('body')
-        caption_font = AppStyle.matplotlib_font_size('caption')
-        small_font = AppStyle.matplotlib_font_size('small')
+        plot_style = resolve_plot_style(self.parent_app)
+        preview_sizes = plot_style.preview_sizes()
+        body_font = preview_sizes["title"]
+        caption_font = preview_sizes["label"]
+        small_font = preview_sizes["tick"]
 
         if result is None:
             self.ax_transform.text(
@@ -646,10 +734,13 @@ class TransformTab(BaseImageTab):
                 ]
 
         display_vals = self.get_display_values()
-        vmin = display_vals["vmin"]
-        vmax = display_vals["vmax"]
-        cmap = resolve_matplotlib_colormap(display_vals["cmap"])
+        cmap = resolve_matplotlib_colormap(plot_style.colormap)
         scale = display_vals["scale"]
+
+        low_percentile, high_percentile = plot_style.preview_percentiles()
+        vmin, vmax = np.percentile(finite, [low_percentile, high_percentile])
+        vmin = float(vmin)
+        vmax = float(vmax)
 
         norm = None
         if scale == "log":
@@ -662,12 +753,6 @@ class TransformTab(BaseImageTab):
         if finite_max <= finite_min:
             finite_max = finite_min + 1.0
 
-        if vmin is None or vmax is None or vmax <= vmin:
-            low_q, high_q = VIEWER_BEHAVIOR.auto_level_percentiles
-            auto_vmin, auto_vmax = np.percentile(finite, [low_q, high_q])
-            vmin = float(auto_vmin)
-            vmax = float(auto_vmax)
-
         if scale == "linear":
             # If global limits are far outside the transform data range, fall back
             # to robust limits so preview remains readable without per-tab tuning.
@@ -679,7 +764,7 @@ class TransformTab(BaseImageTab):
             overlap_ratio = overlap / range_span
             span_ratio = visible_span / range_span
             if overlap_ratio < 0.02 or span_ratio > 200.0:
-                low_q, high_q = VIEWER_BEHAVIOR.auto_level_percentiles
+                low_q, high_q = plot_style.preview_percentiles()
                 auto_vmin, auto_vmax = np.percentile(finite, [low_q, high_q])
                 vmin = float(auto_vmin)
                 vmax = float(auto_vmax)
@@ -701,12 +786,22 @@ class TransformTab(BaseImageTab):
         self._transform_colorbar = self.fig_transform.colorbar(img_artist, ax=self.ax_transform, fraction=0.045, pad=0.03)
         self.ax_transform.set_xlabel(result.x_label, fontsize=caption_font)
         self.ax_transform.set_ylabel(result.y_label, fontsize=caption_font)
-        self.ax_transform.set_title(result.operation.replace("_", " ").title(), fontsize=body_font)
+        self.ax_transform.set_title(
+            result.operation.replace("_", " ").title(),
+            fontsize=body_font,
+        )
         self.ax_transform.tick_params(labelsize=small_font)
+        for tick_label in self._transform_colorbar.ax.get_yticklabels():
+            tick_label.set_fontsize(small_font)
         self.ax_transform.set_axis_on()
         self._apply_display_crop()
         AppStyle.apply_matplotlib_figure_theme(self.fig_transform)
         self.canvas_transform.draw()
+
+    def on_plot_style_changed(self):
+        """Redraw the current transform result with the shared plot style."""
+        self._sync_plot_style_controls()
+        self._update_transform_plot(self._current_result)
 
     def _apply_display_crop(self):
         """Crop the plot axes to the selected operation's display-only x/y

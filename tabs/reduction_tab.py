@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from importlib import import_module
 import os
 from pathlib import Path
@@ -11,9 +12,11 @@ import numpy as np
 import yaml
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QColorDialog,
     QComboBox,
     QDoubleSpinBox,
     QGridLayout,
@@ -55,6 +58,7 @@ from sciview.processing.angle_conventions import display_chi_to_scianalysis_sect
 from sciview.processing.reduction import ReductionBackend, ReductionRequest, save_reduction_result
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
 from sciview.settings.app_settings import SPINBOX_CONFIG
+from sciview.settings.plot_style import resolve_plot_style
 from tabs.base_image_tab import BaseImageTab
 
 
@@ -82,6 +86,7 @@ class ReductionTab(BaseImageTab):
         self._custom_mask = None
         self._custom_mask_label = "None"
         self._building_controls = True
+        self._updating_plot_style_controls = False
         self._build_ui()
         self._building_controls = False
         self.add_display_hook(self._draw_reduction_overlay, "post")
@@ -301,6 +306,39 @@ class ReductionTab(BaseImageTab):
         }
         self._sync_operation_group_visibility()
 
+        style_group = QGroupBox("Plot Style")
+        style_layout = QGridLayout(style_group)
+        plot_style = resolve_plot_style(self.parent_app)
+        self.plot_title_size_spin = QDoubleSpinBox()
+        self.plot_label_size_spin = QDoubleSpinBox()
+        self.plot_tick_size_spin = QDoubleSpinBox()
+        for index, (label, spin, value) in enumerate((
+            ("Plot title", self.plot_title_size_spin, plot_style.title_size),
+            ("Axis labels", self.plot_label_size_spin, plot_style.label_size),
+            ("Tick labels", self.plot_tick_size_spin, plot_style.tick_size),
+        )):
+            spin.setRange(6.0, 72.0)
+            spin.setValue(value)
+            row, column = divmod(index, 2)
+            style_layout.addWidget(QLabel(label), row, column * 2)
+            style_layout.addWidget(spin, row, column * 2 + 1)
+
+        self._line_color = plot_style.line_color
+        self.plot_line_color_button = QPushButton()
+        self.plot_line_color_button.clicked.connect(self._choose_line_color)
+        self._update_line_color_button()
+        self.plot_line_width_spin = QDoubleSpinBox()
+        self.plot_line_width_spin.setRange(0.25, 10.0)
+        self.plot_line_width_spin.setSingleStep(0.25)
+        self.plot_line_width_spin.setValue(plot_style.line_width)
+        self.plot_dpi_spin = QSpinBox()
+        self.plot_dpi_spin.setRange(72, 1200)
+        self.plot_dpi_spin.setValue(plot_style.dpi)
+        self._add_grid_field(style_layout, 2, 0, "Line color", self.plot_line_color_button)
+        self._add_grid_field(style_layout, 2, 1, "Line width", self.plot_line_width_spin)
+        self._add_grid_field(style_layout, 3, 0, "Export DPI", self.plot_dpi_spin)
+        layout.addWidget(style_group)
+
         button_row = QHBoxLayout()
         self.preview_button = QPushButton("Refresh Preview")
         self.preview_button.clicked.connect(self.refresh_preview)
@@ -328,6 +366,14 @@ class ReductionTab(BaseImageTab):
                     widget.valueChanged.connect(self._on_parameters_changed)
 
         self.auto_update_check.stateChanged.connect(self._on_parameters_changed)
+        for spin in (
+            self.plot_title_size_spin,
+            self.plot_label_size_spin,
+            self.plot_tick_size_spin,
+            self.plot_line_width_spin,
+            self.plot_dpi_spin,
+        ):
+            spin.valueChanged.connect(self._on_plot_style_controls_changed)
 
         self.calibration_source_combo.currentTextChanged.connect(self._on_source_changed)
         self.mask_source_combo.currentTextChanged.connect(self._on_source_changed)
@@ -335,6 +381,51 @@ class ReductionTab(BaseImageTab):
         self._on_parameters_changed()
         self._refresh_source_status()
         return panel
+
+    def _update_line_color_button(self) -> None:
+        color = QColor(self._line_color)
+        text_color = "#000000" if color.lightnessF() > 0.55 else "#ffffff"
+        self.plot_line_color_button.setText(self._line_color)
+        self.plot_line_color_button.setStyleSheet(
+            f"background-color: {self._line_color}; color: {text_color};"
+        )
+
+    def _choose_line_color(self) -> None:
+        color = QColorDialog.getColor(QColor(self._line_color), self, "Select Line Color")
+        if not color.isValid():
+            return
+        self._line_color = color.name()
+        self._update_line_color_button()
+        self._on_plot_style_controls_changed()
+
+    def _on_plot_style_controls_changed(self, *args) -> None:
+        if self._building_controls or self._updating_plot_style_controls:
+            return
+        style = replace(
+            resolve_plot_style(self.parent_app),
+            title_size=self.plot_title_size_spin.value(),
+            label_size=self.plot_label_size_spin.value(),
+            tick_size=self.plot_tick_size_spin.value(),
+            line_color=self._line_color,
+            line_width=self.plot_line_width_spin.value(),
+            dpi=self.plot_dpi_spin.value(),
+        )
+        self.parent_app.publish_shared_plot_style(style, source_tab=self)
+        self._update_preview_plot(self._current_result)
+
+    def _sync_plot_style_controls(self) -> None:
+        style = resolve_plot_style(self.parent_app)
+        self._updating_plot_style_controls = True
+        try:
+            self.plot_title_size_spin.setValue(style.title_size)
+            self.plot_label_size_spin.setValue(style.label_size)
+            self.plot_tick_size_spin.setValue(style.tick_size)
+            self._line_color = style.line_color
+            self._update_line_color_button()
+            self.plot_line_width_spin.setValue(style.line_width)
+            self.plot_dpi_spin.setValue(style.dpi)
+        finally:
+            self._updating_plot_style_controls = False
 
     @staticmethod
     def _add_grid_field(grid: QGridLayout, row: int, col: int, label_text: str, widget: QWidget) -> None:
@@ -649,9 +740,11 @@ class ReductionTab(BaseImageTab):
 
     def _update_preview_plot(self, result, message: str | None = None):
         self.ax_plot.clear()
-        body_font = AppStyle.matplotlib_font_size('body')
-        caption_font = AppStyle.matplotlib_font_size('caption')
-        small_font = AppStyle.matplotlib_font_size('small')
+        plot_style = resolve_plot_style(self.parent_app)
+        preview_sizes = plot_style.preview_sizes()
+        body_font = preview_sizes["title"]
+        caption_font = preview_sizes["label"]
+        small_font = preview_sizes["tick"]
 
         if result is None:
             self.ax_plot.text(
@@ -668,7 +761,12 @@ class ReductionTab(BaseImageTab):
             self.canvas_plot.draw()
             return
 
-        self.ax_plot.plot(result.x, result.y, color="#2b6cb0", linewidth=1.5)
+        self.ax_plot.plot(
+            result.x,
+            result.y,
+            color=plot_style.line_color,
+            linewidth=plot_style.line_width,
+        )
 
         scale = self.plot_scale_combo.currentText() if hasattr(self, "plot_scale_combo") else "linear"
         if scale == "logx":
@@ -686,13 +784,21 @@ class ReductionTab(BaseImageTab):
 
         self.ax_plot.set_xlabel(result.x_label, fontsize=caption_font)
         self.ax_plot.set_ylabel(result.y_label, fontsize=caption_font)
-        self.ax_plot.set_title(result.operation.replace("_", " ").title(), fontsize=body_font)
+        self.ax_plot.set_title(
+            result.operation.replace("_", " ").title(),
+            fontsize=body_font,
+        )
         self.ax_plot.tick_params(labelsize=small_font)
         self.ax_plot.grid(True, alpha=0.2)
         self.ax_plot.set_axis_on()
         self._apply_display_crop(scale)
         AppStyle.apply_matplotlib_figure_theme(self.fig_plot)
         self.canvas_plot.draw()
+
+    def on_plot_style_changed(self):
+        """Redraw the current reduction result with the shared plot style."""
+        self._sync_plot_style_controls()
+        self._update_preview_plot(self._current_result)
 
     def _apply_display_crop(self, scale: str):
         """Crop the preview's x axis to the selected operation's q window,

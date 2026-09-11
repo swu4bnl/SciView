@@ -28,6 +28,7 @@ from sciview.processing.batch import (
     REDUCTION_OPERATIONS, TRANSFORM_OPERATIONS,
     BatchFileResult, BatchJob, BatchProtocol, BatchRunner,
 )
+from sciview.settings.plot_style import PlotStyle, resolve_plot_style
 from tabs.base_image_tab import BaseImageTab
 
 
@@ -97,6 +98,7 @@ class BatchTab(QWidget):
         self._runner: BatchRunner | None = None
         self._results: list[BatchFileResult] = []
         self._selected_proto_row: int = -1  # tracks row for auto-save on switch
+        self._running_plot_style: PlotStyle | None = None
 
         self._build_ui()
 
@@ -166,7 +168,7 @@ class BatchTab(QWidget):
         rl.addWidget(BaseImageTab.make_scrollable_panel(self._build_controls_panel()))
         splitter.addWidget(right_widget)
 
-        setup_splitter_layout(splitter, AppStyle.get_layout_ratios()["main_splitter_ratio"])
+        setup_splitter_layout(splitter, [3, 2])
         root.addWidget(splitter)
 
     def _build_file_panel(self) -> QWidget:
@@ -510,6 +512,7 @@ class BatchTab(QWidget):
         payload = {
             "protocols": [p.to_dict() for p in self._protocols],
             "output_formats": self._selected_formats(),
+            "plot_style": resolve_plot_style(self.parent_app).to_dict(),
         }
         path, _ = dialog_save_file(
             self, "Save Batch Recipe", "batch_recipe.yaml",
@@ -534,6 +537,8 @@ class BatchTab(QWidget):
         try:
             raw = Path(path).read_text(encoding="utf-8")
             payload = yaml.safe_load(raw) if path.endswith((".yaml", ".yml")) else __import__("json").loads(raw)
+            style = PlotStyle.from_dict(payload.get("plot_style"))
+            self.parent_app.publish_shared_plot_style(style, source_tab=self)
             self._selected_proto_row = -1
             self.protocol_list.clear()
             self._protocols.clear()
@@ -601,6 +606,7 @@ class BatchTab(QWidget):
 
         self._clear_log()
 
+        self._running_plot_style = resolve_plot_style(self.parent_app)
         job = BatchJob(
             file_paths=list(self._file_paths),
             protocols=active,
@@ -610,6 +616,7 @@ class BatchTab(QWidget):
             mask=mask,
             mirror_input_structure=self.mirror_check.isChecked(),
             input_root=str(Path(self._file_paths[0]).parent),
+            plot_style=self._running_plot_style.to_dict(),
         )
 
         total = len(job.file_paths) * max(len(active), 1)
@@ -677,6 +684,9 @@ class BatchTab(QWidget):
                 "beam_center_y": getattr(cal, "y0", None),
             },
             "q_bounds": bounds,
+            "plot_style": (
+                self._running_plot_style or resolve_plot_style(self.parent_app)
+            ).to_dict(),
             "mask": {"type": type(mask).__name__ if mask is not None else "none"},
             "protocols": [
                 {"name": p.name, "operation": p.operation, "params": dict(p.params)}
