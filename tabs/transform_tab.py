@@ -12,7 +12,6 @@ import numpy as np
 import yaml
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-from matplotlib.colors import LogNorm
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QButtonGroup,
@@ -42,6 +41,11 @@ from sciview.interfaces.theme.app_style import (
     setup_splitter_layout,
 )
 from sciview.masking.io import load_mask_file as backend_load_mask_file
+from sciview.processing.plot_rendering import (
+    TRANSFORM_FIGURE_SIZE,
+    create_transform_axes,
+    render_transform_plot,
+)
 from sciview.processing.transform import TransformBackend, TransformRequest, save_transform_result
 from sciview.settings.app_settings import SPINBOX_CONFIG
 from sciview.settings.plot_style import resolve_plot_style
@@ -55,7 +59,6 @@ def _spin(key):
         w = QDoubleSpinBox(); w.setRange(mn, mx); w.setDecimals(decimals); w.setSingleStep(step); w.setValue(default)
     return w
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
-from sciview.settings.viewer_config import SUPPORTED_IMAGE_COLORMAPS, resolve_matplotlib_colormap
 from tabs.base_image_tab import BaseImageTab
 
 
@@ -115,16 +118,41 @@ class TransformTab(BaseImageTab):
         apply_info_style(self.result_summary)
         layout.addWidget(self.result_summary)
 
-        self.fig_transform, self.ax_transform = plt.subplots(figsize=(6, 8))
-        self.fig_transform.subplots_adjust(left=0.12, bottom=0.12, right=0.98, top=0.95)
+        self.fig_transform, self.ax_transform = plt.subplots(
+            figsize=TRANSFORM_FIGURE_SIZE,
+            layout="constrained",
+        )
         self.canvas_transform = FigureCanvas(self.fig_transform)
         layout.addWidget(self.canvas_transform, 1)
 
         toolbar = NavigationToolbar(self.canvas_transform, self)
-        # toolbar.setMaximumHeight(25)
         layout.addWidget(toolbar)
+        layout.addWidget(self._create_plot_style_group())
 
         return panel
+
+    def _create_plot_style_group(self):
+        style_group = QGroupBox("Plot Style")
+        style_layout = QGridLayout(style_group)
+        plot_style = resolve_plot_style(self.parent_app)
+        self.plot_title_size_spin = QDoubleSpinBox()
+        self.plot_label_size_spin = QDoubleSpinBox()
+        self.plot_tick_size_spin = QDoubleSpinBox()
+        for index, (label, spin, value) in enumerate((
+            ("Plot title", self.plot_title_size_spin, plot_style.title_size),
+            ("Axis labels", self.plot_label_size_spin, plot_style.label_size),
+            ("Tick labels", self.plot_tick_size_spin, plot_style.tick_size),
+        )):
+            spin.setRange(6.0, 72.0)
+            spin.setValue(value)
+            style_layout.addWidget(QLabel(label), 0, index * 2)
+            style_layout.addWidget(spin, 0, index * 2 + 1)
+
+        self.plot_dpi_spin = QSpinBox()
+        self.plot_dpi_spin.setRange(72, 1200)
+        self.plot_dpi_spin.setValue(plot_style.dpi)
+        self._add_grid_field(style_layout, 1, 0, "Export DPI", self.plot_dpi_spin)
+        return style_group
 
     def _create_controls_panel(self):
         panel = QWidget()
@@ -199,13 +227,13 @@ class TransformTab(BaseImageTab):
         self.q_auto_crop_check.setChecked(True)
         q_image_layout.addWidget(self.q_auto_crop_check, 0, 2, 1, 2)
         self.q_x_min_spin = _spin("crop_min")
-        self._add_grid_field(q_image_layout, 1, 0, "qx min (1/Å)", self.q_x_min_spin)
+        self._add_grid_field(q_image_layout, 1, 0, "q<sub>x</sub> min (Å⁻¹)", self.q_x_min_spin)
         self.q_x_max_spin = _spin("crop_max")
-        self._add_grid_field(q_image_layout, 1, 1, "qx max (1/Å)", self.q_x_max_spin)
+        self._add_grid_field(q_image_layout, 1, 1, "q<sub>x</sub> max (Å⁻¹)", self.q_x_max_spin)
         self.q_y_min_spin = _spin("crop_min")
-        self._add_grid_field(q_image_layout, 2, 0, "qz min (1/Å)", self.q_y_min_spin)
+        self._add_grid_field(q_image_layout, 2, 0, "q<sub>z</sub> min (Å⁻¹)", self.q_y_min_spin)
         self.q_y_max_spin = _spin("crop_max")
-        self._add_grid_field(q_image_layout, 2, 1, "qz max (1/Å)", self.q_y_max_spin)
+        self._add_grid_field(q_image_layout, 2, 1, "q<sub>z</sub> max (Å⁻¹)", self.q_y_max_spin)
         layout.addWidget(self.q_image_group)
 
         self.q_phi_group = QGroupBox("Parameters")
@@ -213,18 +241,18 @@ class TransformTab(BaseImageTab):
         self.qphi_bins_relative_spin = _spin("bins_relative")
         self._add_grid_field(q_phi_layout, 0, 0, "Bins (relative)", self.qphi_bins_relative_spin)
         self.qphi_bins_phi_spin = _spin("bins_phi")
-        self._add_grid_field(q_phi_layout, 0, 1, "φ bins", self.qphi_bins_phi_spin)
+        self._add_grid_field(q_phi_layout, 0, 1, "Phi bins", self.qphi_bins_phi_spin)
         self.qphi_auto_crop_check = QCheckBox("Auto crop to calibration")
         self.qphi_auto_crop_check.setChecked(True)
         q_phi_layout.addWidget(self.qphi_auto_crop_check, 1, 0, 1, 4)
         self.qphi_x_min_spin = _spin("q_min")
-        self._add_grid_field(q_phi_layout, 2, 0, "q min (1/Å)", self.qphi_x_min_spin)
+        self._add_grid_field(q_phi_layout, 2, 0, "q min (Å⁻¹)", self.qphi_x_min_spin)
         self.qphi_x_max_spin = _spin("q_max")
-        self._add_grid_field(q_phi_layout, 2, 1, "q max (1/Å)", self.qphi_x_max_spin)
+        self._add_grid_field(q_phi_layout, 2, 1, "q max (Å⁻¹)", self.qphi_x_max_spin)
         self.qphi_y_min_spin = _spin("phi_min")
-        self._add_grid_field(q_phi_layout, 3, 0, "φ min (°)", self.qphi_y_min_spin)
+        self._add_grid_field(q_phi_layout, 3, 0, "Phi min (°)", self.qphi_y_min_spin)
         self.qphi_y_max_spin = _spin("phi_max")
-        self._add_grid_field(q_phi_layout, 3, 1, "φ max (°)", self.qphi_y_max_spin)
+        self._add_grid_field(q_phi_layout, 3, 1, "Phi max (°)", self.qphi_y_max_spin)
         layout.addWidget(self.q_phi_group)
 
         self.qr_qz_group = QGroupBox("Parameters")
@@ -235,13 +263,13 @@ class TransformTab(BaseImageTab):
         self.qrqz_auto_crop_check.setChecked(True)
         qr_qz_layout.addWidget(self.qrqz_auto_crop_check, 0, 2, 1, 2)
         self.qrqz_x_min_spin = _spin("crop_min")
-        self._add_grid_field(qr_qz_layout, 1, 0, "qr min (1/Å)", self.qrqz_x_min_spin)
+        self._add_grid_field(qr_qz_layout, 1, 0, "q<sub>r</sub> min (Å⁻¹)", self.qrqz_x_min_spin)
         self.qrqz_x_max_spin = _spin("crop_max")
-        self._add_grid_field(qr_qz_layout, 1, 1, "qr max (1/Å)", self.qrqz_x_max_spin)
+        self._add_grid_field(qr_qz_layout, 1, 1, "q<sub>r</sub> max (Å⁻¹)", self.qrqz_x_max_spin)
         self.qrqz_y_min_spin = _spin("crop_min")
-        self._add_grid_field(qr_qz_layout, 2, 0, "qz min (1/Å)", self.qrqz_y_min_spin)
+        self._add_grid_field(qr_qz_layout, 2, 0, "q<sub>z</sub> min (Å⁻¹)", self.qrqz_y_min_spin)
         self.qrqz_y_max_spin = _spin("crop_max")
-        self._add_grid_field(qr_qz_layout, 2, 1, "qz max (1/Å)", self.qrqz_y_max_spin)
+        self._add_grid_field(qr_qz_layout, 2, 1, "q<sub>z</sub> max (Å⁻¹)", self.qrqz_y_max_spin)
         layout.addWidget(self.qr_qz_group)
 
         self._operation_groups = {
@@ -283,45 +311,6 @@ class TransformTab(BaseImageTab):
         }
         self._sync_operation_group_visibility()
 
-        style_group = QGroupBox("Plot Style")
-        style_layout = QGridLayout(style_group)
-        plot_style = resolve_plot_style(self.parent_app)
-        self.plot_title_size_spin = QDoubleSpinBox()
-        self.plot_label_size_spin = QDoubleSpinBox()
-        self.plot_tick_size_spin = QDoubleSpinBox()
-        for index, (label, spin, value) in enumerate((
-            ("Plot title", self.plot_title_size_spin, plot_style.title_size),
-            ("Axis labels", self.plot_label_size_spin, plot_style.label_size),
-            ("Tick labels", self.plot_tick_size_spin, plot_style.tick_size),
-        )):
-            spin.setRange(6.0, 72.0)
-            spin.setValue(value)
-            row, column = divmod(index, 2)
-            style_layout.addWidget(QLabel(label), row, column * 2)
-            style_layout.addWidget(spin, row, column * 2 + 1)
-
-        self.plot_cmap_combo = QComboBox()
-        self.plot_cmap_combo.addItems(SUPPORTED_IMAGE_COLORMAPS)
-        self.plot_cmap_combo.setCurrentText(plot_style.colormap)
-        self.plot_ztrim_low_spin = QDoubleSpinBox()
-        self.plot_ztrim_high_spin = QDoubleSpinBox()
-        for spin, value in (
-            (self.plot_ztrim_low_spin, plot_style.ztrim_low),
-            (self.plot_ztrim_high_spin, plot_style.ztrim_high),
-        ):
-            spin.setRange(0.0, 0.49)
-            spin.setDecimals(3)
-            spin.setSingleStep(0.005)
-            spin.setValue(value)
-        self.plot_dpi_spin = QSpinBox()
-        self.plot_dpi_spin.setRange(72, 1200)
-        self.plot_dpi_spin.setValue(plot_style.dpi)
-        self._add_grid_field(style_layout, 2, 0, "Colormap", self.plot_cmap_combo)
-        self._add_grid_field(style_layout, 2, 1, "Trim low", self.plot_ztrim_low_spin)
-        self._add_grid_field(style_layout, 3, 0, "Trim high", self.plot_ztrim_high_spin)
-        self._add_grid_field(style_layout, 3, 1, "Export DPI", self.plot_dpi_spin)
-        layout.addWidget(style_group)
-
         button_row = QHBoxLayout()
         self.preview_button = QPushButton("Refresh Preview")
         self.preview_button.clicked.connect(self.refresh_preview)
@@ -342,13 +331,10 @@ class TransformTab(BaseImageTab):
             button.toggled.connect(lambda checked, op=operation: self._on_protocol_changed(op, checked))
 
         self.auto_update_check.stateChanged.connect(self._on_parameters_changed)
-        self.plot_cmap_combo.currentTextChanged.connect(self._on_plot_style_controls_changed)
         for spin in (
             self.plot_title_size_spin,
             self.plot_label_size_spin,
             self.plot_tick_size_spin,
-            self.plot_ztrim_low_spin,
-            self.plot_ztrim_high_spin,
             self.plot_dpi_spin,
         ):
             spin.valueChanged.connect(self._on_plot_style_controls_changed)
@@ -375,9 +361,6 @@ class TransformTab(BaseImageTab):
                 title_size=self.plot_title_size_spin.value(),
                 label_size=self.plot_label_size_spin.value(),
                 tick_size=self.plot_tick_size_spin.value(),
-                colormap=self.plot_cmap_combo.currentText(),
-                ztrim_low=self.plot_ztrim_low_spin.value(),
-                ztrim_high=self.plot_ztrim_high_spin.value(),
                 dpi=self.plot_dpi_spin.value(),
             )
         except ValueError as exc:
@@ -393,9 +376,6 @@ class TransformTab(BaseImageTab):
             self.plot_title_size_spin.setValue(style.title_size)
             self.plot_label_size_spin.setValue(style.label_size)
             self.plot_tick_size_spin.setValue(style.tick_size)
-            self.plot_cmap_combo.setCurrentText(style.colormap)
-            self.plot_ztrim_low_spin.setValue(style.ztrim_low)
-            self.plot_ztrim_high_spin.setValue(style.ztrim_high)
             self.plot_dpi_spin.setValue(style.dpi)
         finally:
             self._updating_plot_style_controls = False
@@ -685,14 +665,8 @@ class TransformTab(BaseImageTab):
         self.parent_app.show_status(f"{operation_name} complete: {result_size}")
 
     def _update_transform_plot(self, result, message: str | None = None):
-        if self._transform_colorbar is not None:
-            try:
-                self._transform_colorbar.remove()
-            except Exception:
-                pass
-            self._transform_colorbar = None
-
-        self.ax_transform.clear()
+        self.ax_transform, self._transform_colorbar_axis = create_transform_axes(self.fig_transform)
+        self._transform_colorbar = None
         plot_style = resolve_plot_style(self.parent_app)
         preview_sizes = plot_style.preview_sizes()
         body_font = preview_sizes["title"]
@@ -700,6 +674,7 @@ class TransformTab(BaseImageTab):
         small_font = preview_sizes["tick"]
 
         if result is None:
+            self._transform_colorbar_axis.set_axis_off()
             self.ax_transform.text(
                 0.5,
                 0.5,
@@ -714,93 +689,53 @@ class TransformTab(BaseImageTab):
             self.canvas_transform.draw()
             return
 
-        image = np.asarray(result.image, dtype=float)
-        finite = image[np.isfinite(image)]
-        if finite.size == 0:
-            self.ax_transform.text(0.5, 0.5, "No finite transform values", transform=self.ax_transform.transAxes, ha="center", va="center")
-            self.ax_transform.set_axis_off()
-            AppStyle.apply_matplotlib_figure_theme(self.fig_transform)
-            self.canvas_transform.draw()
-            return
-
-        extent = None
-        if result.x_axis is not None and result.y_axis is not None:
-            if result.x_axis.size == image.shape[1] and result.y_axis.size == image.shape[0]:
-                extent = [
-                    float(result.x_axis[0]),
-                    float(result.x_axis[-1]),
-                    float(result.y_axis[0]),
-                    float(result.y_axis[-1]),
-                ]
-
         display_vals = self.get_display_values()
-        cmap = resolve_matplotlib_colormap(plot_style.colormap)
         scale = display_vals["scale"]
-
-        low_percentile, high_percentile = plot_style.preview_percentiles()
-        vmin, vmax = np.percentile(finite, [low_percentile, high_percentile])
-        vmin = float(vmin)
-        vmax = float(vmax)
-
-        norm = None
-        if scale == "log":
-            safe_vmin, safe_vmax = self._sanitize_log_limits(image, vmin, vmax)
-            if safe_vmin is not None and safe_vmax is not None:
-                norm = LogNorm(vmin=safe_vmin, vmax=safe_vmax)
-
-        finite_min = float(np.min(finite))
-        finite_max = float(np.max(finite))
-        if finite_max <= finite_min:
-            finite_max = finite_min + 1.0
-
-        if scale == "linear":
-            # If global limits are far outside the transform data range, fall back
-            # to robust limits so preview remains readable without per-tab tuning.
-            range_span = max(finite_max - finite_min, 1e-12)
-            visible_span = max(float(vmax) - float(vmin), 1e-12)
-            overlap_min = max(float(vmin), finite_min)
-            overlap_max = min(float(vmax), finite_max)
-            overlap = max(0.0, overlap_max - overlap_min)
-            overlap_ratio = overlap / range_span
-            span_ratio = visible_span / range_span
-            if overlap_ratio < 0.02 or span_ratio > 200.0:
-                low_q, high_q = plot_style.preview_percentiles()
-                auto_vmin, auto_vmax = np.percentile(finite, [low_q, high_q])
-                vmin = float(auto_vmin)
-                vmax = float(auto_vmax)
-
-        kwargs = {
-            "origin": "lower",
-            "cmap": cmap,
-            "aspect": "auto",
-        }
-        if extent is not None:
-            kwargs["extent"] = extent
-        if norm is not None:
-            kwargs["norm"] = norm
-        elif scale != "log":
-            kwargs["vmin"] = vmin
-            kwargs["vmax"] = vmax
-
-        img_artist = self.ax_transform.imshow(image, **kwargs)
-        self._transform_colorbar = self.fig_transform.colorbar(img_artist, ax=self.ax_transform, fraction=0.045, pad=0.03)
-        self.ax_transform.set_xlabel(result.x_label, fontsize=caption_font)
-        self.ax_transform.set_ylabel(result.y_label, fontsize=caption_font)
-        self.ax_transform.set_title(
-            result.operation.replace("_", " ").title(),
-            fontsize=body_font,
+        x_min = self._op_float("x_min")
+        x_max = self._op_float("x_max")
+        y_min = self._op_float("y_min")
+        y_max = self._op_float("y_max")
+        x_limits = (x_min, x_max) if x_min is not None and x_max is not None else None
+        y_limits = (y_min, y_max) if y_min is not None and y_max is not None else None
+        theme = {key: value.name() for key, value in AppStyle.theme_colors().items()}
+        self._transform_colorbar = render_transform_plot(
+            self.fig_transform,
+            self.ax_transform,
+            result,
+            plot_style,
+            colorbar_axis=self._transform_colorbar_axis,
+            scale=scale,
+            vmin=display_vals["vmin"],
+            vmax=display_vals["vmax"],
+            x_limits=x_limits,
+            y_limits=y_limits,
+            theme=theme,
         )
-        self.ax_transform.tick_params(labelsize=small_font)
-        for tick_label in self._transform_colorbar.ax.get_yticklabels():
-            tick_label.set_fontsize(small_font)
-        self.ax_transform.set_axis_on()
-        self._apply_display_crop()
-        AppStyle.apply_matplotlib_figure_theme(self.fig_transform)
         self.canvas_transform.draw()
 
     def on_plot_style_changed(self):
         """Redraw the current transform result with the shared plot style."""
         self._sync_plot_style_controls()
+        self._update_transform_plot(self._current_result)
+
+    def _on_vmin_changed(self):
+        super()._on_vmin_changed()
+        self._update_transform_plot(self._current_result)
+
+    def _on_vmax_changed(self):
+        super()._on_vmax_changed()
+        self._update_transform_plot(self._current_result)
+
+    def _on_cmap_changed(self, cmap):
+        super()._on_cmap_changed(cmap)
+        if self._building_controls:
+            return
+        style = replace(resolve_plot_style(self.parent_app), colormap=cmap)
+        self.parent_app.publish_shared_plot_style(style, source_tab=self)
+        self._update_transform_plot(self._current_result)
+
+    def _on_scale_changed(self, scale):
+        super()._on_scale_changed(scale)
         self._update_transform_plot(self._current_result)
 
     def _apply_display_crop(self):
@@ -850,16 +785,34 @@ class TransformTab(BaseImageTab):
         op   = self._selected_operation()
         name = self._operation_labels[op]
         bins_relative = self._op_float("bins_relative", 1.0)
+        transform_method = None
+        if self._current_result is not None and self._current_result.operation == op:
+            transform_method = getattr(self._current_result, "metadata", {}).get("method")
+        preview = {
+            "scale": self.get_display_values()["scale"],
+            "vmin": self.get_display_values()["vmin"],
+            "vmax": self.get_display_values()["vmax"],
+            "transform_method": transform_method,
+            "x_min": self._op_float("x_min"),
+            "x_max": self._op_float("x_max"),
+            "y_min": self._op_float("y_min"),
+            "y_max": self._op_float("y_max"),
+        }
 
         if op == "q_image":
-            return {"operation": op, "name": name, "bins_relative": bins_relative, "save_results": ["plots", "npz"]}
+            return {
+                "operation": op, "name": name, "bins_relative": bins_relative,
+                "preview_params": preview, "save_results": ["plots", "npz"],
+            }
 
         if op == "q_phi_image":
             return {
                 "operation": op, "name": name,
                 "bins_relative": bins_relative,
+                "bins_phi": self._op_int("bins_phi", 360),
                 "phi_min": self._op_float("y_min"),
                 "phi_max": self._op_float("y_max"),
+                "preview_params": preview,
                 "save_results": ["plots", "npz"],
             }
 
@@ -867,6 +820,7 @@ class TransformTab(BaseImageTab):
             return {
                 "operation": op, "name": name,
                 "bins_relative": bins_relative,
+                "preview_params": preview,
                 "save_results": ["plots", "npz"],
             }
 

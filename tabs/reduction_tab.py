@@ -55,6 +55,10 @@ from sciview.interfaces.theme.app_style import (
 )
 from sciview.masking.io import load_mask_file as backend_load_mask_file
 from sciview.processing.angle_conventions import display_chi_to_scianalysis_sector_chi
+from sciview.processing.plot_rendering import (
+    REDUCTION_FIGURE_SIZE,
+    render_reduction_plot,
+)
 from sciview.processing.reduction import ReductionBackend, ReductionRequest, save_reduction_result
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
 from sciview.settings.app_settings import SPINBOX_CONFIG
@@ -121,28 +125,57 @@ class ReductionTab(BaseImageTab):
         apply_subtitle_style(title)
         title_row.addWidget(title)
         title_row.addStretch()
-        title_row.addWidget(QLabel("Scale"))
-        self.plot_scale_combo = QComboBox()
-        self.plot_scale_combo.addItems(["linear", "logx", "logy", "loglog"])
-        self.plot_scale_combo.currentTextChanged.connect(self._on_parameters_changed)
-        self.plot_scale_combo.setMaximumWidth(90)
-        title_row.addWidget(self.plot_scale_combo)
         layout.addLayout(title_row)
 
         self.result_summary = QLabel("No preview yet")
         apply_info_style(self.result_summary)
         layout.addWidget(self.result_summary)
 
-        self.fig_plot, self.ax_plot = plt.subplots(figsize=(6, 4))
-        self.fig_plot.subplots_adjust(left=0.10, bottom=0.18, right=0.98, top=0.95)
+        self.fig_plot, self.ax_plot = plt.subplots(
+            figsize=REDUCTION_FIGURE_SIZE,
+            layout="constrained",
+        )
         self.canvas_plot = FigureCanvas(self.fig_plot)
         layout.addWidget(self.canvas_plot, 1)
 
         toolbar = NavigationToolbar(self.canvas_plot, self)
-        # toolbar.setMaximumHeight(25)
         layout.addWidget(toolbar)
+        layout.addWidget(self._create_plot_style_group())
 
         return panel
+
+    def _create_plot_style_group(self):
+        style_group = QGroupBox("Plot Style")
+        style_layout = QGridLayout(style_group)
+        plot_style = resolve_plot_style(self.parent_app)
+        self.plot_title_size_spin = QDoubleSpinBox()
+        self.plot_label_size_spin = QDoubleSpinBox()
+        self.plot_tick_size_spin = QDoubleSpinBox()
+        for index, (label, spin, value) in enumerate((
+            ("Plot title", self.plot_title_size_spin, plot_style.title_size),
+            ("Axis labels", self.plot_label_size_spin, plot_style.label_size),
+            ("Tick labels", self.plot_tick_size_spin, plot_style.tick_size),
+        )):
+            spin.setRange(6.0, 72.0)
+            spin.setValue(value)
+            style_layout.addWidget(QLabel(label), 0, index * 2)
+            style_layout.addWidget(spin, 0, index * 2 + 1)
+
+        self._line_color = plot_style.line_color
+        self.plot_line_color_button = QPushButton()
+        self.plot_line_color_button.clicked.connect(self._choose_line_color)
+        self._update_line_color_button()
+        self.plot_line_width_spin = QDoubleSpinBox()
+        self.plot_line_width_spin.setRange(0.25, 10.0)
+        self.plot_line_width_spin.setSingleStep(0.25)
+        self.plot_line_width_spin.setValue(plot_style.line_width)
+        self.plot_dpi_spin = QSpinBox()
+        self.plot_dpi_spin.setRange(72, 1200)
+        self.plot_dpi_spin.setValue(plot_style.dpi)
+        self._add_grid_field(style_layout, 1, 0, "Line color", self.plot_line_color_button)
+        self._add_grid_field(style_layout, 1, 1, "Line width", self.plot_line_width_spin)
+        self._add_grid_field(style_layout, 2, 0, "Export DPI", self.plot_dpi_spin)
+        return style_group
 
     def _create_controls_panel(self):
         panel = QWidget()
@@ -217,9 +250,9 @@ class ReductionTab(BaseImageTab):
         self.circular_auto_crop_check.setChecked(True)
         circular_layout.addWidget(self.circular_auto_crop_check, 0, 2, 1, 2)
         self.circular_q_min_spin = _spin("q_min")
-        self._add_grid_field(circular_layout, 1, 0, "q min (1/Å)", self.circular_q_min_spin)
+        self._add_grid_field(circular_layout, 1, 0, "q min (Å⁻¹)", self.circular_q_min_spin)
         self.circular_q_max_spin = _spin("q_max")
-        self._add_grid_field(circular_layout, 1, 1, "q max (1/Å)", self.circular_q_max_spin)
+        self._add_grid_field(circular_layout, 1, 1, "q max (Å⁻¹)", self.circular_q_max_spin)
         layout.addWidget(self.circular_group)
 
         self.sector_group = QGroupBox("Parameters")
@@ -234,9 +267,9 @@ class ReductionTab(BaseImageTab):
         self.sector_end_spin = _spin("sector_end")
         self._add_grid_field(sector_layout, 1, 1, "Angle end (\u00b0)", self.sector_end_spin)
         self.sector_q_min_spin = _spin("q_min")
-        self._add_grid_field(sector_layout, 2, 0, "q min (1/Å)", self.sector_q_min_spin)
+        self._add_grid_field(sector_layout, 2, 0, "q min (Å⁻¹)", self.sector_q_min_spin)
         self.sector_q_max_spin = _spin("q_max")
-        self._add_grid_field(sector_layout, 2, 1, "q max (1/Å)", self.sector_q_max_spin)
+        self._add_grid_field(sector_layout, 2, 1, "q max (Å⁻¹)", self.sector_q_max_spin)
         layout.addWidget(self.sector_group)
 
         self.linecut_q_group = QGroupBox("Parameters")
@@ -244,7 +277,7 @@ class ReductionTab(BaseImageTab):
         self.linecut_q_chi0_spin = _spin("line_chi0")
         self._add_grid_field(linecut_q_layout, 0, 0, "χ center (\u00b0)", self.linecut_q_chi0_spin)
         self.linecut_q_dq_spin = _spin("line_dq")
-        self._add_grid_field(linecut_q_layout, 0, 1, "Half-width Δq (1/\u00c5)", self.linecut_q_dq_spin)
+        self._add_grid_field(linecut_q_layout, 0, 1, "Half-width Δq (Å⁻¹)", self.linecut_q_dq_spin)
         linecut_q_hint = QLabel("χ orientation: 0\u00b0 right, +90\u00b0 up")
         apply_info_style(linecut_q_hint)
         linecut_q_layout.addWidget(linecut_q_hint, 1, 0, 1, 4)
@@ -252,17 +285,17 @@ class ReductionTab(BaseImageTab):
         self.linecut_q_auto_crop_check.setChecked(True)
         linecut_q_layout.addWidget(self.linecut_q_auto_crop_check, 2, 0, 1, 4)
         self.linecut_q_q_min_spin = _spin("q_min")
-        self._add_grid_field(linecut_q_layout, 3, 0, "q min (1/Å)", self.linecut_q_q_min_spin)
+        self._add_grid_field(linecut_q_layout, 3, 0, "q min (Å⁻¹)", self.linecut_q_q_min_spin)
         self.linecut_q_q_max_spin = _spin("q_max")
-        self._add_grid_field(linecut_q_layout, 3, 1, "q max (1/Å)", self.linecut_q_q_max_spin)
+        self._add_grid_field(linecut_q_layout, 3, 1, "q max (Å⁻¹)", self.linecut_q_q_max_spin)
         layout.addWidget(self.linecut_q_group)
 
         self.linecut_angle_group = QGroupBox("Parameters")
         linecut_angle_layout = QGridLayout(self.linecut_angle_group)
         self.linecut_angle_q0_spin = _spin("line_value")
-        self._add_grid_field(linecut_angle_layout, 0, 0, "q center (1/\u00c5)", self.linecut_angle_q0_spin)
+        self._add_grid_field(linecut_angle_layout, 0, 0, "q center (Å⁻¹)", self.linecut_angle_q0_spin)
         self.linecut_angle_dq_spin = _spin("line_dq")
-        self._add_grid_field(linecut_angle_layout, 0, 1, "Ring width Δq (1/\u00c5)", self.linecut_angle_dq_spin)
+        self._add_grid_field(linecut_angle_layout, 0, 1, "Half-width Δq (Å⁻¹)", self.linecut_angle_dq_spin)
         layout.addWidget(self.linecut_angle_group)
 
         self._operation_groups = {
@@ -306,38 +339,13 @@ class ReductionTab(BaseImageTab):
         }
         self._sync_operation_group_visibility()
 
-        style_group = QGroupBox("Plot Style")
-        style_layout = QGridLayout(style_group)
-        plot_style = resolve_plot_style(self.parent_app)
-        self.plot_title_size_spin = QDoubleSpinBox()
-        self.plot_label_size_spin = QDoubleSpinBox()
-        self.plot_tick_size_spin = QDoubleSpinBox()
-        for index, (label, spin, value) in enumerate((
-            ("Plot title", self.plot_title_size_spin, plot_style.title_size),
-            ("Axis labels", self.plot_label_size_spin, plot_style.label_size),
-            ("Tick labels", self.plot_tick_size_spin, plot_style.tick_size),
-        )):
-            spin.setRange(6.0, 72.0)
-            spin.setValue(value)
-            row, column = divmod(index, 2)
-            style_layout.addWidget(QLabel(label), row, column * 2)
-            style_layout.addWidget(spin, row, column * 2 + 1)
-
-        self._line_color = plot_style.line_color
-        self.plot_line_color_button = QPushButton()
-        self.plot_line_color_button.clicked.connect(self._choose_line_color)
-        self._update_line_color_button()
-        self.plot_line_width_spin = QDoubleSpinBox()
-        self.plot_line_width_spin.setRange(0.25, 10.0)
-        self.plot_line_width_spin.setSingleStep(0.25)
-        self.plot_line_width_spin.setValue(plot_style.line_width)
-        self.plot_dpi_spin = QSpinBox()
-        self.plot_dpi_spin.setRange(72, 1200)
-        self.plot_dpi_spin.setValue(plot_style.dpi)
-        self._add_grid_field(style_layout, 2, 0, "Line color", self.plot_line_color_button)
-        self._add_grid_field(style_layout, 2, 1, "Line width", self.plot_line_width_spin)
-        self._add_grid_field(style_layout, 3, 0, "Export DPI", self.plot_dpi_spin)
-        layout.addWidget(style_group)
+        scale_layout = QHBoxLayout()
+        scale_layout.addWidget(QLabel("Scale"))
+        self.plot_scale_combo = QComboBox()
+        self.plot_scale_combo.addItems(["linear", "logx", "logy", "loglog"])
+        self.plot_scale_combo.currentTextChanged.connect(self._on_parameters_changed)
+        scale_layout.addWidget(self.plot_scale_combo, 1)
+        layout.addLayout(scale_layout)
 
         button_row = QHBoxLayout()
         self.preview_button = QPushButton("Refresh Preview")
@@ -761,38 +769,23 @@ class ReductionTab(BaseImageTab):
             self.canvas_plot.draw()
             return
 
-        self.ax_plot.plot(
-            result.x,
-            result.y,
-            color=plot_style.line_color,
-            linewidth=plot_style.line_width,
-        )
-
         scale = self.plot_scale_combo.currentText() if hasattr(self, "plot_scale_combo") else "linear"
-        if scale == "logx":
-            self.ax_plot.set_xscale("log")
-            self.ax_plot.set_yscale("linear")
-        elif scale == "logy":
-            self.ax_plot.set_xscale("linear")
-            self.ax_plot.set_yscale("log")
-        elif scale == "loglog":
-            self.ax_plot.set_xscale("log")
-            self.ax_plot.set_yscale("log")
-        else:
-            self.ax_plot.set_xscale("linear")
-            self.ax_plot.set_yscale("linear")
-
-        self.ax_plot.set_xlabel(result.x_label, fontsize=caption_font)
-        self.ax_plot.set_ylabel(result.y_label, fontsize=caption_font)
-        self.ax_plot.set_title(
-            result.operation.replace("_", " ").title(),
-            fontsize=body_font,
+        x_limits = None
+        if self._selected_operation() in ("circular_average", "sector_average", "linecut_q"):
+            q_min = self._op_float("q_min")
+            q_max = self._op_float("q_max")
+            if q_min is not None and q_max is not None and q_max > q_min:
+                x_limits = (q_min, q_max)
+        theme = {key: value.name() for key, value in AppStyle.theme_colors().items()}
+        render_reduction_plot(
+            self.fig_plot,
+            self.ax_plot,
+            result,
+            plot_style,
+            scale=scale,
+            x_limits=x_limits,
+            theme=theme,
         )
-        self.ax_plot.tick_params(labelsize=small_font)
-        self.ax_plot.grid(True, alpha=0.2)
-        self.ax_plot.set_axis_on()
-        self._apply_display_crop(scale)
-        AppStyle.apply_matplotlib_figure_theme(self.fig_plot)
         self.canvas_plot.draw()
 
     def on_plot_style_changed(self):
@@ -847,11 +840,22 @@ class ReductionTab(BaseImageTab):
         """
         op = self._selected_operation()
         name = self._operation_labels[op]
+        preview = {
+            "scale": self.plot_scale_combo.currentText(),
+            "q_min": self._op_float("q_min"),
+            "q_max": self._op_float("q_max"),
+            "angle_start": self._op_float("angle_start", 0.0),
+            "angle_end": self._op_float("angle_end", 360.0),
+            "chi0": self._op_float("chi0"),
+            "q0": self._op_float("q0"),
+            "dq": self._op_float("dq", 0.01),
+        }
 
         if op == "circular_average":
             return {
                 "operation": op, "name": name,
                 "bins_relative": self._op_float("bins_relative", 1.0),
+                "preview_params": preview,
                 "save_results": ["plots", "txt"],
             }
 
@@ -868,6 +872,7 @@ class ReductionTab(BaseImageTab):
                 "angle":  angle,
                 "dangle": float(dangle),
                 "bins_relative": self._op_float("bins_relative", 1.0),
+                "preview_params": preview,
                 "ylog": True,
                 "save_results": ["plots", "txt"],
             }
@@ -877,6 +882,7 @@ class ReductionTab(BaseImageTab):
                 "operation": op, "name": name,
                 "chi0": self._op_float("chi0", 0.0),
                 "dq":   self._op_float("dq", 0.01),
+                "preview_params": preview,
                 "save_results": ["plots", "txt"],
             }
 
@@ -885,10 +891,16 @@ class ReductionTab(BaseImageTab):
                 "operation": op, "name": name,
                 "q0": self._op_float("q0", 0.1),
                 "dq": self._op_float("dq", 0.01),
+                "preview_params": preview,
                 "save_results": ["plots", "txt"],
             }
 
-        return {"operation": op, "name": name, "save_results": ["plots", "txt"]}
+        return {
+            "operation": op,
+            "name": name,
+            "preview_params": preview,
+            "save_results": ["plots", "txt"],
+        }
 
     def _build_recipe_payload(self) -> dict:
         """Full recipe for Export Recipe: SA-compatible params + context metadata."""
@@ -1021,7 +1033,7 @@ class ReductionTab(BaseImageTab):
                 self._overlay_artists.append(circle_min)
                 _draw_q_label(0.0, q_min, f"qmin={q_min:.3f}")
             _draw_q_label(0.0, q_max, f"qmax={q_max:.3f}")
-            overlay_note = f"Circular average: q <= {q_max:.4f} 1/Å"
+            overlay_note = f"Circular average: q <= {q_max:.4f} Å⁻¹"
         elif operation == "sector_average":
             start = self._op_float("angle_start", 0.0)
             end = self._op_float("angle_end", 360.0)
@@ -1058,7 +1070,7 @@ class ReductionTab(BaseImageTab):
                 _draw_q_label(0.0, q0 + dq, f"q+={q0+dq:.3f}")
                 for ang, txt in ((0.0, "0"), (90.0, "90"), (270.0, "270")):
                     _draw_angle_label(ang, txt, q0 + dq, radial_offset_px=12.0, color="#fdba74")
-                overlay_note = f"I(χ) at q: q0={q0:.4f} 1/Å, Δq={dq:.4f} 1/Å"
+                overlay_note = f"I(χ) at q: q0={q0:.4f} Å⁻¹, Δq={dq:.4f} Å⁻¹"
             else:
                 # I(q) along line: radial stripe at azimuthal angle chi0 with half-width dq (Å⁻¹).
                 chi0 = self._op_float("chi0", 0.0)
@@ -1107,7 +1119,7 @@ class ReductionTab(BaseImageTab):
                 _draw_q_label(chi0, q_min, f"qmin={q_min:.3f}")
                 _draw_q_label(chi0, q_max, f"qmax={q_max:.3f}")
                 overlay_note = (
-                    f"I(q) at χ: χ={chi0:.1f}\N{DEGREE SIGN}, Δq={dq_val:.4f} 1/Å "
+                    f"I(q) at χ: χ={chi0:.1f}\N{DEGREE SIGN}, Δq={dq_val:.4f} Å⁻¹ "
                     f"({angle_text})"
                 )
 

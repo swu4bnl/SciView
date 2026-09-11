@@ -17,6 +17,7 @@ from sciview.processing.angle_conventions import (
     display_chi_to_scianalysis_sector_chi,
 )
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
+from sciview.processing.scientific_labels import reduction_axis_labels
 
 
 ReductionOperation = Literal["circular_average", "sector_average", "linecut_q", "linecut_angle"]
@@ -211,8 +212,7 @@ def _build_scianalysis_data(request: ReductionRequest):
 def _result_from_line(operation: ReductionOperation, line: Any, metadata: dict[str, Any]) -> ReductionResult:
     x = np.asarray(getattr(line, "x"), dtype=float)
     y = np.asarray(getattr(line, "y"), dtype=float)
-    x_label = str(getattr(line, "x_label", "x"))
-    y_label = str(getattr(line, "y_label", "I"))
+    x_label, y_label = reduction_axis_labels(operation)
     payload = dict(metadata)
 
     for attr in ("x_err", "y_err", "f_chi", "dchi"):
@@ -369,8 +369,8 @@ class ReductionBackend:
                 operation=request.operation,
                 x=x,
                 y=y,
-                x_label="Distance (px)",
-                y_label="Intensity",
+                x_label=reduction_axis_labels(request.operation, calibrated=False)[0],
+                y_label=reduction_axis_labels(request.operation, calibrated=False)[1],
                 metadata=metadata,
             )
 
@@ -396,7 +396,7 @@ class ReductionBackend:
             "valid_bins": int(np.count_nonzero(counts > 0)),
             "total_bins": int(counts.size),
         }
-        x_label = "Radius (px)"
+        x_label, y_label = reduction_axis_labels(request.operation, calibrated=False)
         if request.operation == "sector_average":
             metadata["sector"] = {
                 "start_deg": request.angle_start_deg,
@@ -409,7 +409,7 @@ class ReductionBackend:
             x=x,
             y=y,
             x_label=x_label,
-            y_label="Intensity",
+            y_label=y_label,
             metadata=metadata,
         )
 

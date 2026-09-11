@@ -12,6 +12,7 @@ from typing import Any, Callable, Literal
 import numpy as np
 
 from sciview.processing.angle_conventions import display_angle_map
+from sciview.processing.scientific_labels import transform_axis_labels
 
 
 TransformOperation = Literal["q_image", "q_phi_image", "qr_qz_image"]
@@ -33,6 +34,7 @@ class TransformRequest:
     use_mask: bool = True
     bins_phi: int = 360
     bins_relative: float | None = None
+    preferred_method: str | None = None
     # Display-only plot-range hints, matching SciAnalysis's own universal
     # plot_range=[x_min, x_max, y_min, y_max] convention (Data2D.plot() /
     # Data2DImage._plot() in SciAnalysis accept this for every image protocol).
@@ -219,7 +221,9 @@ class TransformBackend:
         if hasattr(request.calibration, "set_image_size"):
             request.calibration.set_image_size(image.shape[1], height=image.shape[0])
 
-        if request.operation in self._runner_registry:
+        if request.preferred_method == "calibration_fallback":
+            method_name, payload = self._run_calibration_fallback(data_2d, request)
+        elif request.operation in self._runner_registry:
             method_name = "custom_runner"
             payload = self._runner_registry[request.operation](data_2d, request)
         else:
@@ -394,11 +398,7 @@ class TransformBackend:
         }
 
     def _axis_labels(self, operation: TransformOperation) -> tuple[str, str]:
-        if operation == "q_phi_image":
-            return "q (1/A)", "chi (deg)"
-        if operation == "qr_qz_image":
-            return "qr (1/A)", "qz (1/A)"
-        return "qx (1/A)", "qz (1/A)"
+        return transform_axis_labels(operation)
 
 
 def save_transform_result(result: TransformResult, path: str | Path) -> Path:

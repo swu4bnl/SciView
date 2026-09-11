@@ -99,6 +99,7 @@ class BatchTab(QWidget):
         self._results: list[BatchFileResult] = []
         self._selected_proto_row: int = -1  # tracks row for auto-save on switch
         self._running_plot_style: PlotStyle | None = None
+        self._running_output_mode = "scianalysis"
 
         self._build_ui()
 
@@ -270,6 +271,14 @@ class BatchTab(QWidget):
         self.mirror_check = QCheckBox("Mirror input subfolder structure")
         self.mirror_check.setChecked(True)
         out_form.addRow(self.mirror_check)
+
+        self.output_mode_combo = QComboBox()
+        self.output_mode_combo.addItem("SciAnalysis plots", "scianalysis")
+        self.output_mode_combo.addItem("Match Reduction/Transform previews", "preview")
+        self.output_mode_combo.setToolTip(
+            "Match previews saves PNG plots with the same style, scale, crop, and theme shown in SciView"
+        )
+        out_form.addRow("Plot output", self.output_mode_combo)
         lay.addWidget(out_group)
 
         # Protocol queue
@@ -383,10 +392,12 @@ class BatchTab(QWidget):
             return
         # Tabs push SA-compatible params directly; strip routing keys only.
         params = {k: v for k, v in payload.items()
-                  if k not in ("operation", "name", "source")}
+                  if k not in ("operation", "name", "source", "preview_params")}
         proto = BatchProtocol(
             name=payload.get("name", key), operation=op,
-            params=params, source=payload.get("source", "external"),
+            params=params,
+            preview_params=dict(payload.get("preview_params", {})),
+            source=payload.get("source", "external"),
         )
         for i, ex in enumerate(self._protocols):
             if ex.name == proto.name:
@@ -512,6 +523,7 @@ class BatchTab(QWidget):
         payload = {
             "protocols": [p.to_dict() for p in self._protocols],
             "output_formats": self._selected_formats(),
+            "output_mode": self.output_mode_combo.currentData(),
             "plot_style": resolve_plot_style(self.parent_app).to_dict(),
         }
         path, _ = dialog_save_file(
@@ -539,6 +551,8 @@ class BatchTab(QWidget):
             payload = yaml.safe_load(raw) if path.endswith((".yaml", ".yml")) else __import__("json").loads(raw)
             style = PlotStyle.from_dict(payload.get("plot_style"))
             self.parent_app.publish_shared_plot_style(style, source_tab=self)
+            mode_index = self.output_mode_combo.findData(payload.get("output_mode", "scianalysis"))
+            self.output_mode_combo.setCurrentIndex(max(0, mode_index))
             self._selected_proto_row = -1
             self.protocol_list.clear()
             self._protocols.clear()
@@ -607,6 +621,11 @@ class BatchTab(QWidget):
         self._clear_log()
 
         self._running_plot_style = resolve_plot_style(self.parent_app)
+        self._running_output_mode = str(self.output_mode_combo.currentData())
+        preview_theme = {
+            key: value.name()
+            for key, value in AppStyle.theme_colors().items()
+        }
         job = BatchJob(
             file_paths=list(self._file_paths),
             protocols=active,
@@ -617,6 +636,8 @@ class BatchTab(QWidget):
             mirror_input_structure=self.mirror_check.isChecked(),
             input_root=str(Path(self._file_paths[0]).parent),
             plot_style=self._running_plot_style.to_dict(),
+            output_mode=self._running_output_mode,
+            preview_theme=preview_theme,
         )
 
         total = len(job.file_paths) * max(len(active), 1)
@@ -684,12 +705,18 @@ class BatchTab(QWidget):
                 "beam_center_y": getattr(cal, "y0", None),
             },
             "q_bounds": bounds,
+            "output_mode": self._running_output_mode,
             "plot_style": (
                 self._running_plot_style or resolve_plot_style(self.parent_app)
             ).to_dict(),
             "mask": {"type": type(mask).__name__ if mask is not None else "none"},
             "protocols": [
-                {"name": p.name, "operation": p.operation, "params": dict(p.params)}
+                {
+                    "name": p.name,
+                    "operation": p.operation,
+                    "params": dict(p.params),
+                    "preview_params": dict(p.preview_params),
+                }
                 for p in self._protocols
                 if p.enabled
             ],

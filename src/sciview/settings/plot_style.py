@@ -14,7 +14,7 @@ class PlotStyle:
     label_size: float = 40.0
     tick_size: float = 25.0
     colormap: str = "viridis"
-    line_color: str = "#000000"
+    line_color: str = "#808080"
     line_width: float = 3.0
     ztrim_low: float = 0.05
     ztrim_high: float = 0.005
