@@ -31,6 +31,7 @@ class AppStyle:
     BUTTON_FORM = {
         'default_height': 34,
         'default_min_width': 124,
+        'protocol_selector_height': 46,
         'compact_text_height': 34,
         'compact_text_min_width': 64,
         'corner_height': 28,
@@ -119,6 +120,7 @@ class AppStyle:
         'status': ('caption', 400),
         'button': ('body', 500),
         'button_emphasis': ('body', 600),  # distinct role so refresh restores the heavier weight
+        'protocol_selector': ('h3', 600),
         'toolbar_symbol': ('h3', 600),
         'toolbar_text': ('small', 400),
         'input': ('body', 400),
@@ -165,6 +167,7 @@ class AppStyle:
         # Splitter ratios
         'main_splitter_ratio': [2, 1],
         'viz_splitter_ratio': [2, 1],
+        'preview_sidebar_ratio': [1, 2],
         'controls_splitter_ratio': [1, 1, 2, 1],
         'tiled_main_splitter_ratio': [1, 2],
         # Tiled browser panel constraints
@@ -285,6 +288,34 @@ class AppStyle:
             }}
             QPushButton:pressed {{
                 background-color: {border};
+            }}
+        """,
+
+        'protocol_selector_button': """
+            QPushButton {{
+                background-color: {surface};
+                color: {text_primary};
+                font-size: {subtitle_font};
+                font-weight: 500;
+                border: 2px solid {border};
+                border-radius: 4px;
+                padding: 7px 12px;
+            }}
+            QPushButton:hover:!checked {{
+                background-color: {surface_alt};
+                border: 2px solid {border_active};
+            }}
+            QPushButton:focus:!checked {{
+                border: 2px solid {border_active};
+            }}
+            QPushButton:pressed:!checked {{
+                background-color: {border};
+            }}
+            QPushButton:checked {{
+                background-color: {border_active};
+                color: {checked_fg};
+                border: 2px solid {border_active};
+                font-weight: 600;
             }}
         """,
 
@@ -1110,6 +1141,8 @@ class AppStyle:
                     size = cls.toolbar_symbol_button_size()
                     widget.setFixedSize(size)
                     widget.setMinimumSize(size)
+                elif widget.property(cls.STYLE_KEY_PROPERTY) == 'protocol_selector_button':
+                    widget.setFixedHeight(cls.BUTTON_FORM['protocol_selector_height'])
                 else:
                     if not style_key:
                         theme_key_check = str(cls.current_theme_key(app) or '')
@@ -1271,6 +1304,13 @@ def apply_emphasis_button_style(widget):
     AppStyle.apply_widget_style(widget, 'emphasis_button')
     widget.setMinimumHeight(AppStyle.standard_button_min_height())
     AppStyle.set_font_role(widget, 'button_emphasis')
+
+def apply_protocol_selector_button_style(widget):
+    """Apply the exclusive protocol-navigation button style."""
+    widget.setCheckable(True)
+    AppStyle.apply_widget_style(widget, 'protocol_selector_button')
+    AppStyle.set_font_role(widget, 'protocol_selector')
+    widget.setFixedHeight(AppStyle.BUTTON_FORM['protocol_selector_height'])
 
 def apply_input_style(widget):
     """Apply input field style to a widget"""

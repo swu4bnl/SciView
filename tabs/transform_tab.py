@@ -14,11 +14,11 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from matplotlib.colors import LogNorm
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
-    QFormLayout,
-                                                                                    QGridLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -33,9 +33,11 @@ from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_fil
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
 from sciview.interfaces.theme.app_style import (
     AppStyle,
+    apply_emphasis_button_style,
     apply_info_style,
+    apply_protocol_selector_button_style,
     apply_subtitle_style,
-    apply_title_style,
+    apply_toolbar_text_button_style,
     setup_splitter_layout,
 )
 from sciview.masking.io import load_mask_file as backend_load_mask_file
@@ -82,19 +84,13 @@ class TransformTab(BaseImageTab):
         layout_ratios = AppStyle.get_layout_ratios()
 
         main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter.addWidget(self._create_transform_panel())
 
-        left_splitter = QSplitter(Qt.Vertical)
-        left_splitter.addWidget(self._create_image_panel())
-        left_splitter.addWidget(self._create_transform_panel())
-        setup_splitter_layout(left_splitter, layout_ratios['viz_splitter_ratio'])
-        main_splitter.addWidget(left_splitter)
-
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
-        right_layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
-        right_layout.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
-        main_splitter.addWidget(right_panel)
+        right_splitter = QSplitter(Qt.Vertical)
+        right_splitter.addWidget(self._create_image_panel())
+        right_splitter.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
+        setup_splitter_layout(right_splitter, layout_ratios['preview_sidebar_ratio'])
+        main_splitter.addWidget(right_splitter)
 
         setup_splitter_layout(main_splitter, layout_ratios['main_splitter_ratio'])
         main_layout.addWidget(main_splitter)
@@ -119,7 +115,7 @@ class TransformTab(BaseImageTab):
         self.fig_transform, self.ax_transform = plt.subplots(figsize=(6, 8))
         self.fig_transform.subplots_adjust(left=0.12, bottom=0.12, right=0.98, top=0.95)
         self.canvas_transform = FigureCanvas(self.fig_transform)
-        layout.addWidget(self.canvas_transform)
+        layout.addWidget(self.canvas_transform, 1)
 
         toolbar = NavigationToolbar(self.canvas_transform, self)
         # toolbar.setMaximumHeight(25)
@@ -133,57 +129,35 @@ class TransformTab(BaseImageTab):
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
 
-        title = QLabel("Controls")
-        apply_title_style(title)
-        layout.addWidget(title)
-
-        source_group = QGroupBox("Sources")
-        source_layout = QFormLayout(source_group)
-        self.configure_adaptive_form_layout(source_layout)
+        source_layout = QHBoxLayout()
+        source_layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
 
         self.calibration_source_combo = QComboBox()
-        self.calibration_source_combo.addItems(["From calibration tab", "Custom profile"])
-        cal_row_widget = QWidget()
-        cal_btn_row = QHBoxLayout(cal_row_widget)
-        cal_btn_row.setContentsMargins(0, 0, 0, 0)
-        cal_btn_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
-        cal_btn_row.addWidget(self.calibration_source_combo, stretch=1)
-        self.load_calibration_button = QPushButton("Load Calibration")
+        self.calibration_source_combo.addItem("Shared", "From calibration tab")
+        self.calibration_source_combo.addItem("Custom", "Custom profile")
+        source_layout.addWidget(QLabel("Calibration"))
+        source_layout.addWidget(self.calibration_source_combo, 1)
+        self.load_calibration_button = QPushButton("Browse")
         self.load_calibration_button.clicked.connect(self._load_custom_calibration)
-        cal_btn_row.addWidget(self.load_calibration_button)
-        source_layout.addRow("Calibration", cal_row_widget)
+        apply_toolbar_text_button_style(self.load_calibration_button)
+        source_layout.addWidget(self.load_calibration_button)
 
         self.mask_source_combo = QComboBox()
-        self.mask_source_combo.addItems(["From mask tab", "Custom mask", "No mask"])
-        mask_row_widget = QWidget()
-        mask_btn_row = QHBoxLayout(mask_row_widget)
-        mask_btn_row.setContentsMargins(0, 0, 0, 0)
-        mask_btn_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
-        mask_btn_row.addWidget(self.mask_source_combo, stretch=1)
-        self.load_mask_button = QPushButton("Load Mask")
+        self.mask_source_combo.addItem("Shared", "From mask tab")
+        self.mask_source_combo.addItem("Custom", "Custom mask")
+        self.mask_source_combo.addItem("None", "No mask")
+        source_layout.addWidget(QLabel("Mask"))
+        source_layout.addWidget(self.mask_source_combo, 1)
+        self.load_mask_button = QPushButton("Browse")
         self.load_mask_button.clicked.connect(self._load_custom_mask)
-        mask_btn_row.addWidget(self.load_mask_button)
-        source_layout.addRow("Mask", mask_row_widget)
+        apply_toolbar_text_button_style(self.load_mask_button)
+        source_layout.addWidget(self.load_mask_button)
+        layout.addLayout(source_layout)
 
-        self.calibration_status_label = QLabel("Calibration: from calibration tab")
-        apply_info_style(self.calibration_status_label)
-        source_layout.addRow(self.calibration_status_label)
-
-        self.mask_status_label = QLabel("Mask: from mask tab")
-        apply_info_style(self.mask_status_label)
-        source_layout.addRow(self.mask_status_label)
-
-        layout.addWidget(source_group)
-
-        self.auto_update_check = QCheckBox("Auto preview")
+        self.auto_update_check = QCheckBox("Live preview")
         self.auto_update_check.setChecked(True)
         layout.addWidget(self.auto_update_check)
 
-        # Each transform is its own checkable group with its own parameters, so
-        # every option (and what it needs) is visible up front instead of
-        # hidden behind a dropdown. Checking a group selects it; the others
-        # gray out (but stay visible) via Qt's native checkable-groupbox behavior.
-        #
         # All three call SciAnalysis the same way: only bins_relative (plus
         # bins_phi for Q-Phi) is a real SciAnalysis parameter — remesh_q_bin /
         # remesh_q_phi / remesh_qr_bin always cover the full calibration extent.
@@ -192,8 +166,29 @@ class TransformTab(BaseImageTab):
         # _apply_display_crop, matching SciAnalysis's own universal
         # plot_range=[x_min, x_max, y_min, y_max] convention (Data2D.plot()) —
         # not sent to SciAnalysis here (see _run_scianalysis).
-        self.q_image_group = QGroupBox("Q Image")
-        self.q_image_group.setCheckable(True)
+        protocol_layout = QGridLayout()
+        protocol_label = QLabel("Protocol")
+        apply_subtitle_style(protocol_label)
+        protocol_layout.addWidget(protocol_label, 0, 0, 1, 3)
+        self.protocol_button_group = QButtonGroup(self)
+        self.protocol_button_group.setExclusive(True)
+        self._operation_buttons = {}
+        for index, (operation, label) in enumerate((
+            ("q_image", "Q Image"),
+            ("q_phi_image", "Q-Phi Image"),
+            ("qr_qz_image", "Qr-Qz Image"),
+        )):
+            button = QPushButton(label)
+            apply_protocol_selector_button_style(button)
+            self.protocol_button_group.addButton(button)
+            self._operation_buttons[operation] = button
+            protocol_layout.addWidget(button, 1, index)
+        self._operation_buttons["q_image"].setChecked(True)
+        for column in range(3):
+            protocol_layout.setColumnStretch(column, 1)
+        layout.addLayout(protocol_layout)
+
+        self.q_image_group = QGroupBox("Parameters")
         q_image_layout = QGridLayout(self.q_image_group)
         self.q_bins_relative_spin = _spin("bins_relative")
         self._add_grid_field(q_image_layout, 0, 0, "Bins (relative)", self.q_bins_relative_spin)
@@ -201,37 +196,35 @@ class TransformTab(BaseImageTab):
         self.q_auto_crop_check.setChecked(True)
         q_image_layout.addWidget(self.q_auto_crop_check, 0, 2, 1, 2)
         self.q_x_min_spin = _spin("crop_min")
-        self._add_grid_field(q_image_layout, 1, 0, "qx min crop (1/A)", self.q_x_min_spin)
+        self._add_grid_field(q_image_layout, 1, 0, "qx min (1/Å)", self.q_x_min_spin)
         self.q_x_max_spin = _spin("crop_max")
-        self._add_grid_field(q_image_layout, 1, 1, "qx max crop (1/A)", self.q_x_max_spin)
+        self._add_grid_field(q_image_layout, 1, 1, "qx max (1/Å)", self.q_x_max_spin)
         self.q_y_min_spin = _spin("crop_min")
-        self._add_grid_field(q_image_layout, 2, 0, "qz min crop (1/A)", self.q_y_min_spin)
+        self._add_grid_field(q_image_layout, 2, 0, "qz min (1/Å)", self.q_y_min_spin)
         self.q_y_max_spin = _spin("crop_max")
-        self._add_grid_field(q_image_layout, 2, 1, "qz max crop (1/A)", self.q_y_max_spin)
+        self._add_grid_field(q_image_layout, 2, 1, "qz max (1/Å)", self.q_y_max_spin)
         layout.addWidget(self.q_image_group)
 
-        self.q_phi_group = QGroupBox("Q-Phi Image")
-        self.q_phi_group.setCheckable(True)
+        self.q_phi_group = QGroupBox("Parameters")
         q_phi_layout = QGridLayout(self.q_phi_group)
         self.qphi_bins_relative_spin = _spin("bins_relative")
         self._add_grid_field(q_phi_layout, 0, 0, "Bins (relative)", self.qphi_bins_relative_spin)
         self.qphi_bins_phi_spin = _spin("bins_phi")
-        self._add_grid_field(q_phi_layout, 0, 1, "Phi bins", self.qphi_bins_phi_spin)
-        self.qphi_auto_crop_check = QCheckBox("Auto crop q range to calibration")
+        self._add_grid_field(q_phi_layout, 0, 1, "φ bins", self.qphi_bins_phi_spin)
+        self.qphi_auto_crop_check = QCheckBox("Auto crop to calibration")
         self.qphi_auto_crop_check.setChecked(True)
         q_phi_layout.addWidget(self.qphi_auto_crop_check, 1, 0, 1, 4)
         self.qphi_x_min_spin = _spin("q_min")
-        self._add_grid_field(q_phi_layout, 2, 0, "q min crop (1/A)", self.qphi_x_min_spin)
+        self._add_grid_field(q_phi_layout, 2, 0, "q min (1/Å)", self.qphi_x_min_spin)
         self.qphi_x_max_spin = _spin("q_max")
-        self._add_grid_field(q_phi_layout, 2, 1, "q max crop (1/A)", self.qphi_x_max_spin)
+        self._add_grid_field(q_phi_layout, 2, 1, "q max (1/Å)", self.qphi_x_max_spin)
         self.qphi_y_min_spin = _spin("phi_min")
-        self._add_grid_field(q_phi_layout, 3, 0, "phi min crop (deg)", self.qphi_y_min_spin)
+        self._add_grid_field(q_phi_layout, 3, 0, "φ min (°)", self.qphi_y_min_spin)
         self.qphi_y_max_spin = _spin("phi_max")
-        self._add_grid_field(q_phi_layout, 3, 1, "phi max crop (deg)", self.qphi_y_max_spin)
+        self._add_grid_field(q_phi_layout, 3, 1, "φ max (°)", self.qphi_y_max_spin)
         layout.addWidget(self.q_phi_group)
 
-        self.qr_qz_group = QGroupBox("Qr-Qz Image")
-        self.qr_qz_group.setCheckable(True)
+        self.qr_qz_group = QGroupBox("Parameters")
         qr_qz_layout = QGridLayout(self.qr_qz_group)
         self.qrqz_bins_relative_spin = _spin("bins_relative")
         self._add_grid_field(qr_qz_layout, 0, 0, "Bins (relative)", self.qrqz_bins_relative_spin)
@@ -239,18 +232,14 @@ class TransformTab(BaseImageTab):
         self.qrqz_auto_crop_check.setChecked(True)
         qr_qz_layout.addWidget(self.qrqz_auto_crop_check, 0, 2, 1, 2)
         self.qrqz_x_min_spin = _spin("crop_min")
-        self._add_grid_field(qr_qz_layout, 1, 0, "qr min crop (1/A)", self.qrqz_x_min_spin)
+        self._add_grid_field(qr_qz_layout, 1, 0, "qr min (1/Å)", self.qrqz_x_min_spin)
         self.qrqz_x_max_spin = _spin("crop_max")
-        self._add_grid_field(qr_qz_layout, 1, 1, "qr max crop (1/A)", self.qrqz_x_max_spin)
+        self._add_grid_field(qr_qz_layout, 1, 1, "qr max (1/Å)", self.qrqz_x_max_spin)
         self.qrqz_y_min_spin = _spin("crop_min")
-        self._add_grid_field(qr_qz_layout, 2, 0, "qz min crop (1/A)", self.qrqz_y_min_spin)
+        self._add_grid_field(qr_qz_layout, 2, 0, "qz min (1/Å)", self.qrqz_y_min_spin)
         self.qrqz_y_max_spin = _spin("crop_max")
-        self._add_grid_field(qr_qz_layout, 2, 1, "qz max crop (1/A)", self.qrqz_y_max_spin)
+        self._add_grid_field(qr_qz_layout, 2, 1, "qz max (1/Å)", self.qrqz_y_max_spin)
         layout.addWidget(self.qr_qz_group)
-
-        self.q_image_group.setChecked(True)
-        self.q_phi_group.setChecked(False)
-        self.qr_qz_group.setChecked(False)
 
         self._operation_groups = {
             "q_image": self.q_image_group,
@@ -289,27 +278,26 @@ class TransformTab(BaseImageTab):
                 "y_max": self.qrqz_y_max_spin,
             },
         }
+        self._sync_operation_group_visibility()
 
         button_row = QHBoxLayout()
-        self.preview_button = QPushButton("Preview")
+        self.preview_button = QPushButton("Refresh Preview")
         self.preview_button.clicked.connect(self.refresh_preview)
-        self.export_button = QPushButton("Export Transform")
+        self.export_button = QPushButton("Export Data")
         self.export_button.clicked.connect(self.export_result)
         self.send_to_batch_button = QPushButton("Send to Batch")
         self.send_to_batch_button.setToolTip("Push current settings as a protocol to the Batch tab")
         self.send_to_batch_button.clicked.connect(self._send_to_batch)
+        apply_emphasis_button_style(self.send_to_batch_button)
         button_row.addWidget(self.preview_button)
         button_row.addWidget(self.export_button)
         button_row.addWidget(self.send_to_batch_button)
         layout.addLayout(button_row)
 
-        self.status_label = QLabel("Ready")
-        apply_info_style(self.status_label)
-        layout.addWidget(self.status_label)
         layout.addStretch()
 
-        for operation, group in self._operation_groups.items():
-            group.toggled.connect(lambda checked, op=operation: self._on_operation_group_toggled(op, checked))
+        for operation, button in self._operation_buttons.items():
+            button.toggled.connect(lambda checked, op=operation: self._on_protocol_changed(op, checked))
 
         self.auto_update_check.stateChanged.connect(self._on_parameters_changed)
         for widgets in self._operation_param_widgets.values():
@@ -336,25 +324,16 @@ class TransformTab(BaseImageTab):
         self._refresh_source_status()
         self._on_parameters_changed()
 
-    def _on_operation_group_toggled(self, operation: str, checked: bool):
-        if self._building_controls:
+    def _on_protocol_changed(self, operation: str, checked: bool):
+        if self._building_controls or not checked:
             return
-        if not checked:
-            # Keep exactly one operation selected at all times.
-            if not any(group.isChecked() for group in self._operation_groups.values()):
-                group = self._operation_groups[operation]
-                group.blockSignals(True)
-                group.setChecked(True)
-                group.blockSignals(False)
-            return
-
-        for other_operation, group in self._operation_groups.items():
-            if other_operation != operation and group.isChecked():
-                group.blockSignals(True)
-                group.setChecked(False)
-                group.blockSignals(False)
-
+        self._sync_operation_group_visibility()
         self._on_parameters_changed()
+
+    def _sync_operation_group_visibility(self):
+        selected_operation = self._selected_operation()
+        for operation, group in self._operation_groups.items():
+            group.setVisible(operation == selected_operation)
 
     def _on_parameters_changed(self, *args):
         if self._building_controls:
@@ -376,8 +355,8 @@ class TransformTab(BaseImageTab):
         self.update_plot(schedule_preview=True)
 
     def _selected_operation(self):
-        for operation, group in self._operation_groups.items():
-            if group.isChecked():
+        for operation, button in self._operation_buttons.items():
+            if button.isChecked():
                 return operation
         return "q_image"
 
@@ -397,17 +376,17 @@ class TransformTab(BaseImageTab):
         return float(widget.value()) if widget is not None else default
 
     def _use_mask_enabled(self):
-        return self.mask_source_combo.currentText() != "No mask"
+        return self.mask_source_combo.currentData() != "No mask"
 
     def _selected_calibration(self):
-        if self.calibration_source_combo.currentText() == "Custom profile":
+        if self.calibration_source_combo.currentData() == "Custom profile":
             return self._custom_calibration
         if hasattr(self.parent_app, "get_shared_calibration"):
             return self.parent_app.get_shared_calibration(self.image_data)
         return getattr(self.parent_app, "calibration", None)
 
     def _selected_mask(self):
-        mode = self.mask_source_combo.currentText()
+        mode = self.mask_source_combo.currentData()
         if mode == "No mask":
             return None
         if mode == "Custom mask":
@@ -445,7 +424,7 @@ class TransformTab(BaseImageTab):
 
             self._custom_calibration = calibration
             self._custom_calibration_label = os.path.basename(file_path)
-            self.calibration_source_combo.setCurrentText("Custom profile")
+            self.calibration_source_combo.setCurrentIndex(self.calibration_source_combo.findData("Custom profile"))
             self._refresh_source_status()
             self.parent_app.show_status(f"Loaded custom calibration: {self._custom_calibration_label}")
             self._on_parameters_changed()
@@ -465,7 +444,7 @@ class TransformTab(BaseImageTab):
         try:
             self._custom_mask = backend_load_mask_file(file_path)
             self._custom_mask_label = os.path.basename(file_path)
-            self.mask_source_combo.setCurrentText("Custom mask")
+            self.mask_source_combo.setCurrentIndex(self.mask_source_combo.findData("Custom mask"))
             self._refresh_source_status()
             self.parent_app.show_status(f"Loaded custom mask: {self._custom_mask_label}")
             self._on_parameters_changed()
@@ -480,25 +459,27 @@ class TransformTab(BaseImageTab):
         cal = self._selected_calibration()
         mask = self._selected_mask()
 
-        if self.calibration_source_combo.currentText() == "Custom profile":
+        if self.calibration_source_combo.currentData() == "Custom profile":
             cal_text = f"Calibration: custom ({self._custom_calibration_label})"
         elif shared_cal is None:
             cal_text = "Calibration: from calibration tab (not loaded)"
         else:
             cal_text = "Calibration: from calibration tab"
 
-        if self.mask_source_combo.currentText() == "No mask":
+        if self.mask_source_combo.currentData() == "No mask":
             mask_text = "Mask: disabled"
-        elif self.mask_source_combo.currentText() == "Custom mask":
+        elif self.mask_source_combo.currentData() == "Custom mask":
             mask_text = f"Mask: custom ({self._custom_mask_label})"
         else:
             mask_text = "Mask: from mask tab" if mask is not None else "Mask: from mask tab (not loaded)"
 
-        self.calibration_status_label.setText(cal_text)
-        self.mask_status_label.setText(mask_text)
+        self.calibration_source_combo.setToolTip(cal_text)
+        self.mask_source_combo.setToolTip(mask_text)
+        self.load_calibration_button.setVisible(self.calibration_source_combo.currentData() == "Custom profile")
+        self.load_mask_button.setVisible(self.mask_source_combo.currentData() == "Custom mask")
 
         if cal is None:
-            self.status_label.setText("Calibration required for transform")
+            self.result_summary.setText("Calibration required")
 
     def _get_image_array(self):
         display_data = self.image_data if self.image_data is not None else getattr(self.parent_app, "image_data", None)
@@ -581,8 +562,8 @@ class TransformTab(BaseImageTab):
             metadata={
                 "image_shape": tuple(int(v) for v in image.shape),
                 "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
-                "calibration_source": self.calibration_source_combo.currentText(),
-                "mask_source": self.mask_source_combo.currentText(),
+                "calibration_source": self.calibration_source_combo.currentData(),
+                "mask_source": self.mask_source_combo.currentData(),
                 "q_bounds": dict(self._q_bounds),
             },
         )
@@ -601,7 +582,6 @@ class TransformTab(BaseImageTab):
             self._current_result = None
             self._update_transform_plot(None, message=f"Preview failed: {exc}")
             self.result_summary.setText(f"Preview failed: {exc}")
-            self.status_label.setText(f"Transform failed: {exc}")
             self.parent_app.show_status(f"Transform failed: {exc}")
             return
 
@@ -611,16 +591,12 @@ class TransformTab(BaseImageTab):
         except Exception as exc:
             # Don't leave the status stuck on "Preview pending..." if rendering itself fails.
             self.result_summary.setText(f"Preview failed: {exc}")
-            self.status_label.setText(f"Transform failed: {exc}")
             self.parent_app.show_status(f"Transform failed: {exc}")
             return
-        self.result_summary.setText(
-            f"{result.operation.replace('_', ' ').title()} shape: {result.image.shape[1]}x{result.image.shape[0]}"
-        )
-        self.status_label.setText(
-            f"{result.operation.replace('_', ' ').title()} complete: {result.image.shape[1]}x{result.image.shape[0]}"
-        )
-        self.parent_app.show_status(self.status_label.text())
+        result_size = f"{result.image.shape[1]}x{result.image.shape[0]}"
+        operation_name = result.operation.replace('_', ' ').title()
+        self.result_summary.setText(f"{operation_name}: {result_size}")
+        self.parent_app.show_status(f"{operation_name} complete: {result_size}")
 
     def _update_transform_plot(self, result, message: str | None = None):
         if self._transform_colorbar is not None:
@@ -806,8 +782,8 @@ class TransformTab(BaseImageTab):
         return {
             **self._build_batch_payload(),
             "q_bounds": dict(self._q_bounds),
-            "calibration_source": self.calibration_source_combo.currentText(),
-            "mask_source": self.mask_source_combo.currentText(),
+            "calibration_source": self.calibration_source_combo.currentData(),
+            "mask_source": self.mask_source_combo.currentData(),
             "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
         }
 
@@ -819,7 +795,7 @@ class TransformTab(BaseImageTab):
             self.parent_app.show_status("Batch tab not available")
 
     def _schedule_preview(self):
-        self.status_label.setText("Preview pending...")
+        self.result_summary.setText("Preview pending...")
         self._preview_timer.start(self._preview_delay_ms)
 
     def update_plot(self, image_data=None, schedule_preview: bool = False):
@@ -872,8 +848,8 @@ class TransformTab(BaseImageTab):
         y_max = self._op_float("y_max")
         if y_min is not None and y_max is not None:
             info_lines.append(f"y crop: {y_min:.4f} to {y_max:.4f}")
-        info_lines.append(f"Calibration source: {self.calibration_source_combo.currentText()}")
-        info_lines.append(f"Mask source: {self.mask_source_combo.currentText()}")
+        info_lines.append(f"Calibration source: {self.calibration_source_combo.currentData()}")
+        info_lines.append(f"Mask source: {self.mask_source_combo.currentData()}")
         if self._current_result is not None:
             info_lines.append(f"Last preview: {self._current_result.operation}")
             info_lines.append(
