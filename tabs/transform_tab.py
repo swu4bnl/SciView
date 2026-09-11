@@ -49,6 +49,7 @@ from sciview.processing.plot_rendering import (
 from sciview.processing.transform import TransformBackend, TransformRequest, save_transform_result
 from sciview.settings.app_settings import SPINBOX_CONFIG
 from sciview.settings.plot_style import resolve_plot_style
+from sciview.settings.viewer_config import SUPPORTED_IMAGE_COLORMAPS, SUPPORTED_IMAGE_SCALES
 
 
 def _spin(key):
@@ -98,7 +99,7 @@ class TransformTab(BaseImageTab):
         setup_splitter_layout(right_splitter, layout_ratios['preview_sidebar_ratio'])
         main_splitter.addWidget(right_splitter)
 
-        setup_splitter_layout(main_splitter, layout_ratios['main_splitter_ratio'])
+        setup_splitter_layout(main_splitter, [1, 1])
         main_layout.addWidget(main_splitter)
 
     def _create_transform_panel(self):
@@ -135,23 +136,44 @@ class TransformTab(BaseImageTab):
         style_group = QGroupBox("Plot Style")
         style_layout = QGridLayout(style_group)
         plot_style = resolve_plot_style(self.parent_app)
+
         self.plot_title_size_spin = QDoubleSpinBox()
         self.plot_label_size_spin = QDoubleSpinBox()
         self.plot_tick_size_spin = QDoubleSpinBox()
         for index, (label, spin, value) in enumerate((
-            ("Plot title", self.plot_title_size_spin, plot_style.title_size),
-            ("Axis labels", self.plot_label_size_spin, plot_style.label_size),
-            ("Tick labels", self.plot_tick_size_spin, plot_style.tick_size),
+            ("Plot title size", self.plot_title_size_spin, plot_style.title_size),
+            ("Axis label size", self.plot_label_size_spin, plot_style.label_size),
+            ("Tick label size", self.plot_tick_size_spin, plot_style.tick_size),
         )):
             spin.setRange(6.0, 72.0)
             spin.setValue(value)
-            style_layout.addWidget(QLabel(label), 0, index * 2)
-            style_layout.addWidget(spin, 0, index * 2 + 1)
+            self._add_grid_field(style_layout, 0, index, label, spin)
 
         self.plot_dpi_spin = QSpinBox()
         self.plot_dpi_spin.setRange(72, 1200)
         self.plot_dpi_spin.setValue(plot_style.dpi)
-        self._add_grid_field(style_layout, 1, 0, "Export DPI", self.plot_dpi_spin)
+
+        display_values = self.get_display_values()
+        self.plot_cmap_combo = QComboBox()
+        self.plot_cmap_combo.addItems(SUPPORTED_IMAGE_COLORMAPS)
+        self.plot_cmap_combo.setCurrentText(plot_style.colormap)
+        self.plot_scale_combo = QComboBox()
+        self.plot_scale_combo.addItems(SUPPORTED_IMAGE_SCALES)
+        self.plot_scale_combo.setCurrentText(display_values["scale"])
+        self.plot_vmin_spin = QDoubleSpinBox()
+        self.plot_vmax_spin = QDoubleSpinBox()
+        for spin, value in (
+            (self.plot_vmin_spin, display_values["vmin"]),
+            (self.plot_vmax_spin, display_values["vmax"]),
+        ):
+            spin.setRange(-1.0e15, 1.0e15)
+            spin.setDecimals(4)
+            spin.setValue(0.0 if value is None else value)
+        self._add_grid_field(style_layout, 0, 3, "Export resolution (DPI)", self.plot_dpi_spin)
+        self._add_grid_field(style_layout, 1, 0, "Colormap", self.plot_cmap_combo)
+        self._add_grid_field(style_layout, 1, 1, "Color scaling", self.plot_scale_combo)
+        self._add_grid_field(style_layout, 1, 2, "Color scale minimum", self.plot_vmin_spin)
+        self._add_grid_field(style_layout, 1, 3, "Color scale maximum", self.plot_vmax_spin)
         return style_group
 
     def _create_controls_panel(self):
@@ -331,11 +353,15 @@ class TransformTab(BaseImageTab):
             button.toggled.connect(lambda checked, op=operation: self._on_protocol_changed(op, checked))
 
         self.auto_update_check.stateChanged.connect(self._on_parameters_changed)
+        self.plot_cmap_combo.currentTextChanged.connect(self._on_plot_style_controls_changed)
+        self.plot_scale_combo.currentTextChanged.connect(self._on_plot_style_controls_changed)
         for spin in (
             self.plot_title_size_spin,
             self.plot_label_size_spin,
             self.plot_tick_size_spin,
             self.plot_dpi_spin,
+            self.plot_vmin_spin,
+            self.plot_vmax_spin,
         ):
             spin.valueChanged.connect(self._on_plot_style_controls_changed)
         for widgets in self._operation_param_widgets.values():
@@ -361,6 +387,7 @@ class TransformTab(BaseImageTab):
                 title_size=self.plot_title_size_spin.value(),
                 label_size=self.plot_label_size_spin.value(),
                 tick_size=self.plot_tick_size_spin.value(),
+                colormap=self.plot_cmap_combo.currentText(),
                 dpi=self.plot_dpi_spin.value(),
             )
         except ValueError as exc:
@@ -376,6 +403,7 @@ class TransformTab(BaseImageTab):
             self.plot_title_size_spin.setValue(style.title_size)
             self.plot_label_size_spin.setValue(style.label_size)
             self.plot_tick_size_spin.setValue(style.tick_size)
+            self.plot_cmap_combo.setCurrentText(style.colormap)
             self.plot_dpi_spin.setValue(style.dpi)
         finally:
             self._updating_plot_style_controls = False
@@ -689,8 +717,7 @@ class TransformTab(BaseImageTab):
             self.canvas_transform.draw()
             return
 
-        display_vals = self.get_display_values()
-        scale = display_vals["scale"]
+        scale = self.plot_scale_combo.currentText()
         x_min = self._op_float("x_min")
         x_max = self._op_float("x_max")
         y_min = self._op_float("y_min")
@@ -705,8 +732,8 @@ class TransformTab(BaseImageTab):
             plot_style,
             colorbar_axis=self._transform_colorbar_axis,
             scale=scale,
-            vmin=display_vals["vmin"],
-            vmax=display_vals["vmax"],
+            vmin=self.plot_vmin_spin.value(),
+            vmax=self.plot_vmax_spin.value(),
             x_limits=x_limits,
             y_limits=y_limits,
             theme=theme,
@@ -716,26 +743,6 @@ class TransformTab(BaseImageTab):
     def on_plot_style_changed(self):
         """Redraw the current transform result with the shared plot style."""
         self._sync_plot_style_controls()
-        self._update_transform_plot(self._current_result)
-
-    def _on_vmin_changed(self):
-        super()._on_vmin_changed()
-        self._update_transform_plot(self._current_result)
-
-    def _on_vmax_changed(self):
-        super()._on_vmax_changed()
-        self._update_transform_plot(self._current_result)
-
-    def _on_cmap_changed(self, cmap):
-        super()._on_cmap_changed(cmap)
-        if self._building_controls:
-            return
-        style = replace(resolve_plot_style(self.parent_app), colormap=cmap)
-        self.parent_app.publish_shared_plot_style(style, source_tab=self)
-        self._update_transform_plot(self._current_result)
-
-    def _on_scale_changed(self, scale):
-        super()._on_scale_changed(scale)
         self._update_transform_plot(self._current_result)
 
     def _apply_display_crop(self):
@@ -789,9 +796,9 @@ class TransformTab(BaseImageTab):
         if self._current_result is not None and self._current_result.operation == op:
             transform_method = getattr(self._current_result, "metadata", {}).get("method")
         preview = {
-            "scale": self.get_display_values()["scale"],
-            "vmin": self.get_display_values()["vmin"],
-            "vmax": self.get_display_values()["vmax"],
+            "scale": self.plot_scale_combo.currentText(),
+            "vmin": self.plot_vmin_spin.value(),
+            "vmax": self.plot_vmax_spin.value(),
             "transform_method": transform_method,
             "x_min": self._op_float("x_min"),
             "x_max": self._op_float("x_max"),

@@ -109,7 +109,7 @@ class ReductionTab(BaseImageTab):
         setup_splitter_layout(right_splitter, layout_ratios['preview_sidebar_ratio'])
         main_splitter.addWidget(right_splitter)
 
-        setup_splitter_layout(main_splitter, layout_ratios['main_splitter_ratio'])
+        setup_splitter_layout(main_splitter, [1, 1])
         main_layout.addWidget(main_splitter)
 
         self.canvas_plot.mpl_connect("motion_notify_event", self.on_mouse_move)
@@ -148,18 +148,18 @@ class ReductionTab(BaseImageTab):
         style_group = QGroupBox("Plot Style")
         style_layout = QGridLayout(style_group)
         plot_style = resolve_plot_style(self.parent_app)
+
         self.plot_title_size_spin = QDoubleSpinBox()
         self.plot_label_size_spin = QDoubleSpinBox()
         self.plot_tick_size_spin = QDoubleSpinBox()
         for index, (label, spin, value) in enumerate((
-            ("Plot title", self.plot_title_size_spin, plot_style.title_size),
-            ("Axis labels", self.plot_label_size_spin, plot_style.label_size),
-            ("Tick labels", self.plot_tick_size_spin, plot_style.tick_size),
+            ("Plot title size", self.plot_title_size_spin, plot_style.title_size),
+            ("Axis label size", self.plot_label_size_spin, plot_style.label_size),
+            ("Tick label size", self.plot_tick_size_spin, plot_style.tick_size),
         )):
             spin.setRange(6.0, 72.0)
             spin.setValue(value)
-            style_layout.addWidget(QLabel(label), 0, index * 2)
-            style_layout.addWidget(spin, 0, index * 2 + 1)
+            self._add_grid_field(style_layout, 0, index, label, spin)
 
         self._line_color = plot_style.line_color
         self.plot_line_color_button = QPushButton()
@@ -172,9 +172,9 @@ class ReductionTab(BaseImageTab):
         self.plot_dpi_spin = QSpinBox()
         self.plot_dpi_spin.setRange(72, 1200)
         self.plot_dpi_spin.setValue(plot_style.dpi)
+        self._add_grid_field(style_layout, 0, 3, "Export resolution (DPI)", self.plot_dpi_spin)
         self._add_grid_field(style_layout, 1, 0, "Line color", self.plot_line_color_button)
         self._add_grid_field(style_layout, 1, 1, "Line width", self.plot_line_width_spin)
-        self._add_grid_field(style_layout, 2, 0, "Export DPI", self.plot_dpi_spin)
         return style_group
 
     def _create_controls_panel(self):

@@ -363,7 +363,7 @@ class BaseImageTab(QWidget):
         layout.setSpacing(0)  # Remove all spacing
 
         if show_header:
-            title = QLabel("Raw Image")
+            title = QLabel("Raw Image Display")
             apply_subtitle_style(title)
             layout.addWidget(title)
 
@@ -382,24 +382,24 @@ class BaseImageTab(QWidget):
 
         # Image controls - now shared across all tabs
         img_ctrl = QHBoxLayout()
-        img_ctrl.addWidget(QLabel("vmin:"))
+        img_ctrl.addWidget(QLabel("Color Map Minimum"))
         self.vmin_input = QLineEdit(str(self.display_settings['vmin']))
         self.vmin_input.editingFinished.connect(self._on_vmin_changed)
         img_ctrl.addWidget(self.vmin_input)
 
-        img_ctrl.addWidget(QLabel("vmax:"))
+        img_ctrl.addWidget(QLabel("Color Map Maximum"))
         self.vmax_input = QLineEdit(str(self.display_settings['vmax']))
         self.vmax_input.editingFinished.connect(self._on_vmax_changed)
         img_ctrl.addWidget(self.vmax_input)
 
-        img_ctrl.addWidget(QLabel("cmap:"))
+        img_ctrl.addWidget(QLabel("Colormap"))
         self.cmap_selector = QComboBox()
         self.cmap_selector.addItems(list(SUPPORTED_IMAGE_COLORMAPS))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.cmap_selector.currentTextChanged.connect(self._on_cmap_changed)
         img_ctrl.addWidget(self.cmap_selector)
 
-        img_ctrl.addWidget(QLabel("scale:"))
+        img_ctrl.addWidget(QLabel("Scale"))
         self.img_scale_combo = QComboBox()
         self.img_scale_combo.addItems(list(SUPPORTED_IMAGE_SCALES))
         self.img_scale_combo.setCurrentText(self.display_settings['scale'])

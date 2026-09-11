@@ -273,8 +273,8 @@ class BatchTab(QWidget):
         out_form.addRow(self.mirror_check)
 
         self.output_mode_combo = QComboBox()
-        self.output_mode_combo.addItem("SciAnalysis plots", "scianalysis")
-        self.output_mode_combo.addItem("Match Reduction/Transform previews", "preview")
+        self.output_mode_combo.addItem("SciAnalysis-Style plots", "scianalysis")
+        self.output_mode_combo.addItem("WYSIWYG previews", "preview")
         self.output_mode_combo.setToolTip(
             "Match previews saves PNG plots with the same style, scale, crop, and theme shown in SciView"
         )
