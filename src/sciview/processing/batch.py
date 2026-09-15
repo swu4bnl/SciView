@@ -5,6 +5,7 @@ from __future__ import annotations
 import fnmatch
 import multiprocessing
 import os
+import re
 import time
 from queue import Empty
 from dataclasses import dataclass, field
@@ -166,13 +167,18 @@ class BatchJob:
 def _serialize_calibration(calibration: Any | None) -> dict[str, Any] | None:
     if calibration is None:
         return None
+    # Some SciAnalysis calibration objects only expose the private
+    # _pixel_size_um/_distance_m attributes; fall back to those, matching
+    # the compatibility lookup used by the batch tab's cookbook serializer.
+    pixel_size_um = getattr(calibration, "pixel_size_um", getattr(calibration, "_pixel_size_um", None))
+    distance_m = getattr(calibration, "distance_m", getattr(calibration, "_distance_m", None))
     return {
         "wavelength_A": float(getattr(calibration, "wavelength_A")),
         "width": int(getattr(calibration, "width", 0) or 0),
         "height": int(getattr(calibration, "height", 0) or 0),
-        "pixel_size_um": float(getattr(calibration, "pixel_size_um")),
+        "pixel_size_um": float(pixel_size_um),
         "beam_position": [float(getattr(calibration, "x0")), float(getattr(calibration, "y0"))],
-        "distance_m": float(getattr(calibration, "distance_m")),
+        "distance_m": float(distance_m),
         "det_orient": float(getattr(calibration, "det_orient", 0.0) or 0.0),
         "det_tilt": float(getattr(calibration, "det_tilt", 0.0) or 0.0),
         "det_phi": float(getattr(calibration, "det_phi", 0.0) or 0.0),
@@ -202,10 +208,14 @@ def _deserialize_calibration(payload: dict[str, Any] | None) -> Any | None:
 
 
 def _serialize_mask(mask: Any | None) -> np.ndarray | None:
+    """Normalize any mask representation to SciView's bool convention (True=masked)
+    before transport, since the child process's coerce_mask_to_bool() treats any
+    ndarray it receives as already following that convention."""
     if mask is None:
         return None
-    value = mask.data if hasattr(mask, "data") and not isinstance(mask, np.ndarray) else mask
-    return np.asarray(value).copy()
+    from sciview.masking.io import coerce_mask_to_bool
+
+    return coerce_mask_to_bool(mask)
 
 
 # ---------------------------------------------------------------------------
@@ -620,14 +630,24 @@ def _valid_limits(first: Any, second: Any) -> tuple[float, float] | None:
     return (first_value, second_value) if second_value > first_value else None
 
 
-def _protocol_output_dir_name(operation: str) -> str:
-    return "qr_image" if operation == "qr_qz_image" else operation
+def _sanitize_path_component(text: str) -> str:
+    """Return a filesystem-safe slug so distinct protocol names never collide."""
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", text.strip())
+    return slug.strip("_") or "protocol"
+
+
+def _protocol_output_dir_name(protocol: "BatchProtocol") -> str:
+    """Unique per-protocol output folder name, so two recipes sharing an
+    operation (e.g. two sector averages at different angles) never overwrite
+    each other's preview outputs."""
+    base = "qr_image" if protocol.operation == "qr_qz_image" else protocol.operation
+    return f"{base}_{_sanitize_path_component(protocol.name)}"
 
 
 def _scianalysis_plot_args(protocol: BatchProtocol, style: PlotStyle) -> dict[str, Any]:
     args = style.scianalysis_args(image=protocol.kind() == "transform")
-    if protocol.kind() == "reduction":
-        scale = str(protocol.preview_params.get("scale", "linear"))
+    if protocol.kind() == "reduction" and "scale" in protocol.preview_params:
+        scale = str(protocol.preview_params["scale"])
         args["xlog"] = scale in ("logx", "loglog")
         args["ylog"] = scale in ("logy", "loglog")
     return args
@@ -657,13 +677,16 @@ def _run_preview_file_with_protocol(
     from sciview.processing.reduction import ReductionBackend, ReductionRequest, save_reduction_result
     from sciview.processing.transform import TransformBackend, TransformRequest, save_transform_result
 
+    if protocol.operation == "thumbnails":
+        raise ValueError("Thumbnails do not have a WYSIWYG preview; use SciAnalysis-style output instead")
+
     image = np.asarray(_load_image_array(file_path), dtype=float)
     bool_mask = coerce_mask_to_bool(mask, shape=image.shape)
     params = protocol.params
     preview = protocol.preview_params
-    proto_out_dir = out_dir / _protocol_output_dir_name(protocol.operation)
+    proto_out_dir = out_dir / _protocol_output_dir_name(protocol)
     proto_out_dir.mkdir(parents=True, exist_ok=True)
-    output_stem = f"{Path(file_path).stem}_{protocol.operation}"
+    output_stem = f"{Path(file_path).stem}_{protocol.operation}_{_sanitize_path_component(protocol.name)}"
     output_path = proto_out_dir / f"{output_stem}.png"
 
     if protocol.kind() == "reduction":
@@ -711,8 +734,6 @@ def _run_preview_file_with_protocol(
             theme=theme,
         )
     else:
-        if protocol.operation == "thumbnails":
-            raise ValueError("Thumbnails do not have a Transform preview")
         request = TransformRequest(
             image=image,
             operation=protocol.operation,

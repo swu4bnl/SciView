@@ -601,6 +601,14 @@ class BatchTab(QWidget):
             self.parent_app.show_status("Batch: no enabled protocols")
             return
 
+        output_mode = str(self.output_mode_combo.currentData())
+        if output_mode == "preview" and any(p.operation == "thumbnails" for p in active):
+            self.parent_app.show_status(
+                "Batch: thumbnails have no WYSIWYG preview — disable them or "
+                "switch Plot output to 'SciAnalysis-Style plots'"
+            )
+            return
+
         output_dir = self.output_dir_input.text().strip()
         if not output_dir:
             output_dir = str(Path(self._file_paths[0]).parent.parent / "analysis")
@@ -621,7 +629,7 @@ class BatchTab(QWidget):
         self._clear_log()
 
         self._running_plot_style = resolve_plot_style(self.parent_app)
-        self._running_output_mode = str(self.output_mode_combo.currentData())
+        self._running_output_mode = output_mode
         preview_theme = {
             key: value.name()
             for key, value in AppStyle.theme_colors().items()
