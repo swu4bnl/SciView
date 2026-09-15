@@ -12,10 +12,15 @@ from typing import Any, Callable, Literal
 import numpy as np
 
 from sciview.processing.angle_conventions import display_angle_map
+from sciview.processing.scientific_labels import transform_axis_labels
 
 
 TransformOperation = Literal["q_image", "q_phi_image", "qr_qz_image"]
 TransformRunner = Callable[[Any, "TransformRequest"], Any]
+
+# Base absolute bin count for the pure-Python calibration fallback (see
+# TransformBackend._run_calibration_fallback), scaled by bins_relative.
+_FALLBACK_BASE_BINS = 320
 
 
 @dataclass(slots=True)
@@ -27,12 +32,20 @@ class TransformRequest:
     calibration: Any
     mask: Any | None = None
     use_mask: bool = True
-    bins_q: int = 320
     bins_phi: int = 360
-    q_min: float | None = None
-    q_max: float | None = None
-    phi_min_deg: float | None = None
-    phi_max_deg: float | None = None
+    bins_relative: float | None = None
+    preferred_method: str | None = None
+    # Display-only plot-range hints, matching SciAnalysis's own universal
+    # plot_range=[x_min, x_max, y_min, y_max] convention (Data2D.plot() /
+    # Data2DImage._plot() in SciAnalysis accept this for every image protocol).
+    # remesh_* always covers the full calibration extent regardless — these
+    # are applied as matplotlib axis limits on the result, not sent to
+    # SciAnalysis, in _run_scianalysis below. x/y map to whatever the
+    # operation's own x_label/y_label axes are (see _axis_labels).
+    x_min: float | None = None
+    x_max: float | None = None
+    y_min: float | None = None
+    y_max: float | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -191,8 +204,8 @@ class TransformBackend:
         image = _coerce_image_array(request.image)
         mask = _coerce_mask_array(request.mask, image.shape)
 
-        if request.bins_q < 2:
-            raise ValueError("bins_q must be at least 2")
+        if request.bins_relative is not None and request.bins_relative <= 0:
+            raise ValueError("bins_relative must be positive")
         if request.bins_phi < 4:
             raise ValueError("bins_phi must be at least 4")
 
@@ -208,7 +221,9 @@ class TransformBackend:
         if hasattr(request.calibration, "set_image_size"):
             request.calibration.set_image_size(image.shape[1], height=image.shape[0])
 
-        if request.operation in self._runner_registry:
+        if request.preferred_method == "calibration_fallback":
+            method_name, payload = self._run_calibration_fallback(data_2d, request)
+        elif request.operation in self._runner_registry:
             method_name = "custom_runner"
             payload = self._runner_registry[request.operation](data_2d, request)
         else:
@@ -221,12 +236,12 @@ class TransformBackend:
             "source": "scianalysis",
             "backend": self.name,
             "method": method_name,
-            "bins_q": int(request.bins_q),
             "bins_phi": int(request.bins_phi),
-            "q_min": request.q_min,
-            "q_max": request.q_max,
-            "phi_min_deg": request.phi_min_deg,
-            "phi_max_deg": request.phi_max_deg,
+            "bins_relative": request.bins_relative,
+            "x_min": request.x_min,
+            "x_max": request.x_max,
+            "y_min": request.y_min,
+            "y_max": request.y_max,
             **payload_meta,
         }
 
@@ -242,29 +257,22 @@ class TransformBackend:
         )
 
     def _run_scianalysis(self, data_2d: Any, request: TransformRequest) -> tuple[str, Any]:
+        # All three operations follow one standard: call the real Data2DScattering
+        # remesh_* method with its actual keyword (bins_relative, plus bins_phi for
+        # q_phi_image). SciAnalysis's remesh_* methods do not accept x_min/x_max/
+        # y_min/y_max — those only ever affect *plot_range* (see Protocols.py /
+        # Data2D.plot()), so this backend leaves them out of the remesh call;
+        # TransformTab applies them as matplotlib axis limits on the already-
+        # computed full-extent result.
         if request.operation == "q_image":
             try:
                 return _invoke_first_available(
                     data_2d,
                     [
                         (
-                            "remesh_q_bin_explicit",
-                            {
-                                "q_min": request.q_min,
-                                "q_max": request.q_max,
-                                "bins": request.bins_q,
-                            },
-                        ),
-                        (
                             "remesh_q_bin",
                             {
-                                "bins": request.bins_q,
-                            },
-                        ),
-                        (
-                            "q_image",
-                            {
-                                "bins": request.bins_q,
+                                "bins_relative": request.bins_relative,
                             },
                         ),
                     ],
@@ -278,27 +286,9 @@ class TransformBackend:
                     data_2d,
                     [
                         (
-                            "remesh_q_phi_explicit",
-                            {
-                                "q_min": request.q_min,
-                                "q_max": request.q_max,
-                                "phi_min": request.phi_min_deg,
-                                "phi_max": request.phi_max_deg,
-                                "bins_q": request.bins_q,
-                                "bins_phi": request.bins_phi,
-                            },
-                        ),
-                        (
                             "remesh_q_phi",
                             {
-                                "bins_q": request.bins_q,
-                                "bins_phi": request.bins_phi,
-                            },
-                        ),
-                        (
-                            "q_phi_image",
-                            {
-                                "bins_q": request.bins_q,
+                                "bins_relative": request.bins_relative,
                                 "bins_phi": request.bins_phi,
                             },
                         ),
@@ -316,6 +306,7 @@ class TransformBackend:
                             "remesh_qr_bin",
                             {
                                 "flag_mask": request.use_mask,
+                                "bins_relative": request.bins_relative,
                             },
                         ),
                     ],
@@ -331,6 +322,12 @@ class TransformBackend:
         if calibration is None:
             raise ValueError("Calibration is required for transform fallback")
 
+        # This fallback doesn't call SciAnalysis at all, so it needs an absolute
+        # bin count; scale a reasonable base by the same bins_relative knob used
+        # for the real remesh_* calls, so "more/fewer bins" behaves consistently.
+        bins_relative = request.bins_relative if request.bins_relative is not None else 1.0
+        bins = max(2, int(round(_FALLBACK_BASE_BINS * bins_relative)))
+
         mask_bool: np.ndarray | None = None
         mask_obj = getattr(data_2d, "mask", None)
         if mask_obj is not None and hasattr(mask_obj, "data"):
@@ -343,17 +340,19 @@ class TransformBackend:
             q_map = np.asarray(calibration.q_map(), dtype=float)
             phi_map = np.asarray(display_angle_map(calibration), dtype=float)
 
+            # Full calibration extent, same as remesh_q_phi's own behavior —
+            # x_min/x_max/y_min/y_max are display-only crop, not applied here.
             q_valid = np.isfinite(q_map)
-            q_min = float(request.q_min) if request.q_min is not None else float(np.nanmin(q_map[q_valid]))
-            q_max = float(request.q_max) if request.q_max is not None else float(np.nanmax(q_map[q_valid]))
-            phi_min = float(request.phi_min_deg) if request.phi_min_deg is not None else -180.0
-            phi_max = float(request.phi_max_deg) if request.phi_max_deg is not None else 180.0
+            q_min = float(np.nanmin(q_map[q_valid]))
+            q_max = float(np.nanmax(q_map[q_valid]))
+            phi_min = -180.0
+            phi_max = 180.0
 
             image_out, q_axis, phi_axis = _bin_weighted_mean_2d(
                 values_x=q_map,
                 values_y=phi_map,
                 intensity=image,
-                bins_x=int(request.bins_q),
+                bins_x=bins,
                 bins_y=int(request.bins_phi),
                 x_min=q_min,
                 x_max=q_max,
@@ -383,8 +382,8 @@ class TransformBackend:
             values_x=qx_map,
             values_y=qz_map,
             intensity=image,
-            bins_x=int(request.bins_q),
-            bins_y=int(request.bins_q),
+            bins_x=bins,
+            bins_y=bins,
             x_min=x_min,
             x_max=x_max,
             y_min=y_min,
@@ -399,11 +398,7 @@ class TransformBackend:
         }
 
     def _axis_labels(self, operation: TransformOperation) -> tuple[str, str]:
-        if operation == "q_phi_image":
-            return "q (1/A)", "chi (deg)"
-        if operation == "qr_qz_image":
-            return "qr (1/A)", "qz (1/A)"
-        return "qx (1/A)", "qz (1/A)"
+        return transform_axis_labels(operation)
 
 
 def save_transform_result(result: TransformResult, path: str | Path) -> Path:

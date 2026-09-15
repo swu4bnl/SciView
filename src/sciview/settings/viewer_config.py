@@ -198,6 +198,44 @@ ARTIST_IMAGE_PALETTES = (
 )
 ARTIST_IMAGE_COLORMAPS = {palette.key: palette for palette in ARTIST_IMAGE_PALETTES}
 
+
+def _relative_luminance(red: float, green: float, blue: float) -> float:
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def _ordered_palette_colors(colors: tuple[str, ...]) -> tuple[str, ...]:
+    """Order raw artist-palette colors into a visually sensible gradient.
+
+    Palettes are curated in an aesthetic order, not a gradient order, so this
+    sorts by luminance (then hue, then lightness) before building a colormap.
+    Shared by the pyqtgraph LUT builder and the matplotlib colormap resolver
+    so both stay visually consistent with each other.
+    """
+    import colorsys
+    from matplotlib.colors import to_rgb
+
+    def sort_key(color: str) -> tuple[float, float, float]:
+        red, green, blue = to_rgb(color)
+        hue, lightness, _saturation = colorsys.rgb_to_hls(red, green, blue)
+        return (_relative_luminance(red, green, blue), hue, lightness)
+
+    return tuple(sorted(colors, key=sort_key))
+
+
+def resolve_matplotlib_colormap(name: str):
+    """Return a colormap matplotlib can use for the given viewer colormap name.
+
+    Standard matplotlib names pass through unchanged. Custom "artist:*" palettes
+    (built for the pyqtgraph-based image viewer's LUT) are not registered with
+    matplotlib, so they are converted to a matplotlib Colormap from the same
+    ordered source colors instead.
+    """
+    palette = ARTIST_IMAGE_COLORMAPS.get(name)
+    if palette is None:
+        return name
+    from matplotlib.colors import LinearSegmentedColormap
+    return LinearSegmentedColormap.from_list(name, _ordered_palette_colors(palette.colors), N=256)
+
 VIEWER_TOOLBAR_ACTIONS = (
     ViewerToolbarAction("pan", "Pan", "Pan image: drag with the left mouse button."),
     ViewerToolbarAction("zoom", "Zoom", "Rectangular zoom: drag a box with the left mouse button."),

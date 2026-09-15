@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from importlib import import_module
 import os
 from pathlib import Path
@@ -11,11 +12,14 @@ import numpy as np
 import yaml
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
+    QColorDialog,
     QComboBox,
     QDoubleSpinBox,
-    QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -42,16 +46,23 @@ from sciview.interfaces.stable_qt.utils.reduction_overlay import (
 )
 from sciview.interfaces.theme.app_style import (
     AppStyle,
+    apply_emphasis_button_style,
     apply_info_style,
+    apply_protocol_selector_button_style,
     apply_subtitle_style,
-    apply_title_style,
+    apply_toolbar_text_button_style,
     setup_splitter_layout,
 )
 from sciview.masking.io import load_mask_file as backend_load_mask_file
 from sciview.processing.angle_conventions import display_chi_to_scianalysis_sector_chi
+from sciview.processing.plot_rendering import (
+    REDUCTION_FIGURE_SIZE,
+    render_reduction_plot,
+)
 from sciview.processing.reduction import ReductionBackend, ReductionRequest, save_reduction_result
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
 from sciview.settings.app_settings import SPINBOX_CONFIG
+from sciview.settings.plot_style import resolve_plot_style
 from tabs.base_image_tab import BaseImageTab
 
 
@@ -79,6 +90,7 @@ class ReductionTab(BaseImageTab):
         self._custom_mask = None
         self._custom_mask_label = "None"
         self._building_controls = True
+        self._updating_plot_style_controls = False
         self._build_ui()
         self._building_controls = False
         self.add_display_hook(self._draw_reduction_overlay, "post")
@@ -89,21 +101,15 @@ class ReductionTab(BaseImageTab):
         layout_ratios = AppStyle.get_layout_ratios()
 
         main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter.addWidget(self._create_preview_panel())
 
-        left_splitter = QSplitter(Qt.Vertical)
-        left_splitter.addWidget(self._create_image_panel())
-        left_splitter.addWidget(self._create_preview_panel())
-        setup_splitter_layout(left_splitter, layout_ratios['viz_splitter_ratio'])
-        main_splitter.addWidget(left_splitter)
+        right_splitter = QSplitter(Qt.Vertical)
+        right_splitter.addWidget(self._create_image_panel())
+        right_splitter.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
+        setup_splitter_layout(right_splitter, layout_ratios['preview_sidebar_ratio'])
+        main_splitter.addWidget(right_splitter)
 
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
-        right_layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
-        right_layout.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
-        main_splitter.addWidget(right_panel)
-
-        setup_splitter_layout(main_splitter, layout_ratios['main_splitter_ratio'])
+        setup_splitter_layout(main_splitter, [1, 1])
         main_layout.addWidget(main_splitter)
 
         self.canvas_plot.mpl_connect("motion_notify_event", self.on_mouse_move)
@@ -119,28 +125,57 @@ class ReductionTab(BaseImageTab):
         apply_subtitle_style(title)
         title_row.addWidget(title)
         title_row.addStretch()
-        title_row.addWidget(QLabel("Scale"))
-        self.plot_scale_combo = QComboBox()
-        self.plot_scale_combo.addItems(["linear", "logx", "logy", "loglog"])
-        self.plot_scale_combo.currentTextChanged.connect(self._on_parameters_changed)
-        self.plot_scale_combo.setMaximumWidth(90)
-        title_row.addWidget(self.plot_scale_combo)
         layout.addLayout(title_row)
 
         self.result_summary = QLabel("No preview yet")
         apply_info_style(self.result_summary)
         layout.addWidget(self.result_summary)
 
-        self.fig_plot, self.ax_plot = plt.subplots(figsize=(6, 4))
-        self.fig_plot.subplots_adjust(left=0.10, bottom=0.18, right=0.98, top=0.95)
+        self.fig_plot, self.ax_plot = plt.subplots(
+            figsize=REDUCTION_FIGURE_SIZE,
+            layout="constrained",
+        )
         self.canvas_plot = FigureCanvas(self.fig_plot)
-        layout.addWidget(self.canvas_plot)
+        layout.addWidget(self.canvas_plot, 1)
 
         toolbar = NavigationToolbar(self.canvas_plot, self)
-        # toolbar.setMaximumHeight(25)
         layout.addWidget(toolbar)
+        layout.addWidget(self._create_plot_style_group())
 
         return panel
+
+    def _create_plot_style_group(self):
+        style_group = QGroupBox("Plot Style")
+        style_layout = QGridLayout(style_group)
+        plot_style = resolve_plot_style(self.parent_app)
+
+        self.plot_title_size_spin = QDoubleSpinBox()
+        self.plot_label_size_spin = QDoubleSpinBox()
+        self.plot_tick_size_spin = QDoubleSpinBox()
+        for index, (label, spin, value) in enumerate((
+            ("Plot title size", self.plot_title_size_spin, plot_style.title_size),
+            ("Axis label size", self.plot_label_size_spin, plot_style.label_size),
+            ("Tick label size", self.plot_tick_size_spin, plot_style.tick_size),
+        )):
+            spin.setRange(6.0, 72.0)
+            spin.setValue(value)
+            self._add_grid_field(style_layout, 0, index, label, spin)
+
+        self._line_color = plot_style.line_color
+        self.plot_line_color_button = QPushButton()
+        self.plot_line_color_button.clicked.connect(self._choose_line_color)
+        self._update_line_color_button()
+        self.plot_line_width_spin = QDoubleSpinBox()
+        self.plot_line_width_spin.setRange(0.25, 10.0)
+        self.plot_line_width_spin.setSingleStep(0.25)
+        self.plot_line_width_spin.setValue(plot_style.line_width)
+        self.plot_dpi_spin = QSpinBox()
+        self.plot_dpi_spin.setRange(72, 1200)
+        self.plot_dpi_spin.setValue(plot_style.dpi)
+        self._add_grid_field(style_layout, 0, 3, "Export resolution (DPI)", self.plot_dpi_spin)
+        self._add_grid_field(style_layout, 1, 0, "Line color", self.plot_line_color_button)
+        self._add_grid_field(style_layout, 1, 1, "Line width", self.plot_line_width_spin)
+        return style_group
 
     def _create_controls_panel(self):
         panel = QWidget()
@@ -148,192 +183,302 @@ class ReductionTab(BaseImageTab):
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
 
-        title = QLabel("Controls")
-        apply_title_style(title)
-        layout.addWidget(title)
-
-        source_group = QGroupBox("Sources")
-        source_layout = QFormLayout(source_group)
-        self.configure_adaptive_form_layout(source_layout)
+        source_layout = QHBoxLayout()
+        source_layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
 
         self.calibration_source_combo = QComboBox()
-        self.calibration_source_combo.addItems(["From calibration tab", "Custom profile"])
-        cal_row_widget = QWidget()
-        cal_btn_row = QHBoxLayout(cal_row_widget)
-        cal_btn_row.setContentsMargins(0, 0, 0, 0)
-        cal_btn_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
-        cal_btn_row.addWidget(self.calibration_source_combo, stretch=1)
-        self.load_calibration_button = QPushButton("Load Calibration")
+        self.calibration_source_combo.addItem("Shared", "From calibration tab")
+        self.calibration_source_combo.addItem("Custom", "Custom profile")
+        source_layout.addWidget(QLabel("Calibration"))
+        source_layout.addWidget(self.calibration_source_combo, 1)
+        self.load_calibration_button = QPushButton("Browse")
         self.load_calibration_button.clicked.connect(self._load_custom_calibration)
-        cal_btn_row.addWidget(self.load_calibration_button)
-        source_layout.addRow("Calibration", cal_row_widget)
+        apply_toolbar_text_button_style(self.load_calibration_button)
+        source_layout.addWidget(self.load_calibration_button)
 
         self.mask_source_combo = QComboBox()
-        self.mask_source_combo.addItems(["From mask tab", "Custom mask", "No mask"])
-        mask_row_widget = QWidget()
-        mask_btn_row = QHBoxLayout(mask_row_widget)
-        mask_btn_row.setContentsMargins(0, 0, 0, 0)
-        mask_btn_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
-        mask_btn_row.addWidget(self.mask_source_combo, stretch=1)
-        self.load_mask_button = QPushButton("Load Mask")
+        self.mask_source_combo.addItem("Shared", "From mask tab")
+        self.mask_source_combo.addItem("Custom", "Custom mask")
+        self.mask_source_combo.addItem("None", "No mask")
+        source_layout.addWidget(QLabel("Mask"))
+        source_layout.addWidget(self.mask_source_combo, 1)
+        self.load_mask_button = QPushButton("Browse")
         self.load_mask_button.clicked.connect(self._load_custom_mask)
-        mask_btn_row.addWidget(self.load_mask_button)
-        source_layout.addRow("Mask", mask_row_widget)
+        apply_toolbar_text_button_style(self.load_mask_button)
+        source_layout.addWidget(self.load_mask_button)
+        layout.addLayout(source_layout)
 
-        self.calibration_status_label = QLabel("Calibration: from calibration tab")
-        apply_info_style(self.calibration_status_label)
-        source_layout.addRow(self.calibration_status_label)
-
-        self.mask_status_label = QLabel("Mask: from mask tab")
-        apply_info_style(self.mask_status_label)
-        source_layout.addRow(self.mask_status_label)
-
-        layout.addWidget(source_group)
-
-        common_group = QGroupBox("Common")
-        common_layout = QFormLayout(common_group)
-        self.configure_adaptive_form_layout(common_layout)
-        common_layout.setLabelAlignment(Qt.AlignRight)
-
-        self.operation_combo = QComboBox()
-        self.operation_combo.addItems(["Circular Average", "Sector Average", "Line I(q) at Chi", "Line I(chi) at Q"])
-        common_layout.addRow("Operation", self.operation_combo)
-
-        self.auto_update_check = QCheckBox("Auto preview")
+        self.auto_update_check = QCheckBox("Live preview")
         self.auto_update_check.setChecked(True)
-        common_layout.addRow(self.auto_update_check)
+        layout.addWidget(self.auto_update_check)
 
-        self.bins_spin = _spin("bins_1d")
-        common_layout.addRow("Bins", self.bins_spin)
+        # q min/max are display-only crops applied to the preview plot's x
+        # axis (see _apply_display_crop), matching SciAnalysis's own
+        # plot_range convention used by batch processing
+        # (apply_q_bounds_to_protocol) for these operations — they are never
+        # sent to SciAnalysis itself (circular_average_q_bin/sector_average_q_bin
+        # always cover the full calibration q range).
+        protocol_layout = QGridLayout()
+        protocol_label = QLabel("Protocol")
+        apply_subtitle_style(protocol_label)
+        protocol_layout.addWidget(protocol_label, 0, 0, 1, 2)
+        self.protocol_button_group = QButtonGroup(self)
+        self.protocol_button_group.setExclusive(True)
+        self._operation_buttons = {}
+        for index, (operation, label) in enumerate((
+            ("circular_average", "Circular Average"),
+            ("sector_average", "Sector Average"),
+            ("linecut_q", "I(q) at χ"),
+            ("linecut_angle", "I(χ) at q"),
+        )):
+            button = QPushButton(label)
+            apply_protocol_selector_button_style(button)
+            self.protocol_button_group.addButton(button)
+            self._operation_buttons[operation] = button
+            row, column = divmod(index, 2)
+            protocol_layout.addWidget(button, row + 1, column)
+        self._operation_buttons["circular_average"].setChecked(True)
+        protocol_layout.setColumnStretch(0, 1)
+        protocol_layout.setColumnStretch(1, 1)
+        layout.addLayout(protocol_layout)
 
-        self.auto_qrange_check = QCheckBox("Auto q-range")
-        self.auto_qrange_check.setChecked(True)
-        common_layout.addRow(self.auto_qrange_check)
-
-        self.q_min_spin = _spin("q_min")
-        common_layout.addRow("q min (1/A)", self.q_min_spin)
-
-        self.q_max_spin = _spin("q_max")
-        common_layout.addRow("q max (1/A)", self.q_max_spin)
-        layout.addWidget(common_group)
-
-        self.circular_group = QGroupBox("Circular average")
-        circular_layout = QFormLayout(self.circular_group)
-        self.configure_adaptive_form_layout(circular_layout)
-        self.circular_hint = QLabel("Uses q max")
-        apply_info_style(self.circular_hint)
-        circular_layout.addRow(self.circular_hint)
+        self.circular_group = QGroupBox("Parameters")
+        circular_layout = QGridLayout(self.circular_group)
+        self.circular_bins_relative_spin = _spin("bins_relative")
+        self._add_grid_field(circular_layout, 0, 0, "Bins (relative)", self.circular_bins_relative_spin)
+        self.circular_auto_crop_check = QCheckBox("Auto crop to calibration")
+        self.circular_auto_crop_check.setChecked(True)
+        circular_layout.addWidget(self.circular_auto_crop_check, 0, 2, 1, 2)
+        self.circular_q_min_spin = _spin("q_min")
+        self._add_grid_field(circular_layout, 1, 0, "q min (Å⁻¹)", self.circular_q_min_spin)
+        self.circular_q_max_spin = _spin("q_max")
+        self._add_grid_field(circular_layout, 1, 1, "q max (Å⁻¹)", self.circular_q_max_spin)
         layout.addWidget(self.circular_group)
 
-        self.sector_group = QGroupBox("Sector average")
-        sector_layout = QFormLayout(self.sector_group)
-        self.configure_adaptive_form_layout(sector_layout)
+        self.sector_group = QGroupBox("Parameters")
+        sector_layout = QGridLayout(self.sector_group)
+        self.sector_bins_relative_spin = _spin("bins_relative")
+        self._add_grid_field(sector_layout, 0, 0, "Bins (relative)", self.sector_bins_relative_spin)
+        self.sector_auto_crop_check = QCheckBox("Auto crop to calibration")
+        self.sector_auto_crop_check.setChecked(True)
+        sector_layout.addWidget(self.sector_auto_crop_check, 0, 2, 1, 2)
         self.sector_start_spin = _spin("sector_start")
-        self.sector_end_spin   = _spin("sector_end")
-        self.sector_hint = QLabel("Uses q max")
-        apply_info_style(self.sector_hint)
-        sector_layout.addRow(self.sector_hint)
-        sector_layout.addRow("Angle start", self.sector_start_spin)
-        sector_layout.addRow("Angle end", self.sector_end_spin)
+        self._add_grid_field(sector_layout, 1, 0, "Angle start (\u00b0)", self.sector_start_spin)
+        self.sector_end_spin = _spin("sector_end")
+        self._add_grid_field(sector_layout, 1, 1, "Angle end (\u00b0)", self.sector_end_spin)
+        self.sector_q_min_spin = _spin("q_min")
+        self._add_grid_field(sector_layout, 2, 0, "q min (Å⁻¹)", self.sector_q_min_spin)
+        self.sector_q_max_spin = _spin("q_max")
+        self._add_grid_field(sector_layout, 2, 1, "q max (Å⁻¹)", self.sector_q_max_spin)
         layout.addWidget(self.sector_group)
 
-        self.line_group = QGroupBox("Line Profile")
-        line_layout = QFormLayout(self.line_group)
-        self.configure_adaptive_form_layout(line_layout)
+        self.linecut_q_group = QGroupBox("Parameters")
+        linecut_q_layout = QGridLayout(self.linecut_q_group)
+        self.linecut_q_chi0_spin = _spin("line_chi0")
+        self._add_grid_field(linecut_q_layout, 0, 0, "χ center (\u00b0)", self.linecut_q_chi0_spin)
+        self.linecut_q_dq_spin = _spin("line_dq")
+        self._add_grid_field(linecut_q_layout, 0, 1, "Half-width Δq (Å⁻¹)", self.linecut_q_dq_spin)
+        linecut_q_hint = QLabel("χ orientation: 0\u00b0 right, +90\u00b0 up")
+        apply_info_style(linecut_q_hint)
+        linecut_q_layout.addWidget(linecut_q_hint, 1, 0, 1, 4)
+        self.linecut_q_auto_crop_check = QCheckBox("Auto crop to calibration")
+        self.linecut_q_auto_crop_check.setChecked(True)
+        linecut_q_layout.addWidget(self.linecut_q_auto_crop_check, 2, 0, 1, 4)
+        self.linecut_q_q_min_spin = _spin("q_min")
+        self._add_grid_field(linecut_q_layout, 3, 0, "q min (Å⁻¹)", self.linecut_q_q_min_spin)
+        self.linecut_q_q_max_spin = _spin("q_max")
+        self._add_grid_field(linecut_q_layout, 3, 1, "q max (Å⁻¹)", self.linecut_q_q_max_spin)
+        layout.addWidget(self.linecut_q_group)
 
-        self.line_value_label = QLabel("Reference")
-        apply_info_style(self.line_value_label)
-        line_layout.addRow(self.line_value_label)
+        self.linecut_angle_group = QGroupBox("Parameters")
+        linecut_angle_layout = QGridLayout(self.linecut_angle_group)
+        self.linecut_angle_q0_spin = _spin("line_value")
+        self._add_grid_field(linecut_angle_layout, 0, 0, "q center (Å⁻¹)", self.linecut_angle_q0_spin)
+        self.linecut_angle_dq_spin = _spin("line_dq")
+        self._add_grid_field(linecut_angle_layout, 0, 1, "Half-width Δq (Å⁻¹)", self.linecut_angle_dq_spin)
+        layout.addWidget(self.linecut_angle_group)
 
-        self.line_value_spin = _spin("line_value")
-        line_layout.addRow("Reference", self.line_value_spin)
+        self._operation_groups = {
+            "circular_average": self.circular_group,
+            "sector_average": self.sector_group,
+            "linecut_q": self.linecut_q_group,
+            "linecut_angle": self.linecut_angle_group,
+        }
+        self._operation_labels = {
+            "circular_average": "Circular Average",
+            "sector_average": "Sector Average",
+            "linecut_q": "Line I(q) at Chi",
+            "linecut_angle": "Line I(chi) at Q",
+        }
+        self._operation_param_widgets = {
+            "circular_average": {
+                "bins_relative": self.circular_bins_relative_spin,
+                "auto_crop": self.circular_auto_crop_check,
+                "q_min": self.circular_q_min_spin,
+                "q_max": self.circular_q_max_spin,
+            },
+            "sector_average": {
+                "bins_relative": self.sector_bins_relative_spin,
+                "angle_start": self.sector_start_spin,
+                "angle_end": self.sector_end_spin,
+                "auto_crop": self.sector_auto_crop_check,
+                "q_min": self.sector_q_min_spin,
+                "q_max": self.sector_q_max_spin,
+            },
+            "linecut_q": {
+                "chi0": self.linecut_q_chi0_spin,
+                "dq": self.linecut_q_dq_spin,
+                "auto_crop": self.linecut_q_auto_crop_check,
+                "q_min": self.linecut_q_q_min_spin,
+                "q_max": self.linecut_q_q_max_spin,
+            },
+            "linecut_angle": {
+                "q0": self.linecut_angle_q0_spin,
+                "dq": self.linecut_angle_dq_spin,
+            },
+        }
+        self._sync_operation_group_visibility()
 
-        self.line_chi0_spin = _spin("line_chi0")
-        self.line_dq_spin   = _spin("line_dq")
-        self.line_dq_label = QLabel("Half-width dq (1/\u00c5)")
-        line_layout.addRow("chi0 (\u00b0)", self.line_chi0_spin)
-        self.line_chi0_hint = QLabel("chi: 0\u00b0 right, +90\u00b0 up")
-        apply_info_style(self.line_chi0_hint)
-        line_layout.addRow(self.line_chi0_hint)
-        line_layout.addRow(self.line_dq_label, self.line_dq_spin)
-        layout.addWidget(self.line_group)
+        scale_layout = QHBoxLayout()
+        scale_layout.addWidget(QLabel("Scale"))
+        self.plot_scale_combo = QComboBox()
+        self.plot_scale_combo.addItems(["linear", "logx", "logy", "loglog"])
+        self.plot_scale_combo.currentTextChanged.connect(self._on_parameters_changed)
+        scale_layout.addWidget(self.plot_scale_combo, 1)
+        layout.addLayout(scale_layout)
 
         button_row = QHBoxLayout()
-        self.preview_button = QPushButton("Preview")
+        self.preview_button = QPushButton("Refresh Preview")
         self.preview_button.clicked.connect(self.refresh_preview)
         self.export_button = QPushButton("Export Data")
         self.export_button.clicked.connect(self.export_result)
-        self.export_recipe_button = QPushButton("Export Recipe")
-        self.export_recipe_button.clicked.connect(self.export_recipe)
         self.send_to_batch_button = QPushButton("Send to Batch")
         self.send_to_batch_button.setToolTip("Push current settings as a protocol to the Batch tab")
         self.send_to_batch_button.clicked.connect(self._send_to_batch)
+        apply_emphasis_button_style(self.send_to_batch_button)
         button_row.addWidget(self.preview_button)
         button_row.addWidget(self.export_button)
-        button_row.addWidget(self.export_recipe_button)
         button_row.addWidget(self.send_to_batch_button)
         layout.addLayout(button_row)
 
-        self.status_label = QLabel("Ready")
-        apply_info_style(self.status_label)
-        layout.addWidget(self.status_label)
         layout.addStretch()
 
-        self.operation_combo.currentTextChanged.connect(self._on_operation_changed)
-        for widget in (
-            self.auto_update_check,
-            self.auto_qrange_check,
-            self.bins_spin,
-            self.q_min_spin,
-            self.q_max_spin,
-            self.sector_start_spin,
-            self.sector_end_spin,
-            self.line_value_spin,
-            self.line_chi0_spin,
-            self.line_dq_spin,
+        for operation, button in self._operation_buttons.items():
+            button.toggled.connect(lambda checked, op=operation: self._on_protocol_changed(op, checked))
+
+        for widgets in self._operation_param_widgets.values():
+            for widget in widgets.values():
+                if hasattr(widget, "stateChanged"):
+                    widget.stateChanged.connect(self._on_parameters_changed)
+                elif hasattr(widget, "valueChanged"):
+                    widget.valueChanged.connect(self._on_parameters_changed)
+
+        self.auto_update_check.stateChanged.connect(self._on_parameters_changed)
+        for spin in (
+            self.plot_title_size_spin,
+            self.plot_label_size_spin,
+            self.plot_tick_size_spin,
+            self.plot_line_width_spin,
+            self.plot_dpi_spin,
         ):
-            if hasattr(widget, "stateChanged"):
-                widget.stateChanged.connect(self._on_parameters_changed)
-            elif hasattr(widget, "currentTextChanged"):
-                widget.currentTextChanged.connect(self._on_parameters_changed)
-            elif hasattr(widget, "valueChanged"):
-                widget.valueChanged.connect(self._on_parameters_changed)
+            spin.valueChanged.connect(self._on_plot_style_controls_changed)
 
         self.calibration_source_combo.currentTextChanged.connect(self._on_source_changed)
         self.mask_source_combo.currentTextChanged.connect(self._on_source_changed)
 
-        self._on_operation_changed(self.operation_combo.currentText())
-        self._on_line_mode_changed()
+        self._on_parameters_changed()
         self._refresh_source_status()
         return panel
 
-    def _on_line_mode_changed(self, _text: str | None = None):
-        mode = self._selected_line_mode()
-        is_line_geom = mode == "q"
-        self.line_chi0_spin.setVisible(is_line_geom)
-        self.line_chi0_hint.setVisible(is_line_geom)
-        self.line_value_spin.setEnabled(not is_line_geom)
+    def _update_line_color_button(self) -> None:
+        color = QColor(self._line_color)
+        text_color = "#000000" if color.lightnessF() > 0.55 else "#ffffff"
+        self.plot_line_color_button.setText(self._line_color)
+        self.plot_line_color_button.setStyleSheet(
+            f"background-color: {self._line_color}; color: {text_color};"
+        )
 
-        if mode == "q":
-            self.line_value_label.setText("Reference")
-            self.line_dq_label.setText("Half-width dq (1/\u00c5)")
-        elif mode == "angle":
-            self.line_value_label.setText("Reference: q0 (1/\u00c5)")
-            self.line_dq_label.setText("Ring width dq (1/\u00c5)")
-        else:
-            self.line_value_label.setText("Reference")
-            self.line_dq_label.setText("Half-width dq (1/\u00c5)")
+    def _choose_line_color(self) -> None:
+        color = QColorDialog.getColor(QColor(self._line_color), self, "Select Line Color")
+        if not color.isValid():
+            return
+        self._line_color = color.name()
+        self._update_line_color_button()
+        self._on_plot_style_controls_changed()
 
+    def _on_plot_style_controls_changed(self, *args) -> None:
+        if self._building_controls or self._updating_plot_style_controls:
+            return
+        style = replace(
+            resolve_plot_style(self.parent_app),
+            title_size=self.plot_title_size_spin.value(),
+            label_size=self.plot_label_size_spin.value(),
+            tick_size=self.plot_tick_size_spin.value(),
+            line_color=self._line_color,
+            line_width=self.plot_line_width_spin.value(),
+            dpi=self.plot_dpi_spin.value(),
+        )
+        self.parent_app.publish_shared_plot_style(style, source_tab=self)
+        self._update_preview_plot(self._current_result)
+
+    def _sync_plot_style_controls(self) -> None:
+        style = resolve_plot_style(self.parent_app)
+        self._updating_plot_style_controls = True
+        try:
+            self.plot_title_size_spin.setValue(style.title_size)
+            self.plot_label_size_spin.setValue(style.label_size)
+            self.plot_tick_size_spin.setValue(style.tick_size)
+            self._line_color = style.line_color
+            self._update_line_color_button()
+            self.plot_line_width_spin.setValue(style.line_width)
+            self.plot_dpi_spin.setValue(style.dpi)
+        finally:
+            self._updating_plot_style_controls = False
+
+    @staticmethod
+    def _add_grid_field(grid: QGridLayout, row: int, col: int, label_text: str, widget: QWidget) -> None:
+        """Place a label+field pair in a 2-column QGridLayout (each column uses 2 grid columns)."""
+        grid.addWidget(QLabel(label_text), row, col * 2)
+        grid.addWidget(widget, row, col * 2 + 1)
+
+    def _on_protocol_changed(self, operation: str, checked: bool):
+        if self._building_controls or not checked:
+            return
+        self._sync_operation_group_visibility()
         self._on_parameters_changed()
 
+    def _sync_operation_group_visibility(self):
+        selected_operation = self._selected_operation()
+        for operation, group in self._operation_groups.items():
+            group.setVisible(operation == selected_operation)
+
+    def _selected_operation(self):
+        for operation, button in self._operation_buttons.items():
+            if button.isChecked():
+                return operation
+        return "circular_average"
+
+    def _op_widget(self, key):
+        return self._operation_param_widgets.get(self._selected_operation(), {}).get(key)
+
+    def _op_bool(self, key, default=False):
+        widget = self._op_widget(key)
+        return widget.isChecked() if widget is not None else default
+
+    def _op_int(self, key, default=0):
+        widget = self._op_widget(key)
+        return int(widget.value()) if widget is not None else default
+
+    def _op_float(self, key, default=None):
+        widget = self._op_widget(key)
+        return float(widget.value()) if widget is not None else default
+
+
     def _selected_line_mode(self):
-        return {
-            "Line I(q) at Chi": "q",
-            "Line I(chi) at Q": "angle",
-        }.get(self.operation_combo.currentText(), "q")
+        return {"linecut_q": "q", "linecut_angle": "angle"}.get(self._selected_operation(), "q")
 
     def _use_mask_enabled(self):
-        return self.mask_source_combo.currentText() != "No mask"
+        return self.mask_source_combo.currentData() != "No mask"
 
     def _q_per_pixel(self):
         calibration = self._selected_calibration()
@@ -356,16 +501,19 @@ class ReductionTab(BaseImageTab):
         self._q_bounds = compute_q_bounds(self._selected_calibration(), mask)
 
     def _refresh_auto_q_range(self, image_shape: tuple[int, int]):
-        if not self.auto_qrange_check.isChecked() or not self._q_bounds:
+        if not self._q_bounds:
             return
         q_min = self._q_bounds["q_min"]
         q_max = self._q_bounds["q_max"]
-        self.q_min_spin.blockSignals(True)
-        self.q_max_spin.blockSignals(True)
-        self.q_min_spin.setValue(q_min)
-        self.q_max_spin.setValue(q_max)
-        self.q_min_spin.blockSignals(False)
-        self.q_max_spin.blockSignals(False)
+        for operation in ("circular_average", "sector_average", "linecut_q"):
+            widgets = self._operation_param_widgets[operation]
+            if not widgets["auto_crop"].isChecked():
+                continue
+            for key, value in (("q_min", q_min), ("q_max", q_max)):
+                widget = widgets[key]
+                widget.blockSignals(True)
+                widget.setValue(value)
+                widget.blockSignals(False)
 
     def _q_to_pixels(self, q_value: float):
         dq = self._q_per_pixel()
@@ -411,7 +559,7 @@ class ReductionTab(BaseImageTab):
 
             self._custom_calibration = calibration
             self._custom_calibration_label = os.path.basename(file_path)
-            self.calibration_source_combo.setCurrentText("Custom profile")
+            self.calibration_source_combo.setCurrentIndex(self.calibration_source_combo.findData("Custom profile"))
             self._refresh_source_status()
             self.parent_app.show_status(f"Loaded custom calibration: {self._custom_calibration_label}")
             self._on_parameters_changed()
@@ -431,7 +579,7 @@ class ReductionTab(BaseImageTab):
         try:
             self._custom_mask = backend_load_mask_file(file_path)
             self._custom_mask_label = os.path.basename(file_path)
-            self.mask_source_combo.setCurrentText("Custom mask")
+            self.mask_source_combo.setCurrentIndex(self.mask_source_combo.findData("Custom mask"))
             self._refresh_source_status()
             self.parent_app.show_status(f"Loaded custom mask: {self._custom_mask_label}")
             self._on_parameters_changed()
@@ -439,14 +587,14 @@ class ReductionTab(BaseImageTab):
             self.parent_app.show_status(f"Failed to load custom mask: {exc}")
 
     def _selected_calibration(self):
-        if self.calibration_source_combo.currentText() == "Custom profile":
+        if self.calibration_source_combo.currentData() == "Custom profile":
             return self._custom_calibration
         if hasattr(self.parent_app, "get_shared_calibration"):
             return self.parent_app.get_shared_calibration(self.image_data)
         return getattr(self.parent_app, "calibration", None)
 
     def _selected_mask(self):
-        mode = self.mask_source_combo.currentText()
+        mode = self.mask_source_combo.currentData()
         if mode == "No mask":
             return None
         if mode == "Custom mask":
@@ -475,47 +623,34 @@ class ReductionTab(BaseImageTab):
         cal = self._selected_calibration()
         mask = self._selected_mask()
 
-        if self.calibration_source_combo.currentText() == "Custom profile":
+        if self.calibration_source_combo.currentData() == "Custom profile":
             cal_text = f"Calibration: custom ({self._custom_calibration_label})"
         elif shared_cal is None:
             cal_text = "Calibration: from calibration tab (not loaded)"
         else:
             cal_text = "Calibration: from calibration tab"
 
-        if self.mask_source_combo.currentText() == "No mask":
+        if self.mask_source_combo.currentData() == "No mask":
             mask_text = "Mask: disabled"
-        elif self.mask_source_combo.currentText() == "Custom mask":
+        elif self.mask_source_combo.currentData() == "Custom mask":
             mask_text = f"Mask: custom ({self._custom_mask_label})"
         else:
             mask_text = "Mask: from mask tab" if mask is not None else "Mask: from mask tab (not loaded)"
 
-        self.calibration_status_label.setText(cal_text)
-        self.mask_status_label.setText(mask_text)
-
-    def _on_operation_changed(self, _text: str):
-        operation = self._selected_operation()
-        self.circular_group.setVisible(operation == "circular_average")
-        self.sector_group.setVisible(operation == "sector_average")
-        self.line_group.setVisible(operation in ("linecut_q", "linecut_angle"))
-        self._on_line_mode_changed()
-        self._on_parameters_changed()
+        self.calibration_source_combo.setToolTip(cal_text)
+        self.mask_source_combo.setToolTip(mask_text)
+        self.load_calibration_button.setVisible(self.calibration_source_combo.currentData() == "Custom profile")
+        self.load_mask_button.setVisible(self.mask_source_combo.currentData() == "Custom mask")
 
     def _on_parameters_changed(self, *args):
         if self._building_controls:
             return
-        manual_q = not self.auto_qrange_check.isChecked()
-        self.q_min_spin.setEnabled(manual_q)
-        self.q_max_spin.setEnabled(manual_q)
+        for operation in ("circular_average", "sector_average", "linecut_q"):
+            widgets = self._operation_param_widgets[operation]
+            manual_crop = not widgets["auto_crop"].isChecked()
+            widgets["q_min"].setEnabled(manual_crop)
+            widgets["q_max"].setEnabled(manual_crop)
         self.update_plot()
-
-    def _selected_operation(self):
-        text = self.operation_combo.currentText()
-        return {
-            "Circular Average": "circular_average",
-            "Sector Average": "sector_average",
-            "Line I(q) at Chi": "linecut_q",
-            "Line I(chi) at Q": "linecut_angle",
-        }[text]
 
     def _get_image_array(self):
         display_data = self.image_data if self.image_data is not None else getattr(self.parent_app, "image_data", None)
@@ -551,22 +686,24 @@ class ReductionTab(BaseImageTab):
 
         operation = self._selected_operation()
         mask = self._get_mask_array(image.shape)
+        q_min = self._op_float("q_min")
+        q_max = self._op_float("q_max")
 
         kwargs = dict(
             image=image,
             operation=operation,
             center_x=float(self._active_center(image.shape)[0]),
             center_y=float(self._active_center(image.shape)[1]),
-            bins=int(self.bins_spin.value()),
-            q_min=float(self.q_min_spin.value()),
-            q_max=float(self.q_max_spin.value()),
+            bins_relative=self._op_float("bins_relative"),
+            q_min=q_min,
+            q_max=q_max,
             radius_max=None,
-            angle_start_deg=float(self.sector_start_spin.value()),
-            angle_end_deg=float(self.sector_end_spin.value()),
-            line_chi0_deg=float(self.line_chi0_spin.value()),
-            line_dq=float(self.line_dq_spin.value()),
+            angle_start_deg=self._op_float("angle_start", 0.0),
+            angle_end_deg=self._op_float("angle_end", 360.0),
+            line_chi0_deg=self._op_float("chi0"),
+            line_dq=self._op_float("dq", 0.01),
             line_mode=self._selected_line_mode(),
-            line_value=float(self.line_value_spin.value()),
+            line_value=self._op_float("q0"),
             use_mask=self._use_mask_enabled(),
             calibration=self._selected_calibration(),
             mask=mask,
@@ -574,15 +711,15 @@ class ReductionTab(BaseImageTab):
             metadata={
                 "image_shape": tuple(int(v) for v in image.shape),
                 "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
-                "calibration_source": self.calibration_source_combo.currentText(),
-                "mask_source": self.mask_source_combo.currentText(),
+                "calibration_source": self.calibration_source_combo.currentData(),
+                "mask_source": self.mask_source_combo.currentData(),
                 "line_mode": self._selected_line_mode(),
                 "q_bounds": dict(self._q_bounds),
             },
         )
 
-        if operation in {"circular_average", "sector_average"}:
-            kwargs["radius_max"] = float(self._q_to_pixels(float(self.q_max_spin.value())))
+        if operation in {"circular_average", "sector_average"} and q_max is not None:
+            kwargs["radius_max"] = float(self._q_to_pixels(q_max))
 
         return ReductionRequest(**kwargs)
 
@@ -599,25 +736,23 @@ class ReductionTab(BaseImageTab):
             self._current_result = None
             self._update_preview_plot(None, message=f"Preview failed: {exc}")
             self.result_summary.setText(f"Preview failed: {exc}")
-            self.status_label.setText(f"Reduction failed: {exc}")
             self.parent_app.show_status(f"Reduction failed: {exc}")
             return
 
         self._current_result = result
         self._update_preview_plot(result)
-        self.result_summary.setText(
-            f"{result.operation.replace('_', ' ').title()} points: {int(np.count_nonzero(np.isfinite(result.y)))}"
-        )
-        self.status_label.setText(
-            f"{result.operation.replace('_', ' ').title()} complete: {int(np.count_nonzero(np.isfinite(result.y)))} points"
-        )
-        self.parent_app.show_status(self.status_label.text())
+        point_count = int(np.count_nonzero(np.isfinite(result.y)))
+        operation_name = result.operation.replace('_', ' ').title()
+        self.result_summary.setText(f"{operation_name}: {point_count} points")
+        self.parent_app.show_status(f"{operation_name} complete: {point_count} points")
 
     def _update_preview_plot(self, result, message: str | None = None):
         self.ax_plot.clear()
-        body_font = AppStyle.matplotlib_font_size('body')
-        caption_font = AppStyle.matplotlib_font_size('caption')
-        small_font = AppStyle.matplotlib_font_size('small')
+        plot_style = resolve_plot_style(self.parent_app)
+        preview_sizes = plot_style.preview_sizes()
+        body_font = preview_sizes["title"]
+        caption_font = preview_sizes["label"]
+        small_font = preview_sizes["tick"]
 
         if result is None:
             self.ax_plot.text(
@@ -630,32 +765,49 @@ class ReductionTab(BaseImageTab):
                 fontsize=body_font,
             )
             self.ax_plot.set_axis_off()
+            AppStyle.apply_matplotlib_figure_theme(self.fig_plot)
             self.canvas_plot.draw()
             return
 
-        self.ax_plot.plot(result.x, result.y, color="#2b6cb0", linewidth=1.5)
-
         scale = self.plot_scale_combo.currentText() if hasattr(self, "plot_scale_combo") else "linear"
-        if scale == "logx":
-            self.ax_plot.set_xscale("log")
-            self.ax_plot.set_yscale("linear")
-        elif scale == "logy":
-            self.ax_plot.set_xscale("linear")
-            self.ax_plot.set_yscale("log")
-        elif scale == "loglog":
-            self.ax_plot.set_xscale("log")
-            self.ax_plot.set_yscale("log")
-        else:
-            self.ax_plot.set_xscale("linear")
-            self.ax_plot.set_yscale("linear")
-
-        self.ax_plot.set_xlabel(result.x_label, fontsize=caption_font)
-        self.ax_plot.set_ylabel(result.y_label, fontsize=caption_font)
-        self.ax_plot.set_title(result.operation.replace("_", " ").title(), fontsize=body_font)
-        self.ax_plot.tick_params(labelsize=small_font)
-        self.ax_plot.grid(True, alpha=0.2)
-        self.ax_plot.set_axis_on()
+        x_limits = None
+        if self._selected_operation() in ("circular_average", "sector_average", "linecut_q"):
+            q_min = self._op_float("q_min")
+            q_max = self._op_float("q_max")
+            if q_min is not None and q_max is not None and q_max > q_min:
+                x_limits = (q_min, q_max)
+        theme = {key: value.name() for key, value in AppStyle.theme_colors().items()}
+        render_reduction_plot(
+            self.fig_plot,
+            self.ax_plot,
+            result,
+            plot_style,
+            scale=scale,
+            x_limits=x_limits,
+            theme=theme,
+        )
         self.canvas_plot.draw()
+
+    def on_plot_style_changed(self):
+        """Redraw the current reduction result with the shared plot style."""
+        self._sync_plot_style_controls()
+        self._update_preview_plot(self._current_result)
+
+    def _apply_display_crop(self, scale: str):
+        """Crop the preview's x axis to the selected operation's q window,
+        matching SciAnalysis's own plot_range convention used by batch
+        processing (apply_q_bounds_to_protocol) — circular_average_q_bin /
+        sector_average_q_bin / linecut_q always compute over the full
+        calibration range regardless of this display-only crop."""
+        if self._selected_operation() not in ("circular_average", "sector_average", "linecut_q"):
+            return
+        q_min = self._op_float("q_min")
+        q_max = self._op_float("q_max")
+        if q_min is None or q_max is None or q_max <= q_min:
+            return
+        if scale in ("logx", "loglog") and q_min <= 0:
+            return
+        self.ax_plot.set_xlim(q_min, q_max)
 
     def export_result(self):
         if self._current_result is None:
@@ -687,18 +839,29 @@ class ReductionTab(BaseImageTab):
         at execution time via compute_q_bounds + apply_q_bounds_to_protocol.
         """
         op = self._selected_operation()
-        name = self.operation_combo.currentText()
+        name = self._operation_labels[op]
+        preview = {
+            "scale": self.plot_scale_combo.currentText(),
+            "q_min": self._op_float("q_min"),
+            "q_max": self._op_float("q_max"),
+            "angle_start": self._op_float("angle_start", 0.0),
+            "angle_end": self._op_float("angle_end", 360.0),
+            "chi0": self._op_float("chi0"),
+            "q0": self._op_float("q0"),
+            "dq": self._op_float("dq", 0.01),
+        }
 
         if op == "circular_average":
             return {
                 "operation": op, "name": name,
-                "bins_relative": max(0.1, int(self.bins_spin.value()) / 100.0),
+                "bins_relative": self._op_float("bins_relative", 1.0),
+                "preview_params": preview,
                 "save_results": ["plots", "txt"],
             }
 
         if op == "sector_average":
-            a_start = float(self.sector_start_spin.value())
-            a_end   = float(self.sector_end_spin.value())
+            a_start = self._op_float("angle_start", 0.0)
+            a_end   = self._op_float("angle_end", 360.0)
             span = (a_end - a_start) % 360.0
             dangle = 360.0 if np.isclose(span, 0.0) else span
             display_angle = (a_start + 0.5 * dangle) % 360.0
@@ -708,38 +871,44 @@ class ReductionTab(BaseImageTab):
                 "operation": op, "name": name,
                 "angle":  angle,
                 "dangle": float(dangle),
-                "bins_relative": max(0.1, int(self.bins_spin.value()) / 100.0),
+                "bins_relative": self._op_float("bins_relative", 1.0),
+                "preview_params": preview,
                 "ylog": True,
                 "save_results": ["plots", "txt"],
             }
 
-        line_mode = self._selected_line_mode()
-        if op == "linecut_q" or line_mode == "q":
-            chi0 = float(self.line_chi0_spin.value())
+        if op == "linecut_q":
             return {
-                "operation": "linecut_q", "name": name,
-                "chi0": chi0,
-                "dq":   float(self.line_dq_spin.value()),
+                "operation": op, "name": name,
+                "chi0": self._op_float("chi0", 0.0),
+                "dq":   self._op_float("dq", 0.01),
+                "preview_params": preview,
                 "save_results": ["plots", "txt"],
             }
 
-        if op == "linecut_angle" or line_mode == "angle":
+        if op == "linecut_angle":
             return {
-                "operation": "linecut_angle", "name": name,
-                "q0": float(self.line_value_spin.value()),
-                "dq": float(self.line_dq_spin.value()),
+                "operation": op, "name": name,
+                "q0": self._op_float("q0", 0.1),
+                "dq": self._op_float("dq", 0.01),
+                "preview_params": preview,
                 "save_results": ["plots", "txt"],
             }
 
-        return {"operation": op, "name": name, "save_results": ["plots", "txt"]}
+        return {
+            "operation": op,
+            "name": name,
+            "preview_params": preview,
+            "save_results": ["plots", "txt"],
+        }
 
     def _build_recipe_payload(self) -> dict:
         """Full recipe for Export Recipe: SA-compatible params + context metadata."""
         return {
             **self._build_batch_payload(),
             "q_bounds": dict(self._q_bounds),
-            "calibration_source": self.calibration_source_combo.currentText(),
-            "mask_source": self.mask_source_combo.currentText(),
+            "calibration_source": self.calibration_source_combo.currentData(),
+            "mask_source": self.mask_source_combo.currentData(),
             "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
         }
 
@@ -786,8 +955,8 @@ class ReductionTab(BaseImageTab):
         cx, cy = self._active_center(image.shape)
         calibration = self._selected_calibration()
         overlay_note = ""
-        q_min = float(self.q_min_spin.value())
-        q_max = float(self.q_max_spin.value())
+        q_min = self._op_float("q_min", 0.0)
+        q_max = self._op_float("q_max", 0.1)
         styles = OVERLAY_STYLE
         angle_text = chi_convention_text(calibration)
 
@@ -864,10 +1033,10 @@ class ReductionTab(BaseImageTab):
                 self._overlay_artists.append(circle_min)
                 _draw_q_label(0.0, q_min, f"qmin={q_min:.3f}")
             _draw_q_label(0.0, q_max, f"qmax={q_max:.3f}")
-            overlay_note = f"Circular average: q <= {q_max:.4f} 1/A"
+            overlay_note = f"Circular average: q <= {q_max:.4f} Å⁻¹"
         elif operation == "sector_average":
-            start = float(self.sector_start_spin.value())
-            end = float(self.sector_end_spin.value())
+            start = self._op_float("angle_start", 0.0)
+            end = self._op_float("angle_end", 360.0)
             span = (end - start) % 360.0
             dangle = 360.0 if np.isclose(span, 0.0) else span
             center = (start + 0.5 * dangle) % 360.0
@@ -890,8 +1059,8 @@ class ReductionTab(BaseImageTab):
         else:
             line_mode = self._selected_line_mode()
             if line_mode == "angle":
-                q0 = float(self.line_value_spin.value())
-                dq = float(self.line_dq_spin.value())
+                q0 = self._op_float("q0", 0.1)
+                dq = self._op_float("dq", 0.01)
                 r_inner = max(0.0, self._q_to_pixels(max(0.0, q0 - dq)))
                 r_outer = max(r_inner + 1e-6, self._q_to_pixels(max(0.0, q0 + dq)))
                 ring_mask = self._screen_ring_mask(image.shape, cx, cy, r_inner, r_outer)
@@ -901,11 +1070,11 @@ class ReductionTab(BaseImageTab):
                 _draw_q_label(0.0, q0 + dq, f"q+={q0+dq:.3f}")
                 for ang, txt in ((0.0, "0"), (90.0, "90"), (270.0, "270")):
                     _draw_angle_label(ang, txt, q0 + dq, radial_offset_px=12.0, color="#fdba74")
-                overlay_note = f"I(chi) at q: q0={q0:.4f} 1/A, dq={dq:.4f} 1/A"
+                overlay_note = f"I(χ) at q: q0={q0:.4f} Å⁻¹, Δq={dq:.4f} Å⁻¹"
             else:
                 # I(q) along line: radial stripe at azimuthal angle chi0 with half-width dq (Å⁻¹).
-                chi0 = float(self.line_chi0_spin.value())
-                dq_val = float(self.line_dq_spin.value())
+                chi0 = self._op_float("chi0", 0.0)
+                dq_val = self._op_float("dq", 0.01)
                 roi = line_q_roi_mask(calibration, chi0, dq_val, q_min, q_max)
                 draw_guides = roi is None
                 if roi is not None:
@@ -950,7 +1119,7 @@ class ReductionTab(BaseImageTab):
                 _draw_q_label(chi0, q_min, f"qmin={q_min:.3f}")
                 _draw_q_label(chi0, q_max, f"qmax={q_max:.3f}")
                 overlay_note = (
-                    f"I(q) at chi0: chi0={chi0:.1f}\N{DEGREE SIGN}, dq={dq_val:.4f} 1/A "
+                    f"I(q) at χ: χ={chi0:.1f}\N{DEGREE SIGN}, Δq={dq_val:.4f} Å⁻¹ "
                     f"({angle_text})"
                 )
 
@@ -1019,18 +1188,21 @@ class ReductionTab(BaseImageTab):
     def _add_tab_specific_status(self, info_lines):
         info_lines.append("")
         info_lines.append("=== REDUCTION STATUS ===")
-        info_lines.append(f"Operation: {self.operation_combo.currentText()}")
+        info_lines.append(f"Operation: {self._operation_labels[self._selected_operation()]}")
         info_lines.append(f"Mask enabled: {'Yes' if self._use_mask_enabled() else 'No'}")
-        info_lines.append(f"q range: {self.q_min_spin.value():.4f} to {self.q_max_spin.value():.4f} 1/A")
+        q_min = self._op_float("q_min")
+        q_max = self._op_float("q_max")
+        if q_min is not None and q_max is not None:
+            info_lines.append(f"q crop: {q_min:.4f} to {q_max:.4f} 1/Å")
         if self._q_bounds:
             info_lines.append(
-                f"qx range: {self._q_bounds['qx_min']:.4f} to {self._q_bounds['qx_max']:.4f} 1/A"
+                f"qx range: {self._q_bounds['qx_min']:.4f} to {self._q_bounds['qx_max']:.4f} 1/Å"
             )
             info_lines.append(
-                f"qz range: {self._q_bounds['qz_min']:.4f} to {self._q_bounds['qz_max']:.4f} 1/A"
+                f"qz range: {self._q_bounds['qz_min']:.4f} to {self._q_bounds['qz_max']:.4f} 1/Å"
             )
-        info_lines.append(f"Calibration source: {self.calibration_source_combo.currentText()}")
-        info_lines.append(f"Mask source: {self.mask_source_combo.currentText()}")
+        info_lines.append(f"Calibration source: {self.calibration_source_combo.currentData()}")
+        info_lines.append(f"Mask source: {self.mask_source_combo.currentData()}")
         if self._current_result is not None:
             info_lines.append(f"Last preview: {self._current_result.operation}")
             info_lines.append(f"Preview points: {self._current_result.y.size}")

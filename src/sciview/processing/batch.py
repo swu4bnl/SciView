@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import fnmatch
+import multiprocessing
 import os
+import re
 import time
+from queue import Empty
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Literal
 
 import numpy as np
+
+from sciview.settings.plot_style import PlotStyle
 
 from sciview.processing.angle_conventions import display_chi_to_scianalysis_chi
 try:
@@ -45,6 +50,7 @@ except Exception:  # pragma: no cover - fallback for headless/backend-only envir
 # ---------------------------------------------------------------------------
 
 ProtocolKind = Literal["reduction", "transform"]
+BatchOutputMode = Literal["scianalysis", "preview"]
 
 REDUCTION_OPERATIONS = ("circular_average", "sector_average", "linecut_q", "linecut_angle")
 TRANSFORM_OPERATIONS = ("q_image", "q_phi_image", "qr_qz_image", "thumbnails")
@@ -70,6 +76,7 @@ class BatchProtocol:
     params: dict[str, Any] = field(default_factory=dict)
     enabled: bool = True
     source: str = "manual"  # "reduction_tab" | "transform_tab" | "manual"
+    preview_params: dict[str, Any] = field(default_factory=dict)
 
     def kind(self) -> ProtocolKind:
         return operation_kind(self.operation)
@@ -79,6 +86,7 @@ class BatchProtocol:
             "name": self.name,
             "operation": self.operation,
             "params": dict(self.params),
+            "preview_params": dict(self.preview_params),
             "enabled": self.enabled,
             "source": self.source,
         }
@@ -89,6 +97,7 @@ class BatchProtocol:
             name=str(payload.get("name", payload.get("operation", ""))),
             operation=str(payload.get("operation", "")),
             params=dict(payload.get("params", {})),
+            preview_params=dict(payload.get("preview_params", {})),
             enabled=bool(payload.get("enabled", True)),
             source=str(payload.get("source", "manual")),
         )
@@ -118,6 +127,95 @@ class BatchJob:
     mask: Any | None = None
     mirror_input_structure: bool = True
     input_root: str = ""  # used when mirror_input_structure=True
+    plot_style: dict[str, Any] = field(default_factory=dict)
+    output_mode: BatchOutputMode = "scianalysis"
+    preview_theme: dict[str, str] = field(default_factory=dict)
+
+    def to_transport(self) -> dict[str, Any]:
+        """Serialize a job without pickling live SciAnalysis objects."""
+        return {
+            "file_paths": list(self.file_paths),
+            "protocols": [protocol.to_dict() for protocol in self.protocols],
+            "output_dir": self.output_dir,
+            "output_formats": list(self.output_formats),
+            "calibration": _serialize_calibration(self.calibration),
+            "mask": _serialize_mask(self.mask),
+            "mirror_input_structure": self.mirror_input_structure,
+            "input_root": self.input_root,
+            "plot_style": dict(self.plot_style),
+            "output_mode": self.output_mode,
+            "preview_theme": dict(self.preview_theme),
+        }
+
+    @classmethod
+    def from_transport(cls, payload: dict[str, Any]) -> "BatchJob":
+        return cls(
+            file_paths=[str(path) for path in payload.get("file_paths", [])],
+            protocols=[BatchProtocol.from_dict(item) for item in payload.get("protocols", [])],
+            output_dir=str(payload.get("output_dir", "")),
+            output_formats=[str(item) for item in payload.get("output_formats", [])],
+            calibration=_deserialize_calibration(payload.get("calibration")),
+            mask=payload.get("mask"),
+            mirror_input_structure=bool(payload.get("mirror_input_structure", True)),
+            input_root=str(payload.get("input_root", "")),
+            plot_style=dict(payload.get("plot_style", {})),
+            output_mode=str(payload.get("output_mode", "scianalysis")),
+            preview_theme=dict(payload.get("preview_theme", {})),
+        )
+
+
+def _serialize_calibration(calibration: Any | None) -> dict[str, Any] | None:
+    if calibration is None:
+        return None
+    # Some SciAnalysis calibration objects only expose the private
+    # _pixel_size_um/_distance_m attributes; fall back to those, matching
+    # the compatibility lookup used by the batch tab's cookbook serializer.
+    pixel_size_um = getattr(calibration, "pixel_size_um", getattr(calibration, "_pixel_size_um", None))
+    distance_m = getattr(calibration, "distance_m", getattr(calibration, "_distance_m", None))
+    return {
+        "wavelength_A": float(getattr(calibration, "wavelength_A")),
+        "width": int(getattr(calibration, "width", 0) or 0),
+        "height": int(getattr(calibration, "height", 0) or 0),
+        "pixel_size_um": float(pixel_size_um),
+        "beam_position": [float(getattr(calibration, "x0")), float(getattr(calibration, "y0"))],
+        "distance_m": float(distance_m),
+        "det_orient": float(getattr(calibration, "det_orient", 0.0) or 0.0),
+        "det_tilt": float(getattr(calibration, "det_tilt", 0.0) or 0.0),
+        "det_phi": float(getattr(calibration, "det_phi", 0.0) or 0.0),
+    }
+
+
+def _deserialize_calibration(payload: dict[str, Any] | None) -> Any | None:
+    if not payload:
+        return None
+    from sciview.profiles.cms_profile import get_calibration_class
+
+    calibration = get_calibration_class()(wavelength_A=float(payload["wavelength_A"]))
+    width = int(payload.get("width", 0))
+    height = int(payload.get("height", 0))
+    if width > 0 and height > 0:
+        calibration.set_image_size(width, height=height)
+    calibration.set_pixel_size(pixel_size_um=float(payload["pixel_size_um"]))
+    calibration.set_beam_position(*[float(value) for value in payload["beam_position"]])
+    calibration.set_distance(float(payload["distance_m"]))
+    if hasattr(calibration, "set_angles"):
+        calibration.set_angles(
+            det_orient=float(payload.get("det_orient", 0.0)),
+            det_tilt=float(payload.get("det_tilt", 0.0)),
+            det_phi=float(payload.get("det_phi", 0.0)),
+        )
+    return calibration
+
+
+def _serialize_mask(mask: Any | None) -> np.ndarray | None:
+    """Normalize any mask representation to SciView's bool convention (True=masked)
+    before transport, since the child process's coerce_mask_to_bool() treats any
+    ndarray it receives as already following that convention."""
+    if mask is None:
+        return None
+    from sciview.masking.io import coerce_mask_to_bool
+
+    return coerce_mask_to_bool(mask)
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +467,8 @@ def apply_q_bounds_to_protocol(proto: "BatchProtocol", bounds: dict[str, float])
 
     return BatchProtocol(
         name=proto.name, operation=proto.operation,
-        params=params, enabled=proto.enabled, source=proto.source,
+        params=params, preview_params=dict(proto.preview_params),
+        enabled=proto.enabled, source=proto.source,
     )
 
 
@@ -503,8 +602,179 @@ def _run_file_with_protocol(
     # Create per-protocol subfolder, matching ProcessorXS.access_dir behaviour.
     proto_out_dir = out_dir / sa_proto.name
     proto_out_dir.mkdir(parents=True, exist_ok=True)
-    sa_proto.run(data, str(proto_out_dir), verbosity=0)
+    title_size = getattr(sa_proto, "run_args", {}).get("sciview_title_size")
+    if title_size is None:
+        sa_proto.run(data, str(proto_out_dir), verbosity=0)
+    else:
+        import matplotlib.pyplot as plt
+
+        original_figtext = plt.figtext
+
+        def styled_figtext(*args, **kwargs):
+            kwargs["size"] = title_size
+            return original_figtext(*args, **kwargs)
+
+        plt.figtext = styled_figtext
+        try:
+            sa_proto.run(data, str(proto_out_dir), verbosity=0)
+        finally:
+            plt.figtext = original_figtext
     return str(proto_out_dir)
+
+
+def _valid_limits(first: Any, second: Any) -> tuple[float, float] | None:
+    if first is None or second is None:
+        return None
+    first_value = float(first)
+    second_value = float(second)
+    return (first_value, second_value) if second_value > first_value else None
+
+
+def _sanitize_path_component(text: str) -> str:
+    """Return a filesystem-safe slug so distinct protocol names never collide."""
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", text.strip())
+    return slug.strip("_") or "protocol"
+
+
+def _protocol_output_dir_name(protocol: "BatchProtocol") -> str:
+    """Unique per-protocol output folder name, so two recipes sharing an
+    operation (e.g. two sector averages at different angles) never overwrite
+    each other's preview outputs."""
+    base = "qr_image" if protocol.operation == "qr_qz_image" else protocol.operation
+    return f"{base}_{_sanitize_path_component(protocol.name)}"
+
+
+def _scianalysis_plot_args(protocol: BatchProtocol, style: PlotStyle) -> dict[str, Any]:
+    args = style.scianalysis_args(image=protocol.kind() == "transform")
+    if protocol.kind() == "reduction" and "scale" in protocol.preview_params:
+        scale = str(protocol.preview_params["scale"])
+        args["xlog"] = scale in ("logx", "loglog")
+        args["ylog"] = scale in ("logy", "loglog")
+    return args
+
+
+def _run_preview_file_with_protocol(
+    file_path: str,
+    protocol: BatchProtocol,
+    calibration: Any,
+    mask: Any,
+    out_dir: Path,
+    style: PlotStyle,
+    theme: dict[str, str],
+) -> str:
+    """Recreate and save the corresponding SciView preview plot."""
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+
+    from sciview.masking.io import coerce_mask_to_bool
+    from sciview.processing.plot_rendering import (
+        REDUCTION_FIGURE_SIZE,
+        TRANSFORM_FIGURE_SIZE,
+        create_transform_axes,
+        render_reduction_plot,
+        render_transform_plot,
+    )
+    from sciview.processing.reduction import ReductionBackend, ReductionRequest, save_reduction_result
+    from sciview.processing.transform import TransformBackend, TransformRequest, save_transform_result
+
+    if protocol.operation == "thumbnails":
+        raise ValueError("Thumbnails do not have a WYSIWYG preview; use SciAnalysis-style output instead")
+
+    image = np.asarray(_load_image_array(file_path), dtype=float)
+    bool_mask = coerce_mask_to_bool(mask, shape=image.shape)
+    params = protocol.params
+    preview = protocol.preview_params
+    proto_out_dir = out_dir / _protocol_output_dir_name(protocol)
+    proto_out_dir.mkdir(parents=True, exist_ok=True)
+    output_stem = f"{Path(file_path).stem}_{protocol.operation}_{_sanitize_path_component(protocol.name)}"
+    output_path = proto_out_dir / f"{output_stem}.png"
+
+    if protocol.kind() == "reduction":
+        center_x = float(getattr(calibration, "x0", (image.shape[1] - 1) / 2.0))
+        center_y = float(getattr(calibration, "y0", (image.shape[0] - 1) / 2.0))
+        if protocol.operation == "sector_average":
+            angle = float(params.get("angle", 0.0))
+            width = float(params.get("dangle", 360.0))
+            angle_start = float(preview.get("angle_start", angle - width / 2.0))
+            angle_end = float(preview.get("angle_end", angle + width / 2.0))
+        else:
+            angle_start = float(preview.get("angle_start", 0.0))
+            angle_end = float(preview.get("angle_end", 360.0))
+        request = ReductionRequest(
+            image=image,
+            operation=protocol.operation,
+            center_x=center_x,
+            center_y=center_y,
+            bins_relative=params.get("bins_relative"),
+            q_min=preview.get("q_min"),
+            q_max=preview.get("q_max"),
+            angle_start_deg=angle_start,
+            angle_end_deg=angle_end,
+            line_chi0_deg=preview.get("chi0", params.get("chi0")),
+            line_dq=float(preview.get("dq", params.get("dq", 0.01))),
+            line_value=preview.get("q0", params.get("q0")),
+            line_mode="angle" if protocol.operation == "linecut_angle" else "q",
+            calibration=calibration,
+            mask=bool_mask,
+            use_mask=bool_mask is not None,
+            metadata={"source_path": file_path},
+        )
+        result = ReductionBackend().run(request)
+        save_reduction_result(result, proto_out_dir / f"{output_stem}.csv")
+        figure = Figure(figsize=REDUCTION_FIGURE_SIZE, layout="constrained")
+        FigureCanvasAgg(figure)
+        axis = figure.subplots()
+        render_reduction_plot(
+            figure,
+            axis,
+            result,
+            style,
+            scale=str(preview.get("scale", "logy" if params.get("ylog") else "linear")),
+            x_limits=_valid_limits(preview.get("q_min"), preview.get("q_max")),
+            theme=theme,
+        )
+    else:
+        request = TransformRequest(
+            image=image,
+            operation=protocol.operation,
+            calibration=calibration,
+            mask=bool_mask,
+            use_mask=bool_mask is not None,
+            bins_relative=params.get("bins_relative"),
+            bins_phi=int(params.get("bins_phi", 360)),
+            preferred_method=preview.get("transform_method"),
+            x_min=preview.get("x_min"),
+            x_max=preview.get("x_max"),
+            y_min=preview.get("y_min"),
+            y_max=preview.get("y_max"),
+            metadata={"source_path": file_path},
+        )
+        result = TransformBackend().run(request)
+        save_transform_result(result, proto_out_dir / f"{output_stem}.npz")
+        figure = Figure(figsize=TRANSFORM_FIGURE_SIZE, layout="constrained")
+        FigureCanvasAgg(figure)
+        axis, colorbar_axis = create_transform_axes(figure)
+        render_transform_plot(
+            figure,
+            axis,
+            result,
+            style,
+            colorbar_axis=colorbar_axis,
+            scale=str(preview.get("scale", "linear")),
+            vmin=preview.get("vmin"),
+            vmax=preview.get("vmax"),
+            x_limits=_valid_limits(preview.get("x_min"), preview.get("x_max")),
+            y_limits=_valid_limits(preview.get("y_min"), preview.get("y_max")),
+            theme=theme,
+        )
+
+    figure.savefig(
+        output_path,
+        dpi=style.dpi,
+        facecolor=figure.get_facecolor(),
+    )
+    figure.clear()
+    return str(output_path)
 
 
 # ---------------------------------------------------------------------------
@@ -560,12 +830,30 @@ def run_batch(
         if not job.file_paths:
             raise ValueError("No input files in job")
 
-        # Compute q bounds from calibration and inject plot_range into each protocol.
-        from sciview.masking.io import coerce_mask_to_bool
-        bounds = compute_q_bounds(job.calibration, coerce_mask_to_bool(job.mask))
-        active = [apply_q_bounds_to_protocol(p, bounds) for p in active]
+        style = PlotStyle.from_dict(job.plot_style)
+        if job.output_mode == "preview":
+            executables = active
+        else:
+            active = [
+                BatchProtocol(
+                    name=proto.name,
+                    operation=proto.operation,
+                    params={
+                        **proto.params,
+                        **_scianalysis_plot_args(proto, style),
+                    },
+                    preview_params=dict(proto.preview_params),
+                    enabled=proto.enabled,
+                    source=proto.source,
+                )
+                for proto in active
+            ]
 
-        sa_protocols = [build_protocol(p) for p in active]
+            # Compute q bounds from calibration and inject plot_range into each protocol.
+            from sciview.masking.io import coerce_mask_to_bool
+            bounds = compute_q_bounds(job.calibration, coerce_mask_to_bool(job.mask))
+            active = [apply_q_bounds_to_protocol(p, bounds) for p in active]
+            executables = [build_protocol(p) for p in active]
 
         files = job.file_paths
         total = len(files) * len(active)
@@ -583,7 +871,10 @@ def run_batch(
         def stop_requested() -> bool:
             return should_stop is not None and should_stop()
 
-        emit_status(f"Starting: {len(files)} file(s), {len(active)} protocol(s)")
+        mode_label = "matching previews" if job.output_mode == "preview" else "SciAnalysis plots"
+        emit_status(
+            f"Starting {mode_label}: {len(files)} file(s), {len(active)} protocol(s)"
+        )
 
         for file_path in files:
             if stop_requested():
@@ -595,7 +886,7 @@ def run_batch(
             )
             out_dir.mkdir(parents=True, exist_ok=True)
 
-            for proto, sa_proto in zip(active, sa_protocols):
+            for proto, executable in zip(active, executables):
                 if stop_requested():
                     break
 
@@ -603,9 +894,20 @@ def run_batch(
                 emit_progress(done, total, label)
                 t0 = time.monotonic()
                 try:
-                    proto_out = _run_file_with_protocol(
-                        file_path, sa_proto, job.calibration, job.mask, out_dir,
-                    )
+                    if job.output_mode == "preview":
+                        proto_out = _run_preview_file_with_protocol(
+                            file_path,
+                            proto,
+                            job.calibration,
+                            job.mask,
+                            out_dir,
+                            style,
+                            job.preview_theme,
+                        )
+                    else:
+                        proto_out = _run_file_with_protocol(
+                            file_path, executable, job.calibration, job.mask, out_dir,
+                        )
                     emit_file_done(BatchFileResult(
                         file_path=file_path, protocol_name=proto.name, status="ok",
                         output_path=proto_out, elapsed_s=time.monotonic() - t0,
@@ -632,9 +934,34 @@ def run_batch(
 execute_batch_job = run_batch
 
 
+def _batch_process_main(job_payload, message_queue, stop_event) -> None:
+    """Child-process entry point; keep Matplotlib state outside the GUI process."""
+    os.environ["MPLBACKEND"] = "Agg"
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    try:
+        job = BatchJob.from_transport(job_payload)
+        ok, err = run_batch(
+            job,
+            on_progress=lambda done, total, label: message_queue.put(
+                ("progress", (done, total, label))
+            ),
+            on_file_done=lambda result: message_queue.put(
+                ("file_done", result.__dict__)
+            ),
+            on_status=lambda message: message_queue.put(("status", message)),
+            should_stop=stop_event.is_set,
+        )
+        message_queue.put(("finished", (ok, err)))
+    except Exception as exc:
+        message_queue.put(("status", f"Batch error: {exc}"))
+        message_queue.put(("finished", (0, 1)))
+
+
 
 class BatchRunner(QThread):
-    """Run a BatchJob on a worker thread, emitting per-file progress signals."""
+    """Supervise a spawned BatchJob process and relay its progress signals."""
 
     progress = pyqtSignal(int, int, str)
     file_done = pyqtSignal(BatchFileResult)
@@ -645,21 +972,68 @@ class BatchRunner(QThread):
         super().__init__(parent)
         self._job = job
         self._stop_requested = False
+        self._stop_event = None
+        self._process = None
 
     def request_stop(self) -> None:
         self._stop_requested = True
+        if self._stop_event is not None:
+            self._stop_event.set()
 
     def run(self) -> None:
         try:
-            ok, err = run_batch(
-                self._job,
-                on_progress=self.progress.emit,
-                on_file_done=self.file_done.emit,
-                on_status=self.status_changed.emit,
-                should_stop=lambda: self._stop_requested,
+            context = multiprocessing.get_context("spawn")
+            message_queue = context.Queue()
+            self._stop_event = context.Event()
+            if self._stop_requested:
+                self._stop_event.set()
+            self._process = context.Process(
+                target=_batch_process_main,
+                args=(self._job.to_transport(), message_queue, self._stop_event),
+                daemon=True,
             )
+            self._process.start()
+            finished = None
+            completed_ok = completed_err = 0
+            cancel_requested_at = None
+            while self._process.is_alive() or finished is None:
+                if self._stop_requested and cancel_requested_at is None:
+                    cancel_requested_at = time.monotonic()
+                if (
+                    cancel_requested_at is not None
+                    and self._process.is_alive()
+                    and time.monotonic() - cancel_requested_at >= 2.0
+                ):
+                    self.status_changed.emit("Stopping batch process")
+                    self._process.terminate()
+                    finished = (completed_ok, completed_err)
+                    break
+                try:
+                    kind, payload = message_queue.get(timeout=0.1)
+                except Empty:
+                    if not self._process.is_alive():
+                        break
+                    continue
+                if kind == "progress":
+                    self.progress.emit(*payload)
+                elif kind == "file_done":
+                    result = BatchFileResult(**payload)
+                    completed_ok += result.status == "ok"
+                    completed_err += result.status == "error"
+                    self.file_done.emit(result)
+                elif kind == "status":
+                    self.status_changed.emit(payload)
+                elif kind == "finished":
+                    finished = payload
+            self._process.join()
+            if finished is None:
+                raise RuntimeError(f"Batch process exited with code {self._process.exitcode}")
+            ok, err = finished
         except Exception as exc:
             self.status_changed.emit(f"Batch error: {exc}")
             ok, err = 0, 1
+        finally:
+            self._process = None
+            self._stop_event = None
         self.finished_batch.emit(ok, err)
 

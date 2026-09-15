@@ -26,6 +26,7 @@ from sciview.settings.viewer_config import (
     VIEWER_COLORS,
     VIEWER_TOOL_ICON_FILES,
     VIEWER_TOOLBAR_ACTIONS,
+    resolve_matplotlib_colormap,
 )
 
 
@@ -720,29 +721,8 @@ class ImageViewer(QWidget):
 
     @staticmethod
     def _artist_palette_lut(name: str) -> np.ndarray:
-        import matplotlib.colors as mcolors
-
-        palette = ARTIST_IMAGE_COLORMAPS[name]
-        colors = ImageViewer._ordered_artist_colors(palette.colors)
-        colormap = mcolors.LinearSegmentedColormap.from_list(name, colors, N=256)
+        colormap = resolve_matplotlib_colormap(name)
         return (colormap(np.linspace(0.0, 1.0, 256))[:, :3] * 255).astype(np.ubyte)
-
-    @staticmethod
-    def _ordered_artist_colors(colors: tuple[str, ...]) -> tuple[str, ...]:
-        import colorsys
-        import matplotlib.colors as mcolors
-
-        def sort_key(color: str) -> tuple[float, float, float]:
-            red, green, blue = mcolors.to_rgb(color)
-            hue, saturation, _lightness = colorsys.rgb_to_hls(red, green, blue)
-            return (ImageViewer._relative_luminance((red, green, blue)), hue, saturation)
-
-        return tuple(sorted(colors, key=sort_key))
-
-    @staticmethod
-    def _relative_luminance(rgb: tuple[float, float, float]) -> float:
-        red, green, blue = rgb
-        return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 
     @staticmethod
     def _rgba_mask(mask: np.ndarray, color: str, alpha: float) -> np.ndarray:

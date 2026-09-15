@@ -1,130 +1,96 @@
 # SciView
 
-SciView is a Python-first desktop workbench for 2D X-ray scattering workflows. It combines local file browsing, Tiled data access, calibration inspection, mask editing, reduction previews, and SciAnalysis-backed protocol experiments in one PyQt5 application.
+![Illustrated overview of the SciView application](docs/gallery/banner.png)
 
-The project is being refactored toward a backend-first architecture: GUI tabs collect user choices and display results, while reusable logic lives under [src/sciview/](src/sciview). CMS is the first supported beamline profile, but core modules should remain beamline-neutral.
+*This AI-generated image is for demonstration only and may differ from the current application.*
 
-## What You Can Do
+SciView is a desktop application for working with 2D X-ray scattering data. It gives you a unified interface to open and inspect images, refine calibration, mask problem areas, preview analysis results, and process multiple files.
 
-- Browse detector images from local folders or configured Tiled catalogs.
-- Preview images with PyQtGraph axes, locked aspect ratio, histogram color limits, colormap controls, and shared display settings.
-- Select a local or Tiled image once and let SciView share it automatically when you switch to analysis tabs.
-- Adjust calibration parameters and inspect beam-center overlays and 1D profiles.
-- Build layered masks with PyQtGraph drawing tools for brush, line, rectangle, circle, and watershed fill workflows.
-- Preview reductions and transforms using shared image, calibration, and mask state.
-- Experiment with SciAnalysis protocol previews while the processing adapter continues to mature.
+If you work with X-ray scattering data, SciView helps you move through these tasks in a connected workflow instead of switching between separate tools or writing scripts from scratch.
 
-For a step-by-step user workflow, see [docs/USER_HOW_TO.md](docs/USER_HOW_TO.md).
+SciView uses [SciAnalysis](https://github.com/CFN-softbio/SciAnalysis) as its core processing engine for X-ray scattering data.
 
-## Quick Start
+## What you can do in SciView
 
-On Windows, double-click [Launch-SciView-win64.cmd](Launch-SciView-win64.cmd). The first launch uses Pixi to prepare SciView's Python environment automatically, then starts the app. If Windows asks whether to install Pixi, choose `Y`.
+SciView is organized into tabs, each one helping with a part of the analysis flow:
 
-On Linux or macOS, run once from the repository root to prepare the environment:
+- Image Browser: open and inspect local detector images
+- Tiled Browser: load data from a configured [NSLS-II Tiled catalog](https://tiled.nsls2.bnl.gov/)
+- Calibration: check and adjust beam center and detector geometry
+- Mask Editing: hide bad regions such as gaps, beamstop shadows, and hot pixels
+- Reduction: preview 1D reductions such as circular or sector averages
+- Transform: preview reciprocal-space views such as qx-qz, qr-qz, and q-phi maps
+- Batch: run selected SciAnalysis processing protocols on multiple local files
+- Info: review the current image and metadata
 
-```bash
-./scripts/bootstrap_env.sh
-```
+The tabs are connected, so once you load an image, the app can carry that same image, calibration, and mask information across the workflow.
 
-Then launch SciView with the script for your platform:
+## Getting started
 
-- Linux: `./Launch-SciView-linux.sh`
+For most users, the easiest way to start is with the launcher script for your system.
+
+### Windows
+
+Double-click [Launch-SciView-win64.cmd](Launch-SciView-win64.cmd).
+
+If Windows asks whether to install Pixi, choose Y to continue. If the launcher asks you to close it after installation, double-click it again.
+
+### macOS and Linux
+
+From the repository folder, use the launcher for your system:
+
 - macOS: `./Launch-SciView-macOS.command`
-- Windows: `Launch-SciView-win64.cmd`
+- Linux: `./Launch-SciView-linux.sh`
 
-The launchers configure the Pixi-managed Python environment and start the application.
+The launcher will install Pixi if needed and prepare the SciView environment automatically. The first launch may take a little longer; later launches should be faster.
 
-### Launcher Behavior
+## A typical SciView workflow
 
-All three platform launchers are setup-first launchers intended for end users.
+A normal session usually follows this order:
 
-- They check for source updates at startup with git pull --ff-only when the repository is a git checkout.
-- They print terminal progress so users can see update checks and dependency setup.
-- They run pixi install automatically before launching the app.
+1. Open an image or scan.
+2. Check the image in the viewer and confirm the data look correct.
+3. Go to Calibration and refine geometry or beam-center values if needed.
+4. Use Mask Editing to exclude regions that should not contribute to the analysis.
+5. Preview the result in Reduction or Transform.
+6. If needed, send a set of files through Batch processing.
+7. Save or export the calibration, mask, or reduced result when it is ready.
 
-Platform entry points:
+## For developers
 
-- macOS: [Launch-SciView-macOS.command](Launch-SciView-macOS.command) -> [scripts/run_sciview_unix.sh](scripts/run_sciview_unix.sh)
-- Linux: [Launch-SciView-linux.sh](Launch-SciView-linux.sh) -> [scripts/run_sciview_unix.sh](scripts/run_sciview_unix.sh)
-- Windows: [Launch-SciView-win64.cmd](Launch-SciView-win64.cmd) -> [scripts/run_sciview_windows.ps1](scripts/run_sciview_windows.ps1)
+### How the project is organized
 
-Launcher options:
+SciView separates the user interface from the analysis logic. The tab files control what you see and interact with, while the modules under `src/sciview` handle data access, calibration, masking, reduction, transforms, and batch execution.
 
-- Disable source auto-update for one run:
-	- macOS/Linux: --no-auto-pull
-	- Windows: -NoAutoPull
-- Prepare dependencies without launching the GUI:
-	- macOS/Linux: --setup-only
-	- Windows: -SetupOnly
+#### Application and shared session
 
-Environment variables:
+- [main.py](main.py): starts the Qt application, creates the tabs, and shares the active image, file list, calibration, mask, recipes, and display settings between them
+- [src/sciview/launchers.py](src/sciview/launchers.py): Python launch entry point used by the Pixi environment
+- [src/sciview/settings/app_settings.py](src/sciview/settings/app_settings.py): application defaults and runtime configuration
+- [src/sciview/profiles/cms_profile.py](src/sciview/profiles/cms_profile.py): CMS beamline profile, detector defaults, and calibration defaults
 
-- SCIVIEW_AUTO_PULL=0 disables source auto-update.
-- SCIVIEW_KEEP_SHELL_OPEN=1 keeps terminal open after app exit (enabled by default in [Launch-SciView-macOS.command](Launch-SciView-macOS.command)).
+#### User interface
 
-For advanced/manual setup, use the fallback virtual environment mode:
+- [tabs/](tabs): the Image Browser, Tiled Browser, Calibration, Mask Editing, Reduction, Transform, Batch, and Info tabs
+- [tabs/base_image_tab.py](tabs/base_image_tab.py): common image-viewing behavior shared by analysis tabs
+- [src/sciview/interfaces/stable_qt/](src/sciview/interfaces/stable_qt): reusable viewers, drawing tools, widgets, and Qt utilities
+- [src/sciview/interfaces/theme/app_style.py](src/sciview/interfaces/theme/app_style.py): visual theme, sizing, icons, and layout rules
 
+#### Analysis and data flow
 
-```bash
-./scripts/bootstrap_env.sh --mode venv
-```
+- [src/sciview/processing/](src/sciview/processing): reduction, transform, recipe, batch, and SciAnalysis integration logic
+- [src/sciview/calibration/](src/sciview/calibration): calibration file handling and reference standards
+- [src/sciview/masking/](src/sciview/masking): mask file handling and mask operations
+- [src/sciview/sources/](src/sciview/sources): local filesystem and Tiled data access
 
-Then start manually:
+#### Setup and documentation
 
-```bash
-PYTHONPATH=src ./.venv/bin/python main.py
-```
+- [scripts/](scripts): environment setup and platform launcher support
 
-## Everyday Workflow
+### If something is not working
 
-1. Load a local image in Image Browser or load a scan/frame in Tiled Browser.
-2. Switch to Calibration, Mask Editing, Reduction, or Transform. The current browser image is shared automatically on tab switch.
-3. Adjust shared display settings with the image histogram, `vmin`, `vmax`, colormap, and linear/log scale controls.
-4. Calibrate geometry or load an existing calibration.
-5. Build or load a mask if the analysis needs one.
-6. Preview reductions or transforms, then export data or recipes.
-
-## Repository Map
-
-- [main.py](main.py): application entry point and shared-state tab orchestration.
-- [tabs/](tabs): current PyQt5 tab widgets.
-- [src/sciview/settings/](src/sciview/settings): application, viewer, and runtime configuration.
-- [src/sciview/profiles/](src/sciview/profiles): beamline profiles and detector defaults.
-- [src/sciview/sources/](src/sciview/sources): local file and Tiled source adapters.
-- [src/sciview/processing/](src/sciview/processing): processing request models and SciAnalysis adapter work.
-- [src/sciview/interfaces/stable_qt/](src/sciview/interfaces/stable_qt): reusable Qt viewer, drawing, and utility modules.
-- [tests/](tests): pytest coverage using synthetic data and mocked services.
-
-## Dependencies
-
-Dependency definitions are managed in [pixi.toml](pixi.toml) and [pyproject.toml](pyproject.toml). Key runtime dependencies include PyQt5, PyQtGraph, NumPy, SciPy, Matplotlib, Pillow, PyYAML, Tiled, and SciAnalysis.
-
-## Development Checks
-
-When available, run:
-
-```bash
-pixi run pytest
-pixi run python -m ruff check src tests
-```
-
-Focused GUI migration checks often use:
-
-```bash
-pixi run pytest tests/test_image_viewer.py
-```
-
-## Configuration Notes
-
-- Beamline-specific behavior belongs in [src/sciview/profiles/](src/sciview/profiles).
-- Application and viewer defaults belong in [src/sciview/settings/](src/sciview/settings).
-- Core modules should not hard-code CMS paths, proposal IDs, filename rules, or mounted beamline storage.
-- GUI-facing angle behavior follows the display convention documented in [docs/ANGLE_CONVENTION_GUIDE.md](docs/ANGLE_CONVENTION_GUIDE.md): `0 deg = right`, positive rotation is counterclockwise, and `+90 deg = up`.
-
-## Troubleshooting
-
-- If startup fails, rerun [scripts/bootstrap_env.sh](scripts/bootstrap_env.sh) to refresh the environment.
-- If Tiled access fails, verify connectivity, login state, profile settings, and [src/sciview/settings/app_settings.py](src/sciview/settings/app_settings.py).
-- If SciAnalysis operations fail, verify package availability and the configured SciAnalysis source.
-- If another tab does not show the expected image, return to the browser tab, confirm the desired image/frame is selected or loaded, then switch back to the analysis tab.
-
+- If the app does not start, close it and run the launcher for your system again.
+- If a tab does not show the image you expected, return to the browser tab and select the file again before switching back.
+- If you are using Tiled data, check the connection and login state.
+- If a SciAnalysis-related step fails, restart SciView so the launcher can check the environment.
+- For manual setup or deeper troubleshooting, use [scripts/bootstrap_env.sh](scripts/bootstrap_env.sh).

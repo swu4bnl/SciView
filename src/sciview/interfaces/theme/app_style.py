@@ -31,6 +31,7 @@ class AppStyle:
     BUTTON_FORM = {
         'default_height': 34,
         'default_min_width': 124,
+        'protocol_selector_height': 46,
         'compact_text_height': 34,
         'compact_text_min_width': 64,
         'corner_height': 28,
@@ -54,6 +55,7 @@ class AppStyle:
         'compact_input_min_width': 92,  # same value; distinct semantic role
         'inline_label_width': 52,
         'unit_label_width': 18,
+        'status_led_size': 14,          # small round non-interactive status dot
     }
 
     CORNER_ICON_FILES = {
@@ -118,6 +120,7 @@ class AppStyle:
         'status': ('caption', 400),
         'button': ('body', 500),
         'button_emphasis': ('body', 600),  # distinct role so refresh restores the heavier weight
+        'protocol_selector': ('h3', 600),
         'toolbar_symbol': ('h3', 600),
         'toolbar_text': ('small', 400),
         'input': ('body', 400),
@@ -164,6 +167,7 @@ class AppStyle:
         # Splitter ratios
         'main_splitter_ratio': [2, 1],
         'viz_splitter_ratio': [2, 1],
+        'preview_sidebar_ratio': [1, 2],
         'controls_splitter_ratio': [1, 1, 2, 1],
         'tiled_main_splitter_ratio': [1, 2],
         # Tiled browser panel constraints
@@ -194,6 +198,8 @@ class AppStyle:
     #   Text atoms   — title_label, subtitle_label, body_text, small_text, info_label, status_label
     #   Interactive  — primary_button, secondary_button, toolbar_symbol_button, toolbar_text_button
     #   Structural   — input_field, group_box, splitter
+    GLOBAL_STYLE_KEYS = ('input_field', 'tooltip', 'group_box', 'splitter')
+
     WIDGET_STYLES = {
         # ── Text atoms ────────────────────────────────────────────────────────
         'title_label': """
@@ -285,26 +291,56 @@ class AppStyle:
             }}
         """,
 
+        'protocol_selector_button': """
+            QPushButton {{
+                background-color: {surface};
+                color: {text_primary};
+                font-size: {subtitle_font};
+                font-weight: 500;
+                border: 2px solid {border};
+                border-radius: 4px;
+                padding: 7px 12px;
+            }}
+            QPushButton:hover:!checked {{
+                background-color: {surface_alt};
+                border: 2px solid {border_active};
+            }}
+            QPushButton:focus:!checked {{
+                border: 2px solid {border_active};
+            }}
+            QPushButton:pressed:!checked {{
+                background-color: {border};
+            }}
+            QPushButton:checked {{
+                background-color: {border_active};
+                color: {checked_fg};
+                border: 2px solid {border_active};
+                font-weight: 600;
+            }}
+        """,
+
         # ── Structural components ───────────────────────────────────────────
         'input_field': """
-            QLineEdit, QSpinBox, QDoubleSpinBox {{
+            QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox {{
                 border: 1px solid {border};
                 border-radius: 4px;
                 padding: {input_padding_v}px {input_padding_h}px;
                 font-size: {body_font};
-                background-color: white;
+                color: {text_primary};
+                background-color: {input_surface};
                 min-height: {input_height}px;
             }}
-            QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+            QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QAbstractSpinBox:focus {{
                 border: 2px solid {border_active};
-                background-color: white;
+                background-color: {input_surface};
             }}
             QComboBox {{
                 border: 1px solid {border};
                 border-radius: 4px;
                 padding: {input_padding_v}px {input_padding_h}px;
                 font-size: {body_font};
-                background-color: white;
+                color: {text_primary};
+                background-color: {input_surface};
                 min-height: {input_height}px;
             }}
             QComboBox:focus {{
@@ -317,6 +353,20 @@ class AppStyle:
             QComboBox::down-arrow {{
                 width: 12px;
                 height: 12px;
+            }}
+            QComboBox QAbstractItemView {{
+                color: {text_primary};
+                background-color: {input_surface};
+                selection-color: {checked_fg};
+                selection-background-color: {border_active};
+            }}
+        """,
+
+        'tooltip': """
+            QToolTip {{
+                color: {text_primary};
+                background-color: {input_surface};
+                border: 1px solid {border};
             }}
         """,
 
@@ -339,6 +389,14 @@ class AppStyle:
             }}
         """,
         
+        'status_led': """
+            QLabel {{
+                background-color: {led_color};
+                border: 1px solid {border};
+                border-radius: {led_radius}px;
+            }}
+        """,
+
         'splitter': """
             QSplitter::handle {{
                 background-color: {border};
@@ -438,12 +496,14 @@ class AppStyle:
             'primary':        theme['accent'].name(),
             'secondary':      theme['control_hover'].name(),
             'surface':        theme['window'].name(),
+            'input_surface':  theme['base'].name(),
             'surface_alt':    theme['control_hover'].name(),
             'border':         theme['border'].name(),
             'border_active':  theme['accent'].name(),
             'text_primary':   theme['text'].name(),
             'text_secondary': theme['muted'].name(),   # muted but legible
             'text_muted':     theme['muted'].name(),   # disabled / very quiet
+            'checked_fg':     theme['checked_fg'].name(),
             # --- non-theme semantic colors from COLORS palette ---
             'success':        cls.COLORS['success'],
             'success_hover':  success.darker(108).name(),
@@ -476,13 +536,12 @@ class AppStyle:
         return style_template.format(**variables)
 
     @classmethod
-    def apply_global_style(cls, app):
-        """Apply global application stylesheet with Qt defaults."""
+    def apply_global_style(cls, app, preserve_existing=False):
+        """Apply SciView's global rules, optionally over an external theme."""
         base_styles = [
+            app.styleSheet() if preserve_existing else "",
             cls.tab_widget_stylesheet(),
-            cls.format_style('input_field'),
-            cls.format_style('group_box'),
-            cls.format_style('splitter'),
+            *(cls.format_style(style_key) for style_key in cls.GLOBAL_STYLE_KEYS),
         ]
         app.setStyleSheet("\n".join(style for style in base_styles if style.strip()))
         cls.refresh_runtime_theme(app, clear_widget_styles=False)
@@ -509,8 +568,10 @@ class AppStyle:
             "margin-bottom: -1px;"
             "}"
             "QTabBar::tab:selected {"
-            f"background: {colors['window'].name()};"
+            f"background: {colors['accent'].name()};"
+            f"color: {colors['checked_fg'].name()};"
             f"border-color: {colors['accent'].name()};"
+            "font-weight: 600;"
             "border-bottom: none;"
             "}"
             "QTabBar::tab:hover:!selected {"
@@ -590,10 +651,13 @@ class AppStyle:
             return False
         try:
             qdarktheme = __import__('qdarktheme')
-            qdarktheme.setup_theme(variant)
-            actual = qdarktheme.get_theme() if variant == 'auto' else variant
+            actual = variant
+            if variant == 'auto':
+                darkdetect = __import__('darkdetect')
+                actual = str(darkdetect.theme() or 'dark').lower()
+            qdarktheme.setup_theme(actual)
             app.setProperty(cls.THEME_KEY_PROPERTY, f'qdarktheme:{actual}')
-            cls.refresh_runtime_theme(app)
+            cls.apply_global_style(app, preserve_existing=True)
             return True
         except Exception:
             return False
@@ -675,6 +739,11 @@ class AppStyle:
     def unit_label_width(cls):
         """Return standard inline unit-label width for small control rows."""
         return cls.FORM_UI['unit_label_width']
+
+    @classmethod
+    def status_led_size(cls):
+        """Return standard diameter for a small round non-interactive status dot."""
+        return cls.FORM_UI['status_led_size']
 
     @classmethod
     def action_button_min_width(cls):
@@ -1022,7 +1091,16 @@ class AppStyle:
             axis.title.set_color(text_color)
             axis.xaxis.label.set_color(text_color)
             axis.yaxis.label.set_color(text_color)
+            axis.xaxis.get_offset_text().set_color(text_color)
+            axis.yaxis.get_offset_text().set_color(text_color)
             axis.tick_params(colors=text_color, labelcolor=text_color)
+            for text in axis.texts:
+                text.set_color(text_color)
+            legend = axis.get_legend()
+            if legend is not None:
+                legend.get_title().set_color(text_color)
+                for text in legend.get_texts():
+                    text.set_color(text_color)
             for spine in axis.spines.values():
                 spine.set_color(grid_color)
             for line in axis.get_xgridlines() + axis.get_ygridlines():
@@ -1063,6 +1141,8 @@ class AppStyle:
                     size = cls.toolbar_symbol_button_size()
                     widget.setFixedSize(size)
                     widget.setMinimumSize(size)
+                elif widget.property(cls.STYLE_KEY_PROPERTY) == 'protocol_selector_button':
+                    widget.setFixedHeight(cls.BUTTON_FORM['protocol_selector_height'])
                 else:
                     if not style_key:
                         theme_key_check = str(cls.current_theme_key(app) or '')
@@ -1225,6 +1305,13 @@ def apply_emphasis_button_style(widget):
     widget.setMinimumHeight(AppStyle.standard_button_min_height())
     AppStyle.set_font_role(widget, 'button_emphasis')
 
+def apply_protocol_selector_button_style(widget):
+    """Apply the exclusive protocol-navigation button style."""
+    widget.setCheckable(True)
+    AppStyle.apply_widget_style(widget, 'protocol_selector_button')
+    AppStyle.set_font_role(widget, 'protocol_selector')
+    widget.setFixedHeight(AppStyle.BUTTON_FORM['protocol_selector_height'])
+
 def apply_input_style(widget):
     """Apply input field style to a widget"""
     AppStyle.apply_widget_style(widget, 'input_field')
@@ -1234,6 +1321,23 @@ def apply_group_box_style(widget):
     """Apply group box style to a widget"""
     AppStyle.apply_widget_style(widget, 'group_box')
     AppStyle.set_font_role(widget, 'group_box')
+
+def apply_status_led_style(widget, state='off'):
+    """Style a small round status dot (non-interactive; not a checkbox/button).
+
+    state: 'off' (unset), 'good', 'warn' (e.g. outlier), or 'error' (e.g. failed).
+    """
+    variables = AppStyle.resolved_colors()
+    led_colors = {
+        'off': variables['border'],
+        'good': variables['success'],
+        'warn': variables['warning'],
+        'error': variables['error'],
+    }
+    led_color = led_colors.get(state, variables['border'])
+    size = AppStyle.status_led_size()
+    widget.setFixedSize(size, size)
+    widget.setStyleSheet(AppStyle.format_style('status_led', led_color=led_color, led_radius=size // 2))
 
 def setup_splitter_layout(splitter, ratios):
     """Setup splitter with consistent ratios and responsive stretch behavior."""

@@ -46,6 +46,74 @@ class RingCenterCalculator:
         
         # For >3 points, use least squares fitting
         return self._calculate_from_multiple_points_fit(points)
+
+    def calculate_center_robust(
+        self, points: List[Tuple[float, float]]
+    ) -> Tuple[float, float, float, List[int], List[int]]:
+        """Calculate the center, retrying with outliers excluded if the first fit fails.
+
+        On failure, tries excluding each remaining point in turn (leave-one-out),
+        fitting the rest, and checking how badly the *excluded* point itself
+        disagrees with that fit. Whichever point disagrees the most is dropped,
+        and this repeats until a fit succeeds or only 3 points remain.
+
+        Args:
+            points: List of (x, y) coordinate tuples (minimum 3 points)
+
+        Returns:
+            tuple: (center_x, center_y, radius, used_indices, dropped_indices),
+            where the index lists refer to positions in the input `points` list.
+
+        Raises:
+            ValueError: If no fit succeeds even after dropping outliers.
+        """
+        working_indices = list(range(len(points)))
+        dropped_indices: List[int] = []
+
+        while True:
+            candidate_points = [points[i] for i in working_indices]
+            try:
+                ux, uy, radius = self.calculate_center(candidate_points)
+                return ux, uy, radius, working_indices, dropped_indices
+            except ValueError:
+                if len(working_indices) <= 3:
+                    raise
+                worst_position = self._find_worst_point_by_leave_one_out(points, working_indices)
+                dropped_indices.append(working_indices.pop(worst_position))
+
+    def _find_worst_point_by_leave_one_out(
+        self, points: List[Tuple[float, float]], working_indices: List[int]
+    ) -> int:
+        """Return the working_indices position that best explains a failed fit.
+
+        For each point, fit a circle from everyone else, then measure how far
+        that excluded point itself falls from the resulting circle. The point
+        that disagrees the most with the rest is the one to drop — this is
+        decided from actual trial fits, not guessed from raw point geometry.
+        """
+        residuals = []
+        positions = []
+        for position, point_index in enumerate(working_indices):
+            trial_indices = working_indices[:position] + working_indices[position + 1:]
+            trial_points = [points[i] for i in trial_indices]
+            try:
+                tux, tuy, tradius = self.calculate_center(trial_points)
+            except ValueError:
+                continue
+            excluded_x, excluded_y = points[point_index]
+            residuals.append(abs(np.hypot(excluded_x - tux, excluded_y - tuy) - tradius))
+            positions.append(position)
+
+        if residuals:
+            return positions[int(np.argmax(residuals))]
+
+        # No leave-one-out fit succeeded (e.g. multiple bad points) — fall back
+        # to the point furthest from the group's typical centroid distance.
+        xs = np.array([points[i][0] for i in working_indices])
+        ys = np.array([points[i][1] for i in working_indices])
+        cx0, cy0 = xs.mean(), ys.mean()
+        distances = np.hypot(xs - cx0, ys - cy0)
+        return int(np.argmax(np.abs(distances - np.median(distances))))
     
     def _calculate_from_three_points_exact(self, points: List[Tuple[float, float]]) -> Tuple[float, float, float]:
         """Exact calculation for 3 points using circumcenter method"""
