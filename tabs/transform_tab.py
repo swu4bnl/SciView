@@ -256,6 +256,14 @@ class TransformTab(BaseImageTab):
         self._add_grid_field(q_image_layout, 2, 0, "q<sub>z</sub> min (Å⁻¹)", self.q_y_min_spin)
         self.q_y_max_spin = _spin("crop_max")
         self._add_grid_field(q_image_layout, 2, 1, "q<sub>z</sub> max (Å⁻¹)", self.q_y_max_spin)
+        self.q_incident_angle_spin = _spin("incident_angle_deg")
+        self.q_incident_angle_spin.setToolTip(
+            "Grazing-incidence angle (GISAXS/GIWAXS); 0 for transmission/normal-incidence data"
+        )
+        self._add_grid_field(q_image_layout, 3, 0, "Incident angle (°)", self.q_incident_angle_spin)
+        self.q_sample_normal_spin = _spin("sample_normal_deg")
+        self.q_sample_normal_spin.setToolTip("Azimuthal (phi) reference offset for sample-stage misalignment")
+        self._add_grid_field(q_image_layout, 3, 1, "Sample normal (°)", self.q_sample_normal_spin)
         layout.addWidget(self.q_image_group)
 
         self.q_phi_group = QGroupBox("Parameters")
@@ -275,6 +283,9 @@ class TransformTab(BaseImageTab):
         self._add_grid_field(q_phi_layout, 3, 0, "Phi min (°)", self.qphi_y_min_spin)
         self.qphi_y_max_spin = _spin("phi_max")
         self._add_grid_field(q_phi_layout, 3, 1, "Phi max (°)", self.qphi_y_max_spin)
+        self.qphi_sample_normal_spin = _spin("sample_normal_deg")
+        self.qphi_sample_normal_spin.setToolTip("Azimuthal (phi) reference offset for sample-stage misalignment")
+        self._add_grid_field(q_phi_layout, 4, 0, "Sample normal (°)", self.qphi_sample_normal_spin)
         layout.addWidget(self.q_phi_group)
 
         self.qr_qz_group = QGroupBox("Parameters")
@@ -292,6 +303,14 @@ class TransformTab(BaseImageTab):
         self._add_grid_field(qr_qz_layout, 2, 0, "q<sub>z</sub> min (Å⁻¹)", self.qrqz_y_min_spin)
         self.qrqz_y_max_spin = _spin("crop_max")
         self._add_grid_field(qr_qz_layout, 2, 1, "q<sub>z</sub> max (Å⁻¹)", self.qrqz_y_max_spin)
+        self.qrqz_incident_angle_spin = _spin("incident_angle_deg")
+        self.qrqz_incident_angle_spin.setToolTip(
+            "Grazing-incidence angle (GISAXS/GIWAXS); 0 for transmission/normal-incidence data"
+        )
+        self._add_grid_field(qr_qz_layout, 3, 0, "Incident angle (°)", self.qrqz_incident_angle_spin)
+        self.qrqz_sample_normal_spin = _spin("sample_normal_deg")
+        self.qrqz_sample_normal_spin.setToolTip("Azimuthal (phi) reference offset for sample-stage misalignment")
+        self._add_grid_field(qr_qz_layout, 3, 1, "Sample normal (°)", self.qrqz_sample_normal_spin)
         layout.addWidget(self.qr_qz_group)
 
         self._operation_groups = {
@@ -312,6 +331,8 @@ class TransformTab(BaseImageTab):
                 "x_max": self.q_x_max_spin,
                 "y_min": self.q_y_min_spin,
                 "y_max": self.q_y_max_spin,
+                "incident_angle_deg": self.q_incident_angle_spin,
+                "sample_normal_deg": self.q_sample_normal_spin,
             },
             "q_phi_image": {
                 "bins_relative": self.qphi_bins_relative_spin,
@@ -321,6 +342,7 @@ class TransformTab(BaseImageTab):
                 "x_max": self.qphi_x_max_spin,
                 "y_min": self.qphi_y_min_spin,
                 "y_max": self.qphi_y_max_spin,
+                "sample_normal_deg": self.qphi_sample_normal_spin,
             },
             "qr_qz_image": {
                 "bins_relative": self.qrqz_bins_relative_spin,
@@ -329,6 +351,8 @@ class TransformTab(BaseImageTab):
                 "x_max": self.qrqz_x_max_spin,
                 "y_min": self.qrqz_y_min_spin,
                 "y_max": self.qrqz_y_max_spin,
+                "incident_angle_deg": self.qrqz_incident_angle_spin,
+                "sample_normal_deg": self.qrqz_sample_normal_spin,
             },
         }
         self._sync_operation_group_visibility()
@@ -472,6 +496,22 @@ class TransformTab(BaseImageTab):
     def _use_mask_enabled(self):
         return self.mask_source_combo.currentData() != "No mask"
 
+    def _resolved_calibration(self):
+        """Return the active calibration with this operation's incident-angle /
+        sample-normal overrides applied (GISAXS/GIWAXS), without mutating the shared
+        calibration."""
+        calibration = self._selected_calibration()
+        incident_widget = self._op_widget("incident_angle_deg")
+        sample_normal_widget = self._op_widget("sample_normal_deg")
+        if calibration is None or (incident_widget is None and sample_normal_widget is None):
+            return calibration
+        from sciview.processing.batch import clone_calibration_with_angles
+        return clone_calibration_with_angles(
+            calibration,
+            incident_angle_deg=incident_widget.value() if incident_widget is not None else None,
+            sample_normal_deg=sample_normal_widget.value() if sample_normal_widget is not None else None,
+        )
+
     def _selected_calibration(self):
         if self.calibration_source_combo.currentData() == "Custom profile":
             return self._custom_calibration
@@ -602,7 +642,7 @@ class TransformTab(BaseImageTab):
     def _compute_q_bounds(self, image_shape: tuple[int, int]):
         from sciview.processing.batch import compute_q_bounds
         mask = self._get_mask_array(image_shape) if self._use_mask_enabled() else None
-        self._q_bounds = compute_q_bounds(self._selected_calibration(), mask)
+        self._q_bounds = compute_q_bounds(self._resolved_calibration(), mask)
 
     def _refresh_auto_q_range(self):
         """Fill each operation's own crop fields from calibration bounds, for
@@ -636,7 +676,7 @@ class TransformTab(BaseImageTab):
         if image is None:
             return None
 
-        calibration = self._selected_calibration()
+        calibration = self._resolved_calibration()
         if calibration is None:
             self.parent_app.show_status("Load calibration before running transform")
             return None
@@ -809,6 +849,8 @@ class TransformTab(BaseImageTab):
         if op == "q_image":
             return {
                 "operation": op, "name": name, "bins_relative": bins_relative,
+                "incident_angle_deg": self._op_float("incident_angle_deg", 0.0),
+                "sample_normal_deg": self._op_float("sample_normal_deg", 0.0),
                 "preview_params": preview, "save_results": ["plots", "npz"],
             }
 
@@ -819,6 +861,7 @@ class TransformTab(BaseImageTab):
                 "bins_phi": self._op_int("bins_phi", 360),
                 "phi_min": self._op_float("y_min"),
                 "phi_max": self._op_float("y_max"),
+                "sample_normal_deg": self._op_float("sample_normal_deg", 0.0),
                 "preview_params": preview,
                 "save_results": ["plots", "npz"],
             }
@@ -827,6 +870,8 @@ class TransformTab(BaseImageTab):
             return {
                 "operation": op, "name": name,
                 "bins_relative": bins_relative,
+                "incident_angle_deg": self._op_float("incident_angle_deg", 0.0),
+                "sample_normal_deg": self._op_float("sample_normal_deg", 0.0),
                 "preview_params": preview,
                 "save_results": ["plots", "npz"],
             }
@@ -904,6 +949,12 @@ class TransformTab(BaseImageTab):
         y_max = self._op_float("y_max")
         if y_min is not None and y_max is not None:
             info_lines.append(f"y crop: {y_min:.4f} to {y_max:.4f}")
+        incident_angle = self._op_float("incident_angle_deg")
+        if incident_angle is not None:
+            info_lines.append(f"Incident angle: {incident_angle:.3f} deg")
+        sample_normal = self._op_float("sample_normal_deg")
+        if sample_normal is not None:
+            info_lines.append(f"Sample normal: {sample_normal:.3f} deg")
         info_lines.append(f"Calibration source: {self.calibration_source_combo.currentData()}")
         info_lines.append(f"Mask source: {self.mask_source_combo.currentData()}")
         if self._current_result is not None:

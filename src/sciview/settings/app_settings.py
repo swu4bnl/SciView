@@ -152,4 +152,10 @@ SPINBOX_CONFIG = {
     # Line-cut params.
     "line_dq":    (0.0001, 100.0, 0.01, 0.001, 4),
     "line_value": (-10.0,  10.0,  0.0, 0.01,  4),
+    # Grazing-incidence angle (GISAXS/GIWAXS), used only by Q Image / Qr-Qz Image —
+    # SciAnalysis folds this into its qz/qr calculation (see CalibrationRQconv.calc_from_XY).
+    "incident_angle_deg": (-90.0, 90.0, 0.0, 0.01, 3),
+    # Azimuthal (phi) reference offset for sample-stage misalignment; feeds into
+    # Qx/Qy/phi for all three transform maps (see CalibrationRQconv.calc_from_XY).
+    "sample_normal_deg": (-180.0, 180.0, 0.0, 0.01, 3),
 }

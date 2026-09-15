@@ -62,6 +62,11 @@ _OPERATION_KIND: dict[str, ProtocolKind] = {
 
 OUTPUT_FORMATS = ("png", "npz", "csv", "txt")  # kept for external callers; not used by run_batch
 
+# Per-protocol calibration overrides (see _resolve_protocol_calibration): these live in
+# BatchProtocol.params for UI/recipe/transport convenience but are not SciAnalysis
+# Protocol constructor kwargs, so build_protocol() strips them before calling SciAnalysis.
+_CALIBRATION_OVERRIDE_PARAM_KEYS = ("incident_angle_deg", "sample_normal_deg")
+
 
 def operation_kind(operation: str) -> ProtocolKind:
     return _OPERATION_KIND.get(operation, "reduction")
@@ -182,6 +187,10 @@ def _serialize_calibration(calibration: Any | None) -> dict[str, Any] | None:
         "det_orient": float(getattr(calibration, "det_orient", 0.0) or 0.0),
         "det_tilt": float(getattr(calibration, "det_tilt", 0.0) or 0.0),
         "det_phi": float(getattr(calibration, "det_phi", 0.0) or 0.0),
+        # Grazing-incidence angle (GISAXS/GIWAXS): SciAnalysis folds this into its
+        # qz_map()/qr_map() output, so it must round-trip through transport too.
+        "incident_angle": float(getattr(calibration, "incident_angle", 0.0) or 0.0),
+        "sample_normal": float(getattr(calibration, "sample_normal", 0.0) or 0.0),
     }
 
 
@@ -203,8 +212,49 @@ def _deserialize_calibration(payload: dict[str, Any] | None) -> Any | None:
             det_orient=float(payload.get("det_orient", 0.0)),
             det_tilt=float(payload.get("det_tilt", 0.0)),
             det_phi=float(payload.get("det_phi", 0.0)),
+            incident_angle=float(payload.get("incident_angle", 0.0)),
+            sample_normal=float(payload.get("sample_normal", 0.0)),
         )
     return calibration
+
+
+def clone_calibration_with_angles(
+    calibration: Any | None,
+    *,
+    incident_angle_deg: float | None = None,
+    sample_normal_deg: float | None = None,
+) -> Any | None:
+    """Return a copy of `calibration` with incident_angle/sample_normal overrides applied
+    for grazing-incidence (GISAXS/GIWAXS) qx-qz / qr-qz / q-phi maps.
+
+    Clones rather than mutating in place: SciAnalysis's set_angles() rewrites all five
+    angle parameters on every call, so mutating a calibration shared with the
+    Calibration tab would get silently reset the next time its own det_orient/tilt/phi
+    controls fire their own set_angles() call. Overrides left as None keep the
+    calibration's existing value.
+    """
+    payload = _serialize_calibration(calibration)
+    if payload is None:
+        return calibration
+    if incident_angle_deg is not None:
+        payload["incident_angle"] = float(incident_angle_deg)
+    if sample_normal_deg is not None:
+        payload["sample_normal"] = float(sample_normal_deg)
+    return _deserialize_calibration(payload)
+
+
+def _resolve_protocol_calibration(protocol: "BatchProtocol", calibration: Any | None) -> Any | None:
+    """Return the calibration to use for one protocol, applying its own incident-angle /
+    sample-normal overrides when present (see clone_calibration_with_angles)."""
+    incident_angle_deg = protocol.params.get("incident_angle_deg")
+    sample_normal_deg = protocol.params.get("sample_normal_deg")
+    if calibration is None or (incident_angle_deg is None and sample_normal_deg is None):
+        return calibration
+    return clone_calibration_with_angles(
+        calibration,
+        incident_angle_deg=incident_angle_deg,
+        sample_normal_deg=sample_normal_deg,
+    )
 
 
 def _serialize_mask(mask: Any | None) -> np.ndarray | None:
@@ -550,7 +600,10 @@ def build_protocol(proto: BatchProtocol) -> Any:
             f"Unknown protocol operation: '{proto.operation}'. "
             f"Registered operations: {sorted(_PROTOCOL_BUILDERS)}"
         )
-    return builder(proto.params)
+    # incident_angle_deg/sample_normal_deg are calibration overrides (see
+    # _resolve_protocol_calibration), not SciAnalysis Protocol constructor kwargs.
+    params = {k: v for k, v in proto.params.items() if k not in _CALIBRATION_OVERRIDE_PARAM_KEYS}
+    return builder(params)
 
 
 def _run_file_with_protocol(
@@ -833,6 +886,7 @@ def run_batch(
         style = PlotStyle.from_dict(job.plot_style)
         if job.output_mode == "preview":
             executables = active
+            protocol_calibrations = [_resolve_protocol_calibration(p, job.calibration) for p in active]
         else:
             active = [
                 BatchProtocol(
@@ -849,10 +903,15 @@ def run_batch(
                 for proto in active
             ]
 
-            # Compute q bounds from calibration and inject plot_range into each protocol.
+            # Compute q bounds per protocol (not once globally) so a protocol's own
+            # incident-angle override (GISAXS/GIWAXS) is reflected in its plot_range crop.
             from sciview.masking.io import coerce_mask_to_bool
-            bounds = compute_q_bounds(job.calibration, coerce_mask_to_bool(job.mask))
-            active = [apply_q_bounds_to_protocol(p, bounds) for p in active]
+            bool_mask = coerce_mask_to_bool(job.mask)
+            protocol_calibrations = [_resolve_protocol_calibration(p, job.calibration) for p in active]
+            active = [
+                apply_q_bounds_to_protocol(p, compute_q_bounds(cal, bool_mask))
+                for p, cal in zip(active, protocol_calibrations)
+            ]
             executables = [build_protocol(p) for p in active]
 
         files = job.file_paths
@@ -886,7 +945,7 @@ def run_batch(
             )
             out_dir.mkdir(parents=True, exist_ok=True)
 
-            for proto, executable in zip(active, executables):
+            for proto, executable, proto_calibration in zip(active, executables, protocol_calibrations):
                 if stop_requested():
                     break
 
@@ -898,7 +957,7 @@ def run_batch(
                         proto_out = _run_preview_file_with_protocol(
                             file_path,
                             proto,
-                            job.calibration,
+                            proto_calibration,
                             job.mask,
                             out_dir,
                             style,
@@ -906,7 +965,7 @@ def run_batch(
                         )
                     else:
                         proto_out = _run_file_with_protocol(
-                            file_path, executable, job.calibration, job.mask, out_dir,
+                            file_path, executable, proto_calibration, job.mask, out_dir,
                         )
                     emit_file_done(BatchFileResult(
                         file_path=file_path, protocol_name=proto.name, status="ok",
