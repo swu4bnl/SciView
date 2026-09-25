@@ -32,6 +32,7 @@ from PyQt5.QtWidgets import (
 
 from sciview.session.session_cache import choose_path
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
+from sciview.interfaces.stable_qt.utils.reduction_overlay import OVERLAY_STYLE
 from sciview.interfaces.theme.app_style import (
     AppStyle,
     apply_emphasis_button_style,
@@ -85,12 +86,12 @@ class TransformTab(BaseImageTab):
         self._preview_timer.timeout.connect(self.refresh_preview)
         self._build_ui()
         self._building_controls = False
+        self.add_display_hook(self._draw_raw_overlay, "post")
         self._refresh_payload_view()
 
     def _build_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        layout_ratios = AppStyle.get_layout_ratios()
 
         main_splitter = QSplitter(Qt.Horizontal)
         main_splitter.addWidget(self._create_transform_panel())
@@ -98,7 +99,7 @@ class TransformTab(BaseImageTab):
         right_splitter = QSplitter(Qt.Vertical)
         right_splitter.addWidget(self._create_image_panel())
         right_splitter.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
-        setup_splitter_layout(right_splitter, layout_ratios['preview_sidebar_ratio'])
+        setup_splitter_layout(right_splitter, [1, 1])
         main_splitter.addWidget(right_splitter)
 
         setup_splitter_layout(main_splitter, [1, 1])
@@ -657,6 +658,24 @@ class TransformTab(BaseImageTab):
         if result is None and raw is not None:
             self.parent_app.show_status("Mask shape does not match the active image; ignoring mask for preview")
         return result
+
+    def _draw_raw_overlay(self, viewer):
+        viewer.clear_overlays(group="transform")
+        image = viewer.source_array
+        if image is None:
+            return
+
+        calibration = self._selected_calibration()
+        if calibration is not None:
+            x0, y0 = getattr(calibration, "x0", None), getattr(calibration, "y0", None)
+            if x0 is not None and y0 is not None:
+                viewer.add_points("transform-center", [float(x0)], [float(y0)], group="transform", color="#00d1ff", size=7.0)
+
+        if self._use_mask_enabled():
+            mask = self._get_mask_array(image.shape)
+            if mask is not None:
+                style = OVERLAY_STYLE["mask"]
+                viewer.add_mask_overlay("transform-mask", mask, group="transform", color=style["color"], alpha=style["alpha"])
 
     def _compute_q_bounds(self, image_shape: tuple[int, int]):
         from sciview.processing.batch import compute_q_bounds
