@@ -215,6 +215,8 @@ class CalibrationApp(BaseImageTab):
         
         for attr, params in calibration_params:
             setattr(self, attr, self._create_spin(*params, parent=params_form))
+        self.spin_x.setToolTip("Middle-click the raw image to set the beam center")
+        self.spin_y.setToolTip("Middle-click the raw image to set the beam center")
 
         # Wavelength/Energy section
         self.spin_wl_ang = QDoubleSpinBox()
@@ -934,8 +936,15 @@ class CalibrationApp(BaseImageTab):
         self.parent_app.show_status(f"1D profiles exported to {file_path}")
 
     def on_mouse_click(self, event):
-        """Handle mouse clicks on the raw image for ring center calculation"""
+        """Pick the beam center with middle click or ring points with right click."""
         if not getattr(event, 'inside_image', False):
+            return
+
+        if event.button == Qt.MiddleButton:
+            self.spin_x.setValue(event.x)
+            self.spin_y.setValue(event.y)
+            self._calibration_update_timer.stop()
+            self.calibrate_and_update_status()
             return
         
         # Mouse button mapping: 1=left, 2=middle, 3=right
