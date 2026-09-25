@@ -38,7 +38,8 @@ class SmiBrowserControls(QWidget):
         layout.addLayout(row)
         row = QHBoxLayout()
         self.stream = QComboBox(); self.detector = QComboBox(); self.axis = QComboBox()
-        for label, widget in (("Stream", self.stream), ("Detector", self.detector), ("Browse axis", self.axis)):
+        self.detector.hide()
+        for label, widget in (("Stream", self.stream), ("Browse axis", self.axis)):
             row.addWidget(QLabel(label)); row.addWidget(widget, 1)
         layout.addLayout(row)
         row = QHBoxLayout()
@@ -145,12 +146,15 @@ class SmiBrowserControls(QWidget):
 
     def clear_results(self):
         self.job.invalidate()
+        self.tab.compare_job.invalidate()
+        self.tab.compare_viewer.hide()
         self.sequence = self.ref = None
         self.order = np.array([], dtype=int)
         self.tab.current_scan = None
         self.tab.current_frame_array = self.tab.current_image_array = None
         self.tab.scan_rows = []
         self.tab.scan_table.setRowCount(0)
+        self.tab.run_explorer.set_run(None, None)
         self.tab.frame_slider.setEnabled(False)
         self.tab.series_slider.setEnabled(False)
         self.tab.load_button.setEnabled(False)
@@ -190,6 +194,10 @@ class SmiBrowserControls(QWidget):
             finally:
                 self._guard = False
             self._show(ref, array)
+            self.tab._set_panel_detectors(list(sequence.fields), ref.detector)
+            self.tab._update_comparison()
+            self.tab.run_explorer.set_run(ref.profile, ref.uid, scan.metadata)
+            self.tab.run_explorer.use_columns(sequence.stream, sequence.streams, sequence.scalars)
         self.job.submit(work, done, self.error)
 
     def _populate_axes(self):
@@ -285,6 +293,7 @@ class SmiBrowserControls(QWidget):
         self.note.setText("Raw coordinates (x=column, y=row); repeated axis values retain separate frames.")
         if hasattr(tab.parent_app, "publish_frame_context"):
             tab.parent_app.publish_frame_context(ref, array, self.sequence.scalars)
+        tab._update_comparison()
 
     def open_cached(self):
         app = self.tab.parent_app

@@ -1161,7 +1161,7 @@ def create_application():
 
     print("[SciView] All tabs loaded. Launching window...")
     if os.environ.get("SCIVIEW_PROFILE") == "smi_migration":
-        main_window.setWindowTitle("SciView - SMI (calibration and masks)")
+        main_window.setWindowTitle("SciView - Tiled run exploration")
         for i in range(main_window.tab_widget.count()):
             if main_window.tab_widget.tabText(i) == "Tiled Browser":
                 main_window.tab_widget.setCurrentIndex(i)

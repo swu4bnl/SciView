@@ -2,6 +2,23 @@
 import time
 
 
+def cached_identity(uri):
+    """Check saved credentials without starting an interactive sign-in flow."""
+    import httpx
+    from tiled.client.context import Context
+    context, _ = Context.from_any_uri(uri, timeout=httpx.Timeout(15.0, connect=5.0))
+    if not context.use_cached_tokens():
+        return None
+    try:
+        info = context.whoami()
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (401, 403): return None
+        raise
+    for identity in (info or {}).get("identities", []):
+        if identity.get("id"): return str(identity["id"])
+    return "Tiled user" if info else None
+
+
 def sign_in(uri, cancel, notify, *, force=False):
     from tiled.client.context import Context
     from tiled.client.utils import handle_error

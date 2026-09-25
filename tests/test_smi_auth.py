@@ -37,6 +37,40 @@ def test_device_login_reuses_cached_session(monkeypatch):
     assert sign_in("https://tiled.example", None, None)["identities"][0]["id"] == "user"
 
 
+def test_startup_identity_never_starts_device_login(monkeypatch):
+    from tiled.client.context import Context
+    from sciview.sources.tiled_auth import cached_identity
+    context = SimpleNamespace(use_cached_tokens=lambda: True, whoami=lambda: {"identities": [{"id": "saved-user"}]})
+    monkeypatch.setattr(Context, "from_any_uri", lambda *a, **kw: (context, None))
+    assert cached_identity("https://tiled.example") == "saved-user"
+    context.use_cached_tokens = lambda: False
+    context.whoami = lambda: (_ for _ in ()).throw(AssertionError("No token should not call whoami"))
+    assert cached_identity("https://tiled.example") is None
+
+
+def test_startup_saved_login_populates_list_without_dialog(monkeypatch):
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt5.QtWidgets import QApplication
+    from main import SciAnaApp
+    from tabs.tiled_browser_tab import TiledBrowserTab
+    app = QApplication.instance() or QApplication([])
+    window = SciAnaApp(); tab = TiledBrowserTab(window)
+    calls = []
+    monkeypatch.setattr("sciview.sources.tiled_auth.cached_identity", lambda uri: "saved-user")
+    monkeypatch.setattr(tab.auth_job, "submit", lambda work, done, error: done(work()))
+    monkeypatch.setattr(tab.smi_controls, "search", lambda filters: calls.append(filters))
+    tab.catalog_combo.blockSignals(True)
+    tab.catalog_combo.setCurrentIndex(tab.catalog_combo.findData("smi_migration"))
+    tab.catalog_combo.blockSignals(False)
+    tab.smi_search.activation_timer.stop()
+    tab._refresh_auth_state()
+    assert "saved-user" in tab.auth_status_label.text()
+    assert calls == [{}]
+    assert "_smi_login" not in tab.__dict__
+    tab.close(); window.close()
+
+
 def test_forced_login_does_not_short_circuit_on_cached_session(monkeypatch):
     from tiled.client.context import Context
     def cached():

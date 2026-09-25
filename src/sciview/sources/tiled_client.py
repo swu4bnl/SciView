@@ -134,8 +134,14 @@ class TiledClientManager:
             if profile.get("lazy_frames"):
                 # The SMI pilot reuses cached credentials without prompting on
                 # every page/frame operation. Login remains an explicit action.
-                client = from_uri(profile['uri'], prompt_for_reauthentication=False,
-                                  timeout=httpx.Timeout(30.0, connect=5.0))
+                from tiled.client import from_context
+                from tiled.client.context import Context
+                context, node_path = Context.from_any_uri(
+                    profile['uri'], timeout=httpx.Timeout(30.0, connect=5.0))
+                # from_uri's automatic reauthentication may be disabled; restore
+                # saved credentials explicitly before catalog access instead.
+                context.use_cached_tokens()
+                client = from_context(context, node_path_parts=node_path)
                 self._clients[profile_name] = client
                 self._current_profile = profile_name
                 return client
