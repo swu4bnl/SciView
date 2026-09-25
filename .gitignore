@@ -26,6 +26,7 @@ tests/*
 !tests/test_smi*.py
 !tests/test_frame_source.py
 !tests/test_latest_job.py
+!tests/test_run_details.py
 
 # VSCode settings
 .vscode/
