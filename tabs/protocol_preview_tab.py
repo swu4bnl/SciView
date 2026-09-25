@@ -35,7 +35,7 @@ from sciview.interfaces.theme.app_style import (
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION
 from sciview.settings.app_settings import PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE, SCIANALYSIS_PATH
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
-from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
+from sciview.session.session_cache import choose_path
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
 
 # Try to import SciAnalysis
@@ -558,10 +558,10 @@ class ProtocolPreviewApp(BaseImageTab):
     
     def _load_calibration_file(self):
         """Load calibration file and store in parent_app for shared access"""
-        file_path, _ = dialog_open_file(
+        file_path, _ = choose_path(
             self,
             "Load Calibration File",
-            "YAML Files (*.yaml *.yml);;All Files (*)",
+            file_filter="YAML Files (*.yaml *.yml);;All Files (*)",
             key="calibration_open",
         )
         
@@ -622,10 +622,10 @@ class ProtocolPreviewApp(BaseImageTab):
     
     def _load_mask_file(self):
         """Load mask file and store in parent_app for shared access"""
-        file_path, _ = dialog_open_file(
+        file_path, _ = choose_path(
             self,
             "Load Mask File",
-            "Mask Files (*.png *.tif *.tiff *.xcf *.yaml);;All Files (*)",
+            file_filter="Mask Files (*.png *.tif *.tiff *.xcf *.yaml);;All Files (*)",
             key="mask_open",
         )
         
@@ -1179,11 +1179,11 @@ class ProtocolPreviewApp(BaseImageTab):
             ext = "yaml"
             filter_str = "YAML Files (*.yaml *.yml)"
         
-        file_path, _ = dialog_save_file(
+        file_path, _ = choose_path(
             self,
             "Export Workflow",
-            f"workflow.{ext}",
-            filter_str,
+            mode="save", default_name=f"workflow.{ext}",
+            file_filter=filter_str,
             key="workflow_export",
         )
         

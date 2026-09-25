@@ -25,12 +25,14 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QSpinBox,
     QSplitter,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
+from sciview.session.session_cache import choose_path
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
+from sciview.interfaces.stable_qt.utils.reduction_overlay import OVERLAY_STYLE
 from sciview.interfaces.theme.app_style import (
     AppStyle,
     apply_emphasis_button_style,
@@ -84,11 +86,12 @@ class TransformTab(BaseImageTab):
         self._preview_timer.timeout.connect(self.refresh_preview)
         self._build_ui()
         self._building_controls = False
+        self.add_display_hook(self._draw_raw_overlay, "post")
+        self._refresh_payload_view()
 
     def _build_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        layout_ratios = AppStyle.get_layout_ratios()
 
         main_splitter = QSplitter(Qt.Horizontal)
         main_splitter.addWidget(self._create_transform_panel())
@@ -96,7 +99,7 @@ class TransformTab(BaseImageTab):
         right_splitter = QSplitter(Qt.Vertical)
         right_splitter.addWidget(self._create_image_panel())
         right_splitter.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
-        setup_splitter_layout(right_splitter, layout_ratios['preview_sidebar_ratio'])
+        setup_splitter_layout(right_splitter, [1, 1])
         main_splitter.addWidget(right_splitter)
 
         setup_splitter_layout(main_splitter, [1, 1])
@@ -107,6 +110,8 @@ class TransformTab(BaseImageTab):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+
+        layout.addLayout(self._create_protocol_selector())
 
         title_row = QHBoxLayout()
         title = QLabel("Transform Preview")
@@ -160,6 +165,8 @@ class TransformTab(BaseImageTab):
         self.plot_scale_combo = QComboBox()
         self.plot_scale_combo.addItems(SUPPORTED_IMAGE_SCALES)
         self.plot_scale_combo.setCurrentText(display_values["scale"])
+        self.color_auto_check = QCheckBox("Auto intensity range")
+        self.color_auto_check.setChecked(True)
         self.plot_vmin_spin = QDoubleSpinBox()
         self.plot_vmax_spin = QDoubleSpinBox()
         for spin, value in (
@@ -169,12 +176,46 @@ class TransformTab(BaseImageTab):
             spin.setRange(-1.0e15, 1.0e15)
             spin.setDecimals(4)
             spin.setValue(0.0 if value is None else value)
+            spin.setEnabled(False)
         self._add_grid_field(style_layout, 0, 3, "Export resolution (DPI)", self.plot_dpi_spin)
         self._add_grid_field(style_layout, 1, 0, "Colormap", self.plot_cmap_combo)
-        self._add_grid_field(style_layout, 1, 1, "Color scaling", self.plot_scale_combo)
-        self._add_grid_field(style_layout, 1, 2, "Color scale minimum", self.plot_vmin_spin)
-        self._add_grid_field(style_layout, 1, 3, "Color scale maximum", self.plot_vmax_spin)
+        self._add_grid_field(style_layout, 1, 1, "Intensity scale", self.plot_scale_combo)
+        self._add_grid_field(style_layout, 1, 2, "Intensity min", self.plot_vmin_spin)
+        self._add_grid_field(style_layout, 1, 3, "Intensity max", self.plot_vmax_spin)
+        style_layout.addWidget(self.color_auto_check, 2, 0, 1, 2)
         return style_group
+
+    def _create_protocol_selector(self):
+        protocol_layout = QGridLayout()
+        protocol_label = QLabel("Protocol")
+        apply_subtitle_style(protocol_label)
+        protocol_layout.addWidget(protocol_label, 0, 0, 1, 3)
+        self.protocol_button_group = QButtonGroup(self)
+        self.protocol_button_group.setExclusive(True)
+        self._operation_buttons = {}
+        for index, (operation, label) in enumerate((
+            ("q_image", "Q Image"),
+            ("q_phi_image", "Q-Phi Image"),
+            ("qr_qz_image", "Qr-Qz Image"),
+        )):
+            button = QPushButton(label)
+            apply_protocol_selector_button_style(button)
+            self.protocol_button_group.addButton(button)
+            self._operation_buttons[operation] = button
+            protocol_layout.addWidget(button, 1, index)
+        self._operation_buttons["q_image"].setChecked(True)
+        for column in range(3):
+            protocol_layout.setColumnStretch(column, 1)
+        return protocol_layout
+
+    def _create_payload_group(self):
+        group = QGroupBox("Recipe")
+        layout = QVBoxLayout(group)
+        self.payload_view = QTextEdit()
+        self.payload_view.setFontFamily("monospace")
+        self.payload_view.setMinimumHeight(150)
+        layout.addWidget(self.payload_view, 1)
+        return group
 
     def _create_controls_panel(self):
         panel = QWidget()
@@ -210,36 +251,6 @@ class TransformTab(BaseImageTab):
         self.auto_update_check = QCheckBox("Live preview")
         self.auto_update_check.setChecked(True)
         layout.addWidget(self.auto_update_check)
-
-        # All three call SciAnalysis the same way: only bins_relative (plus
-        # bins_phi for Q-Phi) is a real SciAnalysis parameter — remesh_q_bin /
-        # remesh_q_phi / remesh_qr_bin always cover the full calibration extent.
-        # The crop fields below (labeled per operation's own axes) are
-        # display-only, applied as matplotlib axis limits in
-        # _apply_display_crop, matching SciAnalysis's own universal
-        # plot_range=[x_min, x_max, y_min, y_max] convention (Data2D.plot()) —
-        # not sent to SciAnalysis here (see _run_scianalysis).
-        protocol_layout = QGridLayout()
-        protocol_label = QLabel("Protocol")
-        apply_subtitle_style(protocol_label)
-        protocol_layout.addWidget(protocol_label, 0, 0, 1, 3)
-        self.protocol_button_group = QButtonGroup(self)
-        self.protocol_button_group.setExclusive(True)
-        self._operation_buttons = {}
-        for index, (operation, label) in enumerate((
-            ("q_image", "Q Image"),
-            ("q_phi_image", "Q-Phi Image"),
-            ("qr_qz_image", "Qr-Qz Image"),
-        )):
-            button = QPushButton(label)
-            apply_protocol_selector_button_style(button)
-            self.protocol_button_group.addButton(button)
-            self._operation_buttons[operation] = button
-            protocol_layout.addWidget(button, 1, index)
-        self._operation_buttons["q_image"].setChecked(True)
-        for column in range(3):
-            protocol_layout.setColumnStretch(column, 1)
-        layout.addLayout(protocol_layout)
 
         self.q_image_group = QGroupBox("Parameters")
         q_image_layout = QGridLayout(self.q_image_group)
@@ -357,7 +368,12 @@ class TransformTab(BaseImageTab):
         }
         self._sync_operation_group_visibility()
 
+        layout.addWidget(self._create_payload_group(), 1)
+
         button_row = QHBoxLayout()
+        self.payload_apply_button = QPushButton("Apply YAML")
+        self.payload_apply_button.setToolTip("Parse the edited Recipe YAML above and apply it to the controls")
+        self.payload_apply_button.clicked.connect(self._apply_payload_edits)
         self.preview_button = QPushButton("Refresh Preview")
         self.preview_button.clicked.connect(self.refresh_preview)
         self.export_button = QPushButton("Export Data")
@@ -366,17 +382,17 @@ class TransformTab(BaseImageTab):
         self.send_to_batch_button.setToolTip("Push current settings as a protocol to the Batch tab")
         self.send_to_batch_button.clicked.connect(self._send_to_batch)
         apply_emphasis_button_style(self.send_to_batch_button)
+        button_row.addWidget(self.payload_apply_button)
         button_row.addWidget(self.preview_button)
         button_row.addWidget(self.export_button)
         button_row.addWidget(self.send_to_batch_button)
         layout.addLayout(button_row)
 
-        layout.addStretch()
-
         for operation, button in self._operation_buttons.items():
             button.toggled.connect(lambda checked, op=operation: self._on_protocol_changed(op, checked))
 
         self.auto_update_check.stateChanged.connect(self._on_parameters_changed)
+        self.color_auto_check.stateChanged.connect(self._on_parameters_changed)
         self.plot_cmap_combo.currentTextChanged.connect(self._on_plot_style_controls_changed)
         self.plot_scale_combo.currentTextChanged.connect(self._on_plot_style_controls_changed)
         for spin in (
@@ -419,6 +435,7 @@ class TransformTab(BaseImageTab):
             return
         self.parent_app.publish_shared_plot_style(style, source_tab=self)
         self._update_transform_plot(self._current_result)
+        self._refresh_payload_view()
 
     def _sync_plot_style_controls(self) -> None:
         style = resolve_plot_style(self.parent_app)
@@ -456,6 +473,8 @@ class TransformTab(BaseImageTab):
     def _on_parameters_changed(self, *args):
         if self._building_controls:
             return
+        self.plot_vmin_spin.setEnabled(not self.color_auto_check.isChecked())
+        self.plot_vmax_spin.setEnabled(not self.color_auto_check.isChecked())
         for operation, widgets in self._operation_param_widgets.items():
             auto_check = widgets.get("auto_crop")
             if auto_check is None:
@@ -470,6 +489,7 @@ class TransformTab(BaseImageTab):
                 widget = widgets.get(key)
                 if widget is not None:
                     widget.setEnabled(manual_crop)
+        self._refresh_payload_view()
         self.update_plot(schedule_preview=True)
 
     def _selected_operation(self):
@@ -532,10 +552,10 @@ class TransformTab(BaseImageTab):
         return getattr(self.parent_app, "mask", getattr(self.parent_app, "current_mask", None))
 
     def _load_custom_calibration(self):
-        file_path, _ = dialog_open_file(
+        file_path, _ = choose_path(
             self,
             "Load Calibration YAML",
-            "YAML files (*.yaml *.yml);;All files (*)",
+            file_filter="YAML files (*.yaml *.yml);;All files (*)",
             key="transform_calibration_open",
         )
         if not file_path:
@@ -566,10 +586,10 @@ class TransformTab(BaseImageTab):
             self.parent_app.show_status(f"Failed to load custom calibration: {exc}")
 
     def _load_custom_mask(self):
-        file_path, _ = dialog_open_file(
+        file_path, _ = choose_path(
             self,
             "Load Mask",
-            "Mask files (*.png *.tif *.tiff *.npy);;All files (*)",
+            file_filter="Mask files (*.png *.tif *.tiff *.npy);;All files (*)",
             key="transform_mask_open",
         )
         if not file_path:
@@ -638,6 +658,24 @@ class TransformTab(BaseImageTab):
         if result is None and raw is not None:
             self.parent_app.show_status("Mask shape does not match the active image; ignoring mask for preview")
         return result
+
+    def _draw_raw_overlay(self, viewer):
+        viewer.clear_overlays(group="transform")
+        image = viewer.source_array
+        if image is None:
+            return
+
+        calibration = self._selected_calibration()
+        if calibration is not None:
+            x0, y0 = getattr(calibration, "x0", None), getattr(calibration, "y0", None)
+            if x0 is not None and y0 is not None:
+                viewer.add_points("transform-center", [float(x0)], [float(y0)], group="transform", color="#00d1ff", size=7.0)
+
+        if self._use_mask_enabled():
+            mask = self._get_mask_array(image.shape)
+            if mask is not None:
+                style = OVERLAY_STYLE["mask"]
+                viewer.add_mask_overlay("transform-mask", mask, group="transform", color=style["color"], alpha=style["alpha"])
 
     def _compute_q_bounds(self, image_shape: tuple[int, int]):
         from sciview.processing.batch import compute_q_bounds
@@ -809,11 +847,11 @@ class TransformTab(BaseImageTab):
             base = os.path.splitext(os.path.basename(self.parent_app.get_image_path()))[0]
             default_name = f"{base}_{self._current_result.operation}.npz"
 
-        file_path, _ = dialog_save_file(
+        file_path, _ = choose_path(
             self,
             "Export transformed image",
-            default_name,
-            "NumPy zipped (*.npz);;NumPy array (*.npy);;All files (*)",
+            mode="save", default_name=default_name,
+            file_filter="NumPy zipped (*.npz);;NumPy array (*.npy);;All files (*)",
             key="transform_export",
         )
         if not file_path:
@@ -822,12 +860,36 @@ class TransformTab(BaseImageTab):
         written_path = save_transform_result(self._current_result, file_path)
         self.parent_app.show_status(f"Transformed image exported to {written_path}")
 
+    def _xy_plot_bounds(self):
+        """x/y (or x/phi) bounds to send: None (native SciAnalysis autoscale)
+        while "Auto crop to calibration" is checked, else the exact typed
+        values — same auto-vs-explicit rule as Reduction tab's q_min/q_max.
+        q_phi_image is exempt on y: phi is always explicit, never
+        calibration-derived (see _on_parameters_changed)."""
+        auto = self._op_bool("auto_crop", True)
+        x_min = None if auto else self._op_float("x_min")
+        x_max = None if auto else self._op_float("x_max")
+        if self._selected_operation() == "q_phi_image":
+            return x_min, x_max, self._op_float("y_min", -180.0), self._op_float("y_max", 180.0)
+        y_min = None if auto else self._op_float("y_min")
+        y_max = None if auto else self._op_float("y_max")
+        return x_min, x_max, y_min, y_max
+
     def _build_batch_payload(self) -> dict:
         """Build SA-compatible protocol recipe for push to batch.
 
-        Does NOT include plot_range (batch injects it from calibration at run time).
-        For q_phi_image the phi range is included as phi_min/phi_max and is consumed
-        by apply_q_bounds_to_protocol when building the final plot_range.
+        x_min/x_max/y_min/y_max (phi_min/phi_max for q_phi_image) are set here
+        from this tab's own crop controls — None while "Auto crop to
+        calibration" is checked (so SciAnalysis's own calibration-derived
+        plot_range applies per file, matching per-file calibration in a
+        batch), or the exact typed values once the user overrides it manually
+        (see transform_canonical_to_scianalysis_kwargs, which assembles the
+        final plot_range and is the only place that conversion happens).
+        zmin/zmax mirror the Intensity min/max controls exactly (None while
+        "Auto intensity range" is checked, so SciAnalysis's own ztrim-based
+        auto-scaling applies) — these are real, honored SciAnalysis kwargs,
+        unlike the log/linear scale mode (hardcoded to 'gamma' inside
+        SciAnalysis's own q_image/qr_image/q_phi_image protocols).
         """
         op   = self._selected_operation()
         name = self._operation_labels[op]
@@ -835,6 +897,10 @@ class TransformTab(BaseImageTab):
         transform_method = None
         if self._current_result is not None and self._current_result.operation == op:
             transform_method = getattr(self._current_result, "metadata", {}).get("method")
+        auto_intensity = self.color_auto_check.isChecked()
+        zmin = None if auto_intensity else self.plot_vmin_spin.value()
+        zmax = None if auto_intensity else self.plot_vmax_spin.value()
+        x_min, x_max, y_min, y_max = self._xy_plot_bounds()
         preview = {
             "scale": self.plot_scale_combo.currentText(),
             "vmin": self.plot_vmin_spin.value(),
@@ -849,6 +915,8 @@ class TransformTab(BaseImageTab):
         if op == "q_image":
             return {
                 "operation": op, "name": name, "bins_relative": bins_relative,
+                "zmin": zmin, "zmax": zmax,
+                "x_min": x_min, "x_max": x_max, "y_min": y_min, "y_max": y_max,
                 "incident_angle_deg": self._op_float("incident_angle_deg", 0.0),
                 "sample_normal_deg": self._op_float("sample_normal_deg", 0.0),
                 "preview_params": preview, "save_results": ["plots", "npz"],
@@ -859,8 +927,9 @@ class TransformTab(BaseImageTab):
                 "operation": op, "name": name,
                 "bins_relative": bins_relative,
                 "bins_phi": self._op_int("bins_phi", 360),
-                "phi_min": self._op_float("y_min"),
-                "phi_max": self._op_float("y_max"),
+                "zmin": zmin, "zmax": zmax,
+                "x_min": x_min, "x_max": x_max,
+                "phi_min": y_min, "phi_max": y_max,
                 "sample_normal_deg": self._op_float("sample_normal_deg", 0.0),
                 "preview_params": preview,
                 "save_results": ["plots", "npz"],
@@ -870,6 +939,8 @@ class TransformTab(BaseImageTab):
             return {
                 "operation": op, "name": name,
                 "bins_relative": bins_relative,
+                "zmin": zmin, "zmax": zmax,
+                "x_min": x_min, "x_max": x_max, "y_min": y_min, "y_max": y_max,
                 "incident_angle_deg": self._op_float("incident_angle_deg", 0.0),
                 "sample_normal_deg": self._op_float("sample_normal_deg", 0.0),
                 "preview_params": preview,
@@ -887,6 +958,105 @@ class TransformTab(BaseImageTab):
             "mask_source": self.mask_source_combo.currentData(),
             "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
         }
+
+    def _build_payload_preview(self) -> dict:
+        """Curated view shown in the YAML payload box: the batch payload plus
+        calibration/mask context, minus preview_params entries that duplicate
+        a top-level field already shown (vmin/vmax duplicate zmin/zmax;
+        x_min/x_max duplicate the top-level crop; y_min/y_max duplicate
+        phi_min/phi_max for q_phi_image). scale and transform_method have no
+        top-level equivalent and stay, since Batch's WYSIWYG match-preview
+        genuinely needs them."""
+        payload = {
+            **self._build_batch_payload(),
+            "calibration_source": self.calibration_source_combo.currentData(),
+            "mask_source": self.mask_source_combo.currentData(),
+        }
+        preview = payload.get("preview_params", {})
+        preview.pop("vmin", None)
+        preview.pop("vmax", None)
+        preview.pop("x_min", None)
+        preview.pop("x_max", None)
+        preview.pop("y_min", None)
+        preview.pop("y_max", None)
+        return payload
+
+    def _refresh_payload_view(self) -> None:
+        if not hasattr(self, "payload_view") or self.payload_view.hasFocus():
+            return
+        text = "# Recipe sent to Batch tab\n" + yaml.safe_dump(
+            self._build_payload_preview(), sort_keys=False, default_flow_style=False
+        )
+        self.payload_view.setPlainText(text)
+
+    def _apply_payload_edits(self) -> None:
+        try:
+            data = yaml.safe_load(self.payload_view.toPlainText()) or {}
+        except yaml.YAMLError as exc:
+            self.parent_app.show_status(f"Invalid YAML: {exc}")
+            return
+        if not isinstance(data, dict):
+            self.parent_app.show_status("Invalid recipe: expected a YAML mapping")
+            return
+
+        operation = data.get("operation")
+        if operation in self._operation_buttons:
+            self._operation_buttons[operation].setChecked(True)
+
+        widgets = self._operation_param_widgets.get(self._selected_operation(), {})
+
+        def _set(key, value):
+            widget = widgets.get(key)
+            if widget is not None and value is not None:
+                widget.blockSignals(True)
+                widget.setValue(float(value))
+                widget.blockSignals(False)
+
+        _set("bins_relative", data.get("bins_relative"))
+        _set("bins_phi", data.get("bins_phi"))
+        _set("incident_angle_deg", data.get("incident_angle_deg"))
+        _set("sample_normal_deg", data.get("sample_normal_deg"))
+
+        auto_crop = widgets.get("auto_crop")
+        x_min, x_max = data.get("x_min"), data.get("x_max")
+        if "x_min" in data or "x_max" in data:
+            if x_min is None and x_max is None:
+                if auto_crop is not None:
+                    auto_crop.setChecked(True)
+            else:
+                if auto_crop is not None:
+                    auto_crop.setChecked(False)
+                _set("x_min", x_min)
+                _set("x_max", x_max)
+
+        if self._selected_operation() == "q_phi_image":
+            _set("y_min", data.get("phi_min"))
+            _set("y_max", data.get("phi_max"))
+        else:
+            y_min, y_max = data.get("y_min"), data.get("y_max")
+            if "y_min" in data or "y_max" in data:
+                if y_min is not None or y_max is not None:
+                    _set("y_min", y_min)
+                    _set("y_max", y_max)
+
+        if "zmin" in data or "zmax" in data:
+            zmin, zmax = data.get("zmin"), data.get("zmax")
+            if zmin is None and zmax is None:
+                self.color_auto_check.setChecked(True)
+            else:
+                self.color_auto_check.setChecked(False)
+                if zmin is not None:
+                    self.plot_vmin_spin.setValue(float(zmin))
+                if zmax is not None:
+                    self.plot_vmax_spin.setValue(float(zmax))
+
+        preview = data.get("preview_params", {})
+        scale = preview.get("scale")
+        if scale:
+            self.plot_scale_combo.setCurrentText(str(scale))
+
+        self._on_parameters_changed()
+        self.parent_app.show_status("Recipe applied from YAML")
 
     def _send_to_batch(self):
         payload = self._build_batch_payload()

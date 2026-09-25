@@ -17,9 +17,7 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
-from sciview.interfaces.stable_qt.utils.file_dialog_state import (
-    dialog_open_file, dialog_save_file, dialog_select_directory,
-)
+from sciview.session.session_cache import choose_path
 from sciview.interfaces.theme.app_style import (
     AppStyle, apply_emphasis_button_style, apply_info_style,
     apply_subtitle_style, apply_title_style, setup_splitter_layout,
@@ -91,17 +89,20 @@ class BatchTab(QWidget):
         super().__init__()
         self.parent_app = parent_app
 
-        # Batch-owned file list — populated by clicking "Load from Session".
+        # Batch-owned file list — kept in sync with the shared session (see
+        # on_shared_file_list_changed) and refreshable on demand.
         self._file_paths: list[str] = []
 
         self._protocols: list[BatchProtocol] = []
         self._runner: BatchRunner | None = None
+        self._running_job: BatchJob | None = None
         self._results: list[BatchFileResult] = []
         self._selected_proto_row: int = -1  # tracks row for auto-save on switch
         self._running_plot_style: PlotStyle | None = None
         self._running_output_mode = "scianalysis"
 
         self._build_ui()
+        self._load_from_session()  # pull whatever the shared session already has, if any
 
     # ------------------------------------------------------------------
     # Session helper
@@ -116,34 +117,47 @@ class BatchTab(QWidget):
         return None
 
     def _load_from_session(self) -> None:
-        """Copy file paths from shared file list or Image Browser session into Batch's own list."""
-        paths = []
-        if hasattr(self.parent_app, "get_shared_file_list"):
-            shared = self.parent_app.get_shared_file_list()
-            for p in shared:
-                p_str = str(p).strip()
-                if p_str and not p_str.startswith("tiled://"):
-                    paths.append(p_str)
+        """Manually pull the current shared file list — auto-sync (see
+        on_shared_file_list_changed) covers ongoing changes; this covers the
+        case Batch was opened before any list was ever published."""
+        paths = list(self.parent_app.get_shared_file_list()) if hasattr(self.parent_app, "get_shared_file_list") else []
 
         if not paths:
             browser = self._find_image_browser()
             if browser is not None and hasattr(browser, "session_manager"):
-                for img in browser.session_manager.images:
-                    p = str(img.get("path", "")).strip()
-                    if p and not p.startswith("tiled://"):
-                        paths.append(p)
+                paths = [img.get("path", "") for img in browser.session_manager.images]
 
-        if not paths:
-            self.parent_app.show_status("Batch: No local image files found in Image Browser session/folder")
-            return
+        self._apply_file_list(paths)
+
+    def on_shared_file_list_changed(self, file_paths: list[str], info: dict[str, str]) -> None:
+        """Live auto-sync: users work by folder/pattern in Image Browser, so
+        Batch's file list should always reflect the current session without
+        requiring a manual reload click."""
+        self._apply_file_list(file_paths)
+
+    def _apply_file_list(self, paths_in: list[str]) -> None:
+        paths = []
+        skipped = 0
+        for item in paths_in:
+            p = str(item).strip()
+            if not p:
+                continue
+            if p.startswith("tiled://"):
+                skipped += 1  # Tiled browsing isn't wired into Batch yet
+                continue
+            paths.append(p)
 
         self._file_paths = paths
         self._file_list_widget.clear()
         for p in paths:
             self._file_list_widget.addItem(os.path.basename(p))
 
-        self._file_count_label.setText(f"{len(paths)} file(s) loaded")
-        self.parent_app.show_status(f"Batch: {len(paths)} file(s) loaded from Image Browser")
+        suffix = f" ({skipped} Tiled file(s) skipped — not yet supported)" if skipped else ""
+        if paths:
+            self._file_count_label.setText(f"{len(paths)} file(s) loaded{suffix}")
+        else:
+            self._file_count_label.setText(f"0 file(s) loaded{suffix} — load images in Image Browser first")
+
 
     # ------------------------------------------------------------------
     # UI
@@ -186,22 +200,22 @@ class BatchTab(QWidget):
         group = QGroupBox("File List")
         form = QVBoxLayout(group)
 
-        btn_load = QPushButton("Load Files from Image Browser Session")
+        btn_load = QPushButton("Refresh File List")
+        btn_load.setToolTip("File list auto-syncs with Image Browser; use this if it hasn't yet")
         apply_emphasis_button_style(btn_load)
         btn_load.clicked.connect(self._load_from_session)
         form.addWidget(btn_load)
 
-        self._file_count_label = QLabel("0 file(s) loaded — click the button above")
+        self._file_count_label = QLabel("0 file(s) loaded — load images in Image Browser first")
         apply_info_style(self._file_count_label)
         form.addWidget(self._file_count_label)
 
         self._file_list_widget = QListWidget()
         self._file_list_widget.setSelectionMode(QAbstractItemView.NoSelection)
         self._file_list_widget.setMinimumHeight(80)
-        form.addWidget(self._file_list_widget)
+        form.addWidget(self._file_list_widget, 1)
 
-        lay.addWidget(group)
-        lay.addStretch()
+        lay.addWidget(group, 1)
         return panel
 
     def _build_log_panel(self) -> QWidget:
@@ -252,25 +266,9 @@ class BatchTab(QWidget):
         apply_title_style(title)
         lay.addWidget(title)
 
-        # Output directory
         out_group = QGroupBox("Output")
         out_form = QFormLayout(out_group)
         BaseImageTab.configure_adaptive_form_layout(out_form)
-
-        out_row = QWidget()
-        oh = QHBoxLayout(out_row)
-        oh.setContentsMargins(0, 0, 0, 0)
-        self.output_dir_input = QLineEdit()
-        self.output_dir_input.setPlaceholderText("Output directory...")
-        oh.addWidget(self.output_dir_input, 1)
-        btn_browse = QPushButton("Browse")
-        btn_browse.clicked.connect(self._browse_output)
-        oh.addWidget(btn_browse)
-        out_form.addRow("Output dir", out_row)
-
-        self.mirror_check = QCheckBox("Mirror input subfolder structure")
-        self.mirror_check.setChecked(True)
-        out_form.addRow(self.mirror_check)
 
         self.output_mode_combo = QComboBox()
         self.output_mode_combo.addItem("SciAnalysis-Style plots", "scianalysis")
@@ -312,15 +310,16 @@ class BatchTab(QWidget):
         lay.addWidget(proto_group)
 
         # Param editor
-        pg = QGroupBox("Edit Selected Protocol")
+        pg = QGroupBox("Edit Selected Protocol Recipe")
         pgl = QVBoxLayout(pg)
         self.param_name_label = QLabel("No protocol selected")
         apply_info_style(self.param_name_label)
         pgl.addWidget(self.param_name_label)
         self.param_editor = QTextEdit()
-        self.param_editor.setPlaceholderText("YAML key: value params")
-        self.param_editor.setMaximumHeight(100)
-        pgl.addWidget(self.param_editor)
+        self.param_editor.setPlaceholderText("YAML recipe (operation, name, params...)")
+        self.param_editor.setFontFamily("monospace")
+        self.param_editor.setMinimumHeight(220)
+        pgl.addWidget(self.param_editor, 1)
         btn_row = QHBoxLayout()
         btn_apply = QPushButton("Apply Params")
         btn_apply.clicked.connect(self._apply_params)
@@ -366,7 +365,7 @@ class BatchTab(QWidget):
             proto = self._protocols[row]
             self._selected_proto_row = row
             self.param_name_label.setText(f"{proto.name}  ({proto.operation})")
-            self.param_editor.setPlainText(yaml.safe_dump(proto.params, sort_keys=False))
+            self.param_editor.setPlainText(yaml.safe_dump(proto.recipe, sort_keys=False))
 
     def _add_protocol(self, proto: BatchProtocol, select: bool = True) -> None:
         self._protocols.append(proto)
@@ -380,25 +379,17 @@ class BatchTab(QWidget):
 
     def _add_protocol_from_combo(self) -> None:
         op = self.proto_combo.currentText()
-        self._add_protocol(BatchProtocol(
-            name=op, operation=op,
-            params=dict(_DEFAULT_PARAMS.get(op, {})),
-            source="manual",
-        ), select=True)
+        recipe = {"name": op, "operation": op, "source": "manual", **dict(_DEFAULT_PARAMS.get(op, {}))}
+        self._add_protocol(BatchProtocol(recipe=recipe), select=True)
 
     def receive_recipe(self, key: str, payload: dict[str, Any]) -> None:
+        """Store a recipe pushed from a processing tab exactly as sent — the
+        recipe IS the payload, with no split/reshape (single source of
+        authority: what's shown/edited here always matches what's sent)."""
         op = payload.get("operation", "")
         if not op:
             return
-        # Tabs push SA-compatible params directly; strip routing keys only.
-        params = {k: v for k, v in payload.items()
-                  if k not in ("operation", "name", "source", "preview_params")}
-        proto = BatchProtocol(
-            name=payload.get("name", key), operation=op,
-            params=params,
-            preview_params=dict(payload.get("preview_params", {})),
-            source=payload.get("source", "external"),
-        )
+        proto = BatchProtocol(recipe=dict(payload))
         for i, ex in enumerate(self._protocols):
             if ex.name == proto.name:
                 self._protocols[i] = proto
@@ -469,7 +460,7 @@ class BatchTab(QWidget):
             try:
                 saved = yaml.safe_load(self.param_editor.toPlainText()) or {}
                 if isinstance(saved, dict):
-                    self._protocols[prev].params = saved
+                    self._protocols[prev].recipe = saved
             except Exception:
                 pass  # skip invalid YAML mid-edit
 
@@ -486,18 +477,19 @@ class BatchTab(QWidget):
         if row < 0 or row >= len(self._protocols):
             return
         try:
-            new_params = yaml.safe_load(self.param_editor.toPlainText()) or {}
-            if not isinstance(new_params, dict):
+            new_recipe = yaml.safe_load(self.param_editor.toPlainText()) or {}
+            if not isinstance(new_recipe, dict):
                 raise ValueError("must be a YAML mapping")
-            self._protocols[row].params = new_params
+            self._protocols[row].recipe = new_recipe
             self._selected_proto_row = row
             self.protocol_list.item(row).setText(self._proto_label(self._protocols[row]))
-            self.parent_app.show_status("Batch: params updated")
+            self.parent_app.show_status("Batch: recipe updated")
         except Exception as exc:
-            self.parent_app.show_status(f"Batch: invalid YAML \u2014 {exc}")
+            self.parent_app.show_status(f"Batch: invalid YAML — {exc}")
 
     def _reset_params(self) -> None:
-        """Reset the selected protocol to its registered default params."""
+        """Reset the selected protocol's params to registered defaults, keeping
+        its identity (name/operation/source) unchanged."""
         row = self.protocol_list.currentRow()
         if row < 0 or row >= len(self._protocols):
             return
@@ -506,9 +498,9 @@ class BatchTab(QWidget):
         if not defaults:
             self.parent_app.show_status(f"Batch: no defaults registered for '{proto.operation}'")
             return
-        proto.params = defaults
+        proto.recipe = {"name": proto.name, "operation": proto.operation, "source": proto.source, **defaults}
         self._selected_proto_row = row
-        self.param_editor.setPlainText(yaml.safe_dump(defaults, sort_keys=False))
+        self.param_editor.setPlainText(yaml.safe_dump(proto.recipe, sort_keys=False))
         self.parent_app.show_status(f"Batch: reset '{proto.name}' params to defaults")
 
     # ------------------------------------------------------------------
@@ -526,9 +518,9 @@ class BatchTab(QWidget):
             "output_mode": self.output_mode_combo.currentData(),
             "plot_style": resolve_plot_style(self.parent_app).to_dict(),
         }
-        path, _ = dialog_save_file(
-            self, "Save Batch Recipe", "batch_recipe.yaml",
-            "YAML files (*.yaml *.yml);;JSON files (*.json);;All files (*)",
+        path, _ = choose_path(
+            self, "Save Batch Recipe", mode="save", default_name="batch_recipe.yaml",
+            file_filter="YAML files (*.yaml *.yml);;JSON files (*.json);;All files (*)",
             key="batch_recipe_save",
         )
         if not path:
@@ -539,9 +531,9 @@ class BatchTab(QWidget):
         self.parent_app.show_status(f"Recipe saved to {p.name}")
 
     def _load_recipe(self) -> None:
-        path, _ = dialog_open_file(
+        path, _ = choose_path(
             self, "Load Batch Recipe",
-            "YAML/JSON files (*.yaml *.yml *.json);;All files (*)",
+            file_filter="YAML/JSON files (*.yaml *.yml *.json);;All files (*)",
             key="batch_recipe_load",
         )
         if not path:
@@ -568,14 +560,36 @@ class BatchTab(QWidget):
         except Exception as exc:
             self.parent_app.show_status(f"Batch: load failed — {exc}")
 
+    def get_session_state(self) -> dict:
+        """Serialize the protocol queue for restart restore (same shape as _save_recipe)."""
+        if not self._protocols:
+            return {}
+        return {
+            "protocols": [p.to_dict() for p in self._protocols],
+            "output_mode": self.output_mode_combo.currentData(),
+            "plot_style": resolve_plot_style(self.parent_app).to_dict(),
+        }
+
+    def restore_session_state(self, state: dict) -> None:
+        """Rebuild the protocol queue from the last saved session (same path as _load_recipe)."""
+        protocols = state.get("protocols") or []
+        if not protocols:
+            return
+        style = PlotStyle.from_dict(state.get("plot_style"))
+        self.parent_app.publish_shared_plot_style(style, source_tab=self)
+        mode_index = self.output_mode_combo.findData(state.get("output_mode", "scianalysis"))
+        self.output_mode_combo.setCurrentIndex(max(0, mode_index))
+        for d in protocols:
+            self._add_protocol(BatchProtocol.from_dict(d), select=False)
+        if self._protocols:
+            self.protocol_list.setCurrentRow(0)
+            self._show_protocol_params(0)
+        self.parent_app.show_status(f"Batch: restored {len(self._protocols)} protocol(s) from last session")
+
+
     # ------------------------------------------------------------------
     # Run / Stop
     # ------------------------------------------------------------------
-
-    def _browse_output(self) -> None:
-        folder = dialog_select_directory(self, "Select Output Folder", key="batch_output_folder")
-        if folder:
-            self.output_dir_input.setText(folder)
 
     def _start_batch(self) -> None:
         # Auto-apply any pending param edits for the currently selected protocol.
@@ -586,7 +600,7 @@ class BatchTab(QWidget):
 
         if not self._file_paths:
             self.parent_app.show_status(
-                "Batch: no files — click 'Load Files from Image Browser Session' first"
+                "Batch: no files — load images in Image Browser first"
             )
             return
 
@@ -609,10 +623,10 @@ class BatchTab(QWidget):
             )
             return
 
-        output_dir = self.output_dir_input.text().strip()
+        output_dir, _ = choose_path(self, "Select Batch Output Folder", mode="directory", key="batch_output_folder")
         if not output_dir:
-            output_dir = str(Path(self._file_paths[0]).parent.parent / "analysis")
-            self.output_dir_input.setText(output_dir)
+            self.parent_app.show_status("Batch: select an output folder to run")
+            return
 
         cal = getattr(self.parent_app, "calibration", None)
         if hasattr(self.parent_app, "get_shared_calibration"):
@@ -641,12 +655,11 @@ class BatchTab(QWidget):
             output_formats=self._selected_formats(),
             calibration=cal,
             mask=mask,
-            mirror_input_structure=self.mirror_check.isChecked(),
-            input_root=str(Path(self._file_paths[0]).parent),
             plot_style=self._running_plot_style.to_dict(),
             output_mode=self._running_output_mode,
             preview_theme=preview_theme,
         )
+        self._running_job = job
 
         total = len(job.file_paths) * max(len(active), 1)
         self.progress_bar.setRange(0, max(total, 1))
@@ -691,18 +704,19 @@ class BatchTab(QWidget):
 
     def _save_cookbook(self) -> None:
         """Save a complete run record (cookbook) alongside the output for provenance."""
-        output_dir = self.output_dir_input.text().strip()
-        if not output_dir:
+        job = self._running_job
+        if job is None:
             return
+        output_dir = job.output_dir
         import datetime
         from sciview.processing.batch import compute_q_bounds
-        cal = getattr(self.parent_app, "calibration", None)
-        mask = getattr(self.parent_app, "mask", None)
+        cal = job.calibration
+        mask = job.mask
         bounds = compute_q_bounds(cal)  # calibration-derived bounds used for this run
         cookbook = {
             "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
             "sciview_version": getattr(self.parent_app, "_scianalysis_source_mode", "unknown"),
-            "input_files": list(self._file_paths),
+            "input_files": list(job.file_paths),
             "output_dir": output_dir,
             "calibration": {
                 "type": type(cal).__name__ if cal is not None else "none",
@@ -718,16 +732,7 @@ class BatchTab(QWidget):
                 self._running_plot_style or resolve_plot_style(self.parent_app)
             ).to_dict(),
             "mask": {"type": type(mask).__name__ if mask is not None else "none"},
-            "protocols": [
-                {
-                    "name": p.name,
-                    "operation": p.operation,
-                    "params": dict(p.params),
-                    "preview_params": dict(p.preview_params),
-                }
-                for p in self._protocols
-                if p.enabled
-            ],
+            "protocols": [dict(p.recipe) for p in job.protocols if p.enabled],
             "results": [
                 {
                     "file": os.path.basename(r.file_path),

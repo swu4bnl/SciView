@@ -1,4 +1,12 @@
-"""CMS beamline profile and compatibility helpers."""
+"""CMS beamline profile loader.
+
+All facility-specific data (beamline identity, default calibration, detector
+mask/geometry configs, Tiled server profiles, filename patterns) lives in
+data/profile_cms.yaml — the single source of truth. This module only parses
+that YAML and exposes it as the stable names other modules import. Adding a
+new beamline means adding a new YAML file with the same schema, not editing
+this loader.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from sciview.settings.app_settings import PHYSICAL_CONSTANTS
 
 
 def get_calibration_class():
@@ -23,332 +33,83 @@ def get_calibration_class():
     return getattr(m, "Calibration")
 
 
-BEAMLINE_NAME = "CMS (11-BM)"
-BEAMLINE_ID = "11bm"
-FACILITY = "NSLS-II"
-
-DEFAULT_CALIBRATION: dict[str, float] = {
-    "wavelength_A": 0.9184,
-    "energy_eV": 12398.425 / 0.9184,
-    "pixel_size_um": 172.0,
-    "distance_m": 0.261,
-    "beam_center_x": 476,
-    "beam_center_y": 650,
-    "detector_orient_deg": 0,
-    "detector_tilt_deg": 0,
-    "detector_phi_deg": 0,
-}
-
-FILE_PATTERNS: dict[str, list[str]] = {
-    "saxs": ["saxs"],
-    "waxs": ["waxs"],
-    "maxs": ["maxs"],
-}
-
-_LEGACY_DETECTOR_CONFIGS: dict[str, dict[str, Any]] = {
-    "saxs": {
-        "name": "Pilatus2M",
-        "available_masks": {
-            "dectris_gaps": "Dectris/Pilatus2M_gaps-mask.png",
-            "vertical_gaps": "Dectris/Pilatus2M_vertical_gaps-mask.png",
-        },
-        "default_mask": "Dectris/Pilatus2M_gaps-mask.png",
-        "calibration_file": "caliXS.yaml",
-        "pixel_size_um": 172.0,
-        "default_distance_m": 5.0,
-        "beam_center_x": 740,
-        "beam_center_y": 1081,
-    },
-    "waxs": {
-        "name": "Pilatus800k",
-        "available_masks": {
-            "dectris_gaps": "Dectris/Pilatus800k_gaps-mask.png",
-            "vertical_gaps": "Dectris/Pilatus800k_vertical_gaps-mask.png",
-        },
-        "default_mask": "Dectris/Pilatus800k_gaps-mask.png",
-        "calibration_file": "caliWS.yaml",
-        "pixel_size_um": 172.0,
-        "default_distance_m": 0.261,
-        "beam_center_x": 476,
-        "beam_center_y": 650,
-    },
-    "maxs": {
-        "name": "Pilatus800k2",
-        "available_masks": {
-            "dectris_gaps": "Dectris/Pilatus800k2_gaps-mask.png",
-            "vertical_gaps": "Dectris/Pilatus800k2_vertical_gaps-mask.png",
-        },
-        "default_mask": "Dectris/Pilatus800k2_gaps-mask.png",
-        "calibration_file": "caliMS.yaml",
-        "pixel_size_um": 172.0,
-        "default_distance_m": 0.220,
-        "beam_center_x": 476,
-        "beam_center_y": 650,
-    },
-}
-
-TILED_PROFILES: dict[str, dict[str, Any]] = {
-    "cms_raw": {
-        "description": "CMS Raw Data",
-        "uri": "http://tiled.nsls2.bnl.gov/api/v1",
-        "path": ["cms", "raw"],
-        "requires_login": True,
-        "default_detectors": {
-            "pilatus2m-1_image": "SAXS",
-            "pilatus800k-1_image": "WAXS",
-            "pilatus800k-2_image": "MAXS",
-        },
-        "scan_id_range": (-999, 9999999),
-        "data_access_path": ["primary", "data", "{detector}"],
-        "timeout": {"connect_s": 5.0, "read_s": 120.0},
-        "search": {
-            "required_fields": {
-                "cycle": "start.cycle",
-                "proposal_id": "start.proposal.proposal_id",
-            },
-            "optional_fields": {
-                "measure_type": "start.measure_type",
-            },
-            "local_filters": {
-                "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
-                "experiment_alias_directory": [
-                    "start.experiment_alias_directory",
-                    "start.experiment_alias",
-                    "start.project_name",
-                ],
-            },
-            "defaults": {"measure_type": "measure"},
-            "summary_fields": {
-                "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
-                "measure_type": ["start.measure_type", "start.measurement_type"],
-                "sample_savename": ["start.sample_savename", "start.sample_save_name"],
-                "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
-                "cycle": ["start.cycle"],
-                "experiment_alias": [
-                    "start.experiment_alias_directory",
-                    "start.experiment_alias",
-                    "start.project_name",
-                ],
-            },
-        },
-        "_note": "4D shape (1, 1, H, W) - accessed via scan.primary.data[detector]",
-    },
-    "cms_migration": {
-        "description": "CMS Migration Data",
-        "uri": "http://tiled.nsls2.bnl.gov/api/v1",
-        "path": ["cms", "migration"],
-        "requires_login": True,
-        "default_detectors": {
-            "pilatus2m-1_image": "SAXS",
-            "pilatus800k-1_image": "WAXS",
-            "pilatus800k-2_image": "MAXS",
-        },
-        "scan_id_range": (-999, 9999999),
-        "data_access_path": ["primary", "{detector}"],
-        "timeout": {"connect_s": 5.0, "read_s": 120.0},
-        "search": {
-            "required_fields": {
-                "cycle": "start.cycle",
-                "proposal_id": "start.proposal.proposal_id",
-            },
-            "optional_fields": {
-                "measure_type": "start.measure_type",
-            },
-            "local_filters": {
-                "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
-                "experiment_alias_directory": [
-                    "start.experiment_alias_directory",
-                    "start.experiment_alias",
-                    "start.project_name",
-                ],
-            },
-            "defaults": {"measure_type": "measure"},
-            "summary_fields": {
-                "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
-                "measure_type": ["start.measure_type", "start.measurement_type"],
-                "sample_savename": ["start.sample_savename", "start.sample_save_name"],
-                "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
-                "cycle": ["start.cycle"],
-                "experiment_alias": [
-                    "start.experiment_alias_directory",
-                    "start.experiment_alias",
-                    "start.project_name",
-                ],
-            },
-        },
-        "_note": "3D shape (1, H, W) - accessed via scan.primary[detector]",
-    },
-    # "cms_old": {
-    #     "description": "CMS Old Data(pre-datasecurity)",
-    #     "uri": "http://tiled.nsls2.bnl.gov/api/v1",
-    #     "path": ["cms", "raw"],
-    #     "requires_login": True,
-    #     "default_detectors": {
-    #         "pilatus2M_image": "SAXS",
-    #         "pilatus800_image": "WAXS",
-    #         "pilatus8002_image": "MAXS",
-    #     },
-    #     "scan_id_range": (-999, 9999999),
-    #     "data_access_path": ["primary", "data", "{detector}"],
-    #     "timeout": {"connect_s": 5.0, "read_s": 120.0},
-    #     "search": {
-    #         "required_fields": {
-    #             "cycle": "start.cycle",
-    #             "proposal_id": "start.proposal.proposal_id",
-    #         },
-    #         "optional_fields": {
-    #             "measure_type": "start.measure_type",
-    #         },
-    #         "local_filters": {
-    #             "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
-    #             "experiment_alias_directory": [
-    #                 "start.experiment_alias_directory",
-    #                 "start.experiment_alias",
-    #                 "start.project_name",
-    #             ],
-    #         },
-    #         "defaults": {"measure_type": "measure"},
-    #         "summary_fields": {
-    #             "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
-    #             "measure_type": ["start.measure_type", "start.measurement_type"],
-    #             "sample_savename": ["start.sample_savename", "start.sample_save_name"],
-    #             "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
-    #             "cycle": ["start.cycle"],
-    #             "experiment_alias": [
-    #                 "start.experiment_alias_directory",
-    #                 "start.experiment_alias",
-    #                 "start.project_name",
-    #             ],
-    #         },
-    #     },
-    #     "_note": "4D shape (1, 1, H, W) - accessed via scan.primary.data[detector]",
-    # },
-    # "nsls2_general": {
-    #     "description": "NSLS-II General (test)",
-    #     "uri": "http://tiled.nsls2.bnl.gov/api/v1",
-    #     "path": [],
-    #     "requires_login": True,
-    #     "default_detectors": {
-    #         "primary": "Primary Detector",
-    #         "detector": "Generic Detector",
-    #     },
-    #     "scan_id_range": (-999, 9999999),
-    #     "data_access_path": ["{detector}"],
-    #     "timeout": {"connect_s": 5.0, "read_s": 120.0},
-    #     "search": {
-    #         "required_fields": {
-    #             "cycle": "start.cycle",
-    #             "proposal_id": "start.proposal.proposal_id",
-    #         },
-    #         "optional_fields": {
-    #             "measure_type": "start.measure_type",
-    #         },
-    #         "local_filters": {
-    #             "sample_savename": ["start.sample_savename", "start.sample_save_name", "start.filename"],
-    #             "experiment_alias_directory": [
-    #                 "start.experiment_alias_directory",
-    #                 "start.experiment_alias",
-    #                 "start.project_name",
-    #             ],
-    #         },
-    #         "defaults": {"measure_type": "measure"},
-    #         "summary_fields": {
-    #             "filename": ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"],
-    #             "measure_type": ["start.measure_type", "start.measurement_type"],
-    #             "sample_savename": ["start.sample_savename", "start.sample_save_name"],
-    #             "proposal_id": ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"],
-    #             "cycle": ["start.cycle"],
-    #             "experiment_alias": [
-    #                 "start.experiment_alias_directory",
-    #                 "start.experiment_alias",
-    #                 "start.project_name",
-    #             ],
-    #         },
-        # },
-        # "_note": "Standard tiled structure - accessed via scan[detector]",
-    # },
-}
-
-
 @dataclass(slots=True)
 class CmsProfile:
-    """Structured CMS profile loaded from YAML plus compatibility metadata."""
+    """Beamline profile loaded verbatim from YAML."""
 
     name: str
     description: str
-    detectors: list[dict[str, Any]] = field(default_factory=list)
-    workspace_layout: dict[str, Any] = field(default_factory=dict)
-    recipes: list[str] = field(default_factory=list)
-    filename_patterns: list[str] = field(default_factory=list)
-    beamline_name: str = BEAMLINE_NAME
-    beamline_id: str = BEAMLINE_ID
-    facility: str = FACILITY
-    detector_configs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    beamline_name: str
+    beamline_id: str
+    facility: str
     default_calibration: dict[str, float] = field(default_factory=dict)
+    file_patterns: dict[str, list[str]] = field(default_factory=dict)
+    detector_configs: dict[str, dict[str, Any]] = field(default_factory=dict)
     tiled_profiles: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
 
 
 def _default_profile_path() -> Path:
     return Path(__file__).resolve().parent / "data" / "profile_cms.yaml"
 
 
-def _resolve_recipe_paths(recipes: list[str], profile_path: Path) -> list[str]:
-    resolved: list[str] = []
-    base_dir = profile_path.parent
-    for recipe in recipes:
-        recipe_path = Path(recipe)
-        if recipe_path.is_absolute():
-            resolved.append(str(recipe_path))
-            continue
-        resolved.append(str((base_dir / recipe_path).resolve()))
-    return resolved
+def _build_default_calibration(raw: dict[str, Any]) -> dict[str, float]:
+    """Fill in energy_eV from wavelength_A rather than storing it twice."""
+    calibration = dict(raw)
+    wavelength_A = calibration.get("wavelength_A")
+    if wavelength_A:
+        calibration["energy_eV"] = PHYSICAL_CONSTANTS["hc_over_e_eV_A"] / wavelength_A
+    return calibration
 
 
-def _merge_detector_configs(profile_detectors: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    merged = {name: dict(config) for name, config in _LEGACY_DETECTOR_CONFIGS.items()}
-    for detector in profile_detectors:
+def _build_detector_configs(detectors: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Key each YAML detector entry by its lowercase name for lookup by measurement type."""
+    configs: dict[str, dict[str, Any]] = {}
+    for detector in detectors:
         key = str(detector["name"]).lower()
-        profile_default = detector.get("default_calibration")
-        if key not in merged:
-            merged[key] = {
-                "name": detector["name"],
-                "available_masks": {},
-                "default_mask": None,
-                "calibration_file": profile_default,
-            }
-            continue
-
-        merged[key]["profile_default_calibration"] = profile_default
-        merged[key]["aliases"] = list(detector.get("aliases", []))
-    return merged
+        masks = dict(detector.get("masks", {}))
+        default_mask_key = detector.get("default_mask")
+        configs[key] = {
+            "name": detector.get("display_name", detector["name"]),
+            "aliases": list(detector.get("aliases", [])),
+            "available_masks": masks,
+            "default_mask": masks.get(default_mask_key) if default_mask_key else None,
+            "calibration_file": detector.get("calibration_file"),
+            "pixel_size_um": detector.get("pixel_size_um"),
+            "default_distance_m": detector.get("default_distance_m"),
+            "beam_center_x": detector.get("beam_center_x"),
+            "beam_center_y": detector.get("beam_center_y"),
+        }
+    return configs
 
 
 def load_cms_profile(profile_path: str | Path | None = None) -> CmsProfile:
-    """Load the CMS profile YAML and enrich it with current compatibility data."""
+    """Load a beamline profile YAML in full — nothing beamline-specific is hardcoded here."""
 
     path = Path(profile_path) if profile_path is not None else _default_profile_path()
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    detectors = list(payload.get("detectors", []))
-    recipes = [str(recipe) for recipe in payload.get("recipes", [])]
+    beamline = payload.get("beamline", {})
     return CmsProfile(
-        name=str(payload.get("name", "CMS")),
+        name=str(payload.get("name", "")),
         description=str(payload.get("description", "")),
-        detectors=detectors,
-        workspace_layout=dict(payload.get("workspace_layout", {})),
-        recipes=_resolve_recipe_paths(recipes, path),
-        filename_patterns=[str(pattern) for pattern in payload.get("filename_patterns", [])],
-        detector_configs=_merge_detector_configs(detectors),
-        default_calibration=dict(DEFAULT_CALIBRATION),
-        tiled_profiles={name: dict(config) for name, config in TILED_PROFILES.items()},
+        beamline_name=str(beamline.get("name", "")),
+        beamline_id=str(beamline.get("id", "")),
+        facility=str(beamline.get("facility", "")),
+        default_calibration=_build_default_calibration(payload.get("default_calibration", {})),
+        file_patterns={k: list(v) for k, v in payload.get("file_patterns", {}).items()},
+        detector_configs=_build_detector_configs(list(payload.get("detectors", []))),
+        tiled_profiles={name: dict(config) for name, config in payload.get("tiled_profiles", {}).items()},
     )
 
 
 CMS_PROFILE = load_cms_profile()
+
+BEAMLINE_NAME = CMS_PROFILE.beamline_name
+BEAMLINE_ID = CMS_PROFILE.beamline_id
+FACILITY = CMS_PROFILE.facility
+DEFAULT_CALIBRATION = CMS_PROFILE.default_calibration
+FILE_PATTERNS = CMS_PROFILE.file_patterns
 DETECTOR_CONFIGS = CMS_PROFILE.detector_configs
+TILED_PROFILES = CMS_PROFILE.tiled_profiles
 
 
 def get_default_tiled_settings() -> tuple[str | None, str | None]:
