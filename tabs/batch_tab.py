@@ -312,15 +312,16 @@ class BatchTab(QWidget):
         lay.addWidget(proto_group)
 
         # Param editor
-        pg = QGroupBox("Edit Selected Protocol")
+        pg = QGroupBox("Edit Selected Protocol Recipe")
         pgl = QVBoxLayout(pg)
         self.param_name_label = QLabel("No protocol selected")
         apply_info_style(self.param_name_label)
         pgl.addWidget(self.param_name_label)
         self.param_editor = QTextEdit()
-        self.param_editor.setPlaceholderText("YAML key: value params")
-        self.param_editor.setMaximumHeight(100)
-        pgl.addWidget(self.param_editor)
+        self.param_editor.setPlaceholderText("YAML recipe (operation, name, params...)")
+        self.param_editor.setFontFamily("monospace")
+        self.param_editor.setMinimumHeight(220)
+        pgl.addWidget(self.param_editor, 1)
         btn_row = QHBoxLayout()
         btn_apply = QPushButton("Apply Params")
         btn_apply.clicked.connect(self._apply_params)
@@ -366,7 +367,7 @@ class BatchTab(QWidget):
             proto = self._protocols[row]
             self._selected_proto_row = row
             self.param_name_label.setText(f"{proto.name}  ({proto.operation})")
-            self.param_editor.setPlainText(yaml.safe_dump(proto.params, sort_keys=False))
+            self.param_editor.setPlainText(yaml.safe_dump(proto.recipe, sort_keys=False))
 
     def _add_protocol(self, proto: BatchProtocol, select: bool = True) -> None:
         self._protocols.append(proto)
@@ -380,25 +381,17 @@ class BatchTab(QWidget):
 
     def _add_protocol_from_combo(self) -> None:
         op = self.proto_combo.currentText()
-        self._add_protocol(BatchProtocol(
-            name=op, operation=op,
-            params=dict(_DEFAULT_PARAMS.get(op, {})),
-            source="manual",
-        ), select=True)
+        recipe = {"name": op, "operation": op, "source": "manual", **dict(_DEFAULT_PARAMS.get(op, {}))}
+        self._add_protocol(BatchProtocol(recipe=recipe), select=True)
 
     def receive_recipe(self, key: str, payload: dict[str, Any]) -> None:
+        """Store a recipe pushed from a processing tab exactly as sent — the
+        recipe IS the payload, with no split/reshape (single source of
+        authority: what's shown/edited here always matches what's sent)."""
         op = payload.get("operation", "")
         if not op:
             return
-        # Tabs push SA-compatible params directly; strip routing keys only.
-        params = {k: v for k, v in payload.items()
-                  if k not in ("operation", "name", "source", "preview_params")}
-        proto = BatchProtocol(
-            name=payload.get("name", key), operation=op,
-            params=params,
-            preview_params=dict(payload.get("preview_params", {})),
-            source=payload.get("source", "external"),
-        )
+        proto = BatchProtocol(recipe=dict(payload))
         for i, ex in enumerate(self._protocols):
             if ex.name == proto.name:
                 self._protocols[i] = proto
@@ -469,7 +462,7 @@ class BatchTab(QWidget):
             try:
                 saved = yaml.safe_load(self.param_editor.toPlainText()) or {}
                 if isinstance(saved, dict):
-                    self._protocols[prev].params = saved
+                    self._protocols[prev].recipe = saved
             except Exception:
                 pass  # skip invalid YAML mid-edit
 
@@ -486,18 +479,19 @@ class BatchTab(QWidget):
         if row < 0 or row >= len(self._protocols):
             return
         try:
-            new_params = yaml.safe_load(self.param_editor.toPlainText()) or {}
-            if not isinstance(new_params, dict):
+            new_recipe = yaml.safe_load(self.param_editor.toPlainText()) or {}
+            if not isinstance(new_recipe, dict):
                 raise ValueError("must be a YAML mapping")
-            self._protocols[row].params = new_params
+            self._protocols[row].recipe = new_recipe
             self._selected_proto_row = row
             self.protocol_list.item(row).setText(self._proto_label(self._protocols[row]))
-            self.parent_app.show_status("Batch: params updated")
+            self.parent_app.show_status("Batch: recipe updated")
         except Exception as exc:
-            self.parent_app.show_status(f"Batch: invalid YAML \u2014 {exc}")
+            self.parent_app.show_status(f"Batch: invalid YAML — {exc}")
 
     def _reset_params(self) -> None:
-        """Reset the selected protocol to its registered default params."""
+        """Reset the selected protocol's params to registered defaults, keeping
+        its identity (name/operation/source) unchanged."""
         row = self.protocol_list.currentRow()
         if row < 0 or row >= len(self._protocols):
             return
@@ -506,9 +500,9 @@ class BatchTab(QWidget):
         if not defaults:
             self.parent_app.show_status(f"Batch: no defaults registered for '{proto.operation}'")
             return
-        proto.params = defaults
+        proto.recipe = {"name": proto.name, "operation": proto.operation, "source": proto.source, **defaults}
         self._selected_proto_row = row
-        self.param_editor.setPlainText(yaml.safe_dump(defaults, sort_keys=False))
+        self.param_editor.setPlainText(yaml.safe_dump(proto.recipe, sort_keys=False))
         self.parent_app.show_status(f"Batch: reset '{proto.name}' params to defaults")
 
     # ------------------------------------------------------------------
@@ -718,16 +712,7 @@ class BatchTab(QWidget):
                 self._running_plot_style or resolve_plot_style(self.parent_app)
             ).to_dict(),
             "mask": {"type": type(mask).__name__ if mask is not None else "none"},
-            "protocols": [
-                {
-                    "name": p.name,
-                    "operation": p.operation,
-                    "params": dict(p.params),
-                    "preview_params": dict(p.preview_params),
-                }
-                for p in self._protocols
-                if p.enabled
-            ],
+            "protocols": [dict(p.recipe) for p in self._protocols if p.enabled],
             "results": [
                 {
                     "file": os.path.basename(r.file_path),

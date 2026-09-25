@@ -16,7 +16,10 @@ import numpy as np
 
 from sciview.settings.plot_style import PlotStyle
 
-from sciview.processing.angle_conventions import display_chi_to_scianalysis_chi
+from sciview.processing.angle_conventions import (
+    display_chi_to_scianalysis_chi,
+    display_chi_to_scianalysis_sector_chi,
+)
 try:
     from PyQt5.QtCore import QThread, pyqtSignal
 except Exception:  # pragma: no cover - fallback for headless/backend-only environments
@@ -63,9 +66,17 @@ _OPERATION_KIND: dict[str, ProtocolKind] = {
 OUTPUT_FORMATS = ("png", "npz", "csv", "txt")  # kept for external callers; not used by run_batch
 
 # Per-protocol calibration overrides (see _resolve_protocol_calibration): these live in
-# BatchProtocol.params for UI/recipe/transport convenience but are not SciAnalysis
+# BatchProtocol.recipe for UI/recipe/transport convenience but are not SciAnalysis
 # Protocol constructor kwargs, so build_protocol() strips them before calling SciAnalysis.
 _CALIBRATION_OVERRIDE_PARAM_KEYS = ("incident_angle_deg", "sample_normal_deg")
+
+# Recipe keys that route/describe a protocol but are never SciAnalysis Protocol
+# constructor kwargs; build_protocol() strips these before calling SciAnalysis
+# for any protocol whose recipe isn't already translated by an adapter.
+_RECIPE_ROUTING_KEYS = (
+    "name", "operation", "source", "preview_params",
+    "calibration_source", "mask_source", "calibration_q_range", "source_path",
+)
 
 
 def operation_kind(operation: str) -> ProtocolKind:
@@ -74,38 +85,56 @@ def operation_kind(operation: str) -> ProtocolKind:
 
 @dataclass
 class BatchProtocol:
-    """One processing step within a batch job."""
+    """One processing step within a batch job.
 
-    name: str
-    operation: str
-    params: dict[str, Any] = field(default_factory=dict)
+    `recipe` is the single source of authority: the exact YAML-serializable
+    dict a tab (Reduction/Transform) sends via push_recipe_to_batch, or that a
+    user edits directly in Batch's own recipe editor. Nothing splits or
+    reshapes it internally — build_protocol()/apply_q_bounds_to_protocol()/the
+    WYSIWYG preview renderer all read directly from recipe, and Batch's UI
+    shows/edits this exact dict, so what's displayed always matches what's
+    actually sent and run. `enabled` is UI-local bookkeeping (the protocol
+    list's checkbox state), not part of the scientific recipe.
+    """
+
+    recipe: dict[str, Any] = field(default_factory=dict)
     enabled: bool = True
-    source: str = "manual"  # "reduction_tab" | "transform_tab" | "manual"
-    preview_params: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def name(self) -> str:
+        return str(self.recipe.get("name") or self.recipe.get("operation", "unnamed"))
+
+    @property
+    def operation(self) -> str:
+        return str(self.recipe.get("operation", ""))
+
+    @property
+    def source(self) -> str:
+        return str(self.recipe.get("source", "manual"))
 
     def kind(self) -> ProtocolKind:
         return operation_kind(self.operation)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "operation": self.operation,
-            "params": dict(self.params),
-            "preview_params": dict(self.preview_params),
-            "enabled": self.enabled,
-            "source": self.source,
-        }
+        return {"recipe": dict(self.recipe), "enabled": self.enabled}
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "BatchProtocol":
-        return cls(
-            name=str(payload.get("name", payload.get("operation", ""))),
-            operation=str(payload.get("operation", "")),
-            params=dict(payload.get("params", {})),
-            preview_params=dict(payload.get("preview_params", {})),
-            enabled=bool(payload.get("enabled", True)),
-            source=str(payload.get("source", "manual")),
-        )
+        if "recipe" in payload:
+            recipe = dict(payload["recipe"])
+        else:
+            # Backward-compat with job/cookbook files saved before the
+            # name/operation/params/preview_params split was collapsed into
+            # one recipe dict.
+            recipe = {
+                "name": payload.get("name", payload.get("operation", "")),
+                "operation": payload.get("operation", ""),
+                "source": payload.get("source", "manual"),
+                **dict(payload.get("params", {})),
+            }
+            if payload.get("preview_params"):
+                recipe["preview_params"] = dict(payload["preview_params"])
+        return cls(recipe=recipe, enabled=bool(payload.get("enabled", True)))
 
 
 @dataclass
@@ -246,8 +275,8 @@ def clone_calibration_with_angles(
 def _resolve_protocol_calibration(protocol: "BatchProtocol", calibration: Any | None) -> Any | None:
     """Return the calibration to use for one protocol, applying its own incident-angle /
     sample-normal overrides when present (see clone_calibration_with_angles)."""
-    incident_angle_deg = protocol.params.get("incident_angle_deg")
-    sample_normal_deg = protocol.params.get("sample_normal_deg")
+    incident_angle_deg = protocol.recipe.get("incident_angle_deg")
+    sample_normal_deg = protocol.recipe.get("sample_normal_deg")
     if calibration is None or (incident_angle_deg is None and sample_normal_deg is None):
         return calibration
     return clone_calibration_with_angles(
@@ -480,10 +509,22 @@ def apply_q_bounds_to_protocol(proto: "BatchProtocol", bounds: dict[str, float])
 
     Protocols carry their recipe settings (bins_relative, ylog, …) but not
     the data-range; this function fills that in at run time from the calibration.
+    circular_average/sector_average/linecut_q from the Reduction tab, and
+    q_image/qr_qz_image/q_phi_image from the Transform tab, are exempt: their
+    canonical crop fields (None = auto, or an explicit override) are already
+    fully decided by the user and are honored as-is by
+    reduction_canonical_to_scianalysis_kwargs() / transform_canonical_to_
+    scianalysis_kwargs() at build_protocol() time.
     phi_min / phi_max keys in params are consumed to build the angular part of
     q_phi_image's plot_range and then removed (SA does not accept them).
     """
     if not bounds:
+        return proto
+
+    op = proto.operation
+    if proto.source == "reduction_tab" and op in ("circular_average", "sector_average", "linecut_q"):
+        return proto
+    if proto.source == "transform_tab" and op in ("q_image", "qr_qz_image", "q_phi_image"):
         return proto
 
     q_min  = bounds["q_min"]
@@ -495,31 +536,26 @@ def apply_q_bounds_to_protocol(proto: "BatchProtocol", bounds: dict[str, float])
     qr_min = bounds.get("qr_min", qx_min)
     qr_max = bounds.get("qr_max", qx_max)
 
-    params = dict(proto.params)
-    op     = proto.operation
+    recipe = dict(proto.recipe)
 
     if op == "circular_average":
-        params["plot_range"] = [q_min, q_max, 0, None]
+        recipe["plot_range"] = [q_min, q_max, 0, None]
     elif op == "sector_average":
-        params["plot_range"] = [q_min, q_max, None, None]
+        recipe["plot_range"] = [q_min, q_max, None, None]
     elif op == "linecut_q":
-        params["plot_range"] = [q_min, q_max, 0, None]
+        recipe["plot_range"] = [q_min, q_max, 0, None]
     elif op == "linecut_angle":
-        params["plot_range"] = [-180, 180, 0, None]
+        recipe["plot_range"] = [-180, 180, 0, None]
     elif op in ("q_image",):
-        params["plot_range"] = [qx_min, qx_max, qz_min, qz_max]
+        recipe["plot_range"] = [qx_min, qx_max, qz_min, qz_max]
     elif op == "qr_qz_image":
-        params["plot_range"] = [qr_min, qr_max, qz_min, qz_max]
+        recipe["plot_range"] = [qr_min, qr_max, qz_min, qz_max]
     elif op == "q_phi_image":
-        phi_min = params.pop("phi_min", -180.0)
-        phi_max = params.pop("phi_max",  180.0)
-        params["plot_range"] = [q_min, q_max, phi_min, phi_max]
+        phi_min = recipe.pop("phi_min", -180.0)
+        phi_max = recipe.pop("phi_max",  180.0)
+        recipe["plot_range"] = [q_min, q_max, phi_min, phi_max]
 
-    return BatchProtocol(
-        name=proto.name, operation=proto.operation,
-        params=params, preview_params=dict(proto.preview_params),
-        enabled=proto.enabled, source=proto.source,
-    )
+    return BatchProtocol(recipe=recipe, enabled=proto.enabled)
 
 
 # ---------------------------------------------------------------------------
@@ -592,7 +628,81 @@ def _build_thumbnails(p: dict) -> Any:
     return Protocols.thumbnails(**p)
 
 
-def build_protocol(proto: BatchProtocol) -> Any:
+def reduction_canonical_to_scianalysis_kwargs(canonical: dict[str, Any], calibration: Any = None) -> dict[str, Any]:
+    """Translate the Reduction tab's canonical UI-shape recipe (scale,
+    q_min/q_max, angle_start/angle_end, chi0/dq/q0 — exactly what its widgets
+    show) into the kwargs SciAnalysis's Protocol constructors expect (xlog/
+    ylog, plot_range, angle/dangle in SciAnalysis's own chi convention). This
+    is the only place that conversion happens; reduction_tab.py and the
+    WYSIWYG match-preview renderer below both stay in the UI shape."""
+    op = canonical.get("operation")
+    if op not in REDUCTION_OPERATIONS:
+        return dict(canonical)
+
+    scale = str(canonical.get("scale", "linear"))
+    q_min = canonical.get("q_min")
+    q_max = canonical.get("q_max")
+    kwargs: dict[str, Any] = {
+        "xlog": scale in ("logx", "loglog"),
+        "ylog": scale in ("logy", "loglog"),
+    }
+    if "save_results" in canonical:
+        kwargs["save_results"] = canonical["save_results"]
+
+    if op == "circular_average":
+        kwargs["bins_relative"] = canonical.get("bins_relative", 1.0)
+        kwargs["plot_range"] = [q_min, q_max, 0, None]
+
+    elif op == "sector_average":
+        angle_start = float(canonical.get("angle_start", 0.0))
+        angle_end = float(canonical.get("angle_end", 360.0))
+        span = (angle_end - angle_start) % 360.0
+        dangle = 360.0 if abs(span) < 1e-9 else span
+        display_angle = (angle_start + 0.5 * dangle) % 360.0
+        kwargs["angle"] = float(display_chi_to_scianalysis_sector_chi(display_angle, calibration))
+        kwargs["dangle"] = dangle
+        kwargs["bins_relative"] = canonical.get("bins_relative", 1.0)
+        kwargs["plot_range"] = [q_min, q_max, None, None]
+
+    elif op == "linecut_q":
+        # chi0's display->SciAnalysis chi-convention conversion is applied
+        # uniformly (for both this recipe and manually-added protocols) by
+        # _build_linecut_q below — not duplicated here.
+        kwargs["chi0"] = canonical.get("chi0", 0.0)
+        kwargs["dq"] = canonical.get("dq", 0.01)
+        kwargs["plot_range"] = [q_min, q_max, 0, None]
+
+    elif op == "linecut_angle":
+        kwargs["q0"] = canonical.get("q0", 0.1)
+        kwargs["dq"] = canonical.get("dq", 0.01)
+
+    return kwargs
+
+
+def transform_canonical_to_scianalysis_kwargs(canonical: dict[str, Any]) -> dict[str, Any]:
+    """Translate the Transform tab's canonical UI-shape recipe (x_min/x_max/
+    y_min/y_max, or phi_min/phi_max for q_phi_image — None = full/auto
+    calibration extent) into the kwargs SciAnalysis's Protocol constructors
+    expect (plot_range). Transform's other fields (bins_relative, bins_phi,
+    zmin, zmax) already match SciAnalysis's own kwarg names 1:1, so assembling
+    plot_range is the only translation needed."""
+    op = canonical.get("operation")
+    if op not in TRANSFORM_OPERATIONS:
+        return dict(canonical)
+
+    kwargs = {k: v for k, v in canonical.items() if k in (
+        "bins_relative", "bins_phi", "zmin", "zmax", "save_results",
+    )}
+    x_min = canonical.get("x_min")
+    x_max = canonical.get("x_max")
+    if op == "q_phi_image":
+        kwargs["plot_range"] = [x_min, x_max, canonical.get("phi_min", -180.0), canonical.get("phi_max", 180.0)]
+    else:
+        kwargs["plot_range"] = [x_min, x_max, canonical.get("y_min"), canonical.get("y_max")]
+    return kwargs
+
+
+def build_protocol(proto: BatchProtocol, calibration: Any = None) -> Any:
     """Build a SciAnalysis protocol object. Raises ValueError for unregistered operations."""
     builder = _PROTOCOL_BUILDERS.get(proto.operation)
     if builder is None:
@@ -602,7 +712,16 @@ def build_protocol(proto: BatchProtocol) -> Any:
         )
     # incident_angle_deg/sample_normal_deg are calibration overrides (see
     # _resolve_protocol_calibration), not SciAnalysis Protocol constructor kwargs.
-    params = {k: v for k, v in proto.params.items() if k not in _CALIBRATION_OVERRIDE_PARAM_KEYS}
+    params = {k: v for k, v in proto.recipe.items() if k not in _CALIBRATION_OVERRIDE_PARAM_KEYS}
+    if proto.source == "reduction_tab" and proto.kind() == "reduction":
+        params = reduction_canonical_to_scianalysis_kwargs(params, calibration)
+    elif proto.source == "transform_tab" and proto.kind() == "transform":
+        params = transform_canonical_to_scianalysis_kwargs(params)
+    else:
+        # Adapter-translated recipes already return only SciAnalysis kwargs;
+        # everything else (manual protocols, transform_tab's already-native
+        # recipes) still carries routing metadata that must be stripped here.
+        params = {k: v for k, v in params.items() if k not in _RECIPE_ROUTING_KEYS}
     return builder(params)
 
 
@@ -699,8 +818,8 @@ def _protocol_output_dir_name(protocol: "BatchProtocol") -> str:
 
 def _scianalysis_plot_args(protocol: BatchProtocol, style: PlotStyle) -> dict[str, Any]:
     args = style.scianalysis_args(image=protocol.kind() == "transform")
-    if protocol.kind() == "reduction" and "scale" in protocol.preview_params:
-        scale = str(protocol.preview_params["scale"])
+    if protocol.kind() == "reduction" and "scale" in protocol.recipe:
+        scale = str(protocol.recipe["scale"])
         args["xlog"] = scale in ("logx", "loglog")
         args["ylog"] = scale in ("logy", "loglog")
     return args
@@ -735,8 +854,7 @@ def _run_preview_file_with_protocol(
 
     image = np.asarray(_load_image_array(file_path), dtype=float)
     bool_mask = coerce_mask_to_bool(mask, shape=image.shape)
-    params = protocol.params
-    preview = protocol.preview_params
+    params = protocol.recipe
     proto_out_dir = out_dir / _protocol_output_dir_name(protocol)
     proto_out_dir.mkdir(parents=True, exist_ok=True)
     output_stem = f"{Path(file_path).stem}_{protocol.operation}_{_sanitize_path_component(protocol.name)}"
@@ -745,27 +863,33 @@ def _run_preview_file_with_protocol(
     if protocol.kind() == "reduction":
         center_x = float(getattr(calibration, "x0", (image.shape[1] - 1) / 2.0))
         center_y = float(getattr(calibration, "y0", (image.shape[0] - 1) / 2.0))
-        if protocol.operation == "sector_average":
+        # Canonical (reduction_tab) shape carries angle_start/angle_end directly;
+        # manually-added protocols only have SciAnalysis-native angle/dangle, so
+        # fall back to deriving start/end from those for that (rarer) case.
+        if "angle_start" in params or "angle_end" in params:
+            angle_start = float(params.get("angle_start", 0.0))
+            angle_end = float(params.get("angle_end", 360.0))
+        elif protocol.operation == "sector_average":
             angle = float(params.get("angle", 0.0))
             width = float(params.get("dangle", 360.0))
-            angle_start = float(preview.get("angle_start", angle - width / 2.0))
-            angle_end = float(preview.get("angle_end", angle + width / 2.0))
+            angle_start = angle - width / 2.0
+            angle_end = angle + width / 2.0
         else:
-            angle_start = float(preview.get("angle_start", 0.0))
-            angle_end = float(preview.get("angle_end", 360.0))
+            angle_start, angle_end = 0.0, 360.0
+        scale = str(params.get("scale", "logy" if params.get("ylog") else "linear"))
         request = ReductionRequest(
             image=image,
             operation=protocol.operation,
             center_x=center_x,
             center_y=center_y,
             bins_relative=params.get("bins_relative"),
-            q_min=preview.get("q_min"),
-            q_max=preview.get("q_max"),
+            q_min=params.get("q_min"),
+            q_max=params.get("q_max"),
             angle_start_deg=angle_start,
             angle_end_deg=angle_end,
-            line_chi0_deg=preview.get("chi0", params.get("chi0")),
-            line_dq=float(preview.get("dq", params.get("dq", 0.01))),
-            line_value=preview.get("q0", params.get("q0")),
+            line_chi0_deg=params.get("chi0"),
+            line_dq=float(params.get("dq", 0.01)),
+            line_value=params.get("q0"),
             line_mode="angle" if protocol.operation == "linecut_angle" else "q",
             calibration=calibration,
             mask=bool_mask,
@@ -782,11 +906,12 @@ def _run_preview_file_with_protocol(
             axis,
             result,
             style,
-            scale=str(preview.get("scale", "logy" if params.get("ylog") else "linear")),
-            x_limits=_valid_limits(preview.get("q_min"), preview.get("q_max")),
+            scale=scale,
+            x_limits=_valid_limits(params.get("q_min"), params.get("q_max")),
             theme=theme,
         )
     else:
+        preview = protocol.recipe.get("preview_params", {})
         request = TransformRequest(
             image=image,
             operation=protocol.operation,
@@ -890,15 +1015,8 @@ def run_batch(
         else:
             active = [
                 BatchProtocol(
-                    name=proto.name,
-                    operation=proto.operation,
-                    params={
-                        **proto.params,
-                        **_scianalysis_plot_args(proto, style),
-                    },
-                    preview_params=dict(proto.preview_params),
+                    recipe={**proto.recipe, **_scianalysis_plot_args(proto, style)},
                     enabled=proto.enabled,
-                    source=proto.source,
                 )
                 for proto in active
             ]
@@ -912,7 +1030,7 @@ def run_batch(
                 apply_q_bounds_to_protocol(p, compute_q_bounds(cal, bool_mask))
                 for p, cal in zip(active, protocol_calibrations)
             ]
-            executables = [build_protocol(p) for p in active]
+            executables = [build_protocol(p, cal) for p, cal in zip(active, protocol_calibrations)]
 
         files = job.file_paths
         total = len(files) * len(active)

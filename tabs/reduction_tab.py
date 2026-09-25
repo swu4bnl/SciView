@@ -24,8 +24,10 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QRadioButton,
     QSpinBox,
     QSplitter,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -54,7 +56,6 @@ from sciview.interfaces.theme.app_style import (
     setup_splitter_layout,
 )
 from sciview.masking.io import load_mask_file as backend_load_mask_file
-from sciview.processing.angle_conventions import display_chi_to_scianalysis_sector_chi
 from sciview.processing.plot_rendering import (
     REDUCTION_FIGURE_SIZE,
     render_reduction_plot,
@@ -94,19 +95,22 @@ class ReductionTab(BaseImageTab):
         self._build_ui()
         self._building_controls = False
         self.add_display_hook(self._draw_reduction_overlay, "post")
+        self._refresh_payload_view()
 
     def _build_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        layout_ratios = AppStyle.get_layout_ratios()
 
         main_splitter = QSplitter(Qt.Horizontal)
-        main_splitter.addWidget(self._create_preview_panel())
+        preview_panel = self._create_preview_panel()
+        main_splitter.addWidget(preview_panel)
 
         right_splitter = QSplitter(Qt.Vertical)
         right_splitter.addWidget(self._create_image_panel())
         right_splitter.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
-        setup_splitter_layout(right_splitter, layout_ratios['preview_sidebar_ratio'])
+        # Recipe/parameters now stretch to fill the sidebar, so the raw image
+        # panel can take an even 1:1 share instead of the shared 1:2 default.
+        setup_splitter_layout(right_splitter, [1, 1])
         main_splitter.addWidget(right_splitter)
 
         setup_splitter_layout(main_splitter, [1, 1])
@@ -119,6 +123,8 @@ class ReductionTab(BaseImageTab):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+
+        layout.addLayout(self._create_protocol_selector())
 
         title_row = QHBoxLayout()
         title = QLabel("Reduction Preview")
@@ -175,7 +181,83 @@ class ReductionTab(BaseImageTab):
         self._add_grid_field(style_layout, 0, 3, "Export resolution (DPI)", self.plot_dpi_spin)
         self._add_grid_field(style_layout, 1, 0, "Line color", self.plot_line_color_button)
         self._add_grid_field(style_layout, 1, 1, "Line width", self.plot_line_width_spin)
+
+        style_layout.addWidget(QLabel("Axis Scale"), 2, 0)
+        style_layout.addWidget(self._create_scale_toggle(), 2, 1, 1, 7)
         return style_group
+
+    def _create_scale_toggle(self):
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        row = QHBoxLayout(container)
+        row.setContentsMargins(0, 0, 0, 0)
+        self.scale_button_group = QButtonGroup(self)
+        self.scale_button_group.setExclusive(True)
+        self._scale_buttons = {}
+        for value, label in (
+            ("linear", "Linear"),
+            ("logx", "LogX"),
+            ("logy", "LogY"),
+            ("loglog", "LogLog"),
+        ):
+            button = QRadioButton(label)
+            self.scale_button_group.addButton(button)
+            self._scale_buttons[value] = button
+            row.addWidget(button)
+        self._scale_buttons["linear"].setChecked(True)
+        for value, button in self._scale_buttons.items():
+            button.toggled.connect(lambda checked, v=value: self._on_scale_changed(v, checked))
+        return container
+
+    def _current_scale(self) -> str:
+        for value, button in self._scale_buttons.items():
+            if button.isChecked():
+                return value
+        return "linear"
+
+    def _set_scale(self, value: str) -> None:
+        button = self._scale_buttons.get(value)
+        if button is not None:
+            button.setChecked(True)
+
+    def _on_scale_changed(self, _value: str, checked: bool) -> None:
+        if not checked:
+            return
+        self._on_parameters_changed()
+
+    def _create_protocol_selector(self):
+        protocol_layout = QGridLayout()
+        protocol_label = QLabel("Protocol")
+        apply_subtitle_style(protocol_label)
+        protocol_layout.addWidget(protocol_label, 0, 0, 1, 2)
+        self.protocol_button_group = QButtonGroup(self)
+        self.protocol_button_group.setExclusive(True)
+        self._operation_buttons = {}
+        for index, (operation, label) in enumerate((
+            ("circular_average", "Circular Average"),
+            ("sector_average", "Sector Average"),
+            ("linecut_q", "I(q) at χ"),
+            ("linecut_angle", "I(χ) at q"),
+        )):
+            button = QPushButton(label)
+            apply_protocol_selector_button_style(button)
+            self.protocol_button_group.addButton(button)
+            self._operation_buttons[operation] = button
+            row, column = divmod(index, 2)
+            protocol_layout.addWidget(button, row + 1, column)
+        self._operation_buttons["circular_average"].setChecked(True)
+        protocol_layout.setColumnStretch(0, 1)
+        protocol_layout.setColumnStretch(1, 1)
+        return protocol_layout
+
+    def _create_payload_group(self):
+        group = QGroupBox("Recipe")
+        layout = QVBoxLayout(group)
+        self.payload_view = QTextEdit()
+        self.payload_view.setFontFamily("monospace")
+        self.payload_view.setMinimumHeight(150)
+        layout.addWidget(self.payload_view, 1)
+        return group
 
     def _create_controls_panel(self):
         panel = QWidget()
@@ -211,36 +293,6 @@ class ReductionTab(BaseImageTab):
         self.auto_update_check = QCheckBox("Live preview")
         self.auto_update_check.setChecked(True)
         layout.addWidget(self.auto_update_check)
-
-        # q min/max are display-only crops applied to the preview plot's x
-        # axis (see _apply_display_crop), matching SciAnalysis's own
-        # plot_range convention used by batch processing
-        # (apply_q_bounds_to_protocol) for these operations — they are never
-        # sent to SciAnalysis itself (circular_average_q_bin/sector_average_q_bin
-        # always cover the full calibration q range).
-        protocol_layout = QGridLayout()
-        protocol_label = QLabel("Protocol")
-        apply_subtitle_style(protocol_label)
-        protocol_layout.addWidget(protocol_label, 0, 0, 1, 2)
-        self.protocol_button_group = QButtonGroup(self)
-        self.protocol_button_group.setExclusive(True)
-        self._operation_buttons = {}
-        for index, (operation, label) in enumerate((
-            ("circular_average", "Circular Average"),
-            ("sector_average", "Sector Average"),
-            ("linecut_q", "I(q) at χ"),
-            ("linecut_angle", "I(χ) at q"),
-        )):
-            button = QPushButton(label)
-            apply_protocol_selector_button_style(button)
-            self.protocol_button_group.addButton(button)
-            self._operation_buttons[operation] = button
-            row, column = divmod(index, 2)
-            protocol_layout.addWidget(button, row + 1, column)
-        self._operation_buttons["circular_average"].setChecked(True)
-        protocol_layout.setColumnStretch(0, 1)
-        protocol_layout.setColumnStretch(1, 1)
-        layout.addLayout(protocol_layout)
 
         self.circular_group = QGroupBox("Parameters")
         circular_layout = QGridLayout(self.circular_group)
@@ -339,15 +391,12 @@ class ReductionTab(BaseImageTab):
         }
         self._sync_operation_group_visibility()
 
-        scale_layout = QHBoxLayout()
-        scale_layout.addWidget(QLabel("Scale"))
-        self.plot_scale_combo = QComboBox()
-        self.plot_scale_combo.addItems(["linear", "logx", "logy", "loglog"])
-        self.plot_scale_combo.currentTextChanged.connect(self._on_parameters_changed)
-        scale_layout.addWidget(self.plot_scale_combo, 1)
-        layout.addLayout(scale_layout)
+        layout.addWidget(self._create_payload_group(), 1)
 
         button_row = QHBoxLayout()
+        self.payload_apply_button = QPushButton("Apply YAML")
+        self.payload_apply_button.setToolTip("Parse the edited Recipe YAML above and apply it to the controls")
+        self.payload_apply_button.clicked.connect(self._apply_payload_edits)
         self.preview_button = QPushButton("Refresh Preview")
         self.preview_button.clicked.connect(self.refresh_preview)
         self.export_button = QPushButton("Export Data")
@@ -356,12 +405,11 @@ class ReductionTab(BaseImageTab):
         self.send_to_batch_button.setToolTip("Push current settings as a protocol to the Batch tab")
         self.send_to_batch_button.clicked.connect(self._send_to_batch)
         apply_emphasis_button_style(self.send_to_batch_button)
+        button_row.addWidget(self.payload_apply_button)
         button_row.addWidget(self.preview_button)
         button_row.addWidget(self.export_button)
         button_row.addWidget(self.send_to_batch_button)
         layout.addLayout(button_row)
-
-        layout.addStretch()
 
         for operation, button in self._operation_buttons.items():
             button.toggled.connect(lambda checked, op=operation: self._on_protocol_changed(op, checked))
@@ -650,6 +698,7 @@ class ReductionTab(BaseImageTab):
             manual_crop = not widgets["auto_crop"].isChecked()
             widgets["q_min"].setEnabled(manual_crop)
             widgets["q_max"].setEnabled(manual_crop)
+        self._refresh_payload_view()
         self.update_plot()
 
     def _get_image_array(self):
@@ -769,7 +818,7 @@ class ReductionTab(BaseImageTab):
             self.canvas_plot.draw()
             return
 
-        scale = self.plot_scale_combo.currentText() if hasattr(self, "plot_scale_combo") else "linear"
+        scale = self._current_scale()
         x_limits = None
         if self._selected_operation() in ("circular_average", "sector_average", "linecut_q"):
             q_min = self._op_float("q_min")
@@ -795,10 +844,7 @@ class ReductionTab(BaseImageTab):
 
     def _apply_display_crop(self, scale: str):
         """Crop the preview's x axis to the selected operation's q window,
-        matching SciAnalysis's own plot_range convention used by batch
-        processing (apply_q_bounds_to_protocol) — circular_average_q_bin /
-        sector_average_q_bin / linecut_q always compute over the full
-        calibration range regardless of this display-only crop."""
+        the same q_min/q_max sent as plot_range to batch processing."""
         if self._selected_operation() not in ("circular_average", "sector_average", "linecut_q"):
             return
         q_min = self._op_float("q_min")
@@ -832,85 +878,148 @@ class ReductionTab(BaseImageTab):
         written_path = save_reduction_result(self._current_result, file_path)
         self.parent_app.show_status(f"Reduction 1D data exported to {written_path}")
 
-    def _build_batch_payload(self) -> dict:
-        """Build SA-compatible protocol recipe for push to batch.
+    def _q_plot_bounds(self):
+        """q_min/q_max to send: None (native SciAnalysis autoscale, matching
+        matplotlib's own data-driven default) while "Auto crop to
+        calibration" is checked, or the exact typed values once the user
+        overrides it manually."""
+        if self._op_bool("auto_crop", True):
+            return None, None
+        return self._op_float("q_min"), self._op_float("q_max")
 
-        Does NOT include plot_range — batch.run_batch injects that from calibration
-        at execution time via compute_q_bounds + apply_q_bounds_to_protocol.
+    def _build_batch_payload(self) -> dict:
+        """Build the canonical UI-shape recipe for push to Batch: exactly what
+        this tab's widgets show (scale, q_min/q_max, angle_start/angle_end,
+        chi0/dq/q0), no SciAnalysis-specific keys.
+
+        SciAnalysis-native kwargs (xlog/ylog, plot_range, angle/dangle in
+        SciAnalysis's own chi convention) are derived from this recipe only in
+        sciview.processing.batch.reduction_canonical_to_scianalysis_kwargs, at
+        the point Batch actually builds a SciAnalysis Protocol object — this
+        is the single source of authority for what the user configured.
         """
         op = self._selected_operation()
         name = self._operation_labels[op]
-        preview = {
-            "scale": self.plot_scale_combo.currentText(),
-            "q_min": self._op_float("q_min"),
-            "q_max": self._op_float("q_max"),
-            "angle_start": self._op_float("angle_start", 0.0),
-            "angle_end": self._op_float("angle_end", 360.0),
-            "chi0": self._op_float("chi0"),
-            "q0": self._op_float("q0"),
-            "dq": self._op_float("dq", 0.01),
-        }
+        scale = self._current_scale()
+        save_results = ["plots", "txt"]
 
         if op == "circular_average":
+            q_min, q_max = self._q_plot_bounds()
             return {
-                "operation": op, "name": name,
+                "operation": op, "name": name, "scale": scale,
                 "bins_relative": self._op_float("bins_relative", 1.0),
-                "preview_params": preview,
-                "save_results": ["plots", "txt"],
+                "q_min": q_min, "q_max": q_max,
+                "save_results": save_results,
             }
 
         if op == "sector_average":
-            a_start = self._op_float("angle_start", 0.0)
-            a_end   = self._op_float("angle_end", 360.0)
-            span = (a_end - a_start) % 360.0
-            dangle = 360.0 if np.isclose(span, 0.0) else span
-            display_angle = (a_start + 0.5 * dangle) % 360.0
-            cal = self._selected_calibration()
-            angle = float(display_chi_to_scianalysis_sector_chi(display_angle, cal))
+            q_min, q_max = self._q_plot_bounds()
             return {
-                "operation": op, "name": name,
-                "angle":  angle,
-                "dangle": float(dangle),
+                "operation": op, "name": name, "scale": scale,
                 "bins_relative": self._op_float("bins_relative", 1.0),
-                "preview_params": preview,
-                "ylog": True,
-                "save_results": ["plots", "txt"],
+                "angle_start": self._op_float("angle_start", 0.0),
+                "angle_end": self._op_float("angle_end", 360.0),
+                "q_min": q_min, "q_max": q_max,
+                "save_results": save_results,
             }
 
         if op == "linecut_q":
+            q_min, q_max = self._q_plot_bounds()
             return {
-                "operation": op, "name": name,
+                "operation": op, "name": name, "scale": scale,
                 "chi0": self._op_float("chi0", 0.0),
-                "dq":   self._op_float("dq", 0.01),
-                "preview_params": preview,
-                "save_results": ["plots", "txt"],
+                "dq": self._op_float("dq", 0.01),
+                "q_min": q_min, "q_max": q_max,
+                "save_results": save_results,
             }
 
         if op == "linecut_angle":
             return {
-                "operation": op, "name": name,
+                "operation": op, "name": name, "scale": scale,
                 "q0": self._op_float("q0", 0.1),
                 "dq": self._op_float("dq", 0.01),
-                "preview_params": preview,
-                "save_results": ["plots", "txt"],
+                "save_results": save_results,
             }
 
-        return {
-            "operation": op,
-            "name": name,
-            "preview_params": preview,
-            "save_results": ["plots", "txt"],
-        }
+        return {"operation": op, "name": name, "scale": scale, "save_results": save_results}
 
     def _build_recipe_payload(self) -> dict:
         """Full recipe for Export Recipe: SA-compatible params + context metadata."""
         return {
             **self._build_batch_payload(),
-            "q_bounds": dict(self._q_bounds),
             "calibration_source": self.calibration_source_combo.currentData(),
             "mask_source": self.mask_source_combo.currentData(),
             "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
         }
+
+    def _build_payload_preview(self) -> dict:
+        """Curated view shown in the YAML payload box: the exact canonical
+        recipe (already SciAnalysis-agnostic — see _build_batch_payload),
+        plus calibration_source/mask_source/calibration_q_range for context."""
+        payload = {
+            **self._build_batch_payload(),
+            "calibration_source": self.calibration_source_combo.currentData(),
+            "mask_source": self.mask_source_combo.currentData(),
+        }
+        if self._q_bounds:
+            payload["calibration_q_range"] = [self._q_bounds["q_min"], self._q_bounds["q_max"]]
+        return payload
+
+    def _refresh_payload_view(self) -> None:
+        if not hasattr(self, "payload_view") or self.payload_view.hasFocus():
+            return
+        text = "# Recipe sent to Batch tab\n" + yaml.safe_dump(
+            self._build_payload_preview(), sort_keys=False, default_flow_style=False
+        )
+        self.payload_view.setPlainText(text)
+
+    def _apply_payload_edits(self) -> None:
+        try:
+            data = yaml.safe_load(self.payload_view.toPlainText()) or {}
+        except yaml.YAMLError as exc:
+            self.parent_app.show_status(f"Invalid YAML: {exc}")
+            return
+        if not isinstance(data, dict):
+            self.parent_app.show_status("Invalid recipe: expected a YAML mapping")
+            return
+
+        operation = data.get("operation")
+        if operation in self._operation_buttons:
+            self._operation_buttons[operation].setChecked(True)
+
+        widgets = self._operation_param_widgets.get(self._selected_operation(), {})
+
+        def _set(key, value):
+            widget = widgets.get(key)
+            if widget is not None and value is not None:
+                widget.blockSignals(True)
+                widget.setValue(float(value))
+                widget.blockSignals(False)
+
+        _set("bins_relative", data.get("bins_relative"))
+        _set("chi0", data.get("chi0"))
+        _set("dq", data.get("dq"))
+        _set("q0", data.get("q0"))
+        _set("angle_start", data.get("angle_start"))
+        _set("angle_end", data.get("angle_end"))
+
+        auto_crop = widgets.get("auto_crop")
+        if "q_min" in data or "q_max" in data:
+            q_min, q_max = data.get("q_min"), data.get("q_max")
+            if q_min is None and q_max is None:
+                if auto_crop is not None:
+                    auto_crop.setChecked(True)
+            else:
+                if auto_crop is not None:
+                    auto_crop.setChecked(False)
+                _set("q_min", q_min)
+                _set("q_max", q_max)
+
+        self._set_scale(str(data.get("scale", "linear")))
+
+        self._on_parameters_changed()
+        self.parent_app.show_status("Recipe applied from YAML")
+
 
     def export_recipe(self):
         payload = self._build_recipe_payload()
