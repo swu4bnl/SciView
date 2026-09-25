@@ -84,6 +84,8 @@ class SciAnaApp(QMainWindow):
 
         # Shared application state
         self.image_data = None
+        self.frame_context = None
+        self.smi_processing = None
         self.image_path = None
         self.calibration = None
         self.mask = None
@@ -175,6 +177,8 @@ class SciAnaApp(QMainWindow):
         self.refresh_shortcut.activated.connect(self._refresh_current_tab)
         self.theme_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
         self.theme_shortcut.activated.connect(self._toggle_dark_light_theme)
+        from sciview.interfaces.theme.appearance import install_menu
+        install_menu(self)
 
         # Dev tools: hot-reload + style inspector (only when DEV_TOOLS=1)
         self._style_hot_reloader = None
@@ -312,6 +316,10 @@ class SciAnaApp(QMainWindow):
     def publish_shared_image(self, image_data, image_path=None, source_tab=None):
         """Publish active image into shared app state and propagate to tabs."""
         self.image_data = image_data
+        self.frame_context = None
+        if self.smi_processing is not None: self.smi_processing.set_context(None)
+        self._set_smi_processing_scope(False)
+        self.setWindowTitle(f"SciView - {BEAMLINE_NAME}")
         if image_path is not None:
             self.image_path = image_path
         self._shared_image_revision += 1
@@ -322,6 +330,44 @@ class SciAnaApp(QMainWindow):
             self.calibration = image_calibration
 
         self.sync_tabs_from_shared(source_tab=source_tab)
+
+    def publish_frame_context(self, ref):
+        """Raw SMI identity is separate from CMS single-plane processing state."""
+        self.frame_context = ref
+        if self.smi_processing is not None: self.smi_processing.set_context(ref)
+        self._set_smi_processing_scope(True)
+        self.setWindowTitle(f"SciView - SMI (12-ID) · {ref.stream}/{ref.detector}")
+
+    def _set_smi_processing_scope(self, smi):
+        for i in range(self.tab_widget.count()):
+            widget = self.tab_widget.widget(i)
+            if hasattr(widget, "set_smi_active"):
+                widget.set_smi_active(smi)
+                self.tab_widget.setTabEnabled(i, True)
+                self.tab_widget.setTabToolTip(i, "SMI whole-primary-run processing" if smi else "")
+                continue
+            if self.tab_widget.tabText(i) in ("Calibration", "Mask Editing", "Reduction", "Transform"):
+                self.tab_widget.setTabEnabled(i, not smi)
+                self.tab_widget.setTabToolTip(i, "SMI processing adapter is not enabled in this pilot; use Peak Analysis for cached products." if smi else "")
+
+    def select_smi_frame(self, uid, index):
+        """Select the primary acquisition frame underlying a cached profile."""
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            controls = getattr(tab, "smi_controls", None)
+            if controls is None:
+                continue
+            profile_index = tab.catalog_combo.findData("smi_migration")
+            tab.catalog_combo.setCurrentIndex(profile_index)
+            sequence = controls.sequence
+            if sequence is not None and sequence.uid == uid and sequence.stream == "primary":
+                controls.select_index(index)
+            else:
+                from sciview.sources.tiled_source import TiledScanSummary
+                scan = next((s for s in tab.scan_rows if s.uid == uid), TiledScanSummary(uid, None))
+                controls.load(scan, stream="primary", index=index)
+            self.tab_widget.setCurrentIndex(i)
+            return
 
     def publish_shared_calibration(self, calibration, source_tab=None, propagate=True):
         """Publish calibration so all tabs can consume a single shared object."""
@@ -445,6 +491,9 @@ class SciAnaApp(QMainWindow):
             if tab == source_tab:
                 continue
 
+            controls = getattr(tab, "smi_controls", None)
+            if controls is not None and controls.active():
+                continue
             if hasattr(tab, 'image_data'):
                 tab.image_data = self.image_data
 
@@ -501,6 +550,10 @@ class SciAnaApp(QMainWindow):
 
     def _render_current_tab_from_shared(self, *_args):
         """Render shared image data when a tab becomes active."""
+        current = self.tab_widget.currentWidget()
+        controls = getattr(current, "smi_controls", None)
+        if controls is not None and controls.active():
+            return  # Do not restore an old CMS image over the lazy SMI frame.
         if self.image_data is None:
             return
 
@@ -932,6 +985,8 @@ def create_application():
 
     # Load layout/sizing ratios from runtime configuration before creating widgets.
     AppStyle.apply_gui_settings(GUI_SETTINGS)
+    from sciview.interfaces.theme.appearance import load_appearance
+    load_appearance(app)
 
     # Resolve the system theme before widgets create palette-derived styles and icons.
     if not AppStyle.apply_qdarktheme('auto', app):
@@ -1017,10 +1072,19 @@ def create_application():
         main_window.add_tab(placeholder, "Mask Editing", icon_key="mask_editing")
 
     # Reduction
+    import importlib.util
+    if importlib.util.find_spec("smi_tiled") is not None:
+        from sciview.interfaces.services.smi_processing import SmiProcessingController
+        main_window.smi_processing = SmiProcessingController(main_window)
+        app.aboutToQuit.connect(main_window.smi_processing.close)
+
     t0 = _tab_start("Reduction")
     try:
         from tabs.reduction_tab import ReductionTab
         reduction_tab = ReductionTab(main_window)
+        if main_window.smi_processing is not None:
+            from tabs.smi_processing_tab import BackendTab, SmiReductionTab
+            reduction_tab = BackendTab(reduction_tab, SmiReductionTab(main_window, main_window.smi_processing))
         main_window.add_tab(reduction_tab, "Reduction", icon_key="reduction")
         _tab_done(t0)
     except ImportError as e:
@@ -1033,6 +1097,9 @@ def create_application():
     try:
         from tabs.transform_tab import TransformTab
         transform_tab = TransformTab(main_window)
+        if main_window.smi_processing is not None:
+            from tabs.smi_processing_tab import BackendTab, SmiTransformTab
+            transform_tab = BackendTab(transform_tab, SmiTransformTab(main_window, main_window.smi_processing))
         main_window.add_tab(transform_tab, "Transform", icon_key="transform")
         _tab_done(t0)
     except ImportError as e:
@@ -1041,6 +1108,14 @@ def create_application():
         main_window.add_tab(placeholder, "Transform", icon_key="transform")
 
     # Batch
+    try:
+        import importlib.util
+        if importlib.util.find_spec("smi_tiled") is not None:
+            from tabs.smi_peak_tab import SmiPeakTab
+            main_window.add_tab(SmiPeakTab(main_window), "Peak Analysis", icon_key="reduction")
+    except ImportError as exc:
+        print(f"[SciView] Optional SMI analysis unavailable: {exc}")
+
     t0 = _tab_start("Batch")
     try:
         from tabs.batch_tab import BatchTab
@@ -1065,6 +1140,12 @@ def create_application():
         main_window.add_tab(placeholder, "Info", icon_key="info")
 
     print("[SciView] All tabs loaded. Launching window...")
+    if os.environ.get("SCIVIEW_PROFILE") == "smi_migration":
+        main_window.setWindowTitle("SciView - SMI (processing)")
+        for i in range(main_window.tab_widget.count()):
+            if main_window.tab_widget.tabText(i) == "Tiled Browser":
+                main_window.tab_widget.setCurrentIndex(i)
+                break
     return app, main_window
 
 
