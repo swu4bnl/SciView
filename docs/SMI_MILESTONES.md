@@ -48,6 +48,10 @@ The first two workflows are now available on this branch:
 - Newest scans load automatically on opening the SMI catalog and after successful
   login. No filters are selected by default. Results are paginated in groups of
   25, newest first, using the smi-browser reverse-catalog pagination path.
+- Startup explicitly restores saved Tiled credentials and checks the identity
+  in a background task. A valid saved session requires no Login click or dialog.
+  Missing/expired credentials show a Login action; network failures are reported
+  separately from “not signed in.”
 - Select **Cycle → Proposal → Project** to narrow automatically. Each child
   selection resets when its parent changes; All leaves that scope unrestricted.
   Cycles include **2026-3** and **Commissioning**, with additional choices from
@@ -93,6 +97,34 @@ Live SMI monitoring is not enabled in this pilot. Non-singleton exposure/panel
 dimensions beyond a simple frame stack are rejected pending explicit mapping.
 
 ## Metadata-relative calibration and layered masks
+
+### Tiled run exploration (CMS and SMI)
+
+The Tiled Browser's right panel contains **Images** and **Scalars / Metadata**.
+The latter contains scalar plots/table and a combined metadata/baseline/config
+explorer. Run metadata is a collapsible key/value/type tree, with Expand/Collapse
+controls and recursive search that retains matching paths. Baseline is a searchable
+Field/Before/After/Delta/Changed/Samples table with a Changed-only filter; selecting
+a row exposes all samples. Configuration is a searchable Device/Field/Value/Units/
+Source/Type/Path table. Both retain complete values in a detail pane; Copy JSON
+copies a selected item or the full document. All search is local to loaded data.
+Scalar and configuration reads are lazy and exclude detector images.
+Configuration is read from stream metadata as well as config nodes where present.
+Baseline retains both before/after samples. Text search is available for metadata.
+
+Scalars supports X/Y 1D curves and X/Y/Z color-mapped 2D scatter maps. Repeated
+positions are not averaged or reshaped; every plotted point retains its acquisition
+index. Click a point or double-click a scalar table row to inspect that frame.
+SMI can switch the corresponding event stream; the existing CMS image path links
+primary frames. SMI reuses already-loaded scalar tables and derived `fn:` axes.
+
+Scan rows now list detector names as plain text. **Detector** above the image
+selects the active detector, and **Compare** opens a second viewer at the same
+acquisition index with independent contrast. A single-detector run disables the
+choice. A missing comparison frame is reported rather than substituting a different
+frame. The active detector drives Calibration/Mask Editing; comparison is visual.
+
+### Calibration and mask workflow
 
 Calibration keeps SciView's right-click ring picks, local-maximum snapping,
 manual center controls, and robust circle-center calculation for SAXS. Geometry
