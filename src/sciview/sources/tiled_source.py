@@ -136,9 +136,16 @@ def tiled_authenticate(
         return TiledAuthState(profile_name, False, error=tiled_import_error())
 
     tiled_manager._clients.pop(profile_name, None)
+    tiled_manager._catalogs.pop(profile_name, None)
     client = tiled_manager.get_or_create_client(profile_name)
     if client is None:
         return TiledAuthState(profile_name, False, error=f"Could not connect to {profile_name}")
+    if _profile(profile_name).get("lazy_frames"):
+        try:
+            client.login()  # explicit Login action only; browsing never prompts
+        except Exception as exc:
+            tiled_manager._clients.pop(profile_name, None)
+            return TiledAuthState(profile_name, False, error=str(exc))
     return tiled_auth_state(profile_name)
 
 

@@ -623,6 +623,10 @@ class ImageViewer(QWidget):
     def refresh_theme(self) -> None:
         """Refresh toolbar icons and pyqtgraph canvas colors for the active theme."""
         colors = AppStyle.theme_colors()
+        from sciview.interfaces.stable_qt.widgets.plot_style import style_plot
+        style_plot(self._plot_item)
+        self._histogram.axis.setTickFont(AppStyle.make_font("body"))
+        self._histogram.axis.setTextPen(colors['text'])
         background = colors['base'].name()
         text_color = colors['text']
         muted_color = colors['muted']

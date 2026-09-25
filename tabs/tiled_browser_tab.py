@@ -30,6 +30,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QSizePolicy,
+    QTabWidget,
 )
 
 from sciview.interfaces.theme.app_style import (
@@ -83,6 +84,10 @@ class TiledBrowserTab(BaseImageTab):
         self.current_frame_array = None
         self.current_image_source = None
         self.current_detector = ""
+        from sciview.interfaces.services.latest_job import LatestJob
+        self.compare_job = LatestJob(self)
+        self.auth_job = LatestJob(self)
+        self._compare_source = None
         self._operation_token = 0
         self._active_thread: QThread | None = None
         self._active_worker: _OperationWorker | None = None
@@ -226,6 +231,9 @@ class TiledBrowserTab(BaseImageTab):
         on_success(result)
 
     def _cancel_operation(self) -> None:
+        if hasattr(self, "smi_controls"):
+            self.smi_controls.job.invalidate()
+            self.smi_search.job.invalidate()
         self._operation_token += 1
         self._stop_playback()
         self._finish_operation()
@@ -262,7 +270,12 @@ class TiledBrowserTab(BaseImageTab):
 
         viewer = QWidget()
         viewer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        viewer_layout = QVBoxLayout(viewer)
+        outer_layout = QVBoxLayout(viewer)
+        self.detail_tabs = QTabWidget()
+        outer_layout.addWidget(self.detail_tabs)
+        images = QWidget()
+        viewer_layout = QVBoxLayout(images)
+        self.detail_tabs.addTab(images, "Images")
         subtitle = QLabel("Preview")
         apply_subtitle_style(subtitle)
         viewer_layout.addWidget(subtitle)
@@ -270,14 +283,35 @@ class TiledBrowserTab(BaseImageTab):
         self.current_image_label = QLabel("No scan selected")
         apply_info_style(self.current_image_label)
         viewer_layout.addWidget(self.current_image_label)
-        viewer_layout.addWidget(self._create_image_panel(), 1)
+        detector_row = QHBoxLayout()
+        self.detector_label = QLabel("Detector")
+        self.detector_select = QComboBox()
+        self.detector_select.currentTextChanged.connect(self._on_panel_detector_changed)
+        detector_row.addWidget(self.detector_label); detector_row.addWidget(self.detector_select, 1)
+        self.compare_select = QComboBox(); self.compare_select.addItem("No second detector", "")
+        self.compare_select.currentIndexChanged.connect(self._update_comparison)
+        detector_row.addWidget(QLabel("Compare")); detector_row.addWidget(self.compare_select, 1)
+        viewer_layout.addLayout(detector_row)
+        self.image_splitter = QSplitter(Qt.Horizontal)
+        self.image_splitter.addWidget(self._create_image_panel())
+        from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
+        self.compare_viewer = ImageViewer(self)
+        self.compare_viewer.hide()
+        self.image_splitter.addWidget(self.compare_viewer)
+        viewer_layout.addWidget(self.image_splitter, 1)
         viewer_layout.addWidget(self._create_frame_group())
+        from sciview.interfaces.stable_qt.widgets.smi_browser import SmiBrowserControls
+        self.smi_controls = SmiBrowserControls(self)
+        viewer_layout.addWidget(self.smi_controls)
 
-        self.metadata_text = QTextEdit()
-        self.metadata_text.setReadOnly(True)
-        self.metadata_text.setMaximumHeight(layout_cfg['tiled_metadata_max_height'])
-        apply_info_style(self.metadata_text)
-        viewer_layout.addWidget(self.metadata_text)
+        from sciview.interfaces.stable_qt.widgets.run_explorer import RunExplorer
+        self.run_explorer = RunExplorer(self)
+        self.detail_tabs.addTab(self.run_explorer, "Scalars / Metadata")
+        self.detail_tabs.currentChanged.connect(self._detail_changed)
+        self.run_explorer.frame_selected.connect(self._scalar_frame_selected)
+        QApplication.instance().aboutToQuit.connect(self.run_explorer.job.close)
+        QApplication.instance().aboutToQuit.connect(self.compare_job.close)
+        QApplication.instance().aboutToQuit.connect(self.auth_job.close)
 
         splitter.addWidget(controls_scroll)
         splitter.addWidget(viewer)
@@ -331,8 +365,8 @@ class TiledBrowserTab(BaseImageTab):
         row.addWidget(self.refresh_button)
         layout.addLayout(row)
 
-        self.auth_status_label = QLabel("Status: unknown")
-        apply_info_style(self.auth_status_label)
+        from sciview.interfaces.stable_qt.widgets.status_label import readable_status
+        self.auth_status_label = readable_status("Login status: not checked")
         layout.addWidget(self.auth_status_label)
         return group
 
@@ -343,7 +377,13 @@ class TiledBrowserTab(BaseImageTab):
         layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
         group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
+        from sciview.interfaces.stable_qt.widgets.smi_search import SmiSearchPanel
+        self.smi_search = SmiSearchPanel(self)
+        self.smi_search.hide()
+        layout.addWidget(self.smi_search)
+        self.legacy_search_widget = QWidget()
         search_grid = QGridLayout()
+        self.legacy_search_widget.setLayout(search_grid)
         search_grid.setHorizontalSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         search_grid.setVerticalSpacing(AppStyle.LAYOUT['panel_spacing'])
         label_width = AppStyle.FORM_UI['section_label_width']
@@ -383,7 +423,7 @@ class TiledBrowserTab(BaseImageTab):
         search_grid.addWidget(cycle_label, 1, 0)
         self.cycle_combo = QComboBox()
         self.cycle_combo.setEditable(True)
-        self.cycle_combo.addItems(["2026-2", "2026-1", "2025-3", "2025-2", "2025-1"])
+        self.cycle_combo.addItems(["2026-3", "2026-2", "2026-1", "2025-3", "2025-2", "2025-1"])
         self.cycle_combo.setMinimumWidth(input_min_width)
         search_grid.addWidget(self.cycle_combo, 1, 1, 1, 2)
 
@@ -400,9 +440,10 @@ class TiledBrowserTab(BaseImageTab):
         apply_toolbar_symbol_button_style(self.run_search_button)
         self.run_search_button.clicked.connect(self._search_scans)
         search_grid.addWidget(self.run_search_button, 1, 5)
+        self.legacy_scope_widgets = [cycle_label, self.cycle_combo, proposal_label, self.proposal_input]
         search_grid.setColumnStretch(2, 1)
         search_grid.setColumnStretch(4, 1)
-        layout.addLayout(search_grid)
+        layout.addWidget(self.legacy_search_widget)
 
         self.advanced_filters_widget = QWidget()
         advanced_filters = QFormLayout(self.advanced_filters_widget)
@@ -620,6 +661,25 @@ class TiledBrowserTab(BaseImageTab):
         profile = self._active_profile()
         if profile is None:
             return
+        self.auth_job.invalidate()
+        if profile == "smi_migration":
+            from sciview.sources.tiled_auth import cached_identity
+            self.auth_status_label.setText("Checking saved Tiled login…")
+            def done(identity):
+                if self._active_profile() != profile: return
+                if identity:
+                    self.auth_status_label.setText(f"Signed in as {identity} · saved session restored")
+                    self.auth_button.setText("Account / Sign in")
+                    # Retry a startup page that failed before credentials were
+                    # restored, without clearing the user's current filters.
+                    if not self.scan_rows and not self.smi_controls.job._running:
+                        self.smi_controls.search(self.smi_search.filters())
+                else:
+                    self.auth_status_label.setText("Not signed in · click Login to access protected scans")
+                    self.auth_button.setText("Login")
+            self.auth_job.submit(lambda: cached_identity("https://tiled.nsls2.bnl.gov"), done,
+                lambda exc: self.auth_status_label.setText(f"Could not check saved login: {exc}"))
+            return
         state = self.image_service.tiled_auth_state(profile)
         if state.authenticated:
             user = state.username or "cached session"
@@ -634,6 +694,26 @@ class TiledBrowserTab(BaseImageTab):
         profile = self._active_profile()
         if profile is None:
             return
+        if self.smi_controls.active():
+            self.auth_job.invalidate()
+            from sciview.interfaces.stable_qt.widgets.tiled_login import TiledLoginDialog
+            from sciview.sources.tiled_client import tiled_manager
+            existing = self.__dict__.get("_smi_login")
+            if existing is not None and existing.isVisible():
+                existing.raise_()
+                return
+            dialog = TiledLoginDialog("https://tiled.nsls2.bnl.gov", self)
+            self._smi_login = dialog
+            def signed_in():
+                tiled_manager._clients.pop(profile, None)
+                tiled_manager._catalogs.pop(profile, None)
+                self.smi_controls.reset()
+                self.auth_status_label.setText(f"Status: signed in as {dialog.identity}")
+                self.auth_button.setText("Account / Sign in")
+                self.smi_search.activate()
+            dialog.authenticated.connect(signed_in)
+            dialog.show()
+            return
         self.parent_app.show_status("Watch the terminal for any Tiled login prompts")
 
         def do_login():
@@ -641,6 +721,7 @@ class TiledBrowserTab(BaseImageTab):
 
         def done(auth):
             self._refresh_auth_state()
+            self.smi_controls.reset()
             if not auth.authenticated:
                 QMessageBox.warning(self, "Login failed", auth.error or "Could not authenticate")
 
@@ -651,6 +732,8 @@ class TiledBrowserTab(BaseImageTab):
         self._cancel_operation()
         self._clear_selection()
         self._refresh_auth_state()
+        self.smi_controls.reset()
+        self.smi_search.activation_timer.start(0)
 
     def _start_live_monitor(self) -> None:
         profile = self._active_profile()
@@ -774,6 +857,10 @@ class TiledBrowserTab(BaseImageTab):
         return len(self.scan_rows) - 1
 
     def _clear_selection(self) -> None:
+        self.compare_job.invalidate(); self._compare_source = None
+        self.compare_viewer.clear_image(); self.compare_viewer.hide()
+        self.run_explorer.set_run(None, None)
+        self._set_panel_detectors([])
         self._live_auto_load_attempts.clear()
         self.scan_rows = []
         self.scan_table.setRowCount(0)
@@ -788,7 +875,7 @@ class TiledBrowserTab(BaseImageTab):
         self.frame_slider.setEnabled(False)
         self.frame_slider.setMaximum(0)
         self.frame_label.setText("1 / 1")
-        self.metadata_text.clear()
+        self.run_explorer.metadata_view.clear()
 
     def _search_scans(self) -> None:
         profile = self._active_profile()
@@ -796,6 +883,12 @@ class TiledBrowserTab(BaseImageTab):
             return
         cycle = self.cycle_combo.currentText().strip()
         proposal_id = self.proposal_input.text().strip()
+        if self.smi_controls.active():
+            filters = self.smi_search.filters()
+            filters["start.sample_name"] = self.sample_savename_input.text().strip()
+            if self.alias_input.text().strip(): filters["start.project_name"] = self.alias_input.text().strip()
+            self.smi_controls.search(filters)
+            return
         if not cycle or not proposal_id:
             QMessageBox.warning(self, "Missing query", "Enter both cycle and proposal ID")
             return
@@ -825,6 +918,9 @@ class TiledBrowserTab(BaseImageTab):
         end_scan_id = self.scan_id_end_input.value()
         if start_scan_id > end_scan_id:
             QMessageBox.warning(self, "Invalid Range", "Start scan ID must be <= end scan ID")
+            return
+        if self.smi_controls.active():
+            self.smi_controls.search({**self.smi_search.filters(), "scan_min": start_scan_id, "scan_max": end_scan_id})
             return
 
         def do_search():
@@ -868,7 +964,7 @@ class TiledBrowserTab(BaseImageTab):
                     timestamp = str(scan.time)
             values = [
                 str(scan.scan_id or ""),
-                "",
+                ", ".join(scan.detectors),
                 scan.filename,
                 scan.measure_type,
                 scan.proposal_id,
@@ -879,10 +975,6 @@ class TiledBrowserTab(BaseImageTab):
             for col_index, value in enumerate(values):
                 self.scan_table.setItem(row_index, col_index, QTableWidgetItem(value))
 
-            detector_combo = QComboBox()
-            detector_combo.addItems(scan.detectors)
-            detector_combo.activated.connect(self._on_row_detector_activated)
-            self.scan_table.setCellWidget(row_index, 1, detector_combo)
 
     def _on_scan_selected(self) -> None:
         selected = self.scan_table.selectionModel().selectedRows()
@@ -890,8 +982,6 @@ class TiledBrowserTab(BaseImageTab):
         self.load_button.setEnabled(has_selection)
 
     def _on_scan_clicked(self, row: int, column: int) -> None:
-        if column == 1:
-            return
         self._activate_scan_row(row)
 
     def _selected_row(self) -> int | None:
@@ -909,13 +999,7 @@ class TiledBrowserTab(BaseImageTab):
         if row is None or profile is None:
             return
         scan = self.scan_rows[row]
-        metadata = scan.metadata
-        if scan.scan_id is not None:
-            try:
-                metadata = self.image_service.tiled_run_metadata(profile, scan.scan_id) or metadata
-            except Exception:
-                pass
-        self.metadata_text.setPlainText(json.dumps(metadata, indent=2, default=str))
+        self.run_explorer.set_run(profile, scan.uid, scan.metadata)
 
     def _load_selected_scan(self) -> None:
         row = self._selected_row()
@@ -931,16 +1015,24 @@ class TiledBrowserTab(BaseImageTab):
         self.series_slider.setValue(row_index)
         self.series_slider.blockSignals(False)
         self._show_selected_metadata()
-        self._load_scan_row(row_index, live_auto_load=live_auto_load)
+        if self.detail_tabs.currentIndex() == 0:
+            self._load_scan_row(row_index, live_auto_load=live_auto_load)
+        else:
+            self.run_explorer.load_active()
 
     def _load_scan_row(self, row_index: int, *, live_auto_load: bool = False) -> None:
         profile = self._active_profile()
         if profile is None or row_index < 0 or row_index >= len(self.scan_rows):
             return
         scan = self.scan_rows[row_index]
+        if self.smi_controls.active():
+            self._set_panel_detectors(scan.detectors)
+            self.smi_controls.load(scan, detector=self._row_detector(row_index))
+            return
         if scan.scan_id is None:
             QMessageBox.warning(self, "Missing scan ID", "Selected row does not have a scan_id")
             return
+        self._set_panel_detectors(scan.detectors)
         detector = self._row_detector(row_index)
         if not detector:
             QMessageBox.warning(self, "Missing detector", "No detector is available for this scan")
@@ -1018,13 +1110,98 @@ class TiledBrowserTab(BaseImageTab):
             f"scan_id={scan.scan_id} detector={detector} sample={scan.sample_name or scan.sample_savename or '?'}"
         )
         self.parent_app.show_status(f"Loaded Tiled scan {scan.scan_id}")
+        self._update_comparison()
+        pending = self.__dict__.pop("_pending_scalar_frame", None)
+        if pending is not None: self.frame_slider.setValue(min(pending, self.frame_slider.maximum()))
 
     def _row_detector(self, row_index: int) -> str:
-        widget = self.scan_table.cellWidget(row_index, 1)
-        if isinstance(widget, QComboBox):
-            return widget.currentText()
         scan = self.scan_rows[row_index]
+        selected = self.detector_select.currentText()
+        if selected in scan.detectors: return selected
         return scan.detectors[0] if scan.detectors else ""
+
+    def _set_panel_detectors(self, detectors, selected=None):
+        previous = selected or self.detector_select.currentText()
+        self.detector_select.blockSignals(True)
+        self.detector_select.clear(); self.detector_select.addItems(list(detectors))
+        if previous in detectors: self.detector_select.setCurrentText(previous)
+        self.detector_select.blockSignals(False)
+        self.detector_select.setEnabled(len(detectors)>1)
+        self.detector_label.setText("Detector" if len(detectors)>1 else "Detector (only one)")
+        old = self.compare_select.currentData()
+        self.compare_select.blockSignals(True)
+        self.compare_select.clear(); self.compare_select.addItem("No second detector", "")
+        for detector in detectors:
+            if detector != self.detector_select.currentText(): self.compare_select.addItem(detector, detector)
+        self.compare_select.setCurrentIndex(max(0, self.compare_select.findData(old)))
+        self.compare_select.setEnabled(len(detectors)>1)
+        self.compare_select.blockSignals(False)
+        self._update_comparison()
+
+    def _update_comparison(self, *_):
+        if not hasattr(self, "compare_viewer"): return
+        self.compare_job.invalidate()
+        field = self.compare_select.currentData()
+        scan = self.current_scan
+        if not field or scan is None:
+            self.compare_viewer.hide()
+            return
+        profile = self._active_profile()
+        ref = self.smi_controls.ref if self.smi_controls.active() else None
+        stream = ref.stream if ref is not None else "primary"
+        index = ref.index if ref is not None else self.frame_slider.value()
+        self.compare_viewer.show(); self.compare_viewer.set_title(f"{field} · loading frame {index}…")
+        def work():
+            from sciview.sources.frame_source import TiledFrameSource, FrameRef
+            from sciview.sources.tiled_client import tiled_manager
+            if self._compare_source is None or self._compare_source.profile != profile:
+                catalog = tiled_manager.get_or_load_catalog(profile)
+                if catalog is None: raise RuntimeError("Tiled connection unavailable")
+                self._compare_source = TiledFrameSource(catalog, profile)
+            sequence = self._compare_source.describe(scan.uid, stream)
+            if sequence.stream != stream: raise ValueError(f"Stream {stream} unavailable")
+            if field not in sequence.fields or index >= sequence.count(field):
+                raise ValueError(f"No {field} frame {index} at this acquisition point")
+            return self._compare_source.read_frame(FrameRef(profile, scan.uid, stream, field, index))
+        def apply(array):
+            self.compare_viewer.set_image(array)
+            self.compare_viewer.set_title(f"{field} · frame {index}")
+            self.compare_viewer.auto_levels()
+        self.compare_job.submit(work, apply, lambda exc: self.compare_viewer.clear_image(str(exc)))
+
+    def _on_panel_detector_changed(self, detector):
+        if not detector: return
+        if self.smi_controls.active():
+            controls = self.smi_controls
+            if self.current_scan is not None:
+                controls.load(self.current_scan, controls.stream.currentText() or None, detector, controls.index.value())
+        else:
+            row = self._selected_row()
+            if row is not None: self._load_scan_row(row)
+
+    def _detail_changed(self, index):
+        row = self._selected_row()
+        if row is None: return
+        if index == 0:
+            scan = self.scan_rows[row]
+            if self.current_scan is None or self.current_scan.uid != scan.uid or self.current_frame_array is None:
+                self._load_scan_row(row)
+        else:
+            self._show_selected_metadata(); self.run_explorer.load_active()
+
+    def _scalar_frame_selected(self, stream, index):
+        row = self._selected_row()
+        if row is None: return
+        scan = self.scan_rows[row]
+        if self.smi_controls.active():
+            self.smi_controls.load(scan, stream, self.detector_select.currentText(), index)
+            self.detail_tabs.blockSignals(True); self.detail_tabs.setCurrentIndex(0); self.detail_tabs.blockSignals(False)
+        elif stream == "primary":
+            if self.current_scan is not None and self.current_scan.uid == scan.uid and self.current_image_array is not None:
+                self.frame_slider.setValue(index); self.detail_tabs.setCurrentIndex(0)
+            else:
+                self._pending_scalar_frame = index
+                self.detail_tabs.setCurrentIndex(0)
 
     def _on_row_detector_activated(self, *_args) -> None:
         self._stop_playback()
@@ -1056,6 +1233,9 @@ class TiledBrowserTab(BaseImageTab):
         self.frame_label.setText(f"1 / {frame_count}")
 
     def _on_frame_changed(self, frame_index: int) -> None:
+        if self.smi_controls.active():
+            self.smi_controls.select_position(frame_index)
+            return
         if self.current_image_array is None:
             return
         frame_count = self._frame_count(self.current_image_array)
@@ -1064,6 +1244,7 @@ class TiledBrowserTab(BaseImageTab):
         self.image_data = frame
         self.frame_label.setText(f"{frame_index + 1} / {frame_count}")
         self.update_plot(frame)
+        self._update_comparison()
 
     def _on_slider_changed(self, position: int) -> None:
         if self.scan_rows and 0 <= position < len(self.scan_rows):
@@ -1105,6 +1286,11 @@ class TiledBrowserTab(BaseImageTab):
             self.series_slider.setValue(min(len(self.scan_rows) - 1, self.series_slider.value() + 1))
 
     def _sync_to_parent(self, show_status: bool = True) -> bool:
+        controls = self.__dict__.get("smi_controls")
+        if controls is not None and controls.active():
+            # Never wrap SMI WAXS pixels in a CMS single-plane calibration.
+            # Cached products use Peak Analysis until the SMI reducer adapter lands.
+            return False
         if self.current_frame_array is None or self.current_scan is None:
             return False
         synthetic_name = f"scan_{self.current_scan.scan_id}.tif"
@@ -1139,5 +1325,10 @@ class TiledBrowserTab(BaseImageTab):
         info_lines.append(f"Detectors: {', '.join(self.current_scan.detectors)}")
 
     def closeEvent(self, event):
+        self.auth_job.close()
+        self.compare_job.close()
+        self.run_explorer.job.close()
+        self.smi_search.close_jobs()
+        self.smi_controls.job.close()
         self._stop_live_monitor()
         super().closeEvent(event)

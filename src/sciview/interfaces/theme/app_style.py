@@ -543,6 +543,8 @@ class AppStyle:
             cls.tab_widget_stylesheet(),
             *(cls.format_style(style_key) for style_key in cls.GLOBAL_STYLE_KEYS),
         ]
+        from .appearance import stylesheet
+        base_styles.append(stylesheet(app))
         app.setStyleSheet("\n".join(style for style in base_styles if style.strip()))
         cls.refresh_runtime_theme(app, clear_widget_styles=False)
 
@@ -863,6 +865,10 @@ class AppStyle:
             control_hover = QColor(material_theme.get('secondaryLightColor' if cls.theme_is_dark(app) else 'secondaryDarkColor', control_bg.name()))
             border = QColor(material_theme.get('primaryLightColor', accent.name()))
             checked_fg = QColor(material_theme.get('primaryTextColor', '#ffffff'))
+            from .appearance import text_color
+            text = text_color(app, text, base)
+            if app.property("sciview_text_mode") in ("contrast", "custom"):
+                muted = text
 
             return {
                 'window': window,
@@ -907,6 +913,10 @@ class AppStyle:
         control_bg = base if cls.theme_is_dark(app) else window
         control_hover = control_bg.lighter(115) if cls.theme_is_dark(app) else control_bg.darker(104)
         checked_fg = QColor('#ffffff') if accent.lightness() < 170 else QColor('#111111')
+        from .appearance import text_color
+        text = text_color(app, text, base)
+        if app.property("sciview_text_mode") in ("contrast", "custom"):
+            muted = text
 
         return {
             'window': window,
@@ -1059,7 +1069,9 @@ class AppStyle:
         if family:
             font.setFamily(family.split(',')[0].strip().strip("'\""))
         font.setPixelSize(cls.font_px(token_name))
-        font.setWeight(weight)
+        # Callers use CSS weights (400/600); Qt5 QFont expects 0–99.
+        font.setWeight({400: QFont.Normal, 500: QFont.Medium, 600: QFont.DemiBold,
+                        700: QFont.Bold}.get(weight, min(99, max(0, weight))))
         return font
 
     @classmethod
