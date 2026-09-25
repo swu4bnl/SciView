@@ -42,7 +42,7 @@ except ImportError as exc:
     TILED_IMPORT_ERROR = f"Tiled import failed: {exc}"
 
 # Import configuration
-from sciview.profiles.cms_profile import TILED_PROFILES, get_default_tiled_settings
+from sciview.profiles.registry import TILED_PROFILES, get_default_tiled_settings
 
 ProgressCallback = Callable[[int, int | str], None]
 
@@ -131,6 +131,14 @@ class TiledClientManager:
         profile = TILED_PROFILES[profile_name]
         
         try:
+            if profile.get("lazy_frames"):
+                # The SMI pilot reuses cached credentials without prompting on
+                # every page/frame operation. Login remains an explicit action.
+                client = from_uri(profile['uri'], prompt_for_reauthentication=False,
+                                  timeout=httpx.Timeout(30.0, connect=5.0))
+                self._clients[profile_name] = client
+                self._current_profile = profile_name
+                return client
             # Connect to tiled server with a short connect timeout and a longer
             # read timeout so failed services do not make the GUI look frozen.
             timeout_config = profile.get("timeout", {})
