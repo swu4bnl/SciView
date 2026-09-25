@@ -18,7 +18,6 @@ import os
 import sys
 import numpy as np
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import List, Tuple, Optional
 
@@ -64,8 +63,9 @@ from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_
 from sciview.masking.io import export_mask_file as backend_export_mask_file
 from sciview.masking.io import load_mask_file as backend_load_mask_file
 from sciview.masking.operations import close_mask_holes, dilate_mask, erode_mask, sobel_edge_mask
-from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
+from sciview.session.session_cache import choose_path
 from sciview.settings.viewer_config import MASK_DRAWING_DEFAULTS, MASK_TOOL_ICON_FILES, MASK_TOOL_NAMES
+from sciview.session import session_cache
 
 
 class MaskLayer:
@@ -139,9 +139,6 @@ class MaskApp(BaseImageTab):
         # Developer control: auto-disable drawing mode after each stroke
         # Set to False to keep drawing mode enabled for continuous drawing
         self.auto_disable_drawing_mode = False
-        
-        # Temporary files for external editing
-        self.temp_files = []
         
         # Add mask overlay hook to post-display hooks
         self.add_display_hook(self._add_mask_overlay, 'post')
@@ -602,13 +599,6 @@ class MaskApp(BaseImageTab):
         btn_gimp.clicked.connect(self._open_in_gimp)
         button_row.addWidget(btn_gimp)
         
-        # Reload mask from file
-        # DEPRECATED
-
-        # btn_reload = QPushButton("Import mask")
-        # btn_reload.clicked.connect(self._import_external_mask)
-        # button_row.addWidget(btn_reload)
-
         button_row.addStretch()
         layout.addLayout(button_row)
         
@@ -870,6 +860,45 @@ class MaskApp(BaseImageTab):
         """Update the combine method and recalculate combined mask"""
         self.combine_method = "OR" if self.combine_or_radio.isChecked() else "AND"
         self._update_combined_mask()
+
+    def get_session_state(self) -> dict:
+        """Serialize mask layers (as compressed arrays) for restart restore."""
+        if not self.mask_layers:
+            return {}
+        layers_meta = []
+        for i, layer in enumerate(self.mask_layers):
+            filename = session_cache.save_array(f"mask_layer_{i}", layer.data)
+            layers_meta.append({
+                "name": layer.name,
+                "visible": layer.visible,
+                "source": layer.source,
+                "file": filename,
+            })
+        return {"combine_method": self.combine_method, "layers": layers_meta}
+
+    def restore_session_state(self, state: dict) -> None:
+        """Rebuild mask layers from the last saved session, if any."""
+        layers_meta = state.get("layers")
+        if not layers_meta:
+            return
+        restored = []
+        for meta in layers_meta:
+            data = session_cache.load_array(meta.get("file", ""))
+            if data is None:
+                continue
+            layer = MaskLayer(data, meta.get("name", "Layer"), meta.get("visible", True))
+            layer.source = meta.get("source", "custom")
+            restored.append(layer)
+        if not restored:
+            return
+        self.mask_layers = restored
+        self.combine_method = "AND" if state.get("combine_method") == "AND" else "OR"
+        self.combine_or_radio.setChecked(self.combine_method == "OR")
+        self.combine_and_radio.setChecked(self.combine_method == "AND")
+        self._update_layer_list()
+        self._update_combined_mask()
+        self.parent_app.show_status(f"Restored {len(restored)} mask layer(s) from last session")
+
     
     def _update_combined_mask(self):
         """Combine all visible layers into a single mask"""
@@ -1060,14 +1089,6 @@ class MaskApp(BaseImageTab):
             tool.draw_value = is_add
     
     
-    def _disable_matplotlib_tools(self):
-        """Legacy no-op retained for old callbacks during viewer migration."""
-        return
-    
-    def _enable_matplotlib_tools(self):
-        """Legacy no-op retained for old callbacks during viewer migration."""
-        return
-    
     # ===== External Editor Methods =====
     
     def _load_instrument_mask(self, detector_key=None, mask_path=None):
@@ -1196,10 +1217,10 @@ class MaskApp(BaseImageTab):
     
     def _load_custom_mask(self):
         """Load a custom mask file"""
-        file_path, _ = dialog_open_file(
+        file_path, _ = choose_path(
             self,
             "Load Mask File",
-            "Mask Files (*.npy *.tif *.tiff *.png *.xcf);;All Files (*)",
+            file_filter="Mask Files (*.npy *.tif *.tiff *.png *.xcf);;All Files (*)",
             key="mask_open",
         )
         
@@ -1232,7 +1253,6 @@ class MaskApp(BaseImageTab):
             return
         
         try:
-            import tempfile
             from PIL import Image
             import matplotlib.pyplot as plt
             import matplotlib.cm as cm
@@ -1255,30 +1275,27 @@ class MaskApp(BaseImageTab):
             cmap = cm.get_cmap(cmap_name)
             img_colored = (cmap(img_normalized / 255.0)[:, :, :3] * 255).astype(np.uint8)
             
-            # Create temp file for image
-            temp_img = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
-            Image.fromarray(img_colored).save(temp_img.name)
-            self.temp_files.append(temp_img.name)
+            # Keep earlier exports available while external editors still use them.
+            image_path = session_cache.new_scratch_path("gimp_image", ".png")
+            Image.fromarray(img_colored).save(image_path)
             
-            # Create temp file for mask if exists
+            # Create scratch file for mask if exists
             temp_mask_path = None
             if self.combined_mask is not None:
-                temp_mask = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+                temp_mask_path = session_cache.new_scratch_path("gimp_mask", ".png")
                 # Convert boolean mask: True=black (0), False=white (255)
                 # This way masked regions are black and unmasked regions are white
                 mask_img = np.where(self.combined_mask, 0, 255).astype(np.uint8)
-                Image.fromarray(mask_img).save(temp_mask.name)
-                temp_mask_path = temp_mask.name
-                self.temp_files.append(temp_mask_path)
+                Image.fromarray(mask_img).save(temp_mask_path)
             
             # Launch GIMP
-            gimp_cmd = ['gimp', temp_img.name]
+            gimp_cmd = ['gimp', str(image_path)]
             if temp_mask_path:
-                gimp_cmd.append(temp_mask_path)
+                gimp_cmd.append(str(temp_mask_path))
             
             subprocess.Popen(gimp_cmd)
             
-            msg = f"Opened in GIMP:\n{temp_img.name}"
+            msg = f"Opened in GIMP:\n{image_path}"
             if temp_mask_path:
                 msg += f"\n{temp_mask_path}\n(Black=Masked, White=Unmasked)"
             msg += "\n\nUse 'Import from External Edit' to reload the edited mask."
@@ -1293,10 +1310,10 @@ class MaskApp(BaseImageTab):
     
     def _import_external_mask(self):
         """Import mask edited in external application"""
-        file_path, _ = dialog_open_file(
+        file_path, _ = choose_path(
             self,
             "Import External Mask",
-            "Image Files (*.png *.tif *.tiff);;All Files (*)",
+            file_filter="Image Files (*.png *.tif *.tiff);;All Files (*)",
             key="mask_open",
         )
         
@@ -1338,11 +1355,11 @@ class MaskApp(BaseImageTab):
         - .npy: Saves as numpy array (preserves boolean type)
         - .png/.tif: Converts to 8-bit image (True=255/white, False=0/black)
         """
-        file_path, filter_text = dialog_save_file(
+        file_path, filter_text = choose_path(
             self,
             "Export Mask",
-            default_name,
-            "PNG Files (*.png);;NumPy Files (*.npy);;TIFF Files (*.tif);;All Files (*)",
+            mode="save", default_name=default_name,
+            file_filter="PNG Files (*.png);;NumPy Files (*.npy);;TIFF Files (*.tif);;All Files (*)",
             key="mask_save",
         )
         

@@ -30,7 +30,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
+from sciview.session.session_cache import choose_path
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
 from sciview.interfaces.theme.app_style import (
     AppStyle,
@@ -551,10 +551,10 @@ class TransformTab(BaseImageTab):
         return getattr(self.parent_app, "mask", getattr(self.parent_app, "current_mask", None))
 
     def _load_custom_calibration(self):
-        file_path, _ = dialog_open_file(
+        file_path, _ = choose_path(
             self,
             "Load Calibration YAML",
-            "YAML files (*.yaml *.yml);;All files (*)",
+            file_filter="YAML files (*.yaml *.yml);;All files (*)",
             key="transform_calibration_open",
         )
         if not file_path:
@@ -585,10 +585,10 @@ class TransformTab(BaseImageTab):
             self.parent_app.show_status(f"Failed to load custom calibration: {exc}")
 
     def _load_custom_mask(self):
-        file_path, _ = dialog_open_file(
+        file_path, _ = choose_path(
             self,
             "Load Mask",
-            "Mask files (*.png *.tif *.tiff *.npy);;All files (*)",
+            file_filter="Mask files (*.png *.tif *.tiff *.npy);;All files (*)",
             key="transform_mask_open",
         )
         if not file_path:
@@ -828,11 +828,11 @@ class TransformTab(BaseImageTab):
             base = os.path.splitext(os.path.basename(self.parent_app.get_image_path()))[0]
             default_name = f"{base}_{self._current_result.operation}.npz"
 
-        file_path, _ = dialog_save_file(
+        file_path, _ = choose_path(
             self,
             "Export transformed image",
-            default_name,
-            "NumPy zipped (*.npz);;NumPy array (*.npy);;All files (*)",
+            mode="save", default_name=default_name,
+            file_filter="NumPy zipped (*.npz);;NumPy array (*.npy);;All files (*)",
             key="transform_export",
         )
         if not file_path:

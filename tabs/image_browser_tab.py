@@ -39,10 +39,7 @@ from sciview.sources.tiled_client import tiled_manager
 
 # Import shared utilities
 from sciview.interfaces.stable_qt.utils.image_utils import ImageShapeConverter, ImageCacheManager
-from sciview.interfaces.stable_qt.utils.file_dialog_state import (
-    dialog_save_file,
-    dialog_select_directory,
-)
+from sciview.session.session_cache import choose_path
 
 
 class ImageLoadWorker(QThread):
@@ -695,8 +692,7 @@ class ImageBrowserApp(BaseImageTab):
         apply_title_style(title)
         header_layout.addWidget(title)
 
-        # pLayback controls for navigating through the session images
-        # DEPRECATED
+        # Playback controls for navigating through the session images
         controls_layout = QHBoxLayout()
         controls_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
 
@@ -992,6 +988,41 @@ class ImageBrowserApp(BaseImageTab):
         """Publish the current browser file-backed list when leaving the tab."""
         self._publish_shared_file_list()
 
+    def get_session_state(self) -> dict:
+        """Serialize last-browsed folder + selected file for restart restore."""
+        folder = self.folder_path_input.text().strip() if hasattr(self, "folder_path_input") else ""
+        current_image = self.session_manager.get_current_image(load_data=False)
+        if not folder and current_image is None:
+            return {}
+        return {
+            "folder": folder,
+            "last_image_path": current_image.get("path") if current_image else None,
+        }
+
+    def restore_session_state(self, state: dict) -> None:
+        """Re-open the last-browsed folder/file and re-sync it to other tabs."""
+        folder = state.get("folder")
+        last_path = state.get("last_image_path")
+
+        if folder:
+            self.folder_path_input.setText(folder)
+            self._refresh_folder_browser(force=True)
+
+        if not last_path:
+            return
+
+        for row in range(self.folder_files_list.count()):
+            item = self.folder_files_list.item(row)
+            if item.data(Qt.UserRole) == last_path:
+                self._select_folder_browser_row(row)
+                break
+        else:
+            self.session_manager.add_image_reference(last_path)
+
+        if self._sync_to_parent(show_status=False):
+            self.parent_app.show_status(f"Restored last session image: {os.path.basename(last_path)}")
+
+
     def get_current_file_list(self) -> list[str]:
         """Return local file paths from the folder browser and/or loaded session."""
         seen: set[str] = set()
@@ -1050,7 +1081,7 @@ class ImageBrowserApp(BaseImageTab):
     # Utility methods
     def _browse_folder(self):
         """Browse for folder"""
-        folder = dialog_select_directory(self, "Select Folder", key="folder_select")
+        folder, _ = choose_path(self, "Select Folder", mode="directory", key="folder_select")
         if folder:
             self.folder_path_input.setText(folder)
             self._refresh_folder_browser(force=True)
@@ -1263,11 +1294,11 @@ class ImageBrowserApp(BaseImageTab):
             QMessageBox.information(self, "No Data", "No images in session to export")
             return
         
-        file_path, _ = dialog_save_file(
+        file_path, _ = choose_path(
             self,
             "Export Session List",
-            "session_list.txt",
-            "Text Files (*.txt)",
+            mode="save", default_name="session_list.txt",
+            file_filter="Text Files (*.txt)",
             key="session_export",
         )
         if file_path:

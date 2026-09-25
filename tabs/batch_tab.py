@@ -17,9 +17,7 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
-from sciview.interfaces.stable_qt.utils.file_dialog_state import (
-    dialog_open_file, dialog_save_file, dialog_select_directory,
-)
+from sciview.session.session_cache import choose_path
 from sciview.interfaces.theme.app_style import (
     AppStyle, apply_emphasis_button_style, apply_info_style,
     apply_subtitle_style, apply_title_style, setup_splitter_layout,
@@ -548,9 +546,9 @@ class BatchTab(QWidget):
             "output_mode": self.output_mode_combo.currentData(),
             "plot_style": resolve_plot_style(self.parent_app).to_dict(),
         }
-        path, _ = dialog_save_file(
-            self, "Save Batch Recipe", "batch_recipe.yaml",
-            "YAML files (*.yaml *.yml);;JSON files (*.json);;All files (*)",
+        path, _ = choose_path(
+            self, "Save Batch Recipe", mode="save", default_name="batch_recipe.yaml",
+            file_filter="YAML files (*.yaml *.yml);;JSON files (*.json);;All files (*)",
             key="batch_recipe_save",
         )
         if not path:
@@ -561,9 +559,9 @@ class BatchTab(QWidget):
         self.parent_app.show_status(f"Recipe saved to {p.name}")
 
     def _load_recipe(self) -> None:
-        path, _ = dialog_open_file(
+        path, _ = choose_path(
             self, "Load Batch Recipe",
-            "YAML/JSON files (*.yaml *.yml *.json);;All files (*)",
+            file_filter="YAML/JSON files (*.yaml *.yml *.json);;All files (*)",
             key="batch_recipe_load",
         )
         if not path:
@@ -590,12 +588,43 @@ class BatchTab(QWidget):
         except Exception as exc:
             self.parent_app.show_status(f"Batch: load failed — {exc}")
 
+    def get_session_state(self) -> dict:
+        """Serialize the protocol queue for restart restore (same shape as _save_recipe)."""
+        if not self._protocols:
+            return {}
+        return {
+            "protocols": [p.to_dict() for p in self._protocols],
+            "output_mode": self.output_mode_combo.currentData(),
+            "plot_style": resolve_plot_style(self.parent_app).to_dict(),
+            "output_dir": self.output_dir_input.text() if hasattr(self, "output_dir_input") else "",
+        }
+
+    def restore_session_state(self, state: dict) -> None:
+        """Rebuild the protocol queue from the last saved session (same path as _load_recipe)."""
+        protocols = state.get("protocols") or []
+        if not protocols:
+            return
+        style = PlotStyle.from_dict(state.get("plot_style"))
+        self.parent_app.publish_shared_plot_style(style, source_tab=self)
+        mode_index = self.output_mode_combo.findData(state.get("output_mode", "scianalysis"))
+        self.output_mode_combo.setCurrentIndex(max(0, mode_index))
+        for d in protocols:
+            self._add_protocol(BatchProtocol.from_dict(d), select=False)
+        if self._protocols:
+            self.protocol_list.setCurrentRow(0)
+            self._show_protocol_params(0)
+        output_dir = state.get("output_dir")
+        if output_dir and hasattr(self, "output_dir_input"):
+            self.output_dir_input.setText(output_dir)
+        self.parent_app.show_status(f"Batch: restored {len(self._protocols)} protocol(s) from last session")
+
+
     # ------------------------------------------------------------------
     # Run / Stop
     # ------------------------------------------------------------------
 
     def _browse_output(self) -> None:
-        folder = dialog_select_directory(self, "Select Output Folder", key="batch_output_folder")
+        folder, _ = choose_path(self, "Select Output Folder", mode="directory", key="batch_output_folder")
         if folder:
             self.output_dir_input.setText(folder)
 
@@ -636,7 +665,7 @@ class BatchTab(QWidget):
             # Force an explicit decision instead of silently guessing a
             # folder from the first file's path — that heuristic broke down
             # whenever files came from multiple folders or a flat directory.
-            output_dir = dialog_select_directory(self, "Select Batch Output Folder", key="batch_output_folder")
+            output_dir, _ = choose_path(self, "Select Batch Output Folder", mode="directory", key="batch_output_folder")
             if not output_dir:
                 self.parent_app.show_status("Batch: select an output folder to run")
                 return

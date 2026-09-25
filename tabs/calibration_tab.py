@@ -35,7 +35,7 @@ from sciview.interfaces.theme.app_style import (
 )
 from sciview.calibration.standards_db import STANDARDS
 from sciview.interfaces.stable_qt.tools.ring_center import RingCenterCalculator
-from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_select_directory, dialog_save_file
+from sciview.session.session_cache import choose_path
 from sciview.processing.calibration_profiles import compute_calibration_profiles
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS
@@ -514,10 +514,6 @@ class CalibrationApp(BaseImageTab):
             self.ring_result_label.setText(f"Fit failed: {str(e)}")
             self.parent_app.show_status(f"Unexpected error: {str(e)}")
 
-    def update_beam_from_ring(self):
-        """Legacy compatibility wrapper for old button callback paths."""
-        self.calculate_ring_center()
-
     def clear_ring_points(self):
         """Clear all picked ring points, indicators, and markers"""
         self._ring_points = [None] * self.MAX_RING_POINTS
@@ -578,6 +574,37 @@ class CalibrationApp(BaseImageTab):
         self.spin_wl_ang.setValue(wavelength)
         self.spin_wl_ang.blockSignals(False)
         self._schedule_calibration_update()
+
+    def get_session_state(self) -> dict:
+        """Serialize calibration parameters for restart restore."""
+        return {
+            "wavelength_A": self.spin_wl_ang.value(),
+            "beam_x": self.spin_x.value(),
+            "beam_y": self.spin_y.value(),
+            "det_orient": self.spin_orient.value(),
+            "det_tilt": self.spin_tilt.value(),
+            "det_phi": self.spin_phi.value(),
+            "distance_m": self.spin_dist.value(),
+            "pixel_size_um": self.spin_pixel.value(),
+        }
+
+    def restore_session_state(self, state: dict) -> None:
+        """Restore calibration parameters from the last saved session."""
+        mapping = {
+            "wavelength_A": self.spin_wl_ang,
+            "beam_x": self.spin_x,
+            "beam_y": self.spin_y,
+            "det_orient": self.spin_orient,
+            "det_tilt": self.spin_tilt,
+            "det_phi": self.spin_phi,
+            "distance_m": self.spin_dist,
+            "pixel_size_um": self.spin_pixel,
+        }
+        for key, spin in mapping.items():
+            value = state.get(key)
+            if value is not None:
+                spin.setValue(float(value))
+
 
     def _draw_standard_lines(self):
         """Draw vertical lines for selected standard in 1D plot"""
@@ -825,9 +852,10 @@ class CalibrationApp(BaseImageTab):
     def export_calibration(self):
         """Export current calibration parameters to a YAML file"""
         # Prompt for directory
-        dir_path = dialog_select_directory(
+        dir_path, _ = choose_path(
             self,
             "Select Directory to Export Calibration",
+            mode="directory",
             key="calibration_export",
         )
         if not dir_path:
@@ -872,11 +900,11 @@ class CalibrationApp(BaseImageTab):
             base = os.path.splitext(os.path.basename(self.parent_app.get_image_path()))[0]
             default_name = f"{base}_1d_profiles.csv"
 
-        file_path, _ = dialog_save_file(
+        file_path, _ = choose_path(
             self,
             "Export 1D Profiles",
-            default_name,
-            "CSV files (*.csv);;Text files (*.txt);;All files (*)",
+            mode="save", default_name=default_name,
+            file_filter="CSV files (*.csv);;Text files (*.txt);;All files (*)",
             key="profile_export",
         )
 

@@ -10,6 +10,7 @@ import os
 import subprocess
 import shutil
 import tempfile
+import tomllib
 from pathlib import Path
 import numpy as np
 
@@ -60,7 +61,8 @@ from sciview.settings.app_settings import (
 from sciview.settings.plot_style import DEFAULT_PLOT_STYLE, PlotStyle
 
 from sciview.interfaces.stable_qt.utils.resource_monitor import get_resource_monitor
-from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file
+from sciview.session.session_cache import choose_path
+from sciview.session import session_cache
 
 
 def _build_placeholder_tab(message):
@@ -78,7 +80,7 @@ class SciAnaApp(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"SciView - {BEAMLINE_NAME}")
+        self.setWindowTitle(f"{QApplication.applicationName()} - {BEAMLINE_NAME}")
         self.status = self.statusBar()
         self._workspace_root = Path(__file__).resolve().parent
 
@@ -139,12 +141,21 @@ class SciAnaApp(QMainWindow):
         self.theme_toggle_button.clicked.connect(self._toggle_dark_light_theme)
         self._update_theme_toggle_icon()
 
+        self.clear_session_button = QPushButton("D")
+        self.clear_session_button.setProperty("sciview_compact_button", True)
+        self.clear_session_button.setToolTip(
+            "Clear saved session cache (last image/calibration/mask/batch queue restore data)"
+        )
+        self.clear_session_button.setFixedSize(corner_button_size)
+        self.clear_session_button.clicked.connect(self._clear_session_cache)
+
         corner_widget = QWidget()
         corner_layout = QHBoxLayout(corner_widget)
         corner_layout.setContentsMargins(0, 0, 0, 0)
         corner_layout.setSpacing(AppStyle.CORNER_BUTTON_UI['spacing'])
         corner_layout.addWidget(self.theme_toggle_button)
         corner_layout.addWidget(self.refresh_button)
+        corner_layout.addWidget(self.clear_session_button)
         corner_layout.addWidget(self.style_inspector_button)
         corner_layout.addStretch()
 
@@ -284,6 +295,71 @@ class SciAnaApp(QMainWindow):
                     index,
                     AppStyle.load_icon(self._workspace_root, icon_filename),
                 )
+
+    def _collect_session_state(self) -> dict:
+        """Gather per-tab restart state, keyed by each tab's stable icon_key."""
+        state = {"display_settings": dict(self.display_settings)}
+        for index in range(self.tab_widget.count()):
+            key = self._tab_icon_keys.get(index)
+            widget = self.tab_widget.widget(index)
+            if not key or not hasattr(widget, "get_session_state"):
+                continue
+            try:
+                tab_state = widget.get_session_state()
+            except Exception as exc:
+                print(f"[session] failed to collect state for '{key}': {exc}")
+                continue
+            if tab_state:
+                state[key] = tab_state
+        return state
+
+    def save_session_state(self) -> None:
+        """Persist current tab state for restore on next launch (best-effort)."""
+        try:
+            session_cache.save_session(self._collect_session_state())
+        except Exception as exc:
+            print(f"[session] failed to save session cache: {exc}")
+
+    def restore_session_state(self) -> None:
+        """Restore last-saved tab state, if any. Never blocks or fails startup."""
+        state = session_cache.load_session()
+        if not state:
+            return
+        display_settings = state.get("display_settings")
+        if display_settings:
+            try:
+                self.publish_shared_display_settings(display_settings)
+            except Exception as exc:
+                print(f"[session] failed to restore display settings: {exc}")
+        for index in range(self.tab_widget.count()):
+            key = self._tab_icon_keys.get(index)
+            widget = self.tab_widget.widget(index)
+            if not key or key not in state or not hasattr(widget, "restore_session_state"):
+                continue
+            try:
+                widget.restore_session_state(state[key])
+            except Exception as exc:
+                print(f"[session] failed to restore state for '{key}': {exc}")
+
+    def _clear_session_cache(self) -> None:
+        """Manually wipe the on-disk session cache (no auto-pruning)."""
+        response = QMessageBox.question(
+            self,
+            "Clear Session Cache",
+            "This deletes the saved last-session restore data (image path, "
+            "calibration, mask layers, batch queue). Continue?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if response != QMessageBox.Yes:
+            return
+        session_cache.clear_session()
+        self.show_status("Session cache cleared")
+
+    def closeEvent(self, event):
+        self.save_session_state()
+        session_cache.clear_scratch()
+        super().closeEvent(event)
 
     def refresh_theme(self):
         """Refresh native sizing and theme-aware icons after a style change."""
@@ -604,7 +680,7 @@ class SciAnaApp(QMainWindow):
             self.show_status("Error: SciAnalysis not available")
             return None, None
             
-        path, _ = dialog_open_file(self, "Open Image File", file_filters, key="image_open")
+        path, _ = choose_path(self, "Open Image File", file_filter=file_filters, key="image_open")
         if not path:
             return None, None
             
@@ -937,10 +1013,12 @@ def create_application():
     if not AppStyle.apply_qdarktheme('auto', app):
         AppStyle.apply_global_style(app)
     
-    # Set application properties
-    app.setApplicationName("SciAnalysis GUI")
-    app.setApplicationVersion("2.0")
-    app.setOrganizationName(BEAMLINE_NAME)
+    with (Path(__file__).resolve().parent / "pyproject.toml").open("rb") as handle:
+        metadata = tomllib.load(handle)
+    project = metadata["project"]
+    app.setApplicationName(metadata["tool"]["sciview"]["display_name"])
+    app.setApplicationVersion(project["version"])
+    app.setOrganizationName(project["name"])
     
     # Create main window
     print("[SciView] Initializing main window...")
@@ -1065,6 +1143,7 @@ def create_application():
         main_window.add_tab(placeholder, "Info", icon_key="info")
 
     print("[SciView] All tabs loaded. Launching window...")
+    main_window.restore_session_state()
     return app, main_window
 
 

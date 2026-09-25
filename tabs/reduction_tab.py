@@ -36,7 +36,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
-from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file, dialog_save_file
+from sciview.session.session_cache import choose_path
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
 from sciview.interfaces.stable_qt.utils.reduction_overlay import (
     OVERLAY_STYLE,
@@ -581,10 +581,10 @@ class ReductionTab(BaseImageTab):
         self._on_parameters_changed()
 
     def _load_custom_calibration(self):
-        file_path, _ = dialog_open_file(
+        file_path, _ = choose_path(
             self,
             "Load Calibration YAML",
-            "YAML files (*.yaml *.yml);;All files (*)",
+            file_filter="YAML files (*.yaml *.yml);;All files (*)",
             key="reduction_calibration_open",
         )
         if not file_path:
@@ -615,10 +615,10 @@ class ReductionTab(BaseImageTab):
             self.parent_app.show_status(f"Failed to load custom calibration: {exc}")
 
     def _load_custom_mask(self):
-        file_path, _ = dialog_open_file(
+        file_path, _ = choose_path(
             self,
             "Load Mask",
-            "Mask files (*.png *.tif *.tiff *.npy);;All files (*)",
+            file_filter="Mask files (*.png *.tif *.tiff *.npy);;All files (*)",
             key="reduction_mask_open",
         )
         if not file_path:
@@ -865,11 +865,11 @@ class ReductionTab(BaseImageTab):
             base = os.path.splitext(os.path.basename(self.parent_app.get_image_path()))[0]
             default_name = f"{base}_{self._current_result.operation}.csv"
 
-        file_path, _ = dialog_save_file(
+        file_path, _ = choose_path(
             self,
             "Export 1D data",
-            default_name,
-            "CSV files (*.csv);;Data files (*.dat);;Text files (*.txt);;All files (*)",
+            mode="save", default_name=default_name,
+            file_filter="CSV files (*.csv);;Data files (*.dat);;Text files (*.txt);;All files (*)",
             key="reduction_export",
         )
         if not file_path:
@@ -1023,11 +1023,11 @@ class ReductionTab(BaseImageTab):
 
     def export_recipe(self):
         payload = self._build_recipe_payload()
-        file_path, _ = dialog_save_file(
+        file_path, _ = choose_path(
             self,
             "Export reduction recipe",
-            "reduction_recipe.yaml",
-            "YAML files (*.yaml *.yml);;JSON files (*.json);;All files (*)",
+            mode="save", default_name="reduction_recipe.yaml",
+            file_filter="YAML files (*.yaml *.yml);;JSON files (*.json);;All files (*)",
             key="reduction_recipe_export",
         )
         if not file_path:

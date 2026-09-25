@@ -64,8 +64,12 @@ setup_with_pixi() {
 
 setup_with_venv() {
     echo "[1/4] Checking Python 3..."
+    if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 12))'; then
+        echo "ERROR: Python 3.12+ is required."
+        exit 1
+    fi
     if ! command -v python3 >/dev/null 2>&1; then
-        echo "ERROR: python3 not found. Install Python 3.10+ first."
+        echo "ERROR: python3 not found. Install Python 3.12+ first."
         exit 1
     fi
 
