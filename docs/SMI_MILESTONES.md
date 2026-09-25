@@ -85,11 +85,73 @@ filter combinations, and fit-artifact reopening remain follow-ups. SMI Login use
 a native browser/device-code dialog with cached credentials, open/copy actions,
 and cancellation; other profiles retain their existing login behavior.
 
-Calibration/Mask Editing remain disabled while an SMI frame is active because
-their SMI geometry/mask editing adapters are not implemented. Reduction/Transform
-now select native SMI views; returning to CMS restores the original SciAnalysis views.
+Calibration, Mask Editing, Reduction and Transform now select native SMI views;
+returning to CMS restores the original SciAnalysis views. Calibration and generated
+masks currently require primary-stream SAXS/WAXS frames; other streams remain
+available for raw browsing.
 Live SMI monitoring is not enabled in this pilot. Non-singleton exposure/panel
 dimensions beyond a simple frame stack are rejected pending explicit mapping.
+
+## Metadata-relative calibration and layered masks
+
+Calibration keeps SciView's right-click ring picks, local-maximum snapping,
+manual center controls, and robust circle-center calculation for SAXS. Geometry
+is initialized by smi-tiled's metadata resolvers, including sample/detector motor
+corrections and bundled calibration. WAXS uses the folded three-panel model and
+the calibrated integration distance (273 mm by default), while the metadata motor
+distance is retained as information. SAXS currently uses the backend's run-reference
+geometry; selecting a different frame does not imply per-frame SAXS geometry support.
+
+- **Center only:** pick at least five well-spaced points on any one ring. Ring q
+  is fitted as a nuisance parameter; energy and distance stay fixed.
+- **Known q:** provide q in nm⁻¹ and fit center plus distance, with energy, tilt,
+  and panel geometry fixed.
+- **AgB order:** q is `order × 2π/5.8380 nm`. Orders 1–100 are selectable.
+- **Store picked ring + q:** accumulate separate known-q/AgB rings, clearing picks
+  between rings, then **Fit stored rings jointly** for common center/distance tweaks.
+- Optional intensity refinement searches near each pick along the local q-gradient
+  (including folded WAXS geometry). This is a picked-ring refinement, not automatic
+  whole-image ring discovery or the older smi-browser q–χ sinusoidal fitting UI.
+- Review the fit RMS and correction values; **Apply fitted / edited center and
+  distance** transfers them to the instrument session and subsequent reductions.
+  Applying twice does not accumulate the same correction. Reset returns to metadata
+  plus bundled defaults. The fitted center is the direct-beam center, not a command
+  to reposition a beamstop motor.
+- Native diagnostic radial/sector profiles use SMI q coordinates and nm⁻¹ units;
+  standards are converted from the native Å⁻¹ database. The native flat-circle
+  operation is unavailable for WAXS; the metadata-relative folded-model fit is used.
+
+Mask Editing retains SciView's brush, shape, threshold/morphology, import/export,
+and layer tools. **Every editable layer is a user exclusion.** Static detector
+masks (blue) and dynamic beamstop/shadow masks (red) are separate generated
+overlays, not editable layers. Their visibility switches affect display only.
+The explicit SAXS shadow/aperture switches affect processing as well as preview.
+Erasing a user layer cannot unmask a detector gap or a generated beamstop region.
+
+User masks are scoped by detector and raw image shape, and persist when switching
+frames/scans in the session. OR/AND and native layer inclusion work within the user
+mask only; its result is always added to the backend exclusions. Drawings remain
+rasters in the UI. For the published smi-tiled API, they are converted to exact
+pixel-boundary rectangles and appended to the original static polygon specification.
+Tests verify pixel-exact round trips, holes, edge pixels, and WAXS transpose; dynamic
+beamstop wrappers/offsets are preserved without normalized JSON round-trip loss.
+Highly fragmented/noisy masks can produce many rectangles and cost more to rasterize;
+a native raster-exclusion backend API would be a useful future improvement.
+
+**Save/Load SMI session** persists relative corrections, original base-mask specs,
+editable layer rasters/names/inclusion, combined user masks, and dynamic options.
+Use **Load SMI base-mask JSON** for an alternate scientific specification; ordinary
+mask imports are user layers. Reduction shows the active instrument corrections
+and user pixel counts. Explicit reduction-panel deltas take precedence over session
+calibration tweaks. Jobs snapshot masks into their own directories and validate raw
+detector shape before reduction. Fitted transmission WAXS corrections are not
+silently applied to GI; that geometry adapter still needs validation.
+
+Scientific verification includes synthetic known/unknown/multiple-ring geometry
+recovery, folded WAXS q-map parity, exact mask composition, session round trips,
+and a real WAXS Qt load with generated masks plus user exclusions passed through
+the backend mask builder. Real AgB calibration against a known reference and real
+GI correction validation remain outstanding.
 
 ## Whole-run processing
 

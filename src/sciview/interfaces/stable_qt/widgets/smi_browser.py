@@ -61,8 +61,8 @@ class SmiBrowserControls(QWidget):
         self.scope_note = readable_status(
             "SMI: browse raw frames, then use Reduction to process the whole primary "
             "run with smi-tiled. Transform displays its 2D products, and Peak Analysis "
-            "explores per-frame I(q). Calibration and mask drawing adapters are still "
-            "in development; bundled or custom SMI mask JSON can be used in Reduction."
+            "explores per-frame I(q). Calibration fits metadata-relative corrections; "
+            "Mask Editing adds native user exclusions over automatic SMI masks."
         )
         layout.addWidget(self.scope_note)
         self.stream.currentTextChanged.connect(self._stream_changed)
@@ -92,6 +92,8 @@ class SmiBrowserControls(QWidget):
             self.tab.parent_app.frame_context = None
             controller = getattr(self.tab.parent_app, "smi_processing", None)
             if controller is not None: controller.set_context(None)
+            instrument = getattr(self.tab.parent_app, "smi_instrument", None)
+            if instrument is not None: instrument.clear_context()
             self.tab.parent_app._set_smi_processing_scope(False)
 
     def refresh_run(self):
@@ -282,7 +284,7 @@ class SmiBrowserControls(QWidget):
         tab.current_image_label.setText(f"SMI {ref.uid[:12]} · {ref.stream}/{ref.detector} · frame {ref.index}")
         self.note.setText("Raw coordinates (x=column, y=row); repeated axis values retain separate frames.")
         if hasattr(tab.parent_app, "publish_frame_context"):
-            tab.parent_app.publish_frame_context(ref)
+            tab.parent_app.publish_frame_context(ref, array, self.sequence.scalars)
 
     def open_cached(self):
         app = self.tab.parent_app

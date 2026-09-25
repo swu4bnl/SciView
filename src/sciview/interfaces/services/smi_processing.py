@@ -1,5 +1,5 @@
 """Qt process supervision and per-selection SMI result publication."""
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 import sys
@@ -27,6 +27,7 @@ class SmiProcessingController(QObject):
         self.cancelled = False
         self._buffer = b""
         self._outcome = None
+        self.instrument = None
         self.io = LatestJob(self)
         self._kill_timer = QTimer(self)
         self._kill_timer.setSingleShot(True)
@@ -54,6 +55,22 @@ class SmiProcessingController(QObject):
         self.io.invalidate()
         directory = results_directory() / f"{request.uid}-{uuid4().hex[:12]}"
         directory.mkdir(parents=True)
+        if self.instrument is not None:
+            import numpy as np
+            extras = self.instrument.reduction_inputs()
+            # Explicit reduction-panel overrides win over instrument tweaks.
+            for key in ("saxs_beam_delta", "waxs_beam_delta", "saxs_distance_delta"):
+                if getattr(request, key) is not None: extras.pop(key, None)
+            masks = {}
+            for (kind, shape), mask in self.instrument.user_masks.items():
+                if kind in masks:
+                    raise ValueError(f"Multiple {kind} mask shapes are active; load a session with only this detector configuration")
+                if not mask.any(): continue
+                path = directory / f"{kind}_user.npy"
+                np.save(path, mask, allow_pickle=False)
+                masks[kind] = str(path)
+            request = replace(request, **extras, user_mask_files=masks,
+                              base_mask_specs=json.loads(json.dumps(self.instrument.base_specs)))
         (directory / "request.json").write_text(json.dumps(asdict(request), indent=2))
         self.directory, self.job_uid = directory, request.uid
         self.cancelled, self._outcome, self._buffer = False, None, b""

@@ -46,14 +46,16 @@ class BackendTab(QStackedWidget):
 
     def on_shared_state_activated(self):
         if self.currentWidget() is self.cms:
-            self.cms.on_shared_state_activated()
+            callback = getattr(self.cms, "on_shared_state_activated", self.cms.update_plot)
+            callback()
 
     def apply_shared_display_settings(self, settings):
         if self.currentWidget() is self.cms:
             self.cms.apply_shared_display_settings(settings)
 
     def on_plot_style_changed(self):
-        self.cms.on_plot_style_changed()
+        callback = getattr(self.cms, "on_plot_style_changed", None)
+        if callback: callback()
 
 
 def _spin(value, low, high, decimals=None):
@@ -167,6 +169,19 @@ class SmiReductionTab(QWidget):
         controller.busy_changed.connect(self.update_buttons)
         QApplication.instance().aboutToQuit.connect(self.io.close)
         self._geometry_controls(); self.update_buttons(); self.refresh_theme()
+        if controller.instrument is not None:
+            self.instrument_note = readable_status("")
+            left.insertWidget(1, self.instrument_note)
+            controller.instrument.changed.connect(self.instrument_changed)
+            self.instrument_changed()
+
+    def instrument_changed(self):
+        instrument = self.controller.instrument
+        corrections = "; ".join(f"{k}: Δrow {v[0]:+.3f}px, Δcol {v[1]:+.3f}px, ΔD {v[2]:+.3f}mm"
+                                for k, v in instrument.corrections.items()) or "metadata + bundled defaults"
+        masks = "; ".join(f"{kind}: {int(mask.sum()):,} user pixels" for (kind, _shape), mask in instrument.user_masks.items()) or "no user exclusions"
+        self.instrument_note.setText(f"Instrument session: {corrections}\n{masks}\n"
+            "User masks are layered over SMI defaults/dynamic masks. Explicit overrides below take precedence over session tweaks.")
 
     def _geometry_controls(self, *_):
         gi = self.geometry.currentIndex() == 1

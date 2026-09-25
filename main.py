@@ -86,6 +86,7 @@ class SciAnaApp(QMainWindow):
         self.image_data = None
         self.frame_context = None
         self.smi_processing = None
+        self.smi_instrument = None
         self.image_path = None
         self.calibration = None
         self.mask = None
@@ -318,6 +319,7 @@ class SciAnaApp(QMainWindow):
         self.image_data = image_data
         self.frame_context = None
         if self.smi_processing is not None: self.smi_processing.set_context(None)
+        if self.smi_instrument is not None: self.smi_instrument.clear_context()
         self._set_smi_processing_scope(False)
         self.setWindowTitle(f"SciView - {BEAMLINE_NAME}")
         if image_path is not None:
@@ -331,10 +333,12 @@ class SciAnaApp(QMainWindow):
 
         self.sync_tabs_from_shared(source_tab=source_tab)
 
-    def publish_frame_context(self, ref):
+    def publish_frame_context(self, ref, array=None, scalars=None):
         """Raw SMI identity is separate from CMS single-plane processing state."""
         self.frame_context = ref
         if self.smi_processing is not None: self.smi_processing.set_context(ref)
+        if self.smi_instrument is not None and array is not None:
+            self.smi_instrument.set_frame(ref, array, scalars or {})
         self._set_smi_processing_scope(True)
         self.setWindowTitle(f"SciView - SMI (12-ID) · {ref.stream}/{ref.detector}")
 
@@ -1042,12 +1046,23 @@ def create_application():
         placeholder = _build_placeholder_tab(f"Tiled Browser Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Tiled Browser", icon_key="tiled_browser")
 
+    # Optional instrument state is shared by native SMI calibration/mask adapters.
+    import importlib.util
+    if importlib.util.find_spec("smi_tiled") is not None:
+        from sciview.interfaces.services.smi_instrument import SmiInstrumentController
+        main_window.smi_instrument = SmiInstrumentController(main_window)
+        app.aboutToQuit.connect(main_window.smi_instrument.close)
+
     # Calibration
     t0 = _tab_start("Calibration")
     try:
         if SCIANALYSIS_AVAILABLE:
             from tabs.calibration_tab import CalibrationApp
             calibration_tab = CalibrationApp(main_window)
+            if main_window.smi_instrument is not None:
+                from tabs.smi_processing_tab import BackendTab
+                from tabs.smi_instrument_tabs import SmiCalibrationTab
+                calibration_tab = BackendTab(calibration_tab, SmiCalibrationTab(main_window, main_window.smi_instrument))
             main_window.add_tab(calibration_tab, "Calibration", icon_key="calibration")
             _tab_done(t0)
         else:
@@ -1064,6 +1079,10 @@ def create_application():
     try:
         from tabs.mask_tab import MaskApp
         mask_tab = MaskApp(main_window)
+        if main_window.smi_instrument is not None:
+            from tabs.smi_processing_tab import BackendTab
+            from tabs.smi_instrument_tabs import SmiMaskTab
+            mask_tab = BackendTab(mask_tab, SmiMaskTab(main_window, main_window.smi_instrument))
         main_window.add_tab(mask_tab, "Mask Editing", icon_key="mask_editing")
         _tab_done(t0)
     except ImportError as e:
@@ -1076,6 +1095,7 @@ def create_application():
     if importlib.util.find_spec("smi_tiled") is not None:
         from sciview.interfaces.services.smi_processing import SmiProcessingController
         main_window.smi_processing = SmiProcessingController(main_window)
+        main_window.smi_processing.instrument = main_window.smi_instrument
         app.aboutToQuit.connect(main_window.smi_processing.close)
 
     t0 = _tab_start("Reduction")
@@ -1141,7 +1161,7 @@ def create_application():
 
     print("[SciView] All tabs loaded. Launching window...")
     if os.environ.get("SCIVIEW_PROFILE") == "smi_migration":
-        main_window.setWindowTitle("SciView - SMI (processing)")
+        main_window.setWindowTitle("SciView - SMI (calibration and masks)")
         for i in range(main_window.tab_widget.count()):
             if main_window.tab_widget.tabText(i) == "Tiled Browser":
                 main_window.tab_widget.setCurrentIndex(i)

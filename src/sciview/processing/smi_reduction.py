@@ -34,6 +34,11 @@ class SmiReductionRequest:
     waxs_beam_delta: tuple | None = None
     saxs_distance_delta: float | None = None
     frame_maps: bool = True
+    waxs_distance: float | None = None
+    shadow: bool = True
+    aperture: bool = True
+    user_mask_files: dict | None = None
+    base_mask_specs: dict | None = None
 
     def validate(self):
         if not self.uid or Path(self.uid).name != self.uid:
@@ -53,9 +58,11 @@ class SmiReductionRequest:
         for delta in (self.saxs_beam_delta, self.waxs_beam_delta):
             if delta is not None and (len(delta) != 2 or not np.isfinite(delta).all()):
                 raise ValueError("Beam deltas must contain two finite values")
-        for value in (self.incident_angle, self.saxs_distance_delta):
+        for value in (self.incident_angle, self.saxs_distance_delta, self.waxs_distance):
             if value is not None and not np.isfinite(value):
                 raise ValueError("Geometry overrides must be finite")
+        if self.waxs_distance is not None and self.waxs_distance <= 0:
+            raise ValueError("WAXS distance must be positive")
         for path in (self.saxs_mask, self.waxs_mask):
             if path and not Path(path).is_file():
                 raise ValueError(f"Mask file not found: {path}")
@@ -70,16 +77,28 @@ class SmiReductionRequest:
                       # Published backend does not yet reject partially filled
                       # browser image caches. Read raw data from Tiled instead.
                       image_cache_path=None)
-        if self.waxs_mask:
-            common["waxs_mask"] = json.loads(Path(self.waxs_mask).read_text())
+        from sciview.processing.smi_geometry import load_mask_spec, compose_mask_spec
+        for kind, path in (("saxs", self.saxs_mask), ("waxs", self.waxs_mask)):
+            if kind == "saxs" and self.geometry == "grazing": continue
+            spec = (load_mask_spec(kind, path) if path else (self.base_mask_specs or {}).get(kind))
+            user_file = (self.user_mask_files or {}).get(kind)
+            if user_file:
+                excluded = np.load(user_file, allow_pickle=False)
+                spec = compose_mask_spec(spec if spec is not None else load_mask_spec(kind), excluded, kind)
+            if spec is not None: common[kind + "_mask"] = spec
         if self.geometry == "grazing":
             common.update(n_qxy=self.n_qxy, n_qz=self.n_qz, incident_angle_deg=self.incident_angle)
+            if self.waxs_distance is not None or self.waxs_beam_delta is not None:
+                raise ValueError("Fitted transmission geometry corrections cannot yet be applied to GI; reset them or use transmission")
             return "reduce_smi_gi", common
         common.update(n_q=self.n_q, n_chi=self.n_chi, geometry="transmission",
                       solid_angle_correction=self.solid_angle, build_detector_ds=False,
                       build_frame_qchi=self.frame_maps, frame_qchi_store=str(Path(workdir) / "frames"))
-        if self.saxs_mask:
-            common["saxs_mask"] = json.loads(Path(self.saxs_mask).read_text())
+        common["saxs_kwargs"] = {"dynamic_saxs_kwargs": {
+            "waxs_shadow": {"enabled": self.shadow}, "aperture": {"enabled": self.aperture}}}
+        if self.waxs_distance is not None:
+            if self.waxs_distance <= 0: raise ValueError("WAXS distance must be positive")
+            common["waxs_kwargs"] = {"sample_distance_mm": self.waxs_distance}
         if self.saxs_beam_delta is not None:
             common["saxs_beam_delta_px"] = tuple(self.saxs_beam_delta)
         if self.waxs_beam_delta is not None:
@@ -270,6 +289,17 @@ def run_job(request_file):
             emit(dict(type="progress", stage=stage, current=int(current), total=int(total)))
     try:
         import smi_tiled
+        if request.user_mask_files:
+            from tiled.client import from_uri
+            from sciview.sources.frame_source import TiledFrameSource
+            catalog = from_uri(request.tiled_uri, prompt_for_reauthentication=False)
+            for part in request.catalog.split("/"): catalog = catalog[part]
+            sequence = TiledFrameSource(catalog, "smi_migration").describe(request.uid, "primary")
+            for kind, path in request.user_mask_files.items():
+                field = "pil2M_image" if kind == "saxs" else "pil900KW_image"
+                if field not in sequence.fields: continue
+                if tuple(np.load(path, mmap_mode="r").shape) != sequence.fields[field][-2:]:
+                    raise ValueError(f"User {kind} mask shape does not match this run")
         name, kwargs = request.backend_call(directory)
         progress("Loading raw data", 0, 0)
         result = getattr(smi_tiled, name)(**kwargs, progress=progress)
