@@ -82,19 +82,6 @@ _DEFAULT_PARAMS: dict[str, dict[str, Any]] = {
 _STATUS_SYMBOL = {"ok": "OK", "error": "ERR", "skipped": "---", "running": "..."}
 
 
-def _common_input_root(file_paths: list[str]) -> str:
-    """Common ancestor directory of every loaded file (not just the first one),
-    so mirror-input-structure and per-file output resolution behave correctly
-    for batches spanning multiple folders."""
-    if not file_paths:
-        return ""
-    dirs = [str(Path(p).parent) for p in file_paths]
-    try:
-        return os.path.commonpath(dirs)
-    except ValueError:
-        return ""  # e.g. paths on different drives
-
-
 class BatchTab(QWidget):
     """Minimal batch tab: load files explicitly, configure protocols, run."""
 
@@ -108,6 +95,7 @@ class BatchTab(QWidget):
 
         self._protocols: list[BatchProtocol] = []
         self._runner: BatchRunner | None = None
+        self._running_job: BatchJob | None = None
         self._results: list[BatchFileResult] = []
         self._selected_proto_row: int = -1  # tracks row for auto-save on switch
         self._running_plot_style: PlotStyle | None = None
@@ -278,25 +266,9 @@ class BatchTab(QWidget):
         apply_title_style(title)
         lay.addWidget(title)
 
-        # Output directory
         out_group = QGroupBox("Output")
         out_form = QFormLayout(out_group)
         BaseImageTab.configure_adaptive_form_layout(out_form)
-
-        out_row = QWidget()
-        oh = QHBoxLayout(out_row)
-        oh.setContentsMargins(0, 0, 0, 0)
-        self.output_dir_input = QLineEdit()
-        self.output_dir_input.setPlaceholderText("Output directory...")
-        oh.addWidget(self.output_dir_input, 1)
-        btn_browse = QPushButton("Browse")
-        btn_browse.clicked.connect(self._browse_output)
-        oh.addWidget(btn_browse)
-        out_form.addRow("Output dir", out_row)
-
-        self.mirror_check = QCheckBox("Mirror input subfolder structure")
-        self.mirror_check.setChecked(True)
-        out_form.addRow(self.mirror_check)
 
         self.output_mode_combo = QComboBox()
         self.output_mode_combo.addItem("SciAnalysis-Style plots", "scianalysis")
@@ -596,7 +568,6 @@ class BatchTab(QWidget):
             "protocols": [p.to_dict() for p in self._protocols],
             "output_mode": self.output_mode_combo.currentData(),
             "plot_style": resolve_plot_style(self.parent_app).to_dict(),
-            "output_dir": self.output_dir_input.text() if hasattr(self, "output_dir_input") else "",
         }
 
     def restore_session_state(self, state: dict) -> None:
@@ -613,20 +584,12 @@ class BatchTab(QWidget):
         if self._protocols:
             self.protocol_list.setCurrentRow(0)
             self._show_protocol_params(0)
-        output_dir = state.get("output_dir")
-        if output_dir and hasattr(self, "output_dir_input"):
-            self.output_dir_input.setText(output_dir)
         self.parent_app.show_status(f"Batch: restored {len(self._protocols)} protocol(s) from last session")
 
 
     # ------------------------------------------------------------------
     # Run / Stop
     # ------------------------------------------------------------------
-
-    def _browse_output(self) -> None:
-        folder, _ = choose_path(self, "Select Output Folder", mode="directory", key="batch_output_folder")
-        if folder:
-            self.output_dir_input.setText(folder)
 
     def _start_batch(self) -> None:
         # Auto-apply any pending param edits for the currently selected protocol.
@@ -660,16 +623,10 @@ class BatchTab(QWidget):
             )
             return
 
-        output_dir = self.output_dir_input.text().strip()
+        output_dir, _ = choose_path(self, "Select Batch Output Folder", mode="directory", key="batch_output_folder")
         if not output_dir:
-            # Force an explicit decision instead of silently guessing a
-            # folder from the first file's path — that heuristic broke down
-            # whenever files came from multiple folders or a flat directory.
-            output_dir, _ = choose_path(self, "Select Batch Output Folder", mode="directory", key="batch_output_folder")
-            if not output_dir:
-                self.parent_app.show_status("Batch: select an output folder to run")
-                return
-            self.output_dir_input.setText(output_dir)
+            self.parent_app.show_status("Batch: select an output folder to run")
+            return
 
         cal = getattr(self.parent_app, "calibration", None)
         if hasattr(self.parent_app, "get_shared_calibration"):
@@ -698,12 +655,11 @@ class BatchTab(QWidget):
             output_formats=self._selected_formats(),
             calibration=cal,
             mask=mask,
-            mirror_input_structure=self.mirror_check.isChecked(),
-            input_root=_common_input_root(self._file_paths),
             plot_style=self._running_plot_style.to_dict(),
             output_mode=self._running_output_mode,
             preview_theme=preview_theme,
         )
+        self._running_job = job
 
         total = len(job.file_paths) * max(len(active), 1)
         self.progress_bar.setRange(0, max(total, 1))
@@ -748,18 +704,19 @@ class BatchTab(QWidget):
 
     def _save_cookbook(self) -> None:
         """Save a complete run record (cookbook) alongside the output for provenance."""
-        output_dir = self.output_dir_input.text().strip()
-        if not output_dir:
+        job = self._running_job
+        if job is None:
             return
+        output_dir = job.output_dir
         import datetime
         from sciview.processing.batch import compute_q_bounds
-        cal = getattr(self.parent_app, "calibration", None)
-        mask = getattr(self.parent_app, "mask", None)
+        cal = job.calibration
+        mask = job.mask
         bounds = compute_q_bounds(cal)  # calibration-derived bounds used for this run
         cookbook = {
             "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
             "sciview_version": getattr(self.parent_app, "_scianalysis_source_mode", "unknown"),
-            "input_files": list(self._file_paths),
+            "input_files": list(job.file_paths),
             "output_dir": output_dir,
             "calibration": {
                 "type": type(cal).__name__ if cal is not None else "none",
@@ -775,7 +732,7 @@ class BatchTab(QWidget):
                 self._running_plot_style or resolve_plot_style(self.parent_app)
             ).to_dict(),
             "mask": {"type": type(mask).__name__ if mask is not None else "none"},
-            "protocols": [dict(p.recipe) for p in self._protocols if p.enabled],
+            "protocols": [dict(p.recipe) for p in job.protocols if p.enabled],
             "results": [
                 {
                     "file": os.path.basename(r.file_path),

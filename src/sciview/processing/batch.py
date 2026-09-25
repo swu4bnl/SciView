@@ -162,11 +162,14 @@ class BatchJob:
     output_formats: list[str] = field(default_factory=lambda: ["png", "npz"])
     calibration: Any | None = None
     mask: Any | None = None
-    mirror_input_structure: bool = True
-    input_root: str = ""  # used when mirror_input_structure=True
     plot_style: dict[str, Any] = field(default_factory=dict)
     output_mode: BatchOutputMode = "scianalysis"
     preview_theme: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.output_dir.strip():
+            raise ValueError("Batch output directory is required")
+        self.output_dir = str(Path(self.output_dir).expanduser().resolve())
 
     def to_transport(self) -> dict[str, Any]:
         """Serialize a job without pickling live SciAnalysis objects."""
@@ -177,8 +180,6 @@ class BatchJob:
             "output_formats": list(self.output_formats),
             "calibration": _serialize_calibration(self.calibration),
             "mask": _serialize_mask(self.mask),
-            "mirror_input_structure": self.mirror_input_structure,
-            "input_root": self.input_root,
             "plot_style": dict(self.plot_style),
             "output_mode": self.output_mode,
             "preview_theme": dict(self.preview_theme),
@@ -193,8 +194,6 @@ class BatchJob:
             output_formats=[str(item) for item in payload.get("output_formats", [])],
             calibration=_deserialize_calibration(payload.get("calibration")),
             mask=payload.get("mask"),
-            mirror_input_structure=bool(payload.get("mirror_input_structure", True)),
-            input_root=str(payload.get("input_root", "")),
             plot_style=dict(payload.get("plot_style", {})),
             output_mode=str(payload.get("output_mode", "scianalysis")),
             preview_theme=dict(payload.get("preview_theme", {})),
@@ -298,27 +297,6 @@ def _serialize_mask(mask: Any | None) -> np.ndarray | None:
     from sciview.masking.io import coerce_mask_to_bool
 
     return coerce_mask_to_bool(mask)
-
-
-# ---------------------------------------------------------------------------
-# Output path helpers
-# ---------------------------------------------------------------------------
-
-def resolve_output_dir(
-    file_path: str,
-    output_dir: str,
-    input_root: str = "",
-    mirror: bool = True,
-) -> Path:
-    """Return the output directory for a given input file path."""
-    if not mirror or not input_root:
-        return Path(output_dir)
-
-    try:
-        rel = Path(file_path).parent.relative_to(input_root)
-        return Path(output_dir) / rel
-    except ValueError:
-        return Path(output_dir)
 
 
 def _load_image_array(file_path: str) -> np.ndarray:
@@ -1067,9 +1045,7 @@ def run_batch(
                 emit_status("Stopped by user")
                 break
 
-            out_dir = resolve_output_dir(
-                file_path, job.output_dir, job.input_root, job.mirror_input_structure,
-            )
+            out_dir = Path(job.output_dir)
             out_dir.mkdir(parents=True, exist_ok=True)
 
             for proto, executable, proto_calibration in zip(active, executables, protocol_calibrations):
