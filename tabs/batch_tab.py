@@ -84,6 +84,19 @@ _DEFAULT_PARAMS: dict[str, dict[str, Any]] = {
 _STATUS_SYMBOL = {"ok": "OK", "error": "ERR", "skipped": "---", "running": "..."}
 
 
+def _common_input_root(file_paths: list[str]) -> str:
+    """Common ancestor directory of every loaded file (not just the first one),
+    so mirror-input-structure and per-file output resolution behave correctly
+    for batches spanning multiple folders."""
+    if not file_paths:
+        return ""
+    dirs = [str(Path(p).parent) for p in file_paths]
+    try:
+        return os.path.commonpath(dirs)
+    except ValueError:
+        return ""  # e.g. paths on different drives
+
+
 class BatchTab(QWidget):
     """Minimal batch tab: load files explicitly, configure protocols, run."""
 
@@ -91,7 +104,8 @@ class BatchTab(QWidget):
         super().__init__()
         self.parent_app = parent_app
 
-        # Batch-owned file list — populated by clicking "Load from Session".
+        # Batch-owned file list — kept in sync with the shared session (see
+        # on_shared_file_list_changed) and refreshable on demand.
         self._file_paths: list[str] = []
 
         self._protocols: list[BatchProtocol] = []
@@ -102,6 +116,7 @@ class BatchTab(QWidget):
         self._running_output_mode = "scianalysis"
 
         self._build_ui()
+        self._load_from_session()  # pull whatever the shared session already has, if any
 
     # ------------------------------------------------------------------
     # Session helper
@@ -116,34 +131,47 @@ class BatchTab(QWidget):
         return None
 
     def _load_from_session(self) -> None:
-        """Copy file paths from shared file list or Image Browser session into Batch's own list."""
-        paths = []
-        if hasattr(self.parent_app, "get_shared_file_list"):
-            shared = self.parent_app.get_shared_file_list()
-            for p in shared:
-                p_str = str(p).strip()
-                if p_str and not p_str.startswith("tiled://"):
-                    paths.append(p_str)
+        """Manually pull the current shared file list — auto-sync (see
+        on_shared_file_list_changed) covers ongoing changes; this covers the
+        case Batch was opened before any list was ever published."""
+        paths = list(self.parent_app.get_shared_file_list()) if hasattr(self.parent_app, "get_shared_file_list") else []
 
         if not paths:
             browser = self._find_image_browser()
             if browser is not None and hasattr(browser, "session_manager"):
-                for img in browser.session_manager.images:
-                    p = str(img.get("path", "")).strip()
-                    if p and not p.startswith("tiled://"):
-                        paths.append(p)
+                paths = [img.get("path", "") for img in browser.session_manager.images]
 
-        if not paths:
-            self.parent_app.show_status("Batch: No local image files found in Image Browser session/folder")
-            return
+        self._apply_file_list(paths)
+
+    def on_shared_file_list_changed(self, file_paths: list[str], info: dict[str, str]) -> None:
+        """Live auto-sync: users work by folder/pattern in Image Browser, so
+        Batch's file list should always reflect the current session without
+        requiring a manual reload click."""
+        self._apply_file_list(file_paths)
+
+    def _apply_file_list(self, paths_in: list[str]) -> None:
+        paths = []
+        skipped = 0
+        for item in paths_in:
+            p = str(item).strip()
+            if not p:
+                continue
+            if p.startswith("tiled://"):
+                skipped += 1  # Tiled browsing isn't wired into Batch yet
+                continue
+            paths.append(p)
 
         self._file_paths = paths
         self._file_list_widget.clear()
         for p in paths:
             self._file_list_widget.addItem(os.path.basename(p))
 
-        self._file_count_label.setText(f"{len(paths)} file(s) loaded")
-        self.parent_app.show_status(f"Batch: {len(paths)} file(s) loaded from Image Browser")
+        suffix = f" ({skipped} Tiled file(s) skipped — not yet supported)" if skipped else ""
+        if paths:
+            self._file_count_label.setText(f"{len(paths)} file(s) loaded{suffix}")
+        else:
+            self._file_count_label.setText(f"0 file(s) loaded{suffix} — load images in Image Browser first")
+
 
     # ------------------------------------------------------------------
     # UI
@@ -186,22 +214,22 @@ class BatchTab(QWidget):
         group = QGroupBox("File List")
         form = QVBoxLayout(group)
 
-        btn_load = QPushButton("Load Files from Image Browser Session")
+        btn_load = QPushButton("Refresh File List")
+        btn_load.setToolTip("File list auto-syncs with Image Browser; use this if it hasn't yet")
         apply_emphasis_button_style(btn_load)
         btn_load.clicked.connect(self._load_from_session)
         form.addWidget(btn_load)
 
-        self._file_count_label = QLabel("0 file(s) loaded — click the button above")
+        self._file_count_label = QLabel("0 file(s) loaded — load images in Image Browser first")
         apply_info_style(self._file_count_label)
         form.addWidget(self._file_count_label)
 
         self._file_list_widget = QListWidget()
         self._file_list_widget.setSelectionMode(QAbstractItemView.NoSelection)
         self._file_list_widget.setMinimumHeight(80)
-        form.addWidget(self._file_list_widget)
+        form.addWidget(self._file_list_widget, 1)
 
-        lay.addWidget(group)
-        lay.addStretch()
+        lay.addWidget(group, 1)
         return panel
 
     def _build_log_panel(self) -> QWidget:
@@ -580,7 +608,7 @@ class BatchTab(QWidget):
 
         if not self._file_paths:
             self.parent_app.show_status(
-                "Batch: no files — click 'Load Files from Image Browser Session' first"
+                "Batch: no files — load images in Image Browser first"
             )
             return
 
@@ -605,7 +633,13 @@ class BatchTab(QWidget):
 
         output_dir = self.output_dir_input.text().strip()
         if not output_dir:
-            output_dir = str(Path(self._file_paths[0]).parent.parent / "analysis")
+            # Force an explicit decision instead of silently guessing a
+            # folder from the first file's path — that heuristic broke down
+            # whenever files came from multiple folders or a flat directory.
+            output_dir = dialog_select_directory(self, "Select Batch Output Folder", key="batch_output_folder")
+            if not output_dir:
+                self.parent_app.show_status("Batch: select an output folder to run")
+                return
             self.output_dir_input.setText(output_dir)
 
         cal = getattr(self.parent_app, "calibration", None)
@@ -636,7 +670,7 @@ class BatchTab(QWidget):
             calibration=cal,
             mask=mask,
             mirror_input_structure=self.mirror_check.isChecked(),
-            input_root=str(Path(self._file_paths[0]).parent),
+            input_root=_common_input_root(self._file_paths),
             plot_style=self._running_plot_style.to_dict(),
             output_mode=self._running_output_mode,
             preview_theme=preview_theme,

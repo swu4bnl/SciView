@@ -73,8 +73,11 @@ _CALIBRATION_OVERRIDE_PARAM_KEYS = ("incident_angle_deg", "sample_normal_deg")
 # Recipe keys that route/describe a protocol but are never SciAnalysis Protocol
 # constructor kwargs; build_protocol() strips these before calling SciAnalysis
 # for any protocol whose recipe isn't already translated by an adapter.
+# "name" is NOT here — SciAnalysis's own Protocol.__init__(name=None, ...) takes
+# it directly and uses it for the output subfolder, so it must pass through
+# (otherwise two same-operation protocols silently overwrite each other's output).
 _RECIPE_ROUTING_KEYS = (
-    "name", "operation", "source", "preview_params",
+    "operation", "source", "preview_params",
     "calibration_source", "mask_source", "calibration_q_range", "source_path",
 )
 
@@ -646,6 +649,12 @@ def reduction_canonical_to_scianalysis_kwargs(canonical: dict[str, Any], calibra
         "xlog": scale in ("logx", "loglog"),
         "ylog": scale in ("logy", "loglog"),
     }
+    if "name" in canonical:
+        # SciAnalysis's own Protocol.__init__(name=...) sets the output
+        # subfolder — without this, two same-operation recipes (e.g. two
+        # sector_average at different angles) would silently overwrite
+        # each other's files.
+        kwargs["name"] = canonical["name"]
     if "save_results" in canonical:
         kwargs["save_results"] = canonical["save_results"]
 
@@ -691,7 +700,7 @@ def transform_canonical_to_scianalysis_kwargs(canonical: dict[str, Any]) -> dict
         return dict(canonical)
 
     kwargs = {k: v for k, v in canonical.items() if k in (
-        "bins_relative", "bins_phi", "zmin", "zmax", "save_results",
+        "name", "bins_relative", "bins_phi", "zmin", "zmax", "save_results",
     )}
     x_min = canonical.get("x_min")
     x_max = canonical.get("x_max")
