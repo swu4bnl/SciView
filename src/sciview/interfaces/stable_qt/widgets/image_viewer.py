@@ -60,6 +60,8 @@ class ImageViewer(QWidget):
     mouse_pressed = pyqtSignal(object)
     mouse_moved = pyqtSignal(object)
     mouse_released = pyqtSignal(object)
+    mouse_double_clicked = pyqtSignal(object)
+    interaction_mode_changed = pyqtSignal(str)
 
     _SUPPORTED_COLORMAPS = set(SUPPORTED_IMAGE_COLORMAPS) | set(ARTIST_IMAGE_COLORMAPS)
 
@@ -128,22 +130,22 @@ class ImageViewer(QWidget):
         self._copy_button.clicked.connect(self.copy_rendered_view_to_clipboard)
         self._save_button.clicked.connect(self._choose_export_path)
 
-        toolbar = QHBoxLayout()
-        toolbar.setContentsMargins(0, 0, 0, 0)
-        toolbar.setSpacing(2)
-        toolbar.addWidget(self._pan_button)
-        toolbar.addWidget(self._zoom_button)
-        toolbar.addWidget(self._home_button)
-        toolbar.addWidget(self._auto_levels_button)
-        toolbar.addWidget(self._copy_button)
-        toolbar.addWidget(self._save_button)
-        toolbar.addWidget(self._palette_info_label)
+        self._toolbar_layout = QHBoxLayout()
+        self._toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        self._toolbar_layout.setSpacing(2)
+        self._toolbar_layout.addWidget(self._pan_button)
+        self._toolbar_layout.addWidget(self._zoom_button)
+        self._toolbar_layout.addWidget(self._home_button)
+        self._toolbar_layout.addWidget(self._auto_levels_button)
+        self._toolbar_layout.addWidget(self._copy_button)
+        self._toolbar_layout.addWidget(self._save_button)
+        self._toolbar_layout.addWidget(self._palette_info_label)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
         layout.addWidget(self._graphics)
-        layout.addLayout(toolbar)
+        layout.addLayout(self._toolbar_layout)
 
         self.refresh_theme()
         self.set_colormap(self._colormap_name)
@@ -288,8 +290,6 @@ class ImageViewer(QWidget):
         if not locked:
             self._release_pointer_capture()
         self._view_box.setMouseEnabled(x=not locked, y=not locked)
-        self._pan_button.setEnabled(not locked)
-        self._zoom_button.setEnabled(not locked)
         if locked:
             self._pan_button.setChecked(False)
             self._zoom_button.setChecked(False)
@@ -297,6 +297,23 @@ class ImageViewer(QWidget):
             self._zoom_button.setChecked(True)
         else:
             self._pan_button.setChecked(True)
+
+    def toolbar_icon(self, action: str) -> QIcon:
+        """Return the current themed icon for a viewer toolbar action."""
+        if action not in VIEWER_TOOL_ICON_FILES:
+            raise ValueError(f"Unsupported viewer toolbar action: {action}")
+        return self._load_toolbar_icon(action)
+
+    def activate_navigation_mode(self, mode: str) -> None:
+        """Unlock drawing input and select a supported viewer navigation mode."""
+        activators = {
+            "pan": self._activate_pan_mode,
+            "zoom": self._activate_zoom_mode,
+        }
+        if mode not in activators:
+            raise ValueError(f"Unsupported navigation mode: {mode}")
+        self.set_interaction_locked(False)
+        activators[mode]()
 
     def _on_auto_levels_clicked(self) -> None:
         if QApplication.keyboardModifiers() & Qt.AltModifier:
@@ -512,11 +529,14 @@ class ImageViewer(QWidget):
     def eventFilter(self, watched: object, event: QEvent) -> bool:
         if watched is self._graphics.viewport() and event.type() in {
             QEvent.MouseButtonPress,
+            QEvent.MouseButtonDblClick,
             QEvent.MouseMove,
             QEvent.MouseButtonRelease,
         }:
             pointer_event = self._pointer_event_from_viewport_pos(event.pos(), event.button(), event.modifiers())
-            if event.type() == QEvent.MouseButtonPress:
+            if event.type() == QEvent.MouseButtonDblClick:
+                self.mouse_double_clicked.emit(pointer_event)
+            elif event.type() == QEvent.MouseButtonPress:
                 if self._interaction_locked:
                     self._capture_pointer()
                 self.mouse_pressed.emit(pointer_event)
@@ -604,11 +624,13 @@ class ImageViewer(QWidget):
         self._view_box.setMouseMode(pg.ViewBox.PanMode)
         self._pan_button.setChecked(True)
         self._zoom_button.setChecked(False)
+        self.interaction_mode_changed.emit("pan")
 
     def _activate_zoom_mode(self) -> None:
         self._view_box.setMouseMode(pg.ViewBox.RectMode)
         self._pan_button.setChecked(False)
         self._zoom_button.setChecked(True)
+        self.interaction_mode_changed.emit("zoom")
 
     def _choose_export_path(self) -> None:
         path, _ = QFileDialog.getSaveFileName(

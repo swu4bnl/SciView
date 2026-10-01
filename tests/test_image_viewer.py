@@ -7,13 +7,17 @@ import numpy as np
 import pytest
 from matplotlib.figure import Figure
 from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QApplication, QWidget
+from PyQt5.QtWidgets import QApplication, QPushButton, QSizePolicy, QToolButton, QWidget
 
 import pyqtgraph as pg
 
 from sciview.interfaces.theme.app_style import AppStyle
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
-from sciview.interfaces.stable_qt.tools.mask_drawing_tools import BrushDrawingTool, MaskDrawingSession
+from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
+    BrushDrawingTool,
+    MaskDrawingSession,
+    compose_mask_layers,
+)
 
 
 @pytest.fixture(scope="module")
@@ -114,8 +118,8 @@ def test_viewer_interaction_lock_disables_pan_zoom_controls(viewer):
     viewer.set_interaction_locked(True)
 
     assert viewer._interaction_locked
-    assert not viewer._pan_button.isEnabled()
-    assert not viewer._zoom_button.isEnabled()
+    assert viewer._pan_button.isEnabled()
+    assert viewer._zoom_button.isEnabled()
     assert not viewer._pan_button.isChecked()
     assert not viewer._zoom_button.isChecked()
 
@@ -259,6 +263,98 @@ def test_migrated_image_tabs_construct_with_image_viewer(qapp, module_name, clas
         assert isinstance(tab.image_viewer, ImageViewer)
     finally:
         tab.close()
+
+
+def test_mask_theme_refresh_updates_custom_visuals_without_losing_state(qapp, monkeypatch):
+    from tabs.mask_tab import MaskApp, MaskLayer
+
+    colors = {
+        "window": QColor("#f5f5f5"),
+        "base": QColor("#ffffff"),
+        "text": QColor("#202020"),
+        "muted": QColor("#707070"),
+        "grid": QColor("#b0b0b0"),
+        "accent": QColor("#0067c0"),
+        "border": QColor("#909090"),
+        "control_bg": QColor("#ffffff"),
+        "control_hover": QColor("#e8e8e8"),
+        "checked_fg": QColor("#ffffff"),
+        "icon": QColor("#202020"),
+    }
+    monkeypatch.setattr(AppStyle, "theme_colors", classmethod(lambda cls, app=None: colors))
+
+    tab = MaskApp(DummyParentApp())
+    try:
+        layer_panel = tab.layer_list.parentWidget()
+        sidebar_layout = layer_panel.parentWidget().layout()
+        assert layer_panel.sizePolicy().verticalPolicy() == QSizePolicy.Expanding
+        assert tab.layer_list.sizePolicy().verticalPolicy() == QSizePolicy.Expanding
+        assert sidebar_layout.stretch(sidebar_layout.indexOf(layer_panel)) == 1
+
+        image = np.arange(16, dtype=float).reshape(4, 4)
+        tab.image_data = image
+        tab.mask_layers.append(MaskLayer(image > 8, name="Threshold"))
+        tab._update_layer_list()
+        tab.threshold_low_spin.setValue(3.0)
+        tab.threshold_high_spin.setValue(12.0)
+        tab.refresh_theme()
+
+        light_item = tab.layer_list.item(tab._list_row_for_layer(0))
+        light_row = tab.layer_list.itemWidget(light_item)
+        light_icon = light_row.findChild(QToolButton).icon().pixmap(20, 20).toImage()
+
+        colors.update({
+            "window": QColor("#202124"),
+            "base": QColor("#17181a"),
+            "text": QColor("#f1f3f5"),
+            "muted": QColor("#b0b4b8"),
+            "grid": QColor("#5f6368"),
+            "accent": QColor("#63b3ff"),
+            "border": QColor("#666a70"),
+            "control_bg": QColor("#2b2d30"),
+            "control_hover": QColor("#3a3d41"),
+            "icon": QColor("#f1f3f5"),
+        })
+        tab.refresh_theme()
+
+        dark_item = tab.layer_list.item(tab._list_row_for_layer(0))
+        dark_row = tab.layer_list.itemWidget(dark_item)
+        dark_icon = dark_row.findChild(QToolButton).icon().pixmap(20, 20).toImage()
+        assert light_icon != dark_icon
+        assert colors["accent"].name() in dark_row.styleSheet()
+        assert tab.threshold_plot.backgroundBrush().color() == colors["base"]
+        assert tab.threshold_low_spin.value() == 3.0
+        assert tab.threshold_high_spin.value() == 12.0
+        assert tab._get_active_layer_index() == 0
+        assert colors["control_bg"].name() in tab.tool_buttons["Brush"].property("baseStyleSheet")
+
+        selected_color = "#d12f7a"
+        tab._set_overlay_color(selected_color)
+        AppStyle.refresh_runtime_theme(qapp)
+        assert tab.overlay_color == selected_color
+        swatch = tab.layer_color_button.icon().pixmap(tab.layer_color_button.iconSize()).toImage()
+        assert swatch.pixelColor(swatch.width() // 2, swatch.height() // 2) == QColor(selected_color)
+        assert selected_color not in tab.layer_color_button.styleSheet()
+    finally:
+        tab.close()
+
+
+def test_color_swatch_does_not_modify_unrelated_styles(qapp):
+    sibling = QPushButton("Unrelated")
+    sibling.setStyleSheet("padding: 3px;")
+    swatch = QPushButton()
+    swatch.setIcon(AppStyle.color_swatch_icon("#112233"))
+    app_stylesheet = qapp.styleSheet()
+    sibling_stylesheet = sibling.styleSheet()
+    try:
+        swatch.setIcon(AppStyle.color_swatch_icon("#abcdef"))
+
+        assert qapp.styleSheet() == app_stylesheet
+        assert sibling.styleSheet() == sibling_stylesheet
+        assert "#abcdef" not in swatch.styleSheet()
+    finally:
+        swatch.close()
+        sibling.close()
 
 
 def test_viewer_shows_axes_and_histogram_controls(viewer):
@@ -588,26 +684,152 @@ def test_mask_tool_buttons_toggle_canvas_lock(qapp):
         assert not hasattr(tab, 'drawing_mode_check')
         assert not tab.drawing_mode
         assert not tab.image_viewer._interaction_locked
+        assert not tab.image_viewer._pan_button.isHidden()
+        assert not tab.image_viewer._zoom_button.isHidden()
+        assert not tab.image_viewer._home_button.isHidden()
+        assert not tab.image_viewer.toolbar_icon("pan").isNull()
+        assert not tab.image_viewer.toolbar_icon("zoom").isNull()
+        assert not tab.image_viewer.toolbar_icon("home").isNull()
+        with pytest.raises(ValueError, match="Unsupported viewer toolbar action"):
+            tab.image_viewer.toolbar_icon("unknown")
+        assert tab.image_viewer._pan_button.isChecked()
+        assert tab.navigation_buttons["pan"].isChecked()
+        for button in [*tab.navigation_buttons.values(), *tab.tool_buttons.values()]:
+            assert button.width() == button.height()
 
+        tab.tool_buttons["Brush"].click()
+
+        assert not tab.drawing_mode
+        assert not tab.image_viewer._interaction_locked
+
+        tab._add_empty_layer()
         tab.tool_buttons["Brush"].click()
 
         assert tab.drawing_mode
         assert tab.image_viewer._interaction_locked
         assert tab.tool_buttons["Brush"].isChecked()
+        assert not tab.image_viewer._pan_button.isChecked()
+        assert not tab.navigation_buttons["pan"].isChecked()
+
+        tab.image_viewer._zoom_button.click()
+
+        assert not tab.drawing_mode
+        assert not tab.image_viewer._interaction_locked
+        assert tab.image_viewer._zoom_button.isChecked()
+        assert tab.navigation_buttons["zoom"].isChecked()
+
+        tab.navigation_buttons["pan"].click()
+
+        assert tab.image_viewer._pan_button.isChecked()
+        assert tab.navigation_buttons["pan"].isChecked()
+
+        tab.tool_buttons["Brush"].click()
 
         tab.tool_buttons["Brush"].click()
 
         assert not tab.drawing_mode
         assert not tab.image_viewer._interaction_locked
         assert not tab.tool_buttons["Brush"].isChecked()
+        assert tab.image_viewer._pan_button.isChecked()
+        assert tab.navigation_buttons["pan"].isChecked()
     finally:
         tab.close()
 
 
 class DummyMaskLayer:
-    def __init__(self, data, visible=True):
+    def __init__(self, data, visible=True, combine_mode="OR"):
         self.data = np.asarray(data, dtype=bool)
         self.visible = visible
+        self.combine_mode = combine_mode
+
+
+def test_mask_layers_compose_in_order_with_incoming_operators():
+    layers = [
+        DummyMaskLayer([[True, True], [False, False]]),
+        DummyMaskLayer([[True, False], [True, False]], combine_mode="AND"),
+        DummyMaskLayer([[False, False], [False, True]], combine_mode="OR"),
+    ]
+
+    result = compose_mask_layers(layers)
+
+    np.testing.assert_array_equal(result, [[True, False], [False, True]])
+
+
+def test_mask_tab_threshold_modes_and_layer_edit_guards(qapp):
+    from tabs.mask_tab import MaskApp
+
+    tab = MaskApp(DummyParentApp())
+    tab.image_data = np.arange(9, dtype=float).reshape(3, 3)
+    try:
+        tab.threshold_region.setRegion((2.0, 5.0))
+
+        tab.threshold_mode_combo.setCurrentText("Below")
+        np.testing.assert_array_equal(tab._make_threshold_mask(), tab.image_data <= 5.0)
+        assert "threshold-preview" in tab.image_viewer._overlays
+        tab.threshold_mode_combo.setCurrentText("Range")
+        np.testing.assert_array_equal(
+            tab._make_threshold_mask(),
+            (tab.image_data >= 2.0) & (tab.image_data <= 5.0),
+        )
+        tab.threshold_mode_combo.setCurrentText("Above")
+        np.testing.assert_array_equal(tab._make_threshold_mask(), tab.image_data >= 2.0)
+
+        tab.threshold_low_spin.setValue(2.0)
+        tab.threshold_high_spin.setValue(5.0)
+        tab.threshold_log_x_check.setChecked(True)
+        plot_low, plot_high = tab.threshold_region.getRegion()
+        assert plot_low == pytest.approx(np.log10(2.0))
+        assert plot_high == pytest.approx(np.log10(5.0))
+        np.testing.assert_array_equal(tab._make_threshold_mask(), tab.image_data >= 2.0)
+
+        tab._add_empty_layer()
+        tab.mask_layers[0].visible = False
+        tab.tool_buttons["Brush"].click()
+        assert not tab.drawing_mode
+    finally:
+        tab.close()
+
+
+def test_mask_tab_renders_visible_layers_and_refinement_is_undoable(qapp):
+    from tabs.mask_tab import MaskApp, MaskLayer
+
+    tab = MaskApp(DummyParentApp())
+    tab.image_data = np.zeros((5, 5), dtype=float)
+    full = np.ones((5, 5), dtype=bool)
+    hidden = np.eye(5, dtype=bool)
+    tab.mask_layers = [
+        MaskLayer(full.copy(), "Visible"),
+        MaskLayer(hidden, "Hidden", visible=False),
+    ]
+    try:
+        tab._update_layer_list()
+        tab.layer_list.setCurrentRow(0)
+        tab.update_plot()
+
+        assert "combined-mask" in tab.image_viewer._overlays
+        assert "mask-layer-0" not in tab.image_viewer._overlays
+        assert "mask-layer-1" not in tab.image_viewer._overlays
+        assert "threshold-preview" not in tab.image_viewer._overlays
+
+        connector = tab.layer_list.itemWidget(tab.layer_list.item(1))
+        operator_button = connector.findChild(QPushButton)
+        assert operator_button.text() == "OR"
+        assert "∪ Union" in operator_button.toolTip()
+        operator_button.click()
+        assert tab.mask_layers[1].combine_mode == "AND"
+        connector = tab.layer_list.itemWidget(tab.layer_list.item(1))
+        operator_button = connector.findChild(QPushButton)
+        assert operator_button.text() == "AND"
+        assert "∩ Intersection" in operator_button.toolTip()
+
+        tab._refine_active_layer("shrink")
+        assert np.count_nonzero(tab.mask_layers[0].data) < 25
+        tab.undo_stack.undo()
+        np.testing.assert_array_equal(tab.mask_layers[0].data, full)
+        tab.undo_stack.redo()
+        assert np.count_nonzero(tab.mask_layers[0].data) < 25
+    finally:
+        tab.close()
 
 
 def test_mask_drawing_session_composes_preview_for_visible_layers():
@@ -616,28 +838,28 @@ def test_mask_drawing_session_composes_preview_for_visible_layers():
         DummyMaskLayer([[False, False], [True, False]]),
         DummyMaskLayer([[True, True], [True, True]], visible=False),
     ]
+    previews = []
     session = MaskDrawingSession(
         is_enabled=lambda: True,
         get_tool=lambda: None,
-        get_image_data=lambda: None,
-        get_active_layer=lambda create: None,
-        get_active_layer_index=lambda create: None,
+        get_active_layer=lambda: None,
+        get_active_layer_index=lambda: None,
         get_layers=lambda: layers,
-        get_combine_method=lambda: "OR",
-        set_combined_mask=lambda mask: None,
+        set_combined_mask=lambda mask: previews.append(mask.copy()),
         update_combined_mask=lambda: None,
         update_plot=lambda: None,
         set_drawing_enabled=lambda enabled: None,
         should_auto_disable=lambda: False,
         get_brush_size=lambda: 1,
         get_draw_value=lambda: True,
+        on_edit_finished=lambda index, before, after: None,
     )
 
     preview = np.array([[False, False], [False, True]])
-    combined = session._compose_preview(layers, 0, preview)
+    session._show_layer_preview(0, preview)
 
     expected = np.array([[False, False], [True, True]])
-    np.testing.assert_array_equal(combined, expected)
+    np.testing.assert_array_equal(previews[-1], expected)
 
 
 class DummyPointerEvent:
@@ -656,11 +878,9 @@ def test_brush_session_uses_preview_refresh_until_release():
     session = MaskDrawingSession(
         is_enabled=lambda: True,
         get_tool=lambda: tool,
-        get_image_data=lambda: np.zeros((8, 8), dtype=float),
-        get_active_layer=lambda create: layer,
-        get_active_layer_index=lambda create: 0,
+        get_active_layer=lambda: layer,
+        get_active_layer_index=lambda: 0,
         get_layers=lambda: [layer],
-        get_combine_method=lambda: "OR",
         set_combined_mask=lambda mask: preview_masks.append(mask.copy()),
         update_combined_mask=lambda: calls.__setitem__("final", calls["final"] + 1),
         update_plot=lambda: calls.__setitem__("preview", calls["preview"] + 1),
@@ -668,6 +888,7 @@ def test_brush_session_uses_preview_refresh_until_release():
         should_auto_disable=lambda: False,
         get_brush_size=lambda: 1,
         get_draw_value=lambda: True,
+        on_edit_finished=lambda index, before, after: None,
     )
 
     session.handle_press(DummyPointerEvent(1, 1))

@@ -16,7 +16,6 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QButtonGroup,
     QCheckBox,
-    QColorDialog,
     QComboBox,
     QDoubleSpinBox,
     QGridLayout,
@@ -24,6 +23,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QColorDialog,
     QRadioButton,
     QSpinBox,
     QSplitter,
@@ -169,8 +169,8 @@ class ReductionTab(BaseImageTab):
 
         self._line_color = plot_style.line_color
         self.plot_line_color_button = QPushButton()
-        self.plot_line_color_button.clicked.connect(self._choose_line_color)
         self._update_line_color_button()
+        self.plot_line_color_button.clicked.connect(self._choose_line_color)
         self.plot_line_width_spin = QDoubleSpinBox()
         self.plot_line_width_spin.setRange(0.25, 10.0)
         self.plot_line_width_spin.setSingleStep(0.25)
@@ -438,21 +438,19 @@ class ReductionTab(BaseImageTab):
         self._refresh_source_status()
         return panel
 
-    def _update_line_color_button(self) -> None:
-        color = QColor(self._line_color)
-        text_color = "#000000" if color.lightnessF() > 0.55 else "#ffffff"
-        self.plot_line_color_button.setText(self._line_color)
-        self.plot_line_color_button.setStyleSheet(
-            f"background-color: {self._line_color}; color: {text_color};"
-        )
+    def _set_line_color(self, color: str) -> None:
+        self._line_color = color
+        self._update_line_color_button()
+        self._on_plot_style_controls_changed()
 
     def _choose_line_color(self) -> None:
         color = QColorDialog.getColor(QColor(self._line_color), self, "Select Line Color")
-        if not color.isValid():
-            return
-        self._line_color = color.name()
-        self._update_line_color_button()
-        self._on_plot_style_controls_changed()
+        if color.isValid():
+            self._set_line_color(color.name())
+
+    def _update_line_color_button(self) -> None:
+        self.plot_line_color_button.setIcon(AppStyle.color_swatch_icon(self._line_color))
+        self.plot_line_color_button.setText(self._line_color)
 
     def _on_plot_style_controls_changed(self, *args) -> None:
         if self._building_controls or self._updating_plot_style_controls:

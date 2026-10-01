@@ -14,6 +14,7 @@ class ViewerColors:
     default_circle: str = "#ff0000"
     default_crosshair: str = "#ff0000"
     default_mask: str = "#ef4444"
+    mask_preview: str = "#facc15"
 
 
 @dataclass(frozen=True)
@@ -254,13 +255,15 @@ VIEWER_TOOL_ICON_FILES = {
     "save": "viewer_save.svg",
 }
 
-MASK_TOOL_NAMES = ("Brush", "Line", "Rectangle", "Circle", "Watershed Fill")
+MASK_TOOL_NAMES = ("Brush", "Eraser", "Line", "Rectangle", "Circle", "Polygon", "Smart Fill")
 MASK_TOOL_ICON_FILES = {
     "Brush": "tool_pen.svg",
+    "Eraser": "tool_eraser.svg",
     "Line": "tool_line.svg",
     "Rectangle": "tool_rect.svg",
     "Circle": "tool_circle.svg",
-    "Watershed Fill": "tool_fill.svg",
+    "Polygon": "tool_polygon.svg",
+    "Smart Fill": "tool_fill.svg",
 }
 MASK_DRAWING_DEFAULTS = {
     "brush_size": 5,

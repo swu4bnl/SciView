@@ -710,6 +710,16 @@ class AppStyle:
         size = max(cls.BUTTON_FORM['mask_tool_icon_size'], cls.font_px('body') + 6)
         return QSize(size, size)
 
+    @staticmethod
+    def color_swatch_icon(color, size=18):
+        """Render a color sample for display on a native Qt button."""
+        value = QColor(color)
+        if not value.isValid():
+            raise ValueError(f"Invalid color: {color!r}")
+        pixmap = QPixmap(size, size)
+        pixmap.fill(value)
+        return QIcon(pixmap)
+
     @classmethod
     def toolbar_text_button_height(cls):
         """Return standard toolbar text-button height."""

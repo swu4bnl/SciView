@@ -104,17 +104,42 @@ maybe_auto_pull() {
     fi
 
     echo_step "Checking for SciView source updates..."
-    local pull_output
-    if pull_output="$("$git_bin" -C "$PROJECT_ROOT" pull --ff-only 2>&1)"; then
-        if [[ -n "$pull_output" ]]; then
-            printf "%s\n" "$pull_output"
-        fi
-        echo "Source update check finished."
+    if ! "$git_bin" -C "$PROJECT_ROOT" fetch --quiet; then
+        echo "Skipping source auto-update (git fetch failed)."
+        return 0
+    fi
+
+    local upstream
+    if ! upstream="$("$git_bin" -C "$PROJECT_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || [[ -z "$upstream" ]]; then
+        echo "Skipping SciView source update (current branch has no upstream)."
+        return 0
+    fi
+
+    local behind
+    if ! behind="$("$git_bin" -C "$PROJECT_ROOT" rev-list --count "HEAD..$upstream")"; then
+        echo "Skipping source auto-update (unable to compare with $upstream)."
+        return 0
+    fi
+    if [[ "$behind" == "0" ]]; then
+        echo "SciView is up to date."
+        return 0
+    fi
+
+    echo "$behind update commit(s) available from $upstream."
+    local answer
+    read -r -p "Update SciView now? [y/N] " answer || answer=""
+    case "$answer" in
+        [Yy]|[Yy][Ee][Ss]) ;;
+        *)
+            echo "Skipping SciView source update."
+            return 0
+            ;;
+    esac
+
+    if "$git_bin" -C "$PROJECT_ROOT" merge --ff-only "$upstream"; then
+        echo "SciView source updated."
     else
-        if [[ -n "$pull_output" ]]; then
-            printf "%s\n" "$pull_output"
-        fi
-        echo "Skipping source auto-update (non-fatal)."
+        echo "Skipping source auto-update (fast-forward merge failed)."
     fi
 }
 
