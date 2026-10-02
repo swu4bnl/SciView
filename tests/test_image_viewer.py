@@ -16,6 +16,7 @@ from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
 from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
     BrushDrawingTool,
     MaskDrawingSession,
+    PolygonDrawingTool,
     compose_mask_layers,
 )
 
@@ -782,10 +783,50 @@ def test_mask_tab_threshold_modes_and_layer_edit_guards(qapp):
         assert plot_high == pytest.approx(np.log10(5.0))
         np.testing.assert_array_equal(tab._make_threshold_mask(), tab.image_data >= 2.0)
 
+        tab.threshold_log_x_check.setChecked(False)
+        tab.threshold_low_spin.blockSignals(True)
+        tab.threshold_high_spin.blockSignals(True)
+        tab.threshold_low_spin.setValue(7.0)
+        tab.threshold_high_spin.setValue(3.0)
+        tab.threshold_low_spin.blockSignals(False)
+        tab.threshold_high_spin.blockSignals(False)
+        tab.threshold_mode_combo.setCurrentText("Range")
+        tab._normalize_threshold_spins()
+        assert tab.threshold_low_spin.value() == 3.0
+        assert tab.threshold_high_spin.value() == 7.0
+        np.testing.assert_array_equal(
+            tab._make_threshold_mask(),
+            (tab.image_data >= 3.0) & (tab.image_data <= 7.0),
+        )
+
         tab._add_empty_layer()
         tab.mask_layers[0].visible = False
         tab.tool_buttons["Brush"].click()
         assert not tab.drawing_mode
+    finally:
+        tab.close()
+
+
+def test_mask_session_restore_migrates_legacy_combine_method(qapp, monkeypatch):
+    from tabs import mask_tab
+
+    arrays = {
+        "first.npy": np.array([[True, True], [False, False]]),
+        "second.npy": np.array([[True, False], [True, False]]),
+    }
+    monkeypatch.setattr(mask_tab.session_cache, "load_array", arrays.get)
+    tab = mask_tab.MaskApp(DummyParentApp())
+    try:
+        tab.restore_session_state({
+            "combine_method": "AND",
+            "layers": [
+                {"name": "First", "file": "first.npy"},
+                {"name": "Second", "file": "second.npy", "combine_mode": "OR"},
+            ],
+        })
+
+        assert tab.mask_layers[0].combine_mode == "AND"
+        assert tab.mask_layers[1].combine_mode == "OR"
     finally:
         tab.close()
 
@@ -862,11 +903,86 @@ def test_mask_drawing_session_composes_preview_for_visible_layers():
     np.testing.assert_array_equal(previews[-1], expected)
 
 
+def test_polygon_uses_all_clicked_vertices():
+    tool = PolygonDrawingTool()
+    tool.vertices = [(1, 1), (1, 4), (4, 1)]
+
+    result = tool.finish(np.zeros((6, 6), dtype=bool))
+
+    assert result[2, 2]
+
+
 class DummyPointerEvent:
     def __init__(self, x, y, inside_image=True):
         self.x = x
         self.y = y
         self.inside_image = inside_image
+
+
+def test_polygon_session_commits_to_layer_where_edit_began():
+    layers = [
+        DummyMaskLayer(np.zeros((6, 6), dtype=bool)),
+        DummyMaskLayer(np.zeros((6, 6), dtype=bool)),
+    ]
+    active_index = [0]
+    edits = []
+    tool = PolygonDrawingTool()
+    session = MaskDrawingSession(
+        is_enabled=lambda: True,
+        get_tool=lambda: tool,
+        get_active_layer=lambda: layers[active_index[0]],
+        get_active_layer_index=lambda: active_index[0],
+        get_layers=lambda: layers,
+        set_combined_mask=lambda mask: None,
+        update_combined_mask=lambda: None,
+        update_plot=lambda: None,
+        set_drawing_enabled=lambda enabled: None,
+        should_auto_disable=lambda: False,
+        get_brush_size=lambda: 1,
+        get_draw_value=lambda: True,
+        on_edit_finished=lambda index, before, after: edits.append((index, before, after)),
+    )
+
+    session.handle_press(DummyPointerEvent(1, 1))
+    active_index[0] = 1
+    session.handle_press(DummyPointerEvent(4, 1))
+    session.handle_press(DummyPointerEvent(1, 4))
+
+    assert session.finish_polygon()
+    assert layers[0].data[2, 2]
+    assert not layers[1].data.any()
+    assert edits[0][0] == 0
+
+
+def test_mask_tab_cancels_polygon_when_switching_modes(qapp):
+    from tabs.mask_tab import MaskApp
+
+    tab = MaskApp(DummyParentApp())
+    tab.image_data = np.zeros((6, 6), dtype=float)
+    try:
+        tab._add_empty_layer()
+        tab.tool_buttons["Polygon"].click()
+        for x, y in [(1, 1), (4, 1), (1, 4)]:
+            tab.drawing_session.handle_press(DummyPointerEvent(x, y))
+        assert tab.drawing_session._edit_layer is tab.mask_layers[0]
+        assert tab._preview_mask is not None
+
+        tab.tool_buttons["Line"].click()
+
+        assert tab.drawing_session._edit_layer is None
+        assert not tab.drawing_tools["Polygon"].vertices
+        assert tab._preview_mask is None
+
+        tab.tool_buttons["Polygon"].click()
+        tab.drawing_session.handle_press(DummyPointerEvent(1, 1))
+        tab.image_viewer._zoom_button.click()
+
+        assert not tab.drawing_mode
+        assert tab.drawing_session._edit_layer is None
+        assert not tab.drawing_tools["Polygon"].vertices
+        assert tab._preview_mask is None
+    finally:
+        tab.close()
 
 
 def test_brush_session_uses_preview_refresh_until_release():

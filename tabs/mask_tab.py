@@ -658,6 +658,7 @@ class MaskApp(BaseImageTab):
         self.threshold_low_spin.setDecimals(4)
         self.threshold_low_spin.setRange(-1.0e15, 1.0e15)
         self.threshold_low_spin.valueChanged.connect(self._on_threshold_spins_changed)
+        self.threshold_low_spin.editingFinished.connect(self._normalize_threshold_spins)
         low_layout.addWidget(self.threshold_low_spin)
         values.addWidget(self.threshold_low_control)
         self.threshold_high_control = QWidget()
@@ -669,6 +670,7 @@ class MaskApp(BaseImageTab):
         self.threshold_high_spin.setDecimals(4)
         self.threshold_high_spin.setRange(-1.0e15, 1.0e15)
         self.threshold_high_spin.valueChanged.connect(self._on_threshold_spins_changed)
+        self.threshold_high_spin.editingFinished.connect(self._normalize_threshold_spins)
         high_layout.addWidget(self.threshold_high_spin)
         values.addWidget(self.threshold_high_control)
         values.addStretch()
@@ -816,6 +818,19 @@ class MaskApp(BaseImageTab):
             self._updating_threshold_controls = False
         self._update_threshold_preview()
 
+    def _normalize_threshold_spins(self) -> None:
+        low = self.threshold_low_spin.value()
+        high = self.threshold_high_spin.value()
+        if low <= high:
+            return
+        self._updating_threshold_controls = True
+        try:
+            self.threshold_low_spin.setValue(high)
+            self.threshold_high_spin.setValue(low)
+        finally:
+            self._updating_threshold_controls = False
+        self._on_threshold_spins_changed()
+
     def _on_threshold_controls_changed(self) -> None:
         mode = self.threshold_mode_combo.currentText()
         self.threshold_low_control.setVisible(mode != "Below")
@@ -830,6 +845,8 @@ class MaskApp(BaseImageTab):
             return None
         low = self.threshold_low_spin.value()
         high = self.threshold_high_spin.value()
+        if high < low:
+            low, high = high, low
         mode = self.threshold_mode_combo.currentText()
         finite = np.isfinite(image_2d)
         if mode == "Below":
@@ -1315,6 +1332,7 @@ class MaskApp(BaseImageTab):
         layers_meta = state.get("layers")
         if not layers_meta:
             return
+        legacy_combine_mode = state.get("combine_method", "OR")
         restored = []
         for meta in layers_meta:
             data = session_cache.load_array(meta.get("file", ""))
@@ -1324,7 +1342,7 @@ class MaskApp(BaseImageTab):
                 data,
                 meta.get("name", "Layer"),
                 meta.get("visible", True),
-                combine_mode=meta.get("combine_mode", "OR"),
+                combine_mode=meta.get("combine_mode", legacy_combine_mode),
             )
             layer.source = meta.get("source", "custom")
             restored.append(layer)
@@ -1373,9 +1391,9 @@ class MaskApp(BaseImageTab):
 
     def _set_drawing_enabled_from_session(self, enabled: bool) -> None:
         """Set drawing state and keep tool buttons/canvas lock in sync."""
+        if self.drawing_mode and not enabled:
+            self.drawing_session.cancel_current_edit()
         self.drawing_mode = bool(enabled)
-        if self.drawing_tool and not self.drawing_mode:
-            self.drawing_tool.reset()
 
         if self.drawing_mode:
             self.image_viewer.set_interaction_locked(True)
@@ -1442,6 +1460,8 @@ class MaskApp(BaseImageTab):
                 self.tool_buttons[tool_name].setChecked(False)
                 self.parent_app.show_status("Show the active layer before editing it")
                 return
+            if self.drawing_mode and self.drawing_tool.name != tool_name:
+                self.drawing_session.cancel_current_edit()
             for name, button in self.tool_buttons.items():
                 if name != tool_name:
                     button.blockSignals(True)

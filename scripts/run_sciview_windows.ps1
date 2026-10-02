@@ -58,8 +58,10 @@ function Invoke-SourceAutoUpdate {
             throw "git fetch exited with code $LASTEXITCODE"
         }
 
-        $upstream = (& $git.Source -C $ProjectRoot rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>$null).Trim()
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($upstream)) {
+        $upstreamOutput = & $git.Source -C $ProjectRoot rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>$null
+        $upstreamExitCode = $LASTEXITCODE
+        $upstream = ([string]$upstreamOutput).Trim()
+        if ($upstreamExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($upstream)) {
             Write-Host "Skipping SciView source update (current branch has no upstream)."
             return
         }

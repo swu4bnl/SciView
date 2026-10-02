@@ -138,7 +138,7 @@ class MaskDrawingSession:
         self.get_brush_size = get_brush_size
         self.get_draw_value = get_draw_value
         self.on_edit_finished = on_edit_finished
-        self._edit_layer_index: int | None = None
+        self._edit_layer: object | None = None
         self._edit_before: np.ndarray | None = None
 
     def handle_press(self, event) -> None:
@@ -150,12 +150,14 @@ class MaskDrawingSession:
             return
         self._sync_tool(tool)
         if isinstance(tool, PolygonDrawingTool):
-            layer_index = self.get_active_layer_index()
-            current_layer = self.get_active_layer()
-            if layer_index is None or current_layer is None or not current_layer.visible:
-                return
             if not tool.vertices:
-                self._begin_edit(layer_index, current_layer.data)
+                current_layer = self.get_active_layer()
+                if current_layer is None or not current_layer.visible:
+                    return
+                self._begin_edit(current_layer)
+            elif self._edit_target() is None:
+                self.cancel_current_edit()
+                return
             tool.add_vertex(point)
             self._show_preview(point, tool)
             return
@@ -163,7 +165,7 @@ class MaskDrawingSession:
         current_layer = self.get_active_layer()
         if layer_index is None or current_layer is None or not current_layer.visible:
             return
-        self._begin_edit(layer_index, current_layer.data)
+        self._begin_edit(current_layer)
         tool.begin(point)
         if isinstance(tool, BrushDrawingTool):
             self._draw_brush_stroke(point, tool)
@@ -177,8 +179,9 @@ class MaskDrawingSession:
         self._sync_tool(tool)
         if isinstance(tool, PolygonDrawingTool) and tool.vertices:
             point = self._event_point(event, require_inside=False)
-            current_layer = self.get_active_layer()
-            if point is not None and current_layer is not None:
+            target = self._edit_target()
+            if point is not None and target is not None:
+                _, current_layer = target
                 point = self._clamp_point_to_mask(point, current_layer.data)
                 self._show_preview(point, tool)
             return
@@ -214,9 +217,10 @@ class MaskDrawingSession:
                     if point is None:
                         return
                 else:
-                    current_layer = self.get_active_layer()
-                    if current_layer is None:
+                    target = self._edit_target()
+                    if target is None:
                         return
+                    _, current_layer = target
                     point = self._event_point(event, require_inside=False) or tool.last_draw_point
                     if point is None:
                         return
@@ -237,21 +241,19 @@ class MaskDrawingSession:
         tool.draw_value = self.get_draw_value()
 
     def _draw_brush_stroke(self, point: tuple[int, int], tool: DrawingTool) -> None:
-        current_layer = self.get_active_layer()
-        if current_layer is None:
+        target = self._edit_target()
+        if target is None:
             return
+        layer_index, current_layer = target
         current_layer.data = tool.finalize(current_layer.data, point)
         tool.move(point)
-        layer_index = self.get_active_layer_index()
-        if layer_index is not None:
-            self._show_layer_preview(layer_index, current_layer.data)
+        self._show_layer_preview(layer_index, current_layer.data)
 
     def _show_preview(self, point: tuple[int, int], tool: DrawingTool) -> None:
-        layer_index = self.get_active_layer_index()
-        if layer_index is None:
+        target = self._edit_target()
+        if target is None:
             return
-        layers = self.get_layers()
-        current_layer = layers[layer_index]
+        layer_index, current_layer = target
         preview_data = tool.preview(current_layer.data, point)
         self._show_layer_preview(layer_index, preview_data)
 
@@ -270,10 +272,10 @@ class MaskDrawingSession:
         tool = self.get_tool()
         if not isinstance(tool, PolygonDrawingTool) or len(tool.vertices) < 3:
             return False
-        layer_index = self.get_active_layer_index()
-        current_layer = self.get_active_layer()
-        if layer_index is None or current_layer is None:
+        target = self._edit_target()
+        if target is None:
             return False
+        _, current_layer = target
         current_layer.data = tool.finish(current_layer.data)
         self.update_combined_mask()
         self.update_plot()
@@ -282,35 +284,41 @@ class MaskDrawingSession:
 
     def cancel_current_edit(self) -> None:
         tool = self.get_tool()
-        if self._edit_layer_index is not None and self._edit_before is not None:
-            layers = self.get_layers()
-            if self._edit_layer_index < len(layers):
-                layers[self._edit_layer_index].data = self._edit_before.copy()
+        target = self._edit_target()
+        if target is not None and self._edit_before is not None:
+            _, current_layer = target
+            current_layer.data = self._edit_before.copy()
         if tool is not None:
             tool.reset()
-        self._edit_layer_index = None
+        self._edit_layer = None
         self._edit_before = None
         self.update_combined_mask()
         self.update_plot()
 
-    def _begin_edit(self, layer_index: int, data: np.ndarray) -> None:
-        if self._edit_layer_index is None:
-            self._edit_layer_index = layer_index
-            self._edit_before = np.asarray(data, dtype=bool).copy()
+    def _begin_edit(self, layer: object) -> None:
+        if self._edit_layer is None:
+            self._edit_layer = layer
+            self._edit_before = np.asarray(layer.data, dtype=bool).copy()
 
     def _finish_edit(self) -> None:
-        layer_index = self._edit_layer_index
+        target = self._edit_target()
         before = self._edit_before
-        self._edit_layer_index = None
+        self._edit_layer = None
         self._edit_before = None
-        if layer_index is None or before is None:
+        if target is None or before is None:
             return
-        layers = self.get_layers()
-        if layer_index >= len(layers):
-            return
-        after = np.asarray(layers[layer_index].data, dtype=bool).copy()
+        layer_index, current_layer = target
+        after = np.asarray(current_layer.data, dtype=bool).copy()
         if not np.array_equal(before, after):
             self.on_edit_finished(layer_index, before, after)
+
+    def _edit_target(self) -> tuple[int, object] | None:
+        if self._edit_layer is None:
+            return None
+        for layer_index, layer in enumerate(self.get_layers()):
+            if layer is self._edit_layer:
+                return layer_index, layer
+        return None
 
     @staticmethod
     def _event_point(event, *, require_inside: bool) -> tuple[int, int] | None:
@@ -607,6 +615,7 @@ class PolygonDrawingTool(DrawingTool):
 
         rows, columns = np.indices(mask_layer.shape)
         vertices = np.asarray([(column, row) for row, column in points], dtype=float)
+        vertices = np.vstack((vertices, vertices[0]))
         inside = Path(vertices, closed=True).contains_points(
             np.column_stack((columns.ravel(), rows.ravel())),
             radius=0.5,
