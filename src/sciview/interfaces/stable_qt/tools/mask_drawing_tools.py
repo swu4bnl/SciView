@@ -10,6 +10,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Callable
 
+from sciview.masking.layers import compose_mask_layers
 from sciview.masking.operations import watershed_fill_mask
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
 from sciview.settings.viewer_config import MASK_DRAWING_DEFAULTS
@@ -55,13 +56,7 @@ class DrawingTool(ABC):
         # Drawing state (inherited by all tools)
         self.is_dragging = False
         self.last_draw_point = None
-        self.parent_app = None
         self.get_image_data = None
-    
-    def configure(self, canvas, ax, parent_app, image_data_getter=None):
-        """Configure optional app references retained for tab compatibility."""
-        self.parent_app = parent_app
-        self.get_image_data = image_data_getter
     
     def set_image_data_getter(self, getter: Callable):
         """Set function to retrieve current image data"""
@@ -118,11 +113,9 @@ class MaskDrawingSession:
         *,
         is_enabled: Callable[[], bool],
         get_tool: Callable[[], DrawingTool | None],
-        get_image_data: Callable[[], object],
-        get_active_layer: Callable[[bool], object | None],
-        get_active_layer_index: Callable[[bool], int | None],
+        get_active_layer: Callable[[], object | None],
+        get_active_layer_index: Callable[[], int | None],
         get_layers: Callable[[], list],
-        get_combine_method: Callable[[], str],
         set_combined_mask: Callable[[np.ndarray], None],
         update_combined_mask: Callable[[], None],
         update_plot: Callable[[], None],
@@ -130,14 +123,13 @@ class MaskDrawingSession:
         should_auto_disable: Callable[[], bool],
         get_brush_size: Callable[[], int],
         get_draw_value: Callable[[], bool],
+        on_edit_finished: Callable[[int, np.ndarray, np.ndarray], None],
     ) -> None:
         self.is_enabled = is_enabled
         self.get_tool = get_tool
-        self.get_image_data = get_image_data
         self.get_active_layer = get_active_layer
         self.get_active_layer_index = get_active_layer_index
         self.get_layers = get_layers
-        self.get_combine_method = get_combine_method
         self.set_combined_mask = set_combined_mask
         self.update_combined_mask = update_combined_mask
         self.update_plot = update_plot
@@ -145,7 +137,9 @@ class MaskDrawingSession:
         self.should_auto_disable = should_auto_disable
         self.get_brush_size = get_brush_size
         self.get_draw_value = get_draw_value
-        self.preview_mask: np.ndarray | None = None
+        self.on_edit_finished = on_edit_finished
+        self._edit_layer: object | None = None
+        self._edit_before: np.ndarray | None = None
 
     def handle_press(self, event) -> None:
         tool = self.get_tool()
@@ -155,6 +149,23 @@ class MaskDrawingSession:
         if point is None:
             return
         self._sync_tool(tool)
+        if isinstance(tool, PolygonDrawingTool):
+            if not tool.vertices:
+                current_layer = self.get_active_layer()
+                if current_layer is None or not current_layer.visible:
+                    return
+                self._begin_edit(current_layer)
+            elif self._edit_target() is None:
+                self.cancel_current_edit()
+                return
+            tool.add_vertex(point)
+            self._show_preview(point, tool)
+            return
+        layer_index = self.get_active_layer_index()
+        current_layer = self.get_active_layer()
+        if layer_index is None or current_layer is None or not current_layer.visible:
+            return
+        self._begin_edit(current_layer)
         tool.begin(point)
         if isinstance(tool, BrushDrawingTool):
             self._draw_brush_stroke(point, tool)
@@ -166,6 +177,14 @@ class MaskDrawingSession:
         if not self.is_enabled() or tool is None:
             return
         self._sync_tool(tool)
+        if isinstance(tool, PolygonDrawingTool) and tool.vertices:
+            point = self._event_point(event, require_inside=False)
+            target = self._edit_target()
+            if point is not None and target is not None:
+                _, current_layer = target
+                point = self._clamp_point_to_mask(point, current_layer.data)
+                self._show_preview(point, tool)
+            return
         if not (tool.is_dragging and tool.is_active):
             return
         if isinstance(tool, BrushDrawingTool):
@@ -174,7 +193,7 @@ class MaskDrawingSession:
                 return
             self._draw_brush_stroke(point, tool)
         else:
-            current_layer = self.get_active_layer(True)
+            current_layer = self.get_active_layer()
             if current_layer is None:
                 return
             point = self._event_point(event, require_inside=False)
@@ -186,6 +205,8 @@ class MaskDrawingSession:
 
     def handle_release(self, event) -> None:
         tool = self.get_tool()
+        if isinstance(tool, PolygonDrawingTool):
+            return
         if tool is None or not tool.is_dragging:
             return
 
@@ -196,9 +217,10 @@ class MaskDrawingSession:
                     if point is None:
                         return
                 else:
-                    current_layer = self.get_active_layer(True)
-                    if current_layer is None:
+                    target = self._edit_target()
+                    if target is None:
                         return
+                    _, current_layer = target
                     point = self._event_point(event, require_inside=False) or tool.last_draw_point
                     if point is None:
                         return
@@ -206,8 +228,8 @@ class MaskDrawingSession:
                     current_layer.data = tool.finalize(current_layer.data, point)
                 self.update_combined_mask()
                 self.update_plot()
+                self._finish_edit()
             finally:
-                self.preview_mask = None
                 tool.end()
                 tool.reset()
 
@@ -219,53 +241,84 @@ class MaskDrawingSession:
         tool.draw_value = self.get_draw_value()
 
     def _draw_brush_stroke(self, point: tuple[int, int], tool: DrawingTool) -> None:
-        current_layer = self.get_active_layer(True)
-        if current_layer is None:
+        target = self._edit_target()
+        if target is None:
             return
+        layer_index, current_layer = target
         current_layer.data = tool.finalize(current_layer.data, point)
         tool.move(point)
-        layer_index = self.get_active_layer_index(False)
-        if layer_index is not None:
-            self._show_layer_preview(layer_index, current_layer.data)
+        self._show_layer_preview(layer_index, current_layer.data)
 
     def _show_preview(self, point: tuple[int, int], tool: DrawingTool) -> None:
-        layer_index = self.get_active_layer_index(True)
-        if layer_index is None:
+        target = self._edit_target()
+        if target is None:
             return
-        layers = self.get_layers()
-        current_layer = layers[layer_index]
+        layer_index, current_layer = target
         preview_data = tool.preview(current_layer.data, point)
         self._show_layer_preview(layer_index, preview_data)
 
     def _show_layer_preview(self, layer_index: int, preview_data: np.ndarray) -> None:
-        temp_combined = self._compose_preview(self.get_layers(), layer_index, preview_data)
-        preview_mask = temp_combined.astype(bool, copy=False)
+        preview_mask = compose_mask_layers(
+            self.get_layers(),
+            replacement=(layer_index, preview_data),
+        )
+        if preview_mask is None:
+            return
+        preview_mask = preview_mask.astype(bool, copy=False)
         self.set_combined_mask(preview_mask)
-        self.preview_mask = preview_mask
         self.update_plot()
 
-    def _compose_preview(self, layers, layer_index: int, preview_data: np.ndarray) -> np.ndarray:
-        visible_layers = [layer for layer in layers if layer.visible]
-        if not visible_layers:
-            return preview_data.astype(bool, copy=False)
-        if len(visible_layers) == 1 and layers[layer_index].visible:
-            return preview_data.astype(bool, copy=False)
-        if self.get_combine_method() == "OR":
-            temp_combined = np.zeros_like(preview_data, dtype=bool)
-            for idx, layer in enumerate(layers):
-                if not layer.visible:
-                    continue
-                layer_data = preview_data if idx == layer_index else layer.data
-                temp_combined = np.logical_or(temp_combined, layer_data)
-            return temp_combined
+    def finish_polygon(self) -> bool:
+        tool = self.get_tool()
+        if not isinstance(tool, PolygonDrawingTool) or len(tool.vertices) < 3:
+            return False
+        target = self._edit_target()
+        if target is None:
+            return False
+        _, current_layer = target
+        current_layer.data = tool.finish(current_layer.data)
+        self.update_combined_mask()
+        self.update_plot()
+        self._finish_edit()
+        return True
 
-        temp_combined = None
-        for idx, layer in enumerate(layers):
-            if not layer.visible:
-                continue
-            layer_data = preview_data if idx == layer_index else layer.data
-            temp_combined = layer_data.astype(bool, copy=False) if temp_combined is None else np.logical_and(temp_combined, layer_data)
-        return preview_data.astype(bool, copy=False) if temp_combined is None else temp_combined
+    def cancel_current_edit(self) -> None:
+        tool = self.get_tool()
+        target = self._edit_target()
+        if target is not None and self._edit_before is not None:
+            _, current_layer = target
+            current_layer.data = self._edit_before.copy()
+        if tool is not None:
+            tool.reset()
+        self._edit_layer = None
+        self._edit_before = None
+        self.update_combined_mask()
+        self.update_plot()
+
+    def _begin_edit(self, layer: object) -> None:
+        if self._edit_layer is None:
+            self._edit_layer = layer
+            self._edit_before = np.asarray(layer.data, dtype=bool).copy()
+
+    def _finish_edit(self) -> None:
+        target = self._edit_target()
+        before = self._edit_before
+        self._edit_layer = None
+        self._edit_before = None
+        if target is None or before is None:
+            return
+        layer_index, current_layer = target
+        after = np.asarray(current_layer.data, dtype=bool).copy()
+        if not np.array_equal(before, after):
+            self.on_edit_finished(layer_index, before, after)
+
+    def _edit_target(self) -> tuple[int, object] | None:
+        if self._edit_layer is None:
+            return None
+        for layer_index, layer in enumerate(self.get_layers()):
+            if layer is self._edit_layer:
+                return layer_index, layer
+        return None
 
     @staticmethod
     def _event_point(event, *, require_inside: bool) -> tuple[int, int] | None:
@@ -519,6 +572,60 @@ class CircleDrawingTool(DrawingTool):
     def reset(self):
         super().reset()
         self.start_point = None
+
+
+class PolygonDrawingTool(DrawingTool):
+    """Filled polygon built from click-added vertices and committed explicitly."""
+
+    def __init__(self):
+        super().__init__("Polygon")
+        self.vertices: list[tuple[int, int]] = []
+
+    def start(self, point: Tuple[int, int]):
+        self.add_vertex(point)
+
+    def add_vertex(self, point: tuple[int, int]) -> None:
+        self.vertices.append(point)
+        self.is_active = True
+
+    def preview(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
+        points = [*self.vertices, current_point]
+        if len(points) < 3:
+            return mask_layer
+        return self._draw_polygon(mask_layer.copy(), points)
+
+    def finalize(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
+        return self.preview(mask_layer, current_point)
+
+    def finish(self, mask_layer: np.ndarray) -> np.ndarray:
+        if len(self.vertices) < 3:
+            return mask_layer
+        result = self._draw_polygon(mask_layer, self.vertices)
+        self.reset()
+        return result
+
+    def remove_last_vertex(self) -> None:
+        if self.vertices:
+            self.vertices.pop()
+        if not self.vertices:
+            self.reset()
+
+    def _draw_polygon(self, mask_layer: np.ndarray, points: list[tuple[int, int]]) -> np.ndarray:
+        from matplotlib.path import Path
+
+        rows, columns = np.indices(mask_layer.shape)
+        vertices = np.asarray([(column, row) for row, column in points], dtype=float)
+        vertices = np.vstack((vertices, vertices[0]))
+        inside = Path(vertices, closed=True).contains_points(
+            np.column_stack((columns.ravel(), rows.ravel())),
+            radius=0.5,
+        ).reshape(mask_layer.shape)
+        mask_layer[inside] = self.draw_value
+        return mask_layer
+
+    def reset(self):
+        super().reset()
+        self.vertices = []
 
 
 class WatershedFillTool(DrawingTool):

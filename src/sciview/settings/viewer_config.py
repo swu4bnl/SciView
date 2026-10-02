@@ -14,6 +14,7 @@ class ViewerColors:
     default_circle: str = "#ff0000"
     default_crosshair: str = "#ff0000"
     default_mask: str = "#ef4444"
+    mask_preview: str = "#facc15"
 
 
 @dataclass(frozen=True)
@@ -239,6 +240,8 @@ def resolve_matplotlib_colormap(name: str):
 VIEWER_TOOLBAR_ACTIONS = (
     ViewerToolbarAction("pan", "Pan", "Pan image: drag with the left mouse button."),
     ViewerToolbarAction("zoom", "Zoom", "Rectangular zoom: drag a box with the left mouse button."),
+    ViewerToolbarAction("beam_center", "Beam Center", "Show or hide the calibrated beam center."),
+    ViewerToolbarAction("mask", "Mask", "Show or hide the active mask."),
     ViewerToolbarAction("home", "Home", "Reset the image view to the full detector frame."),
     ViewerToolbarAction("auto", "Auto", "Set color limits from the current image."),
     ViewerToolbarAction("copy", "Copy", "Copy the rendered image view to the clipboard."),
@@ -248,19 +251,23 @@ VIEWER_TOOLBAR_ACTIONS = (
 VIEWER_TOOL_ICON_FILES = {
     "pan": "viewer_pan.svg",
     "zoom": "viewer_zoom.svg",
+    "beam_center": "tab_calibration.svg",
+    "mask": "tab_mask_editing.svg",
     "home": "viewer_home.svg",
     "auto": "viewer_auto.svg",
     "copy": "viewer_copy.svg",
     "save": "viewer_save.svg",
 }
 
-MASK_TOOL_NAMES = ("Brush", "Line", "Rectangle", "Circle", "Watershed Fill")
+MASK_TOOL_NAMES = ("Brush", "Eraser", "Line", "Rectangle", "Circle", "Polygon", "Smart Fill")
 MASK_TOOL_ICON_FILES = {
     "Brush": "tool_pen.svg",
+    "Eraser": "tool_eraser.svg",
     "Line": "tool_line.svg",
     "Rectangle": "tool_rect.svg",
     "Circle": "tool_circle.svg",
-    "Watershed Fill": "tool_fill.svg",
+    "Polygon": "tool_polygon.svg",
+    "Smart Fill": "tool_fill.svg",
 }
 MASK_DRAWING_DEFAULTS = {
     "brush_size": 5,

@@ -16,7 +16,6 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QButtonGroup,
     QCheckBox,
-    QColorDialog,
     QComboBox,
     QDoubleSpinBox,
     QGridLayout,
@@ -24,6 +23,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QColorDialog,
     QRadioButton,
     QSpinBox,
     QSplitter,
@@ -40,7 +40,6 @@ from sciview.session.session_cache import choose_path
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
 from sciview.interfaces.stable_qt.utils.reduction_overlay import (
     OVERLAY_STYLE,
-    chi_q_to_pixel,
     chi_convention_text,
     chi_to_screen_vector,
     line_q_roi_mask,
@@ -60,6 +59,7 @@ from sciview.processing.plot_rendering import (
     REDUCTION_FIGURE_SIZE,
     render_reduction_plot,
 )
+from sciview.processing.calibration_geometry import chi_q_to_pixel, q_to_pixel_radius
 from sciview.processing.reduction import ReductionBackend, ReductionRequest, save_reduction_result
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
 from sciview.settings.app_settings import SPINBOX_CONFIG
@@ -169,8 +169,8 @@ class ReductionTab(BaseImageTab):
 
         self._line_color = plot_style.line_color
         self.plot_line_color_button = QPushButton()
-        self.plot_line_color_button.clicked.connect(self._choose_line_color)
         self._update_line_color_button()
+        self.plot_line_color_button.clicked.connect(self._choose_line_color)
         self.plot_line_width_spin = QDoubleSpinBox()
         self.plot_line_width_spin.setRange(0.25, 10.0)
         self.plot_line_width_spin.setSingleStep(0.25)
@@ -438,21 +438,19 @@ class ReductionTab(BaseImageTab):
         self._refresh_source_status()
         return panel
 
-    def _update_line_color_button(self) -> None:
-        color = QColor(self._line_color)
-        text_color = "#000000" if color.lightnessF() > 0.55 else "#ffffff"
-        self.plot_line_color_button.setText(self._line_color)
-        self.plot_line_color_button.setStyleSheet(
-            f"background-color: {self._line_color}; color: {text_color};"
-        )
+    def _set_line_color(self, color: str) -> None:
+        self._line_color = color
+        self._update_line_color_button()
+        self._on_plot_style_controls_changed()
 
     def _choose_line_color(self) -> None:
         color = QColorDialog.getColor(QColor(self._line_color), self, "Select Line Color")
-        if not color.isValid():
-            return
-        self._line_color = color.name()
-        self._update_line_color_button()
-        self._on_plot_style_controls_changed()
+        if color.isValid():
+            self._set_line_color(color.name())
+
+    def _update_line_color_button(self) -> None:
+        self.plot_line_color_button.setIcon(AppStyle.color_swatch_icon(self._line_color))
+        self.plot_line_color_button.setText(self._line_color)
 
     def _on_plot_style_controls_changed(self, *args) -> None:
         if self._building_controls or self._updating_plot_style_controls:
@@ -564,6 +562,9 @@ class ReductionTab(BaseImageTab):
                 widget.blockSignals(False)
 
     def _q_to_pixels(self, q_value: float):
+        radius = q_to_pixel_radius(self._selected_calibration(), q_value)
+        if radius is not None:
+            return radius
         dq = self._q_per_pixel()
         if dq is None or dq <= 0:
             return q_value
@@ -724,6 +725,12 @@ class ReductionTab(BaseImageTab):
         if result is None and raw is not None:
             self.parent_app.show_status("Mask shape does not match the active image; ignoring mask for preview")
         return result
+
+    def _overlay_calibration(self):
+        return self._selected_calibration()
+
+    def _overlay_mask(self):
+        return self._selected_mask() if self._use_mask_enabled() else None
 
     def _sync_geometry_controls(self, image_shape: tuple[int, int]):
         self._last_control_shape = image_shape
@@ -1122,15 +1129,6 @@ class ReductionTab(BaseImageTab):
                 anchor=(0.0, 1.0),
             )
             self._overlay_artists.append(label)
-
-        center_marker = viewer.add_points('reduction-center', [cx], [cy], group='reduction', color="#00d1ff", size=7.0)
-        self._overlay_artists.append(center_marker)
-
-        if self._use_mask_enabled():
-            mask = self._get_mask_array(image.shape)
-            if mask is not None:
-                mask_artist = viewer.add_mask_overlay('reduction-mask', mask, group='reduction', color=styles["mask"]["color"], alpha=styles["mask"]["alpha"])
-                self._overlay_artists.append(mask_artist)
 
         if operation == "circular_average":
             radius = float(self._q_to_pixels(q_max))

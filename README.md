@@ -44,6 +44,10 @@ From the repository folder, use the launcher for your system:
 
 The launcher will install Pixi if needed and prepare the SciView environment automatically. The first launch may take a little longer; later launches should be faster.
 
+> **Note**
+>
+> The launcher may offer to update SciView. You can safely decline and continue using the installed version. Please note that SciView is under active development, and new features or bug fixes may be available in the latest version. Be prepared to be surprised by new fancy features. :smile:
+
 ## A typical SciView workflow
 
 A normal session usually follows this order:
@@ -86,6 +90,8 @@ SciView separates the user interface from the analysis logic. The tab files cont
 #### Setup and documentation
 
 - [scripts/](scripts): environment setup and platform launcher support
+
+The launcher checks the current Git branch's configured upstream and prompts only when new commits are available. Updates use fast-forward-only merges; branches without an upstream or with diverging commits are not changed. Disable the check with `Launch-SciView-win64.cmd -NoAutoPull` on Windows, `--no-auto-pull` on macOS or Linux, or `SCIVIEW_AUTO_PULL=0` on any platform.
 
 ### If something is not working
 

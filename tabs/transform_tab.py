@@ -32,7 +32,6 @@ from PyQt5.QtWidgets import (
 
 from sciview.session.session_cache import choose_path
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
-from sciview.interfaces.stable_qt.utils.reduction_overlay import OVERLAY_STYLE
 from sciview.interfaces.theme.app_style import (
     AppStyle,
     apply_emphasis_button_style,
@@ -86,7 +85,6 @@ class TransformTab(BaseImageTab):
         self._preview_timer.timeout.connect(self.refresh_preview)
         self._build_ui()
         self._building_controls = False
-        self.add_display_hook(self._draw_raw_overlay, "post")
         self._refresh_payload_view()
 
     def _build_ui(self):
@@ -659,23 +657,11 @@ class TransformTab(BaseImageTab):
             self.parent_app.show_status("Mask shape does not match the active image; ignoring mask for preview")
         return result
 
-    def _draw_raw_overlay(self, viewer):
-        viewer.clear_overlays(group="transform")
-        image = viewer.source_array
-        if image is None:
-            return
+    def _overlay_calibration(self):
+        return self._selected_calibration()
 
-        calibration = self._selected_calibration()
-        if calibration is not None:
-            x0, y0 = getattr(calibration, "x0", None), getattr(calibration, "y0", None)
-            if x0 is not None and y0 is not None:
-                viewer.add_points("transform-center", [float(x0)], [float(y0)], group="transform", color="#00d1ff", size=7.0)
-
-        if self._use_mask_enabled():
-            mask = self._get_mask_array(image.shape)
-            if mask is not None:
-                style = OVERLAY_STYLE["mask"]
-                viewer.add_mask_overlay("transform-mask", mask, group="transform", color=style["color"], alpha=style["alpha"])
+    def _overlay_mask(self):
+        return self._selected_mask() if self._use_mask_enabled() else None
 
     def _compute_q_bounds(self, image_shape: tuple[int, int]):
         from sciview.processing.batch import compute_q_bounds

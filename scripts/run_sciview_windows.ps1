@@ -53,11 +53,40 @@ function Invoke-SourceAutoUpdate {
 
     Write-Step "Checking for SciView source updates..."
     try {
-        & $git.Source -C $ProjectRoot pull --ff-only
+        & $git.Source -C $ProjectRoot fetch --quiet
         if ($LASTEXITCODE -ne 0) {
-            throw "git pull --ff-only exited with code $LASTEXITCODE"
+            throw "git fetch exited with code $LASTEXITCODE"
         }
-        Write-Host "Source update check finished."
+
+        $upstreamOutput = & $git.Source -C $ProjectRoot rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>$null
+        $upstreamExitCode = $LASTEXITCODE
+        $upstream = ([string]$upstreamOutput).Trim()
+        if ($upstreamExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($upstream)) {
+            Write-Host "Skipping SciView source update (current branch has no upstream)."
+            return
+        }
+
+        $behind = [int](& $git.Source -C $ProjectRoot rev-list --count "HEAD..$upstream")
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to compare the current branch with $upstream"
+        }
+        if ($behind -eq 0) {
+            Write-Host "SciView is up to date."
+            return
+        }
+
+        Write-Host "$behind update commit(s) available from $upstream."
+        $answer = Read-Host "Update SciView now? [y/N]"
+        if ($answer -notmatch '^(y|yes)$') {
+            Write-Host "Skipping SciView source update."
+            return
+        }
+
+        & $git.Source -C $ProjectRoot merge --ff-only $upstream
+        if ($LASTEXITCODE -ne 0) {
+            throw "git merge --ff-only exited with code $LASTEXITCODE"
+        }
+        Write-Host "SciView source updated."
     }
     catch {
         Write-Host "Skipping source auto-update (non-fatal): $($_.Exception.Message)"

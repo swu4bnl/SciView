@@ -123,6 +123,8 @@ DEFAULT_DISPLAY_SETTINGS = {
     "vmax": 1000,
     "cmap": "gray",
     "scale": "linear",
+    "show_beam_center": True,
+    "show_mask": True,
 }
 
 # Spin-box configuration for tabs that share similar controls.
