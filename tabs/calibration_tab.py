@@ -73,6 +73,7 @@ class CalibrationApp(BaseImageTab):
         self._profile_data = None
         self._last_profile_signature = None
         self._calibration_update_delay_ms = 150
+        self._applying_ring_center = False
         self._calibration_update_timer = QTimer(self)
         self._calibration_update_timer.setSingleShot(True)
         self._calibration_update_timer.timeout.connect(self.calibrate_and_update_status)
@@ -414,8 +415,18 @@ class CalibrationApp(BaseImageTab):
         return row
 
     def _schedule_calibration_update(self, *_args):
+        if not self._applying_ring_center:
+            self._clear_calculated_ring()
         self.parent_app.show_status("Calibration update pending...")
         self._calibration_update_timer.start(self._calibration_update_delay_ms)
+
+    def _clear_calculated_ring(self) -> None:
+        if hasattr(self, 'calculated_ring_center'):
+            del self.calculated_ring_center
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.clear_overlays(group='ring-center')
+        if hasattr(self, 'ring_result_label'):
+            self._update_ring_picking_state()
 
     def _load_standards_db(self):
         """Load standards database"""
@@ -461,8 +472,12 @@ class CalibrationApp(BaseImageTab):
             self.calculated_ring_center = (ux, uy)
 
             # Apply calculated center directly to beam position controls.
-            self.spin_x.setValue(ux)
-            self.spin_y.setValue(uy)
+            self._applying_ring_center = True
+            try:
+                self.spin_x.setValue(ux)
+                self.spin_y.setValue(uy)
+            finally:
+                self._applying_ring_center = False
             self.calibrate_and_update_status()
 
             for i in dropped_indices:
@@ -526,6 +541,7 @@ class CalibrationApp(BaseImageTab):
         self.temp_markers = []
         if hasattr(self, 'image_viewer'):
             self.image_viewer.clear_overlays(group='ring-temp')
+        self._clear_calculated_ring()
 
         self.current_point_index = 0
         self._update_ring_picking_state()
