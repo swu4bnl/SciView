@@ -40,7 +40,6 @@ from sciview.session.session_cache import choose_path
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
 from sciview.interfaces.stable_qt.utils.reduction_overlay import (
     OVERLAY_STYLE,
-    chi_q_to_pixel,
     chi_convention_text,
     chi_to_screen_vector,
     line_q_roi_mask,
@@ -60,6 +59,7 @@ from sciview.processing.plot_rendering import (
     REDUCTION_FIGURE_SIZE,
     render_reduction_plot,
 )
+from sciview.processing.calibration_geometry import chi_q_to_pixel, q_to_pixel_radius
 from sciview.processing.reduction import ReductionBackend, ReductionRequest, save_reduction_result
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
 from sciview.settings.app_settings import SPINBOX_CONFIG
@@ -562,6 +562,9 @@ class ReductionTab(BaseImageTab):
                 widget.blockSignals(False)
 
     def _q_to_pixels(self, q_value: float):
+        radius = q_to_pixel_radius(self._selected_calibration(), q_value)
+        if radius is not None:
+            return radius
         dq = self._q_per_pixel()
         if dq is None or dq <= 0:
             return q_value
