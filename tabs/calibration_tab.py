@@ -36,6 +36,7 @@ from sciview.interfaces.theme.app_style import (
 from sciview.calibration.standards_db import STANDARDS
 from sciview.interfaces.stable_qt.tools.ring_center import RingCenterCalculator
 from sciview.session.session_cache import choose_path
+from sciview.processing.calibration_geometry import q_to_pixel_radius
 from sciview.processing.calibration_profiles import compute_calibration_profiles
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS
@@ -62,9 +63,6 @@ class CalibrationApp(BaseImageTab):
         self.temp_markers = []  # Track temporary yellow markers
         self.ring_point_indicators = []
 
-        # Add crosshair hook to show beam center
-        self.add_display_hook(self._add_beam_center_crosshair, 'post')
-        
         # Load standards database
         self.standards_db = self._load_standards_db()
         self.selected_standard = None
@@ -367,13 +365,20 @@ class CalibrationApp(BaseImageTab):
         layout.addWidget(self.standards_combo)
         self.standards_combo.setMaximumHeight(32)
 
+        self.show_standard_rings_check = QCheckBox("Show Rings")
+        self.show_standard_rings_check.setChecked(False)
+        self.show_standard_rings_check.setEnabled(False)
+        self.show_standard_rings_check.setToolTip("Show the selected standard's reference rings on the detector image")
+        self.show_standard_rings_check.toggled.connect(self._refresh_standard_rings)
+        layout.addWidget(self.show_standard_rings_check)
+
         # Info label
         self.standards_info_label = QLabel("Pick a standard above to overlay its reference lines.")
         self.standards_info_label.setWordWrap(True)
         apply_info_style(self.standards_info_label)
         layout.addWidget(self.standards_info_label)
 
-        panel.setMaximumHeight(120)
+        panel.setMaximumHeight(150)
 
         return panel
 
@@ -417,6 +422,8 @@ class CalibrationApp(BaseImageTab):
     def _schedule_calibration_update(self, *_args):
         if not self._applying_ring_center:
             self._clear_calculated_ring()
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.clear_overlays(group='standard-rings')
         self.parent_app.show_status("Calibration update pending...")
         self._calibration_update_timer.start(self._calibration_update_delay_ms)
 
@@ -432,16 +439,14 @@ class CalibrationApp(BaseImageTab):
         """Load standards database"""
         return dict(STANDARDS)
 
-    def _add_beam_center_crosshair(self, viewer):
-        """Hook to add crosshair at beam center position"""
-        if hasattr(self, 'spin_x') and hasattr(self, 'spin_y'):
-            center_x = self.spin_x.value()
-            center_y = self.spin_y.value()
-            
-            # Add crosshair lines
-            if hasattr(self, 'image_data') and self.image_data is not None:
-                viewer.clear_overlays(group='calibration-crosshair')
-                viewer.add_crosshair('beam-center', center_x, center_y, group='calibration-crosshair', color='#ff0000')
+    def _draw_beam_center_overlay(self, viewer, center_x: float, center_y: float) -> None:
+        viewer.add_crosshair(
+            'shared-beam-center',
+            center_x,
+            center_y,
+            group='shared-image-overlays',
+            color='#ff0000',
+        )
 
     def _set_ring_point_indicator(self, index, state):
         """Set a single pick-state LED: 'off', 'good', 'warn' (outlier), or 'error' (fit failed)."""
@@ -631,15 +636,48 @@ class CalibrationApp(BaseImageTab):
             for q in qvals:
                 self.ax_plot.axvline(q, color='magenta', linestyle='--', linewidth=1.5, alpha=0.7)
 
+    def _refresh_standard_rings(self, *_args):
+        """Draw the selected standard's q positions as detector rings."""
+        if not hasattr(self, 'image_viewer'):
+            return
+        self.image_viewer.clear_overlays(group='standard-rings')
+        if self.image_data is None or not self.show_standard_rings_check.isChecked() or not self.selected_standard:
+            return
+
+        calibration = getattr(self.image_data, 'calibration', None)
+        if calibration is None:
+            calibration = self.calibration
+        if calibration is None:
+            return
+
+        center_x = self.spin_x.value()
+        center_y = self.spin_y.value()
+        for index, q_value in enumerate(self.standards_db.get(self.selected_standard, [])):
+            radius = q_to_pixel_radius(calibration, q_value)
+            if radius is not None:
+                self.image_viewer.add_circle(
+                    f'standard-ring-{index}',
+                    center_x,
+                    center_y,
+                    radius,
+                    group='standard-rings',
+                    color='#ff00ff',
+                    width=1.5,
+                )
+
     def on_standard_selected(self, text):
         """Handle standard material selection"""
         if text == "None":
             self.selected_standard = None
+            self.show_standard_rings_check.setChecked(False)
+            self.show_standard_rings_check.setEnabled(False)
             self.standards_info_label.setText("Pick a standard above to overlay its reference lines.")
         else:
             self.selected_standard = text
+            self.show_standard_rings_check.setEnabled(True)
             qvals = self.standards_db.get(text, [])
             self.standards_info_label.setText(f"Showing {len(qvals)} reference lines for {text}.")
+        self._refresh_standard_rings()
         self.update_plot_calibration()
 
         # === STANDARDS STATUS ===
@@ -660,7 +698,6 @@ class CalibrationApp(BaseImageTab):
             plot_xlim, plot_ylim = self.ax_plot.get_xlim(), self.ax_plot.get_ylim()
             plot_xlim_valid = not np.allclose(plot_xlim, (0, 1))
             plot_ylim_valid = not np.allclose(plot_ylim, (0, 1))
-            self._refresh_calibration_crosshair()
             self._update_1d_plots(plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
 
     def on_shared_state_activated(self):
@@ -670,6 +707,7 @@ class CalibrationApp(BaseImageTab):
     def update_plot_calibration(self):
         """Update plots based on current calibration and image data"""
         if self.image_data is None:
+            self._refresh_standard_rings()
             return
         
         # Store current limits for 1D plot
@@ -679,8 +717,6 @@ class CalibrationApp(BaseImageTab):
 
         if getattr(self.image_viewer, 'source_array', None) is None:
             super().update_plot()
-        else:
-            self._refresh_calibration_crosshair()
         
         # Then, update the 1D plots
         self._update_1d_plots(plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
@@ -716,6 +752,9 @@ class CalibrationApp(BaseImageTab):
             # Publish updated calibration so other tabs consume the same object.
             if hasattr(self.parent_app, 'publish_shared_calibration'):
                 self.parent_app.publish_shared_calibration(self.image_data.calibration, source_tab=self)
+
+            self._refresh_shared_image_overlays()
+            self._refresh_standard_rings()
 
 
             # cal = self.calibration
@@ -768,18 +807,6 @@ class CalibrationApp(BaseImageTab):
         # Update 1D plot with real data
         self._draw_1d_plots(circ, hor_1, hor_2, ver_1, ver_2, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
 
-    def _refresh_calibration_crosshair(self):
-        if not hasattr(self, 'image_viewer') or self.image_data is None:
-            return
-        self.image_viewer.clear_overlays(group='calibration-crosshair')
-        self.image_viewer.add_crosshair(
-            'beam-center',
-            self.spin_x.value(),
-            self.spin_y.value(),
-            group='calibration-crosshair',
-            color='#ff0000',
-        )
-    
     def _clear_1d_plots(self):
         """Clear 1D plots when SciAnalysis is not available or analysis fails"""
         self.ax_plot.clear()

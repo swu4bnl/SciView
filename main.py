@@ -412,7 +412,7 @@ class SciAnaApp(QMainWindow):
             self.sync_tabs_from_shared(source_tab=source_tab)
 
     def publish_shared_display_settings(self, settings, source_tab=None):
-        """Publish image display settings so all image tabs share contrast and colormap."""
+        """Publish image display settings so image tabs share rendering and overlay state."""
         self.display_settings.update(settings)
         current_tab = self.tab_widget.currentWidget()
         if current_tab is not None and current_tab != source_tab and hasattr(current_tab, 'apply_shared_display_settings'):
@@ -577,11 +577,17 @@ class SciAnaApp(QMainWindow):
 
     def _render_current_tab_from_shared(self, *_args):
         """Render shared image data when a tab becomes active."""
-        if self.image_data is None:
-            return
-
         tab = self.tab_widget.currentWidget()
         if tab is None:
+            return
+
+        if hasattr(tab, 'apply_shared_display_settings'):
+            try:
+                tab.apply_shared_display_settings(self.display_settings)
+            except Exception as e:
+                print(f"DEBUG: Error applying display settings to active tab: {e}")
+
+        if self.image_data is None:
             return
 
         if hasattr(tab, 'image_data'):
@@ -608,13 +614,6 @@ class SciAnaApp(QMainWindow):
                 return
             except Exception as e:
                 print(f"DEBUG: Error refreshing active tab shared state: {e}")
-
-        if hasattr(tab, 'apply_shared_display_settings'):
-            try:
-                tab.apply_shared_display_settings(self.display_settings)
-                return
-            except Exception as e:
-                print(f"DEBUG: Error applying display settings to active tab: {e}")
 
         if hasattr(tab, 'update_plot'):
             try:

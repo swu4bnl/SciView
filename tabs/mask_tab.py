@@ -553,11 +553,8 @@ class MaskApp(BaseImageTab):
         apply_info_style(self.active_layer_label)
         appearance_header.addWidget(self.active_layer_label)
         appearance_header.addStretch()
-        self.show_mask_check = QCheckBox("Show")
-        self.show_mask_check.setChecked(True)
-        self.show_mask_check.setToolTip("Show or hide the combined mask overlay")
+        self.show_mask_check = self.image_viewer.mask_overlay_button
         self.show_mask_check.toggled.connect(self._refresh_mask_overlay)
-        appearance_header.addWidget(self.show_mask_check)
         appearance.addLayout(appearance_header)
         appearance_row = QHBoxLayout()
         appearance_row.addWidget(QLabel("Color"))
@@ -1800,6 +1797,13 @@ class MaskApp(BaseImageTab):
             print(f"Export error details:\n{traceback.format_exc()}")
     
     # ===== Display Methods =====
+
+    def _overlay_mask(self):
+        return None
+
+    def _refresh_shared_image_overlays(self, *_args):
+        super()._refresh_shared_image_overlays()
+        self._refresh_mask_overlay()
     
     def _add_mask_overlay(self, viewer):
         """Render the composed mask, or the temporary in-progress edit."""

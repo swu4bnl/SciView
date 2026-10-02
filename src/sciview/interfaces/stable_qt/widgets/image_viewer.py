@@ -62,6 +62,7 @@ class ImageViewer(QWidget):
     mouse_released = pyqtSignal(object)
     mouse_double_clicked = pyqtSignal(object)
     interaction_mode_changed = pyqtSignal(str)
+    overlay_visibility_changed = pyqtSignal()
 
     _SUPPORTED_COLORMAPS = set(SUPPORTED_IMAGE_COLORMAPS) | set(ARTIST_IMAGE_COLORMAPS)
 
@@ -112,6 +113,10 @@ class ImageViewer(QWidget):
         toolbar_actions = {action.key: action for action in VIEWER_TOOLBAR_ACTIONS}
         self._pan_button = self._make_tool_button(toolbar_actions["pan"], self._load_toolbar_icon("pan"))
         self._zoom_button = self._make_tool_button(toolbar_actions["zoom"], self._load_toolbar_icon("zoom"))
+        self.beam_center_overlay_button = self._make_tool_button(
+            toolbar_actions["beam_center"], self._load_toolbar_icon("beam_center")
+        )
+        self.mask_overlay_button = self._make_tool_button(toolbar_actions["mask"], self._load_toolbar_icon("mask"))
         self._home_button = self._make_tool_button(toolbar_actions["home"], self._load_toolbar_icon("home"))
         self._auto_levels_button = self._make_tool_button(toolbar_actions["auto"], self._load_toolbar_icon("auto"))
         self._copy_button = self._make_tool_button(toolbar_actions["copy"], self._load_toolbar_icon("copy"))
@@ -122,6 +127,10 @@ class ImageViewer(QWidget):
         self._palette_info_label.setStyleSheet("")
         self._pan_button.setCheckable(True)
         self._zoom_button.setCheckable(True)
+        self.beam_center_overlay_button.setCheckable(True)
+        self.mask_overlay_button.setCheckable(True)
+        self.beam_center_overlay_button.setVisible(False)
+        self.mask_overlay_button.setVisible(False)
         self._pan_button.setChecked(True)
         self._pan_button.clicked.connect(self._activate_pan_mode)
         self._zoom_button.clicked.connect(self._activate_zoom_mode)
@@ -129,12 +138,16 @@ class ImageViewer(QWidget):
         self._auto_levels_button.clicked.connect(self._on_auto_levels_clicked)
         self._copy_button.clicked.connect(self.copy_rendered_view_to_clipboard)
         self._save_button.clicked.connect(self._choose_export_path)
+        self.beam_center_overlay_button.toggled.connect(self._emit_overlay_visibility_changed)
+        self.mask_overlay_button.toggled.connect(self._emit_overlay_visibility_changed)
 
         self._toolbar_layout = QHBoxLayout()
         self._toolbar_layout.setContentsMargins(0, 0, 0, 0)
         self._toolbar_layout.setSpacing(2)
         self._toolbar_layout.addWidget(self._pan_button)
         self._toolbar_layout.addWidget(self._zoom_button)
+        self._toolbar_layout.addWidget(self.beam_center_overlay_button)
+        self._toolbar_layout.addWidget(self.mask_overlay_button)
         self._toolbar_layout.addWidget(self._home_button)
         self._toolbar_layout.addWidget(self._auto_levels_button)
         self._toolbar_layout.addWidget(self._copy_button)
@@ -304,6 +317,11 @@ class ImageViewer(QWidget):
             raise ValueError(f"Unsupported viewer toolbar action: {action}")
         return self._load_toolbar_icon(action)
 
+    def enable_overlay_tools(self) -> None:
+        """Show the beam-center and mask toolbar controls."""
+        self.beam_center_overlay_button.setVisible(True)
+        self.mask_overlay_button.setVisible(True)
+
     def activate_navigation_mode(self, mode: str) -> None:
         """Unlock drawing input and select a supported viewer navigation mode."""
         activators = {
@@ -319,6 +337,9 @@ class ImageViewer(QWidget):
         if QApplication.keyboardModifiers() & Qt.AltModifier:
             self.apply_next_artist_palette()
         self.auto_levels()
+
+    def _emit_overlay_visibility_changed(self, _checked: bool) -> None:
+        self.overlay_visibility_changed.emit()
 
     def _capture_pointer(self) -> None:
         if self._pointer_captured:
@@ -660,6 +681,8 @@ class ImageViewer(QWidget):
         for key, button in {
             "pan": self._pan_button,
             "zoom": self._zoom_button,
+            "beam_center": self.beam_center_overlay_button,
+            "mask": self.mask_overlay_button,
             "home": self._home_button,
             "auto": self._auto_levels_button,
             "copy": self._copy_button,

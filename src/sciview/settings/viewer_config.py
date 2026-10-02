@@ -240,6 +240,8 @@ def resolve_matplotlib_colormap(name: str):
 VIEWER_TOOLBAR_ACTIONS = (
     ViewerToolbarAction("pan", "Pan", "Pan image: drag with the left mouse button."),
     ViewerToolbarAction("zoom", "Zoom", "Rectangular zoom: drag a box with the left mouse button."),
+    ViewerToolbarAction("beam_center", "Beam Center", "Show or hide the calibrated beam center."),
+    ViewerToolbarAction("mask", "Mask", "Show or hide the active mask."),
     ViewerToolbarAction("home", "Home", "Reset the image view to the full detector frame."),
     ViewerToolbarAction("auto", "Auto", "Set color limits from the current image."),
     ViewerToolbarAction("copy", "Copy", "Copy the rendered image view to the clipboard."),
@@ -249,6 +251,8 @@ VIEWER_TOOLBAR_ACTIONS = (
 VIEWER_TOOL_ICON_FILES = {
     "pan": "viewer_pan.svg",
     "zoom": "viewer_zoom.svg",
+    "beam_center": "tab_calibration.svg",
+    "mask": "tab_mask_editing.svg",
     "home": "viewer_home.svg",
     "auto": "viewer_auto.svg",
     "copy": "viewer_copy.svg",

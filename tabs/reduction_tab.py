@@ -726,6 +726,12 @@ class ReductionTab(BaseImageTab):
             self.parent_app.show_status("Mask shape does not match the active image; ignoring mask for preview")
         return result
 
+    def _overlay_calibration(self):
+        return self._selected_calibration()
+
+    def _overlay_mask(self):
+        return self._selected_mask() if self._use_mask_enabled() else None
+
     def _sync_geometry_controls(self, image_shape: tuple[int, int]):
         self._last_control_shape = image_shape
 
@@ -1123,15 +1129,6 @@ class ReductionTab(BaseImageTab):
                 anchor=(0.0, 1.0),
             )
             self._overlay_artists.append(label)
-
-        center_marker = viewer.add_points('reduction-center', [cx], [cy], group='reduction', color="#00d1ff", size=7.0)
-        self._overlay_artists.append(center_marker)
-
-        if self._use_mask_enabled():
-            mask = self._get_mask_array(image.shape)
-            if mask is not None:
-                mask_artist = viewer.add_mask_overlay('reduction-mask', mask, group='reduction', color=styles["mask"]["color"], alpha=styles["mask"]["alpha"])
-                self._overlay_artists.append(mask_artist)
 
         if operation == "circular_average":
             radius = float(self._q_to_pixels(q_max))

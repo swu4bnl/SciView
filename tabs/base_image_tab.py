@@ -52,6 +52,8 @@ class BaseImageTab(QWidget):
             self.display_settings = self.parent_app.display_settings
         else:
             self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
+        self.display_settings.setdefault('show_beam_center', DEFAULT_DISPLAY_SETTINGS['show_beam_center'])
+        self.display_settings.setdefault('show_mask', DEFAULT_DISPLAY_SETTINGS['show_mask'])
         
         # Image-related attributes that will be set by load_image
         self.export_cali_path = None
@@ -312,14 +314,25 @@ class BaseImageTab(QWidget):
         self.vmax_input.blockSignals(True)
         self.cmap_selector.blockSignals(True)
         self.img_scale_combo.blockSignals(True)
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.beam_center_overlay_button.blockSignals(True)
+            self.image_viewer.mask_overlay_button.blockSignals(True)
         self.vmin_input.setText(str(self.display_settings['vmin']))
         self.vmax_input.setText(str(self.display_settings['vmax']))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.img_scale_combo.setCurrentText(self.display_settings['scale'])
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.beam_center_overlay_button.setChecked(
+                bool(self.display_settings.get('show_beam_center', False))
+            )
+            self.image_viewer.mask_overlay_button.setChecked(bool(self.display_settings.get('show_mask', False)))
         self.vmin_input.blockSignals(False)
         self.vmax_input.blockSignals(False)
         self.cmap_selector.blockSignals(False)
         self.img_scale_combo.blockSignals(False)
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.beam_center_overlay_button.blockSignals(False)
+            self.image_viewer.mask_overlay_button.blockSignals(False)
 
     def apply_shared_display_settings(self, settings):
         """Receive display settings from the main app and refresh local controls."""
@@ -346,6 +359,15 @@ class BaseImageTab(QWidget):
         if hasattr(self.parent_app, 'publish_shared_display_settings'):
             self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
 
+    def _on_overlay_visibility_changed(self) -> None:
+        self.display_settings.update(
+            show_beam_center=self.image_viewer.beam_center_overlay_button.isChecked(),
+            show_mask=self.image_viewer.mask_overlay_button.isChecked(),
+        )
+        if hasattr(self.parent_app, 'publish_shared_display_settings'):
+            self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
+        self._refresh_shared_image_overlays()
+
     def _apply_display_settings_to_viewer(self) -> None:
         """Apply contrast and colormap to the existing viewer image without reloading it."""
         if not hasattr(self, 'image_viewer') or self.image_viewer.source_array is None:
@@ -354,6 +376,7 @@ class BaseImageTab(QWidget):
         self.image_viewer.set_colormap(display_vals['cmap'])
         self.image_viewer.set_scale(display_vals['scale'])
         self.image_viewer.set_levels(display_vals['vmin'], display_vals['vmax'])
+        self._refresh_shared_image_overlays()
 
     def _create_image_panel(self, show_header: bool = True):
         """Create the image display panel"""
@@ -378,6 +401,12 @@ class BaseImageTab(QWidget):
         self.image_viewer.cursor_moved.connect(self._on_viewer_cursor_moved)
         self.image_viewer.levels_changed.connect(self._on_viewer_levels_changed)
         self.image_viewer.colormap_changed.connect(self._on_viewer_colormap_changed)
+        self.image_viewer.enable_overlay_tools()
+        self.image_viewer.beam_center_overlay_button.setChecked(
+            bool(self.display_settings.get('show_beam_center', False))
+        )
+        self.image_viewer.mask_overlay_button.setChecked(bool(self.display_settings.get('show_mask', False)))
+        self.image_viewer.overlay_visibility_changed.connect(self._on_overlay_visibility_changed)
         layout.addWidget(self.image_viewer)
 
         # Image controls - now shared across all tabs
@@ -405,9 +434,62 @@ class BaseImageTab(QWidget):
         self.img_scale_combo.setCurrentText(self.display_settings['scale'])
         self.img_scale_combo.currentTextChanged.connect(self._on_scale_changed)
         img_ctrl.addWidget(self.img_scale_combo)
+
         layout.addLayout(img_ctrl)
         
         return panel
+
+    def _overlay_calibration(self):
+        if hasattr(self.parent_app, 'get_shared_calibration'):
+            calibration = self.parent_app.get_shared_calibration(self.image_data)
+            if calibration is not None:
+                return calibration
+        calibration = getattr(self.image_data, 'calibration', None)
+        return calibration if calibration is not None else self.calibration
+
+    def _overlay_mask(self):
+        if hasattr(self.parent_app, 'get_shared_mask'):
+            return self.parent_app.get_shared_mask()
+        return getattr(self.parent_app, 'mask', None)
+
+    def _draw_beam_center_overlay(self, viewer, center_x: float, center_y: float) -> None:
+        viewer.add_points(
+            'shared-beam-center',
+            [center_x],
+            [center_y],
+            group='shared-image-overlays',
+            color='#00d1ff',
+            size=7.0,
+        )
+
+    def _draw_shared_image_overlays(self, viewer):
+        viewer.clear_overlays(group='shared-image-overlays')
+        image = viewer.source_array
+        if image is None:
+            return
+
+        if self.image_viewer.beam_center_overlay_button.isChecked():
+            calibration = self._overlay_calibration()
+            center_x = getattr(calibration, 'x0', None) if calibration is not None else None
+            center_y = getattr(calibration, 'y0', None) if calibration is not None else None
+            if center_x is not None and center_y is not None:
+                self._draw_beam_center_overlay(viewer, float(center_x), float(center_y))
+
+        if self.image_viewer.mask_overlay_button.isChecked():
+            from sciview.masking.io import coerce_mask_to_bool
+            mask = coerce_mask_to_bool(self._overlay_mask(), image.shape)
+            if mask is not None:
+                viewer.add_mask_overlay(
+                    'shared-mask',
+                    mask,
+                    group='shared-image-overlays',
+                    color='#ef4444',
+                    alpha=0.50,
+                )
+
+    def _refresh_shared_image_overlays(self, *_args):
+        if hasattr(self, 'image_viewer'):
+            self._draw_shared_image_overlays(self.image_viewer)
 
     def _create_image_info_panel(self):
         """Create the image information display panel (reusable across tabs)"""
@@ -517,6 +599,7 @@ class BaseImageTab(QWidget):
         self.image_viewer.set_image(img_array, preserve_view=preserve_view)
 
         # Call post-display hooks for tab-specific customizations
+        self._draw_shared_image_overlays(self.image_viewer)
         for hook in self.post_display_hooks:
             hook(self.image_viewer)
 
