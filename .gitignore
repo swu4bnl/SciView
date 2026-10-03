@@ -10,7 +10,12 @@
 /bak/
 /Bsub/testing/
 /doc/
-/.github/
+/.github/*
+!/.github/copilot-instructions.md
+!/.github/instructions/
+!/.github/instructions/**
+!/.github/skills/
+!/.github/skills/**
 /dev/
 
 # Temporary and backup files
@@ -20,7 +25,6 @@ test*
 *debug*
 tests/
 tests/*
-/docs/*.md
 
 # VSCode settings
 .vscode/
