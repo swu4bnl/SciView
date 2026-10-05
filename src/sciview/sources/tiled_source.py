@@ -12,12 +12,12 @@ import fnmatch
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
 from sciview.data.models import ImageRef
-from sciview.sources.tiled_client import tiled_manager
+from sciview.sources.tiled_client import TiledDeviceAuthorization, tiled_manager
 
 
 @dataclass(slots=True)
@@ -122,12 +122,15 @@ def tiled_authenticate(
     username: str | None = None,
     password: str | None = None,
     interactive_fallback: bool = True,
+    authorization_callback: Callable[[TiledDeviceAuthorization], None] | None = None,
+    cancellation_requested: Callable[[], bool] | None = None,
 ) -> TiledAuthState:
     """Create or refresh a cached Tiled client.
 
-    The current project dependency uses Tiled's interactive ``client.login()``
-    flow, so username/password are accepted for future API compatibility but
-    are not passed through here.
+    When ``authorization_callback`` is provided, external OAuth device details
+    are emitted to the caller and no terminal or browser interaction occurs in
+    the data-source layer. Username/password remain accepted for API
+    compatibility but are not used by the current external-provider flow.
     """
 
     del username, password, interactive_fallback
@@ -136,7 +139,12 @@ def tiled_authenticate(
         return TiledAuthState(profile_name, False, error=tiled_import_error())
 
     tiled_manager._clients.pop(profile_name, None)
-    client = tiled_manager.get_or_create_client(profile_name)
+    tiled_manager._catalogs.pop(profile_name, None)
+    client = tiled_manager.get_or_create_client(
+        profile_name,
+        authorization_callback=authorization_callback,
+        cancellation_requested=cancellation_requested,
+    )
     if client is None:
         return TiledAuthState(profile_name, False, error=f"Could not connect to {profile_name}")
     return tiled_auth_state(profile_name)
