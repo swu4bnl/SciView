@@ -1,41 +1,143 @@
 name: CMS
-description: "CMS beamline profile for SciView. This is a profile, not core logic."
+description: "CMS beamline profile for SciView."
+
+beamline:
+  name: "CMS (11-BM)"
+  id: "11bm"
+  facility: "NSLS-II"
+
+# wavelength_A is the single source of truth; energy_eV is derived from it at load time.
+default_calibration:
+  wavelength_A: 0.9184
+  pixel_size_um: 172.0
+  distance_m: 0.261
+  beam_center_x: 476
+  beam_center_y: 650
+  detector_orient_deg: 0
+  detector_tilt_deg: 0
+  detector_phi_deg: 0
+
+# Substrings matched against a filename (case-insensitive) to identify measurement type.
+file_patterns:
+  saxs: ["saxs"]
+  waxs: ["waxs"]
+  maxs: ["maxs"]
 
 detectors:
   - name: saxs
     aliases: ["SAXS"]
-    default_calibration: "caliSAXS.yaml"
+    display_name: Pilatus2M
+    calibration_file: caliXS.yaml
+    pixel_size_um: 172.0
+    default_distance_m: 5.0
+    beam_center_x: 740
+    beam_center_y: 1081
+    masks:
+      dectris_gaps: Dectris/Pilatus2M_gaps-mask.png
+      vertical_gaps: Dectris/Pilatus2M_vertical_gaps-mask.png
+    default_mask: dectris_gaps
 
   - name: waxs
     aliases: ["WAXS"]
-    default_calibration: "caliWAXS.yaml"
+    display_name: Pilatus800k
+    calibration_file: caliWS.yaml
+    pixel_size_um: 172.0
+    default_distance_m: 0.261
+    beam_center_x: 476
+    beam_center_y: 650
+    masks:
+      dectris_gaps: Dectris/Pilatus800k_gaps-mask.png
+      vertical_gaps: Dectris/Pilatus800k_vertical_gaps-mask.png
+    default_mask: dectris_gaps
 
-workspace_layout:
-  image_roots:
-    - detector: saxs
-      role: raw
-      path: "{experiment_root}/saxs/raw"
+  - name: maxs
+    aliases: ["MAXS"]
+    display_name: Pilatus800k2
+    calibration_file: caliMS.yaml
+    pixel_size_um: 172.0
+    default_distance_m: 0.220
+    beam_center_x: 476
+    beam_center_y: 650
+    masks:
+      dectris_gaps: Dectris/Pilatus800k2_gaps-mask.png
+      vertical_gaps: Dectris/Pilatus800k2_vertical_gaps-mask.png
+    default_mask: dectris_gaps
 
-    - detector: saxs
-      role: stitched
-      path: "{experiment_root}/saxs/stitched"
+tiled_profiles:
+  cms_raw:
+    description: "CMS Raw Data"
+    uri: "http://tiled.nsls2.bnl.gov/api/v1"
+    path: ["cms", "raw"]
+    requires_login: true
+    default_detectors:
+      pilatus2m-1_image: SAXS
+      pilatus800k-1_image: WAXS
+      pilatus800k-2_image: MAXS
+    data_access_path: ["primary", "data", "{detector}"]
+    timeout:
+      connect_s: 5.0
+      read_s: 120.0
+    search:
+      required_fields:
+        cycle: start.cycle
+        proposal_id: start.proposal.proposal_id
+      optional_fields:
+        measure_type: start.measure_type
+      local_filters:
+        sample_savename: ["start.sample_savename", "start.sample_save_name", "start.filename"]
+        experiment_alias_directory:
+          - start.experiment_alias_directory
+          - start.experiment_alias
+          - start.project_name
+      defaults:
+        measure_type: measure
+      summary_fields:
+        filename: ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"]
+        measure_type: ["start.measure_type", "start.measurement_type"]
+        sample_savename: ["start.sample_savename", "start.sample_save_name"]
+        proposal_id: ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"]
+        cycle: ["start.cycle"]
+        experiment_alias:
+          - start.experiment_alias_directory
+          - start.experiment_alias
+          - start.project_name
+    _note: "4D shape (1, 1, H, W) - accessed via scan.primary.data[detector]"
 
-    - detector: waxs
-      role: raw
-      path: "{experiment_root}/waxs/raw"
-
-    - detector: waxs
-      role: stitched
-      path: "{experiment_root}/waxs/stitched"
-
-  analysis_roots:
-    - detector: saxs
-      path: "{experiment_root}/saxs/analysis"
-
-    - detector: waxs
-      path: "{experiment_root}/waxs/analysis"
-
-recipes:
-  - recipe_saxs_circular_average.yaml
-
-filename_patterns: []
+  cms_migration:
+    description: "CMS Migration Data"
+    uri: "http://tiled.nsls2.bnl.gov/api/v1"
+    path: ["cms", "migration"]
+    requires_login: true
+    default_detectors:
+      pilatus2m-1_image: SAXS
+      pilatus800k-1_image: WAXS
+      pilatus800k-2_image: MAXS
+    data_access_path: ["primary", "{detector}"]
+    timeout:
+      connect_s: 5.0
+      read_s: 120.0
+    search:
+      required_fields:
+        cycle: start.cycle
+        proposal_id: start.proposal.proposal_id
+      optional_fields:
+        measure_type: start.measure_type
+      local_filters:
+        sample_savename: ["start.sample_savename", "start.sample_save_name", "start.filename"]
+        experiment_alias_directory:
+          - start.experiment_alias_directory
+          - start.experiment_alias
+          - start.project_name
+      defaults:
+        measure_type: measure
+      summary_fields:
+        filename: ["start.filename", "start.file_name", "start.sample_filename", "start.sample_savename"]
+        measure_type: ["start.measure_type", "start.measurement_type"]
+        sample_savename: ["start.sample_savename", "start.sample_save_name"]
+        proposal_id: ["start.proposal.proposal_id", "start.proposal_id", "start.data_session"]
+        cycle: ["start.cycle"]
+        experiment_alias:
+          - start.experiment_alias_directory
+          - start.experiment_alias
+          - start.project_name
+    _note: "3D shape (1, H, W) - accessed via scan.primary[detector]"

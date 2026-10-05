@@ -11,7 +11,7 @@ import numpy as np
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox
+    QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox, QFormLayout
 )
 from PyQt5.QtCore import Qt, QTimer
 
@@ -24,10 +24,19 @@ from matplotlib.backends.backend_qt5agg import (
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
-from sciview.interfaces.theme.app_style import *
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_emphasis_button_style,
+    apply_info_style,
+    apply_status_led_style,
+    apply_subtitle_style,
+    apply_title_style,
+    setup_splitter_layout,
+)
 from sciview.calibration.standards_db import STANDARDS
 from sciview.interfaces.stable_qt.tools.ring_center import RingCenterCalculator
-from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_select_directory, dialog_save_file
+from sciview.session.session_cache import choose_path
+from sciview.processing.calibration_geometry import q_to_pixel_radius
 from sciview.processing.calibration_profiles import compute_calibration_profiles
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS
@@ -39,16 +48,21 @@ HC_E = PHYSICAL_CONSTANTS['hc_over_e_eV_A']
 
 class CalibrationApp(BaseImageTab):
     """Main calibration application widget"""
-    
+
+    MAX_RING_POINTS = 15  # ring-center pick slots; drives indicator count, cycling, and status text
+
     def __init__(self, parent_app):
         super().__init__(parent_app)
         
         # Initialize ring center calculator
         self.ring_calculator = RingCenterCalculator()
-        
-        # Add crosshair hook to show beam center
-        self.add_display_hook(self._add_beam_center_crosshair, 'post')
-        
+
+        # Picked ring points live here, not in the UI; the panel only shows pick-state dots.
+        self._ring_points = [None] * self.MAX_RING_POINTS
+        self.current_point_index = 0
+        self.temp_markers = []  # Track temporary yellow markers
+        self.ring_point_indicators = []
+
         # Load standards database
         self.standards_db = self._load_standards_db()
         self.selected_standard = None
@@ -57,6 +71,7 @@ class CalibrationApp(BaseImageTab):
         self._profile_data = None
         self._last_profile_signature = None
         self._calibration_update_delay_ms = 150
+        self._applying_ring_center = False
         self._calibration_update_timer = QTimer(self)
         self._calibration_update_timer.setSingleShot(True)
         self._calibration_update_timer.timeout.connect(self.calibrate_and_update_status)
@@ -97,18 +112,19 @@ class CalibrationApp(BaseImageTab):
         
         # Ring center calculation panel
         ring_center_panel = self._create_ring_center_panel()
-        controls_splitter.addWidget(ring_center_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(ring_center_panel))
+
+        # Standards reference panel — pick a standard right after finding the ring
+        # center, so its reference lines are up before fine-tuning parameters below.
+        standards_panel = self._create_standards_panel()
+        controls_splitter.addWidget(self.make_scrollable_panel(standards_panel))
 
         # Calibration parameters panel
         calibration_panel = self._create_calibration_panel()
-        controls_splitter.addWidget(calibration_panel)
-        
-        # Standards reference panel
-        standards_panel = self._create_standards_panel()
-        controls_splitter.addWidget(standards_panel)
+        controls_splitter.addWidget(self.make_scrollable_panel(calibration_panel))
         
         # Set initial sizes for control panels with ring workflow first.
-        control_ratios = [2, 1, 1]
+        control_ratios = [2, 1, 4]
         setup_splitter_layout(controls_splitter, control_ratios)
         
         main_splitter.addWidget(controls_splitter)
@@ -133,9 +149,12 @@ class CalibrationApp(BaseImageTab):
         title_layout = QHBoxLayout()
         title_layout.setContentsMargins(0, 0, 0, 0)
         
-        title = QLabel("1D Profiles")
+        title = QLabel("1D Profiles ")
         apply_subtitle_style(title)
         title_layout.addWidget(title)
+
+        tip_label = QLabel("Tweak beam center to align peaks")
+        title_layout.addWidget(tip_label)
         
         title_layout.addStretch()  # Push scale controls to the right
         
@@ -145,11 +164,11 @@ class CalibrationApp(BaseImageTab):
         self.scale_combo = QComboBox()
         self.scale_combo.addItems(["linear", "logx", "logy", "loglog"])
         self.scale_combo.currentTextChanged.connect(self.update_plot_calibration)
-        self.scale_combo.setMaximumWidth(80)  # Limit width
+        self.scale_combo.setMinimumWidth(88)
         title_layout.addWidget(self.scale_combo)
 
         btn_export_1d = QPushButton("Export 1D")
-        btn_export_1d.setMaximumWidth(80)
+        btn_export_1d.setMinimumWidth(88)
         btn_export_1d.clicked.connect(self.export_1d_profiles)
         title_layout.addWidget(btn_export_1d)
 
@@ -165,7 +184,6 @@ class CalibrationApp(BaseImageTab):
         
         # Use more compact navigation toolbar or remove it
         toolbar = NavigationToolbar(self.canvas_plot, self)
-        toolbar.setMaximumHeight(25)  # Make toolbar smaller
         layout.addWidget(toolbar)
         
         return panel
@@ -174,7 +192,7 @@ class CalibrationApp(BaseImageTab):
         """Create the calibration parameters panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         
         # Title
         title = QLabel("Calibration Parameters")
@@ -182,45 +200,52 @@ class CalibrationApp(BaseImageTab):
         layout.addWidget(title)
         
         # Parameter spinboxes using config defaults
+        params_form = QFormLayout()
+        self.configure_adaptive_form_layout(params_form)
         calibration_params = [
-            ("spin_x", ("Beam Center X", -1024, 4096, DEFAULT_CALIBRATION['beam_center_x'], 1)),
-            ("spin_y", ("Beam Center Y", -1024, 4096, DEFAULT_CALIBRATION['beam_center_y'], 1)),
+            ("spin_x", ("<u>Beam Center X</u>", -1024, 4096, DEFAULT_CALIBRATION['beam_center_x'], 1)),
+            ("spin_y", ("<u>Beam Center Y</u>", -1024, 4096, DEFAULT_CALIBRATION['beam_center_y'], 1)),
             ("spin_orient", ("Detector Orient (°)", -180, 180, DEFAULT_CALIBRATION['detector_orient_deg'], 1)),
             ("spin_tilt", ("Detector Tilt (°)", -180, 180, DEFAULT_CALIBRATION['detector_tilt_deg'], 1)),
             ("spin_phi", ("Detector Phi (°)", -180, 180, DEFAULT_CALIBRATION['detector_phi_deg'], 1)),
-            ("spin_dist", ("Distance (m)", 0.001, 200, DEFAULT_CALIBRATION['distance_m'], 0.001)),
+            ("spin_dist", ("<u>Distance (m)</u>", 0.001, 200, DEFAULT_CALIBRATION['distance_m'], 0.001)),
             ("spin_pixel", ("Pixel Size (µm)", 0, 5000, DEFAULT_CALIBRATION['pixel_size_um'], 0.1)),
         ]
         
         for attr, params in calibration_params:
-            setattr(self, attr, self._create_spin(*params, parent=layout))
+            setattr(self, attr, self._create_spin(*params, parent=params_form))
+        self.spin_x.setToolTip("Middle-click the raw image to set the beam center")
+        self.spin_y.setToolTip("Middle-click the raw image to set the beam center")
 
         # Wavelength/Energy section
-        wl_layout = QHBoxLayout()
-        wl_layout.addWidget(QLabel("Wavelength (Å):"))
         self.spin_wl_ang = QDoubleSpinBox()
         self.spin_wl_ang.setRange(0.01, 10.0)
         self.spin_wl_ang.setSingleStep(0.001)
         self.spin_wl_ang.setDecimals(4)
         self.spin_wl_ang.setValue(DEFAULT_CALIBRATION['wavelength_A'])
+        self.spin_wl_ang.setAlignment(Qt.AlignRight)
+        self.spin_wl_ang.setMinimumWidth(AppStyle.wide_input_min_width())
         self.spin_wl_ang.valueChanged.connect(self.on_wavelength_changed)
-        wl_layout.addWidget(self.spin_wl_ang)
-        layout.addLayout(wl_layout)
-        
-        energy_layout = QHBoxLayout()
-        energy_layout.addWidget(QLabel("Energy (eV):"))
+        params_form.addRow(QLabel("Wavelength (Å):"), self._right_aligned_field_row(self.spin_wl_ang))
+
         self.spin_energy_ev = QDoubleSpinBox()
         self.spin_energy_ev.setRange(100.0, 50000.0)
         self.spin_energy_ev.setSingleStep(1.0)
         self.spin_energy_ev.setValue(DEFAULT_CALIBRATION['energy_eV'])
+        self.spin_energy_ev.setAlignment(Qt.AlignRight)
+        self.spin_energy_ev.setMinimumWidth(AppStyle.wide_input_min_width())
         self.spin_energy_ev.valueChanged.connect(self.on_energy_changed)
-        energy_layout.addWidget(self.spin_energy_ev)
-        layout.addLayout(energy_layout)
+        energy_label = QLabel("<u>Energy (eV):</u>")
+        params_form.addRow(energy_label, self._right_aligned_field_row(self.spin_energy_ev))
+
+        layout.addLayout(params_form)
 
         # Action buttons
         btns_layout = QHBoxLayout()
         btn_cal = QPushButton("Calibrate")
         btn_cal.clicked.connect(self.calibrate_and_update_status)
+        btn_cal.setMinimumWidth(AppStyle.action_button_min_width())
+        apply_emphasis_button_style(btn_cal)
         btns_layout.addWidget(btn_cal)
         btn_export = QPushButton("Export")
         btn_export.clicked.connect(self.export_calibration)
@@ -236,124 +261,98 @@ class CalibrationApp(BaseImageTab):
         """Create the ring center calculation panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         
         # Title
-        title = QLabel("Ring Center Calculation")
+        title = QLabel("Calculate Ring Center")
         apply_title_style(title)
         layout.addWidget(title)
         
         # Instructions
-        instructions_label = QLabel("Pick points on one ring. 3+ points required.")
+        instructions_label = QLabel("Right-click 3+ points on a ring.")
         instructions_label.setWordWrap(True)
-        instructions_label.setStyleSheet("font-size: 11px; color: #666;")
+        apply_info_style(instructions_label)
         layout.addWidget(instructions_label)
-        
-        # Create scroll area for point inputs
-        from PyQt5.QtWidgets import QScrollArea
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setMaximumHeight(280)  # Show more points with current compact design
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-        # Create widget to hold all point inputs
-        points_widget = QWidget()
-        points_layout = QVBoxLayout(points_widget)
-        points_layout.setContentsMargins(2, 2, 2, 2)
-        points_layout.setSpacing(2)
-        
-        # Create fixed list of 10 point inputs
-        self.ring_center_inputs = []
-        for i in range(10):
-            point_widget = QWidget()
-            point_layout = QHBoxLayout(point_widget)
-            point_layout.setContentsMargins(0, 0, 0, 0)
-            point_layout.setSpacing(0)
-            
-            # Point label with required/optional indicator
-            if i < 3:
-                label = QLabel(f"Pt {i+1}*:")  # Asterisk for required
-                label.setStyleSheet("font-size: 10px; font-weight: bold; color: #333;")
-            else:
-                label = QLabel(f"Pt {i+1}:")   # Optional points
-                label.setStyleSheet("font-size: 10px; color: #666;")
-            # label.setFixedWidth(35)
-            point_layout.addWidget(label)
-            
-            x_spin = QDoubleSpinBox()
-            x_spin.setRange(-9999, 9999)
-            x_spin.setDecimals(1)
-            x_spin.setValue(0)
-            point_layout.addWidget(x_spin)
-            
-            y_spin = QDoubleSpinBox()
-            y_spin.setRange(-9999, 9999)
-            y_spin.setDecimals(1)
-            y_spin.setValue(0)
-            point_layout.addWidget(y_spin)
-            
-            self.ring_center_inputs.append((x_spin, y_spin))
-            points_layout.addWidget(point_widget)
-        
-        # Set the points widget in the scroll area
-        scroll_area.setWidget(points_widget)
-        layout.addWidget(scroll_area)
-        
-        # Buttons layout
-        btn_layout = QHBoxLayout()
-        calc_button = QPushButton("Calculate")
-        calc_button.clicked.connect(self.calculate_ring_center)
-        btn_layout.addWidget(calc_button)
-        
-        clear_button = QPushButton("Clear")
-        clear_button.clicked.connect(self.clear_ring_points)
-        btn_layout.addWidget(clear_button)
-        layout.addLayout(btn_layout)
-        
-        # Result display
-        self.ring_result_label = QLabel("Ring center: Not calculated")
-        self.ring_result_label.setWordWrap(True)
-        apply_info_style(self.ring_result_label)
-        layout.addWidget(self.ring_result_label)
 
-        # Right-click assist controls
-        snap_window_row = QHBoxLayout()
-        self.snap_to_max_check = QCheckBox("Local Maximum")
+        # Snap options come first so they're set before the user starts picking.
+        snap_row = QHBoxLayout()
+        snap_row.setContentsMargins(0, 0, 0, 0)
+        snap_row.setSpacing(6)
+        self.snap_to_max_check = QCheckBox("Snap to Peak")
+        self.snap_to_max_check.setToolTip("Snap each right-click to the brightest nearby pixel")
         self.snap_to_max_check.setChecked(True)
-        snap_window_row.addWidget(self.snap_to_max_check)
-        snap_window_row.addWidget(QLabel("Window"))
+        snap_row.addWidget(self.snap_to_max_check)
+
+        window_label = QLabel("Window")
+        window_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        window_label.setMinimumWidth(AppStyle.inline_label_width())
+        snap_row.addWidget(window_label)
+
         self.snap_window_spin = QSpinBox()
         self.snap_window_spin.setRange(3, 15)
         self.snap_window_spin.setSingleStep(2)
         self.snap_window_spin.setValue(5)
         self.snap_window_spin.setToolTip("Odd-size local search window (3-15 pixels)")
-        self.snap_window_spin.setMaximumWidth(70)
-        snap_window_row.addWidget(self.snap_window_spin)
-        snap_window_row.addWidget(QLabel("px"))
-        snap_window_row.addStretch()
-        layout.addLayout(snap_window_row)
-        
-        # Click instruction
-        click_instruction = QLabel("Right-click to fill next point.")
-        click_instruction.setWordWrap(True)
-        apply_info_style(click_instruction)
-        layout.addWidget(click_instruction)
-        
-        # Initialize click tracking
-        self.current_point_index = 0
-        self.temp_markers = []  # Track temporary yellow markers
-        
-        layout.addStretch()
+        self.snap_window_spin.setFixedWidth(AppStyle.compact_input_min_width())
+        snap_row.addWidget(self.snap_window_spin)
+
+        px_label = QLabel("px")
+        px_label.setMinimumWidth(AppStyle.unit_label_width())
+        snap_row.addWidget(px_label)
+        snap_row.addStretch()
+        layout.addLayout(snap_row)
+
+        # Pick-state LEDs sit right under the snap options so picking progress
+        # is visible before the user reaches the Calculate button below.
+        # The actual (x, y) values live in self._ring_points, not in any widget.
+        # Plain QLabel dots: this is a status readout, not a clickable control.
+        indicators_row = QHBoxLayout()
+        indicators_row.setContentsMargins(0, 0, 0, 0)
+        indicators_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
+        self.ring_point_indicators = []
+        for i in range(self.MAX_RING_POINTS):
+            indicator = QLabel()
+            indicator.setToolTip(f"Point {i + 1} ({'required' if i < 3 else 'optional'})")
+            apply_status_led_style(indicator, state='off')
+            self.ring_point_indicators.append(indicator)
+            indicators_row.addWidget(indicator)
+        indicators_row.addStretch()
+        layout.addLayout(indicators_row)
+
+        # Calculate is only clickable once enough points are picked.
+        controls_row = QHBoxLayout()
+        controls_row.setContentsMargins(0, 0, 0, 0)
+        controls_row.setSpacing(6)
+        self.calc_ring_button = QPushButton("Calculate")
+        self.calc_ring_button.clicked.connect(self.calculate_ring_center)
+        self.calc_ring_button.setMinimumWidth(AppStyle.action_button_min_width())
+        self.calc_ring_button.setEnabled(False)
+        apply_emphasis_button_style(self.calc_ring_button)
+        controls_row.addWidget(self.calc_ring_button)
+
+        clear_button = QPushButton("Clear")
+        clear_button.clicked.connect(self.clear_ring_points)
+        controls_row.addWidget(clear_button)
+        controls_row.addStretch()
+        layout.addLayout(controls_row)
+
+        # Result display
+        self.ring_result_label = QLabel("")
+        self.ring_result_label.setWordWrap(True)
+        apply_info_style(self.ring_result_label)
+        layout.addWidget(self.ring_result_label)
+
+        self._update_ring_picking_state()
+
         return panel
 
     def _create_standards_panel(self):
         """Create the standards reference panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
 
-        title = QLabel("Standard Materials")
+        title = QLabel("Check Against a Standard")
         apply_title_style(title)
         layout.addWidget(title)
 
@@ -364,90 +363,152 @@ class CalibrationApp(BaseImageTab):
             self.standards_combo.addItem(mat)
         self.standards_combo.currentTextChanged.connect(self.on_standard_selected)
         layout.addWidget(self.standards_combo)
+        self.standards_combo.setMaximumHeight(32)
+
+        self.show_standard_rings_check = QCheckBox("Show Rings")
+        self.show_standard_rings_check.setChecked(False)
+        self.show_standard_rings_check.setEnabled(False)
+        self.show_standard_rings_check.setToolTip("Show the selected standard's reference rings on the detector image")
+        self.show_standard_rings_check.toggled.connect(self._refresh_standard_rings)
+        layout.addWidget(self.show_standard_rings_check)
 
         # Info label
-        self.standards_info_label = QLabel("Select a standard for reference lines.")
+        self.standards_info_label = QLabel("Pick a standard above to overlay its reference lines.")
         self.standards_info_label.setWordWrap(True)
         apply_info_style(self.standards_info_label)
         layout.addWidget(self.standards_info_label)
 
+        panel.setMaximumHeight(150)
+
         return panel
 
-    def _create_spin(self, label, mn, mx, default, step, parent):
+    def _create_spin(self, label, mn, mx, default, step, *, parent):
         """Create a labeled spin box with status update connection"""
-        lay = QHBoxLayout()
-        lay.addWidget(QLabel(label))
+        form = parent if isinstance(parent, QFormLayout) else None
+        if form is not None:
+            row = None
+            lay = None
+        else:
+            lay = QHBoxLayout()
+            lay.addWidget(QLabel(label))
+
         spin = QDoubleSpinBox()
         spin.setRange(mn, mx)
         spin.setSingleStep(step)
         spin.setValue(default)
         spin.setDecimals(4 if step < 0.01 else 2)
+        spin.setAlignment(Qt.AlignRight)
+        spin.setMinimumWidth(AppStyle.wide_input_min_width())
         spin.valueChanged.connect(self._schedule_calibration_update)
-        lay.addWidget(spin)
-        parent.addLayout(lay)
+
+        if form is not None:
+            form.addRow(QLabel(label), self._right_aligned_field_row(spin))
+        else:
+            lay.addWidget(spin)
+            parent.addLayout(lay)
         return spin
 
+    @staticmethod
+    def _right_aligned_field_row(widget):
+        """Wrap a field widget so it stays aligned to the right edge of the form row."""
+        row = QWidget()
+        lay = QHBoxLayout(row)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addStretch()
+        lay.addWidget(widget)
+        return row
+
     def _schedule_calibration_update(self, *_args):
+        if not self._applying_ring_center:
+            self._clear_calculated_ring()
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.clear_overlays(group='standard-rings')
         self.parent_app.show_status("Calibration update pending...")
         self._calibration_update_timer.start(self._calibration_update_delay_ms)
+
+    def _clear_calculated_ring(self) -> None:
+        if hasattr(self, 'calculated_ring_center'):
+            del self.calculated_ring_center
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.clear_overlays(group='ring-center')
+        if hasattr(self, 'ring_result_label'):
+            self._update_ring_picking_state()
 
     def _load_standards_db(self):
         """Load standards database"""
         return dict(STANDARDS)
 
-    def _add_beam_center_crosshair(self, viewer):
-        """Hook to add crosshair at beam center position"""
-        if hasattr(self, 'spin_x') and hasattr(self, 'spin_y'):
-            center_x = self.spin_x.value()
-            center_y = self.spin_y.value()
-            
-            # Add crosshair lines
-            if hasattr(self, 'image_data') and self.image_data is not None:
-                viewer.clear_overlays(group='calibration-crosshair')
-                viewer.add_crosshair('beam-center', center_x, center_y, group='calibration-crosshair', color='#ff0000')
+    def _draw_beam_center_overlay(self, viewer, center_x: float, center_y: float) -> None:
+        viewer.add_crosshair(
+            'shared-beam-center',
+            center_x,
+            center_y,
+            group='shared-image-overlays',
+            color='#ff0000',
+        )
+
+    def _set_ring_point_indicator(self, index, state):
+        """Set a single pick-state LED: 'off', 'good', 'warn' (outlier), or 'error' (fit failed)."""
+        apply_status_led_style(self.ring_point_indicators[index], state=state)
+
+    def _update_ring_picking_state(self):
+        """Gate the Calculate button and show a short picking-progress hint."""
+        picked = sum(1 for point in self._ring_points if point is not None)
+        self.calc_ring_button.setEnabled(picked >= 3)
+        if picked < 3:
+            self.ring_result_label.setText(f"{picked}/{self.MAX_RING_POINTS} points picked (need 3+)")
+        else:
+            self.ring_result_label.setText(f"{picked}/{self.MAX_RING_POINTS} points picked")
 
     def calculate_ring_center(self):
-        """Calculate the center of a circle from multiple points"""
+        """Calculate the center of a circle from multiple points, auto-excluding outliers on failure"""
+        picked_indices = [i for i, point in enumerate(self._ring_points) if point is not None]
+        points = [self._ring_points[i] for i in picked_indices]
+
         try:
-            # Get coordinates from input fields, skipping empty points
-            points = []
-            for i, (x_input, y_input) in enumerate(self.ring_center_inputs):
-                x_val = x_input.value()
-                y_val = y_input.value()
-                # Skip points that are at origin (0,0) as they are likely empty
-                if x_val != 0 or y_val != 0:
-                    points.append((x_val, y_val))
-            
-            if len(points) < 3:
-                self.ring_result_label.setText("Error: Need at least 3 points to calculate ring center")
-                return
-            
-            # Use the enhanced ring center calculator
-            ux, uy, radius = self.ring_calculator.calculate_center(points)
-            
+            # calculate_center_robust retries with the worst point dropped if the plain fit fails.
+            ux, uy, radius, used_positions, dropped_positions = self.ring_calculator.calculate_center_robust(points)
+            used_indices = [picked_indices[p] for p in used_positions]
+            dropped_indices = [picked_indices[p] for p in dropped_positions]
+            used_points = [points[p] for p in used_positions]
+
             # Store the calculated center
             self.calculated_ring_center = (ux, uy)
 
             # Apply calculated center directly to beam position controls.
-            self.spin_x.setValue(ux)
-            self.spin_y.setValue(uy)
+            self._applying_ring_center = True
+            try:
+                self.spin_x.setValue(ux)
+                self.spin_y.setValue(uy)
+            finally:
+                self._applying_ring_center = False
             self.calibrate_and_update_status()
-            
-            # Update result display
-            fit_method = "exact (3 pts)" if len(points) == 3 else "least-squares fit"
-            self.ring_result_label.setText(
-                f"Ring center: ({ux:.2f}, {uy:.2f})\n"
-                f"Radius: {radius:.2f} pixels\n"
-                f"Used {len(points)} points ({fit_method})\n"
-                "Beam center auto-updated"
-            )
+
+            for i in dropped_indices:
+                self._set_ring_point_indicator(i, 'warn')  # auto-excluded outlier
+
+            # Flag any used point whose fit residual stands out from the rest as an outlier,
+            # reusing the calculator's own fit-quality tolerance (single source of truth).
+            outlier_tolerance = radius * self.ring_calculator.max_relative_radius_std
+            for i, (x, y) in zip(used_indices, used_points):
+                residual = abs(((x - ux) ** 2 + (y - uy) ** 2) ** 0.5 - radius)
+                self._set_ring_point_indicator(i, 'warn' if residual > outlier_tolerance else 'good')
+
+            # Fit score reuses the calculator's own quality metric (0-1, higher is better).
+            quality = self.ring_calculator.validate_ring_quality(used_points, (ux, uy))
+            fit_score_pct = quality['quality_score'] * 100.0
+            result_text = f"Center ({ux:.1f}, {uy:.1f}), r={radius:.1f}px, fit={fit_score_pct:.0f}%"
+            if dropped_indices:
+                result_text += f" ({len(dropped_indices)} excluded)"
+            self.ring_result_label.setText(result_text)
             
             # Mark points and center on the raw image
             if hasattr(self, 'image_viewer') and self.image_data is not None:
                 self.image_viewer.clear_overlays(group='ring-center')
 
-                # Plot the input points
-                xs, ys = zip(*points)
+                # Plot the points used in the fit
+                xs, ys = zip(*used_points)
                 self.image_viewer.add_points('ring-points', xs, ys, group='ring-center', color='#00ffff', size=9.0, pen='#0000ff')
                 
                 # Plot the calculated center
@@ -456,37 +517,40 @@ class CalibrationApp(BaseImageTab):
                 # Draw the circle
                 self.image_viewer.add_circle('ring-center-circle', ux, uy, radius, group='ring-center', color='#ff0000', width=2.0)
             
-            self.parent_app.show_status(f"Ring center calculated and applied: ({ux:.2f}, {uy:.2f}) using {len(points)} points")
+            status_message = f"Ring center calculated and applied: ({ux:.2f}, {uy:.2f}) using {len(used_points)} points"
+            if dropped_indices:
+                status_message += f" ({len(dropped_indices)} outliers excluded)"
+            self.parent_app.show_status(status_message)
             
             # Update status info to show ring center calculation
             self.update_status_info()
             
         except ValueError as e:
-            self.ring_result_label.setText(f"Error: {str(e)}")
+            for i in picked_indices:
+                self._set_ring_point_indicator(i, 'error')
+            self.ring_result_label.setText(f"Fit failed: {str(e)}")
             self.parent_app.show_status(f"Error calculating ring center: {str(e)}")
         except Exception as e:
-            self.ring_result_label.setText(f"Unexpected error: {str(e)}")
+            for i in picked_indices:
+                self._set_ring_point_indicator(i, 'error')
+            self.ring_result_label.setText(f"Fit failed: {str(e)}")
             self.parent_app.show_status(f"Unexpected error: {str(e)}")
 
-    def update_beam_from_ring(self):
-        """Legacy compatibility wrapper for old button callback paths."""
-        self.calculate_ring_center()
-
     def clear_ring_points(self):
-        """Clear all ring coordinate inputs and markers"""
-        for x_input, y_input in self.ring_center_inputs:
-            x_input.setValue(0.0)
-            y_input.setValue(0.0)
-        
+        """Clear all picked ring points, indicators, and markers"""
+        self._ring_points = [None] * self.MAX_RING_POINTS
+        for index in range(len(self.ring_point_indicators)):
+            self._set_ring_point_indicator(index, 'off')
+
         # Clear temporary yellow markers
-        if hasattr(self, 'temp_markers'):
-            self.temp_markers = []
-            if hasattr(self, 'image_viewer'):
-                self.image_viewer.clear_overlays(group='ring-temp')
-        
-        self.ring_result_label.setText("Enter coordinates on a ring and click 'Calculate'")
+        self.temp_markers = []
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.clear_overlays(group='ring-temp')
+        self._clear_calculated_ring()
+
         self.current_point_index = 0
-        self.parent_app.show_status("Ring coordinate inputs cleared")
+        self._update_ring_picking_state()
+        self.parent_app.show_status("Ring points cleared")
 
     def _add_tab_specific_status(self, info_lines):
         """Add calibration-specific status information"""
@@ -494,13 +558,8 @@ class CalibrationApp(BaseImageTab):
         
         # === RING CENTER STATUS ===
         info_lines.append("=== RING CENTER STATUS ===")
-        # Count non-zero ring points
-        ring_points_count = 0
-        for x_input, y_input in self.ring_center_inputs:
-            if x_input.value() != 0 or y_input.value() != 0:
-                ring_points_count += 1
-        
-        info_lines.append(f"Ring points entered: {ring_points_count}/10")
+        ring_points_count = sum(1 for point in self._ring_points if point is not None)
+        info_lines.append(f"Ring points entered: {ring_points_count}/{self.MAX_RING_POINTS}")
         if hasattr(self, 'calculated_ring_center'):
             cx, cy = self.calculated_ring_center
             info_lines.append(f"Calculated center: ({cx:.2f}, {cy:.2f})")
@@ -539,6 +598,37 @@ class CalibrationApp(BaseImageTab):
         self.spin_wl_ang.blockSignals(False)
         self._schedule_calibration_update()
 
+    def get_session_state(self) -> dict:
+        """Serialize calibration parameters for restart restore."""
+        return {
+            "wavelength_A": self.spin_wl_ang.value(),
+            "beam_x": self.spin_x.value(),
+            "beam_y": self.spin_y.value(),
+            "det_orient": self.spin_orient.value(),
+            "det_tilt": self.spin_tilt.value(),
+            "det_phi": self.spin_phi.value(),
+            "distance_m": self.spin_dist.value(),
+            "pixel_size_um": self.spin_pixel.value(),
+        }
+
+    def restore_session_state(self, state: dict) -> None:
+        """Restore calibration parameters from the last saved session."""
+        mapping = {
+            "wavelength_A": self.spin_wl_ang,
+            "beam_x": self.spin_x,
+            "beam_y": self.spin_y,
+            "det_orient": self.spin_orient,
+            "det_tilt": self.spin_tilt,
+            "det_phi": self.spin_phi,
+            "distance_m": self.spin_dist,
+            "pixel_size_um": self.spin_pixel,
+        }
+        for key, spin in mapping.items():
+            value = state.get(key)
+            if value is not None:
+                spin.setValue(float(value))
+
+
     def _draw_standard_lines(self):
         """Draw vertical lines for selected standard in 1D plot"""
         if self.selected_standard:
@@ -546,15 +636,48 @@ class CalibrationApp(BaseImageTab):
             for q in qvals:
                 self.ax_plot.axvline(q, color='magenta', linestyle='--', linewidth=1.5, alpha=0.7)
 
+    def _refresh_standard_rings(self, *_args):
+        """Draw the selected standard's q positions as detector rings."""
+        if not hasattr(self, 'image_viewer'):
+            return
+        self.image_viewer.clear_overlays(group='standard-rings')
+        if self.image_data is None or not self.show_standard_rings_check.isChecked() or not self.selected_standard:
+            return
+
+        calibration = getattr(self.image_data, 'calibration', None)
+        if calibration is None:
+            calibration = self.calibration
+        if calibration is None:
+            return
+
+        center_x = self.spin_x.value()
+        center_y = self.spin_y.value()
+        for index, q_value in enumerate(self.standards_db.get(self.selected_standard, [])):
+            radius = q_to_pixel_radius(calibration, q_value)
+            if radius is not None:
+                self.image_viewer.add_circle(
+                    f'standard-ring-{index}',
+                    center_x,
+                    center_y,
+                    radius,
+                    group='standard-rings',
+                    color='#ff00ff',
+                    width=1.5,
+                )
+
     def on_standard_selected(self, text):
         """Handle standard material selection"""
         if text == "None":
             self.selected_standard = None
-            self.standards_info_label.setText("No standard selected.")
+            self.show_standard_rings_check.setChecked(False)
+            self.show_standard_rings_check.setEnabled(False)
+            self.standards_info_label.setText("Pick a standard above to overlay its reference lines.")
         else:
             self.selected_standard = text
+            self.show_standard_rings_check.setEnabled(True)
             qvals = self.standards_db.get(text, [])
-            self.standards_info_label.setText(f"Selected: {text} ({len(qvals)} lines)")
+            self.standards_info_label.setText(f"Showing {len(qvals)} reference lines for {text}.")
+        self._refresh_standard_rings()
         self.update_plot_calibration()
 
         # === STANDARDS STATUS ===
@@ -568,9 +691,23 @@ class CalibrationApp(BaseImageTab):
         except Exception as e:
             print(f"Error updating standards status: {e}")
 
+    def update_plot(self, image_data=None):
+        """Update 2D image viewer and 1D calibration plots/crosshair."""
+        super().update_plot(image_data)
+        if self.image_data is not None:
+            plot_xlim, plot_ylim = self.ax_plot.get_xlim(), self.ax_plot.get_ylim()
+            plot_xlim_valid = not np.allclose(plot_xlim, (0, 1))
+            plot_ylim_valid = not np.allclose(plot_ylim, (0, 1))
+            self._update_1d_plots(plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
+
+    def on_shared_state_activated(self):
+        """Refresh calibration tab state when tab becomes active."""
+        self.update_plot_calibration()
+
     def update_plot_calibration(self):
         """Update plots based on current calibration and image data"""
         if self.image_data is None:
+            self._refresh_standard_rings()
             return
         
         # Store current limits for 1D plot
@@ -579,9 +716,7 @@ class CalibrationApp(BaseImageTab):
         plot_ylim_valid = not np.allclose(plot_ylim, (0, 1))
 
         if getattr(self.image_viewer, 'source_array', None) is None:
-            self.update_plot()
-        else:
-            self._refresh_calibration_crosshair()
+            super().update_plot()
         
         # Then, update the 1D plots
         self._update_1d_plots(plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
@@ -589,7 +724,16 @@ class CalibrationApp(BaseImageTab):
     def _update_1d_plots(self, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid):
         """Update the 1D analysis plots"""
         # Update calibration if SciAnalysis is available
-        if self.scianalysis_available and self.image_data.calibration:
+        if self.scianalysis_available and self.image_data:
+            if not hasattr(self.image_data, 'calibration') or self.image_data.calibration is None:
+                if hasattr(self.parent_app, 'calibration') and self.parent_app.calibration is not None:
+                    self.image_data.calibration = self.parent_app.calibration
+                elif hasattr(self, 'calibration') and self.calibration is not None:
+                    self.image_data.calibration = self.calibration
+                else:
+                    from sciview.profiles.cms_profile import get_calibration_class
+                    cal_cls = get_calibration_class()
+                    self.image_data.calibration = cal_cls(wavelength_A=self.spin_wl_ang.value())
 
             height, width = self.image_data.data.shape
             self.image_data.calibration.width = width
@@ -608,6 +752,9 @@ class CalibrationApp(BaseImageTab):
             # Publish updated calibration so other tabs consume the same object.
             if hasattr(self.parent_app, 'publish_shared_calibration'):
                 self.parent_app.publish_shared_calibration(self.image_data.calibration, source_tab=self)
+
+            self._refresh_shared_image_overlays()
+            self._refresh_standard_rings()
 
 
             # cal = self.calibration
@@ -660,50 +807,44 @@ class CalibrationApp(BaseImageTab):
         # Update 1D plot with real data
         self._draw_1d_plots(circ, hor_1, hor_2, ver_1, ver_2, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid)
 
-    def _refresh_calibration_crosshair(self):
-        if not hasattr(self, 'image_viewer') or self.image_data is None:
-            return
-        self.image_viewer.clear_overlays(group='calibration-crosshair')
-        self.image_viewer.add_crosshair(
-            'beam-center',
-            self.spin_x.value(),
-            self.spin_y.value(),
-            group='calibration-crosshair',
-            color='#ff0000',
-        )
-    
     def _clear_1d_plots(self):
         """Clear 1D plots when SciAnalysis is not available or analysis fails"""
         self.ax_plot.clear()
         self._last_profile_signature = None
+        body_font = AppStyle.matplotlib_font_size('body')
+        caption_font = AppStyle.matplotlib_font_size('caption')
+        small_font = AppStyle.matplotlib_font_size('small')
         self.ax_plot.text(0.5, 0.5, 'No Q-space analysis available\n\nRequires:\n• Valid image data\n• SciAnalysis library\n• Proper calibration parameters', 
                          transform=self.ax_plot.transAxes, 
                          ha='center', va='center', 
-                         fontsize=10, color='gray',
+                         fontsize=body_font, color='gray',
                          bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.7))
-        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=8)
-        self.ax_plot.set_ylabel('Intensity', fontsize=8)
-        self.ax_plot.tick_params(labelsize=7)
+        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=caption_font)
+        self.ax_plot.set_ylabel('Intensity', fontsize=caption_font)
+        self.ax_plot.tick_params(labelsize=small_font)
+        AppStyle.apply_matplotlib_figure_theme(self.fig_plot)
         self.canvas_plot.draw()
     
     def _draw_1d_plots(self, circ, hor_1, hor_2, ver_1, ver_2, plot_xlim, plot_ylim, plot_xlim_valid, plot_ylim_valid):
         """Draw the 1D plots with given data"""
         # Update 1D plot
         self.ax_plot.clear()
-        self.ax_plot.plot(circ.x, circ.y, label='Circular Avg', color='#22BB44', linewidth=1.5)
-        self.ax_plot.plot(hor_1.x, hor_1.y, label='Horizontal 0°', color='#BB4422', linewidth=1.2)
-        self.ax_plot.plot(hor_2.x, hor_2.y, label='Horizontal 180°', color='#BB2244', linewidth=1.2)
-        self.ax_plot.plot(ver_1.x, ver_1.y, label='Vertical 90°', color='#2244BB', linewidth=1.2)
-        self.ax_plot.plot(ver_2.x, ver_2.y, label='Vertical 270°', color='#4422BB', linewidth=1.2)
+        caption_font = AppStyle.matplotlib_font_size('caption')
+        small_font = AppStyle.matplotlib_font_size('small')
+        self.ax_plot.plot(circ.x, circ.y, label='Circular Avg', color='#44EE44', linewidth=1.5)
+        self.ax_plot.plot(hor_1.x, hor_1.y, label='Horizontal 0°', color='#EE6622', linewidth=1.2)
+        self.ax_plot.plot(hor_2.x, hor_2.y, label='Horizontal 180°', color='#EE2266', linewidth=1.2)
+        self.ax_plot.plot(ver_1.x, ver_1.y, label='Vertical 90°', color='#2266EE', linewidth=1.2)
+        self.ax_plot.plot(ver_2.x, ver_2.y, label='Vertical 270°', color='#6622EE', linewidth=1.2)
 
         # Draw standard lines if selected
         self._draw_standard_lines()
 
         # Set labels and legend with smaller fonts
-        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=8)
-        self.ax_plot.set_ylabel('Intensity', fontsize=8)
-        self.ax_plot.legend(fontsize=6, loc='best', frameon=False)
-        self.ax_plot.tick_params(labelsize=7)
+        self.ax_plot.set_xlabel('Q (Å⁻¹)', fontsize=caption_font)
+        self.ax_plot.set_ylabel('Intensity', fontsize=caption_font)
+        self.ax_plot.legend(fontsize=small_font, loc='best', frameon=False)
+        self.ax_plot.tick_params(labelsize=small_font)
         
         # Apply scaling options properly
         ps = self.scale_combo.currentText()
@@ -749,15 +890,17 @@ class CalibrationApp(BaseImageTab):
         
         # Ensure plot fills the canvas with custom tight margins
         self.fig_plot.subplots_adjust(left=0.05, bottom=0.10, right=0.99, top=0.99)
+        AppStyle.apply_matplotlib_figure_theme(self.fig_plot)
         self.canvas_plot.draw()
         self._last_profile_signature = profile_signature
 
     def export_calibration(self):
         """Export current calibration parameters to a YAML file"""
         # Prompt for directory
-        dir_path = dialog_select_directory(
+        dir_path, _ = choose_path(
             self,
             "Select Directory to Export Calibration",
+            mode="directory",
             key="calibration_export",
         )
         if not dir_path:
@@ -802,11 +945,11 @@ class CalibrationApp(BaseImageTab):
             base = os.path.splitext(os.path.basename(self.parent_app.get_image_path()))[0]
             default_name = f"{base}_1d_profiles.csv"
 
-        file_path, _ = dialog_save_file(
+        file_path, _ = choose_path(
             self,
             "Export 1D Profiles",
-            default_name,
-            "CSV files (*.csv);;Text files (*.txt);;All files (*)",
+            mode="save", default_name=default_name,
+            file_filter="CSV files (*.csv);;Text files (*.txt);;All files (*)",
             key="profile_export",
         )
 
@@ -836,8 +979,15 @@ class CalibrationApp(BaseImageTab):
         self.parent_app.show_status(f"1D profiles exported to {file_path}")
 
     def on_mouse_click(self, event):
-        """Handle mouse clicks on the raw image for ring center calculation"""
+        """Pick the beam center with middle click or ring points with right click."""
         if not getattr(event, 'inside_image', False):
+            return
+
+        if event.button == Qt.MiddleButton:
+            self.spin_x.setValue(event.x)
+            self.spin_y.setValue(event.y)
+            self._calibration_update_timer.stop()
+            self.calibrate_and_update_status()
             return
         
         # Mouse button mapping: 1=left, 2=middle, 3=right
@@ -850,30 +1000,27 @@ class CalibrationApp(BaseImageTab):
                     if snapped is not None:
                         display_x, display_y = snapped
 
-                # Fill the next available coordinate field (cycles through 10 points)
-                x_input, y_input = self.ring_center_inputs[self.current_point_index]
-                x_input.setValue(display_x)
-                y_input.setValue(display_y)
-                
+                # Fill the next available point slot (cycles through the point slots)
+                self._ring_points[self.current_point_index] = (display_x, display_y)
+                self._set_ring_point_indicator(self.current_point_index, 'good')
+                self._update_ring_picking_state()
+
                 # Visual feedback - add yellow marker
                 if hasattr(self, 'image_viewer'):
-                    # Add to temp markers list
-                    if not hasattr(self, 'temp_markers'):
-                        self.temp_markers = []
                     marker_id = f"ring-temp-{len(self.temp_markers)}"
                     self.image_viewer.add_points(marker_id, [display_x], [display_y], group='ring-temp', color='#ffff00', size=12.0)
                     self.temp_markers.append(marker_id)
                     
-                    # Remove oldest marker if we exceed 10 markers
-                    if len(self.temp_markers) > 10:
+                    # Remove oldest marker if we exceed the point-slot cap
+                    if len(self.temp_markers) > self.MAX_RING_POINTS:
                         oldest_marker_id = self.temp_markers.pop(0)
                         self.image_viewer.remove_overlay(oldest_marker_id)
                 
-                self.current_point_index = (self.current_point_index + 1) % 10
+                self.current_point_index = (self.current_point_index + 1) % self.MAX_RING_POINTS
                 
                 # Update status
                 if self.current_point_index == 0:
-                    self.parent_app.show_status("All 10 points filled. Click 'Calculate Ring Center' or continue right-clicking to replace points.")
+                    self.parent_app.show_status(f"All {self.MAX_RING_POINTS} points filled. Click 'Calculate Ring Center' or continue right-clicking to replace points.")
                 else:
                     self.parent_app.show_status(f"Point {self.current_point_index} filled. Right-click for point {self.current_point_index + 1}.")
 

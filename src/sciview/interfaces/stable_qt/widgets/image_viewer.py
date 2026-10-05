@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PyQt5.QtCore import QEvent, QPointF, Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, QPointF, QSize, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
@@ -26,6 +26,7 @@ from sciview.settings.viewer_config import (
     VIEWER_COLORS,
     VIEWER_TOOL_ICON_FILES,
     VIEWER_TOOLBAR_ACTIONS,
+    resolve_matplotlib_colormap,
 )
 
 
@@ -59,6 +60,9 @@ class ImageViewer(QWidget):
     mouse_pressed = pyqtSignal(object)
     mouse_moved = pyqtSignal(object)
     mouse_released = pyqtSignal(object)
+    mouse_double_clicked = pyqtSignal(object)
+    interaction_mode_changed = pyqtSignal(str)
+    overlay_visibility_changed = pyqtSignal()
 
     _SUPPORTED_COLORMAPS = set(SUPPORTED_IMAGE_COLORMAPS) | set(ARTIST_IMAGE_COLORMAPS)
 
@@ -109,6 +113,10 @@ class ImageViewer(QWidget):
         toolbar_actions = {action.key: action for action in VIEWER_TOOLBAR_ACTIONS}
         self._pan_button = self._make_tool_button(toolbar_actions["pan"], self._load_toolbar_icon("pan"))
         self._zoom_button = self._make_tool_button(toolbar_actions["zoom"], self._load_toolbar_icon("zoom"))
+        self.beam_center_overlay_button = self._make_tool_button(
+            toolbar_actions["beam_center"], self._load_toolbar_icon("beam_center")
+        )
+        self.mask_overlay_button = self._make_tool_button(toolbar_actions["mask"], self._load_toolbar_icon("mask"))
         self._home_button = self._make_tool_button(toolbar_actions["home"], self._load_toolbar_icon("home"))
         self._auto_levels_button = self._make_tool_button(toolbar_actions["auto"], self._load_toolbar_icon("auto"))
         self._copy_button = self._make_tool_button(toolbar_actions["copy"], self._load_toolbar_icon("copy"))
@@ -116,9 +124,13 @@ class ImageViewer(QWidget):
         self._palette_info_label = QLabel("")
         self._palette_info_label.setVisible(False)
         self._palette_info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self._palette_info_label.setStyleSheet("color: #4b5563; padding-left: 6px;")
+        self._palette_info_label.setStyleSheet("")
         self._pan_button.setCheckable(True)
         self._zoom_button.setCheckable(True)
+        self.beam_center_overlay_button.setCheckable(True)
+        self.mask_overlay_button.setCheckable(True)
+        self.beam_center_overlay_button.setVisible(False)
+        self.mask_overlay_button.setVisible(False)
         self._pan_button.setChecked(True)
         self._pan_button.clicked.connect(self._activate_pan_mode)
         self._zoom_button.clicked.connect(self._activate_zoom_mode)
@@ -126,24 +138,29 @@ class ImageViewer(QWidget):
         self._auto_levels_button.clicked.connect(self._on_auto_levels_clicked)
         self._copy_button.clicked.connect(self.copy_rendered_view_to_clipboard)
         self._save_button.clicked.connect(self._choose_export_path)
+        self.beam_center_overlay_button.toggled.connect(self._emit_overlay_visibility_changed)
+        self.mask_overlay_button.toggled.connect(self._emit_overlay_visibility_changed)
 
-        toolbar = QHBoxLayout()
-        toolbar.setContentsMargins(0, 0, 0, 0)
-        toolbar.setSpacing(2)
-        toolbar.addWidget(self._pan_button)
-        toolbar.addWidget(self._zoom_button)
-        toolbar.addWidget(self._home_button)
-        toolbar.addWidget(self._auto_levels_button)
-        toolbar.addWidget(self._copy_button)
-        toolbar.addWidget(self._save_button)
-        toolbar.addWidget(self._palette_info_label)
+        self._toolbar_layout = QHBoxLayout()
+        self._toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        self._toolbar_layout.setSpacing(2)
+        self._toolbar_layout.addWidget(self._pan_button)
+        self._toolbar_layout.addWidget(self._zoom_button)
+        self._toolbar_layout.addWidget(self.beam_center_overlay_button)
+        self._toolbar_layout.addWidget(self.mask_overlay_button)
+        self._toolbar_layout.addWidget(self._home_button)
+        self._toolbar_layout.addWidget(self._auto_levels_button)
+        self._toolbar_layout.addWidget(self._copy_button)
+        self._toolbar_layout.addWidget(self._save_button)
+        self._toolbar_layout.addWidget(self._palette_info_label)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
         layout.addWidget(self._graphics)
-        layout.addLayout(toolbar)
+        layout.addLayout(self._toolbar_layout)
 
+        self.refresh_theme()
         self.set_colormap(self._colormap_name)
 
     @property
@@ -286,8 +303,6 @@ class ImageViewer(QWidget):
         if not locked:
             self._release_pointer_capture()
         self._view_box.setMouseEnabled(x=not locked, y=not locked)
-        self._pan_button.setEnabled(not locked)
-        self._zoom_button.setEnabled(not locked)
         if locked:
             self._pan_button.setChecked(False)
             self._zoom_button.setChecked(False)
@@ -296,10 +311,35 @@ class ImageViewer(QWidget):
         else:
             self._pan_button.setChecked(True)
 
+    def toolbar_icon(self, action: str) -> QIcon:
+        """Return the current themed icon for a viewer toolbar action."""
+        if action not in VIEWER_TOOL_ICON_FILES:
+            raise ValueError(f"Unsupported viewer toolbar action: {action}")
+        return self._load_toolbar_icon(action)
+
+    def enable_overlay_tools(self) -> None:
+        """Show the beam-center and mask toolbar controls."""
+        self.beam_center_overlay_button.setVisible(True)
+        self.mask_overlay_button.setVisible(True)
+
+    def activate_navigation_mode(self, mode: str) -> None:
+        """Unlock drawing input and select a supported viewer navigation mode."""
+        activators = {
+            "pan": self._activate_pan_mode,
+            "zoom": self._activate_zoom_mode,
+        }
+        if mode not in activators:
+            raise ValueError(f"Unsupported navigation mode: {mode}")
+        self.set_interaction_locked(False)
+        activators[mode]()
+
     def _on_auto_levels_clicked(self) -> None:
         if QApplication.keyboardModifiers() & Qt.AltModifier:
             self.apply_next_artist_palette()
         self.auto_levels()
+
+    def _emit_overlay_visibility_changed(self, _checked: bool) -> None:
+        self.overlay_visibility_changed.emit()
 
     def _capture_pointer(self) -> None:
         if self._pointer_captured:
@@ -510,11 +550,14 @@ class ImageViewer(QWidget):
     def eventFilter(self, watched: object, event: QEvent) -> bool:
         if watched is self._graphics.viewport() and event.type() in {
             QEvent.MouseButtonPress,
+            QEvent.MouseButtonDblClick,
             QEvent.MouseMove,
             QEvent.MouseButtonRelease,
         }:
             pointer_event = self._pointer_event_from_viewport_pos(event.pos(), event.button(), event.modifiers())
-            if event.type() == QEvent.MouseButtonPress:
+            if event.type() == QEvent.MouseButtonDblClick:
+                self.mouse_double_clicked.emit(pointer_event)
+            elif event.type() == QEvent.MouseButtonPress:
                 if self._interaction_locked:
                     self._capture_pointer()
                 self.mouse_pressed.emit(pointer_event)
@@ -602,11 +645,13 @@ class ImageViewer(QWidget):
         self._view_box.setMouseMode(pg.ViewBox.PanMode)
         self._pan_button.setChecked(True)
         self._zoom_button.setChecked(False)
+        self.interaction_mode_changed.emit("pan")
 
     def _activate_zoom_mode(self) -> None:
         self._view_box.setMouseMode(pg.ViewBox.RectMode)
         self._pan_button.setChecked(False)
         self._zoom_button.setChecked(True)
+        self.interaction_mode_changed.emit("zoom")
 
     def _choose_export_path(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -618,6 +663,39 @@ class ImageViewer(QWidget):
         if path:
             self.export_rendered_view(path)
 
+    def refresh_theme(self) -> None:
+        """Refresh toolbar icons and pyqtgraph canvas colors for the active theme."""
+        colors = AppStyle.theme_colors()
+        background = colors['base'].name()
+        text_color = colors['text']
+        muted_color = colors['muted']
+
+        self._graphics.setBackground(background)
+        self._view_box.setBackgroundColor(background)
+        self._message_item.setColor(muted_color)
+        self._plot_item.getAxis("left").setPen(text_color)
+        self._plot_item.getAxis("left").setTextPen(text_color)
+        self._plot_item.getAxis("bottom").setPen(text_color)
+        self._plot_item.getAxis("bottom").setTextPen(text_color)
+
+        for key, button in {
+            "pan": self._pan_button,
+            "zoom": self._zoom_button,
+            "beam_center": self.beam_center_overlay_button,
+            "mask": self.mask_overlay_button,
+            "home": self._home_button,
+            "auto": self._auto_levels_button,
+            "copy": self._copy_button,
+            "save": self._save_button,
+        }.items():
+            AppStyle.apply_widget_style(button, 'compact_button')
+            button.setIcon(self._load_toolbar_icon(key))
+            button.setIconSize(AppStyle.tab_icon_size())
+
+        self._palette_info_label.setStyleSheet(f"color: {muted_color.name()};")
+        self._graphics.update()
+        self.update()
+
     def _load_toolbar_icon(self, key: str) -> QIcon:
         icon_filename = VIEWER_TOOL_ICON_FILES.get(key)
         if not icon_filename:
@@ -628,14 +706,17 @@ class ImageViewer(QWidget):
     @staticmethod
     def _make_tool_button(action: Any, icon: QIcon) -> QToolButton:
         button = QToolButton()
+        button.setAutoRaise(False)
+        button.setFixedSize(AppStyle.toolbar_symbol_button_size())
+        AppStyle.apply_widget_style(button, 'compact_button')
         if icon.isNull():
             button.setText(action.label)
+            button.setFont(AppStyle.make_font('h3', weight=600))
         else:
             button.setIcon(icon)
-            button.setIconSize(AppStyle.tab_icon_size())
+            icon_size = max(16, min(button.width() - 10, button.height() - 10))
+            button.setIconSize(QSize(icon_size, icon_size))
         button.setToolTip(action.tooltip)
-        button.setAutoRaise(True)
-        button.setFixedSize(AppStyle.toolbar_symbol_button_size())
         return button
 
     @staticmethod
@@ -685,29 +766,8 @@ class ImageViewer(QWidget):
 
     @staticmethod
     def _artist_palette_lut(name: str) -> np.ndarray:
-        import matplotlib.colors as mcolors
-
-        palette = ARTIST_IMAGE_COLORMAPS[name]
-        colors = ImageViewer._ordered_artist_colors(palette.colors)
-        colormap = mcolors.LinearSegmentedColormap.from_list(name, colors, N=256)
+        colormap = resolve_matplotlib_colormap(name)
         return (colormap(np.linspace(0.0, 1.0, 256))[:, :3] * 255).astype(np.ubyte)
-
-    @staticmethod
-    def _ordered_artist_colors(colors: tuple[str, ...]) -> tuple[str, ...]:
-        import colorsys
-        import matplotlib.colors as mcolors
-
-        def sort_key(color: str) -> tuple[float, float, float]:
-            red, green, blue = mcolors.to_rgb(color)
-            hue, saturation, _lightness = colorsys.rgb_to_hls(red, green, blue)
-            return (ImageViewer._relative_luminance((red, green, blue)), hue, saturation)
-
-        return tuple(sorted(colors, key=sort_key))
-
-    @staticmethod
-    def _relative_luminance(rgb: tuple[float, float, float]) -> float:
-        red, green, blue = rgb
-        return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 
     @staticmethod
     def _rgba_mask(mask: np.ndarray, color: str, alpha: float) -> np.ndarray:

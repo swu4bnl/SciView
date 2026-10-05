@@ -1,5 +1,6 @@
 param(
     [switch]$SetupOnly,
+    [switch]$NoAutoPull,
 
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$LauncherArgs
@@ -16,6 +17,80 @@ function Write-Step {
     param([string]$Message)
     Write-Host ""
     Write-Host $Message -ForegroundColor Cyan
+}
+
+function Test-TruthyFlag {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+
+    switch -Regex ($Value.Trim().ToLowerInvariant()) {
+        '^(1|true|yes|on)$' { return $true }
+        default { return $false }
+    }
+}
+
+function Invoke-SourceAutoUpdate {
+    param([bool]$Enabled)
+
+    if (-not $Enabled) {
+        Write-Host "Skipping SciView source update check (--NoAutoPull)."
+        return
+    }
+
+    if (-not (Test-Path (Join-Path $ProjectRoot ".git"))) {
+        Write-Host "Skipping SciView source update check (not a git checkout)."
+        return
+    }
+
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    if ($null -eq $git) {
+        Write-Host "Skipping SciView source update check (git not available)."
+        return
+    }
+
+    Write-Step "Checking for SciView source updates..."
+    try {
+        & $git.Source -C $ProjectRoot fetch --quiet
+        if ($LASTEXITCODE -ne 0) {
+            throw "git fetch exited with code $LASTEXITCODE"
+        }
+
+        $upstreamOutput = & $git.Source -C $ProjectRoot rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>$null
+        $upstreamExitCode = $LASTEXITCODE
+        $upstream = ([string]$upstreamOutput).Trim()
+        if ($upstreamExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($upstream)) {
+            Write-Host "Skipping SciView source update (current branch has no upstream)."
+            return
+        }
+
+        $behind = [int](& $git.Source -C $ProjectRoot rev-list --count "HEAD..$upstream")
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to compare the current branch with $upstream"
+        }
+        if ($behind -eq 0) {
+            Write-Host "SciView is up to date."
+            return
+        }
+
+        Write-Host "$behind update commit(s) available from $upstream."
+        $answer = Read-Host "Update SciView now? [y/N]"
+        if ($answer -notmatch '^(y|yes)$') {
+            Write-Host "Skipping SciView source update."
+            return
+        }
+
+        & $git.Source -C $ProjectRoot merge --ff-only $upstream
+        if ($LASTEXITCODE -ne 0) {
+            throw "git merge --ff-only exited with code $LASTEXITCODE"
+        }
+        Write-Host "SciView source updated."
+    }
+    catch {
+        Write-Host "Skipping source auto-update (non-fatal): $($_.Exception.Message)"
+    }
 }
 
 function Find-ManagedPythonTool {
@@ -56,7 +131,7 @@ function Install-ManagedPythonTool {
     $env:Path = "$env:LOCALAPPDATA\pixi\bin;$env:USERPROFILE\.pixi\bin;$env:Path"
     $tool = Find-ManagedPythonTool
     if ($null -eq $tool) {
-        throw "Pixi was installed, but this launcher could not find it. Close this window and launch SciView again."
+        throw "Pixi was installed. Close this window and launch SciView again."
     }
     return $tool
 }
@@ -64,6 +139,16 @@ function Install-ManagedPythonTool {
 try {
     Write-Host "SciView Launcher" -ForegroundColor Green
     Write-Host "This window uses Pixi to prepare the Python environment and start SciView."
+
+    $autoPullEnabled = Test-TruthyFlag $env:SCIVIEW_AUTO_PULL
+    if (-not $autoPullEnabled -and [string]::IsNullOrWhiteSpace($env:SCIVIEW_AUTO_PULL)) {
+        $autoPullEnabled = $true
+    }
+    if ($NoAutoPull) {
+        $autoPullEnabled = $false
+    }
+
+    Invoke-SourceAutoUpdate -Enabled $autoPullEnabled
 
     $tool = Find-ManagedPythonTool
     if ($null -eq $tool) {

@@ -14,6 +14,7 @@ class ViewerColors:
     default_circle: str = "#ff0000"
     default_crosshair: str = "#ff0000"
     default_mask: str = "#ef4444"
+    mask_preview: str = "#facc15"
 
 
 @dataclass(frozen=True)
@@ -198,9 +199,49 @@ ARTIST_IMAGE_PALETTES = (
 )
 ARTIST_IMAGE_COLORMAPS = {palette.key: palette for palette in ARTIST_IMAGE_PALETTES}
 
+
+def _relative_luminance(red: float, green: float, blue: float) -> float:
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def _ordered_palette_colors(colors: tuple[str, ...]) -> tuple[str, ...]:
+    """Order raw artist-palette colors into a visually sensible gradient.
+
+    Palettes are curated in an aesthetic order, not a gradient order, so this
+    sorts by luminance (then hue, then lightness) before building a colormap.
+    Shared by the pyqtgraph LUT builder and the matplotlib colormap resolver
+    so both stay visually consistent with each other.
+    """
+    import colorsys
+    from matplotlib.colors import to_rgb
+
+    def sort_key(color: str) -> tuple[float, float, float]:
+        red, green, blue = to_rgb(color)
+        hue, lightness, _saturation = colorsys.rgb_to_hls(red, green, blue)
+        return (_relative_luminance(red, green, blue), hue, lightness)
+
+    return tuple(sorted(colors, key=sort_key))
+
+
+def resolve_matplotlib_colormap(name: str):
+    """Return a colormap matplotlib can use for the given viewer colormap name.
+
+    Standard matplotlib names pass through unchanged. Custom "artist:*" palettes
+    (built for the pyqtgraph-based image viewer's LUT) are not registered with
+    matplotlib, so they are converted to a matplotlib Colormap from the same
+    ordered source colors instead.
+    """
+    palette = ARTIST_IMAGE_COLORMAPS.get(name)
+    if palette is None:
+        return name
+    from matplotlib.colors import LinearSegmentedColormap
+    return LinearSegmentedColormap.from_list(name, _ordered_palette_colors(palette.colors), N=256)
+
 VIEWER_TOOLBAR_ACTIONS = (
     ViewerToolbarAction("pan", "Pan", "Pan image: drag with the left mouse button."),
     ViewerToolbarAction("zoom", "Zoom", "Rectangular zoom: drag a box with the left mouse button."),
+    ViewerToolbarAction("beam_center", "Beam Center", "Show or hide the calibrated beam center."),
+    ViewerToolbarAction("mask", "Mask", "Show or hide the active mask."),
     ViewerToolbarAction("home", "Home", "Reset the image view to the full detector frame."),
     ViewerToolbarAction("auto", "Auto", "Set color limits from the current image."),
     ViewerToolbarAction("copy", "Copy", "Copy the rendered image view to the clipboard."),
@@ -210,19 +251,23 @@ VIEWER_TOOLBAR_ACTIONS = (
 VIEWER_TOOL_ICON_FILES = {
     "pan": "viewer_pan.svg",
     "zoom": "viewer_zoom.svg",
+    "beam_center": "tab_calibration.svg",
+    "mask": "tab_mask_editing.svg",
     "home": "viewer_home.svg",
     "auto": "viewer_auto.svg",
     "copy": "viewer_copy.svg",
     "save": "viewer_save.svg",
 }
 
-MASK_TOOL_NAMES = ("Brush", "Line", "Rectangle", "Circle", "Watershed Fill")
+MASK_TOOL_NAMES = ("Brush", "Eraser", "Line", "Rectangle", "Circle", "Polygon", "Smart Fill")
 MASK_TOOL_ICON_FILES = {
     "Brush": "tool_pen.svg",
+    "Eraser": "tool_eraser.svg",
     "Line": "tool_line.svg",
     "Rectangle": "tool_rect.svg",
     "Circle": "tool_circle.svg",
-    "Watershed Fill": "tool_fill.svg",
+    "Polygon": "tool_polygon.svg",
+    "Smart Fill": "tool_fill.svg",
 }
 MASK_DRAWING_DEFAULTS = {
     "brush_size": 5,

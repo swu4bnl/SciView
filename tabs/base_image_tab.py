@@ -13,12 +13,17 @@ import datetime
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QFileDialog,
-    QTextEdit
+    QTextEdit, QFormLayout, QScrollArea
 )
 from PyQt5.QtCore import Qt
 
 # Import configuration from package modules.
-from sciview.interfaces.theme.app_style import *
+from sciview.interfaces.theme.app_style import (
+    AppStyle,
+    apply_info_style,
+    apply_subtitle_style,
+    apply_title_style,
+)
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_detector_config, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import DEFAULT_DISPLAY_SETTINGS, MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, get_image_info
@@ -47,6 +52,8 @@ class BaseImageTab(QWidget):
             self.display_settings = self.parent_app.display_settings
         else:
             self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
+        self.display_settings.setdefault('show_beam_center', DEFAULT_DISPLAY_SETTINGS['show_beam_center'])
+        self.display_settings.setdefault('show_mask', DEFAULT_DISPLAY_SETTINGS['show_mask'])
         
         # Image-related attributes that will be set by load_image
         self.export_cali_path = None
@@ -67,6 +74,25 @@ class BaseImageTab(QWidget):
         """Update image info text when an info widget is available."""
         if hasattr(self, 'image_info_text') and self.image_info_text is not None:
             self.image_info_text.setPlainText(text)
+
+    @staticmethod
+    def configure_adaptive_form_layout(form_layout: QFormLayout) -> None:
+        """Apply responsive defaults to forms used in side control panels."""
+        form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        form_layout.setRowWrapPolicy(QFormLayout.WrapLongRows)
+        form_layout.setFormAlignment(Qt.AlignTop)
+
+    @staticmethod
+    def make_scrollable_panel(panel: QWidget) -> QScrollArea:
+        """Wrap a panel in a scroll area to keep all controls reachable."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setMinimumHeight(AppStyle.LAYOUT.get('control_panel_min_height', 96))
+        scroll.setWidget(panel)
+        return scroll
 
     def _sanitize_log_limits(self, img_array, vmin, vmax):
         """Return safe positive limits for log display or (None, None) if unavailable."""
@@ -89,10 +115,15 @@ class BaseImageTab(QWidget):
 
     def _init_calibration(self):
         """Initialize calibration object"""
+        if hasattr(self, 'parent_app') and hasattr(self.parent_app, 'calibration') and self.parent_app.calibration is not None:
+            self.calibration = self.parent_app.calibration
+            return
+
         if self.scianalysis_available:
             try:
-                from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
-                self.calibration = CalibrationRQconv(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
+                from sciview.profiles.cms_profile import get_calibration_class
+                cal_cls = get_calibration_class()
+                self.calibration = cal_cls(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
                 self.calibration.set_pixel_size(pixel_size_um=DEFAULT_CALIBRATION['pixel_size_um'])
                 self.calibration.set_distance(DEFAULT_CALIBRATION['distance_m'])
                 self.calibration.set_beam_position(
@@ -113,39 +144,43 @@ class BaseImageTab(QWidget):
 
     def _create_calibration_for_detector(self, measurement_type):
         """
-        Create or update calibration object for specific detector type
+        Create or reuse calibration object for specific detector type
         
         Args:
             measurement_type: 'saxs', 'waxs', 'maxs', or None
             
         Returns:
-            CalibrationRQconv object configured for the detector
+            Calibration object configured for the detector
         """
         if not self.scianalysis_available:
             return None
             
         try:
-            from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
+            # 1. Prefer shared calibration from parent_app if already active
+            if hasattr(self, 'parent_app') and hasattr(self.parent_app, 'calibration') and self.parent_app.calibration is not None:
+                return self.parent_app.calibration
 
-            detector_config = get_detector_config(measurement_type or 'waxs')
-            
-            # Use existing calibration if available, or create new one
+            # 2. Or reuse local calibration if available
             if hasattr(self, 'calibration') and self.calibration is not None:
-                calibration = self.calibration
-            else:
-                calibration = CalibrationRQconv(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
-            
-            # Update with detector-specific parameters
+                return self.calibration
+
+            # 3. Otherwise create initial calibration from detector defaults
+            from sciview.profiles.cms_profile import get_calibration_class
+            cal_cls = get_calibration_class()
+            detector_config = get_detector_config(measurement_type or 'waxs')
+
+            calibration = cal_cls(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
             calibration.set_pixel_size(pixel_size_um=detector_config['pixel_size_um'])
             calibration.set_distance(detector_config['default_distance_m'])
             calibration.set_beam_position(detector_config['beam_center_x'], detector_config['beam_center_y'])
             
-            # Set angles to prevent None values - this is the missing piece!
-            calibration.set_angles(
-                det_orient=DEFAULT_CALIBRATION['detector_orient_deg'],
-                det_tilt=DEFAULT_CALIBRATION['detector_tilt_deg'], 
-                det_phi=DEFAULT_CALIBRATION['detector_phi_deg']
-            )
+            # Set angles to prevent None values
+            if hasattr(calibration, 'set_angles'):
+                calibration.set_angles(
+                    det_orient=DEFAULT_CALIBRATION['detector_orient_deg'],
+                    det_tilt=DEFAULT_CALIBRATION['detector_tilt_deg'], 
+                    det_phi=DEFAULT_CALIBRATION['detector_phi_deg']
+                )
             
             return calibration
             
@@ -279,14 +314,25 @@ class BaseImageTab(QWidget):
         self.vmax_input.blockSignals(True)
         self.cmap_selector.blockSignals(True)
         self.img_scale_combo.blockSignals(True)
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.beam_center_overlay_button.blockSignals(True)
+            self.image_viewer.mask_overlay_button.blockSignals(True)
         self.vmin_input.setText(str(self.display_settings['vmin']))
         self.vmax_input.setText(str(self.display_settings['vmax']))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.img_scale_combo.setCurrentText(self.display_settings['scale'])
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.beam_center_overlay_button.setChecked(
+                bool(self.display_settings.get('show_beam_center', False))
+            )
+            self.image_viewer.mask_overlay_button.setChecked(bool(self.display_settings.get('show_mask', False)))
         self.vmin_input.blockSignals(False)
         self.vmax_input.blockSignals(False)
         self.cmap_selector.blockSignals(False)
         self.img_scale_combo.blockSignals(False)
+        if hasattr(self, 'image_viewer'):
+            self.image_viewer.beam_center_overlay_button.blockSignals(False)
+            self.image_viewer.mask_overlay_button.blockSignals(False)
 
     def apply_shared_display_settings(self, settings):
         """Receive display settings from the main app and refresh local controls."""
@@ -313,6 +359,15 @@ class BaseImageTab(QWidget):
         if hasattr(self.parent_app, 'publish_shared_display_settings'):
             self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
 
+    def _on_overlay_visibility_changed(self) -> None:
+        self.display_settings.update(
+            show_beam_center=self.image_viewer.beam_center_overlay_button.isChecked(),
+            show_mask=self.image_viewer.mask_overlay_button.isChecked(),
+        )
+        if hasattr(self.parent_app, 'publish_shared_display_settings'):
+            self.parent_app.publish_shared_display_settings(self.display_settings, source_tab=self)
+        self._refresh_shared_image_overlays()
+
     def _apply_display_settings_to_viewer(self) -> None:
         """Apply contrast and colormap to the existing viewer image without reloading it."""
         if not hasattr(self, 'image_viewer') or self.image_viewer.source_array is None:
@@ -321,64 +376,126 @@ class BaseImageTab(QWidget):
         self.image_viewer.set_colormap(display_vals['cmap'])
         self.image_viewer.set_scale(display_vals['scale'])
         self.image_viewer.set_levels(display_vals['vmin'], display_vals['vmax'])
+        self._refresh_shared_image_overlays()
 
-    def _create_image_panel(self):
+    def _create_image_panel(self, show_header: bool = True):
         """Create the image display panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)  # Remove all spacing
-        
-        # Image display title
-        title = QLabel("Raw Image")
-        apply_subtitle_style(title)
-        layout.addWidget(title)
 
-        # Dynamic filename label
-        self.filename_label = QLabel("File Name: No image loaded")
-        apply_info_style(self.filename_label)
-        layout.addWidget(self.filename_label)
+        if show_header:
+            title = QLabel("Raw Image Display")
+            apply_subtitle_style(title)
+            layout.addWidget(title)
+
+            self.filename_label = QLabel("File Name: No image loaded")
+            apply_info_style(self.filename_label)
+            layout.addWidget(self.filename_label)
+        else:
+            self.filename_label = QLabel("No image loaded")
+            self.filename_label.setVisible(False)
 
         self.image_viewer = ImageViewer(self)
         self.image_viewer.cursor_moved.connect(self._on_viewer_cursor_moved)
         self.image_viewer.levels_changed.connect(self._on_viewer_levels_changed)
         self.image_viewer.colormap_changed.connect(self._on_viewer_colormap_changed)
+        self.image_viewer.enable_overlay_tools()
+        self.image_viewer.beam_center_overlay_button.setChecked(
+            bool(self.display_settings.get('show_beam_center', False))
+        )
+        self.image_viewer.mask_overlay_button.setChecked(bool(self.display_settings.get('show_mask', False)))
+        self.image_viewer.overlay_visibility_changed.connect(self._on_overlay_visibility_changed)
         layout.addWidget(self.image_viewer)
 
         # Image controls - now shared across all tabs
         img_ctrl = QHBoxLayout()
-        img_ctrl.addWidget(QLabel("vmin:"))
+        img_ctrl.addWidget(QLabel("Color Map Minimum"))
         self.vmin_input = QLineEdit(str(self.display_settings['vmin']))
         self.vmin_input.editingFinished.connect(self._on_vmin_changed)
         img_ctrl.addWidget(self.vmin_input)
-        
-        img_ctrl.addWidget(QLabel("vmax:"))
+
+        img_ctrl.addWidget(QLabel("Color Map Maximum"))
         self.vmax_input = QLineEdit(str(self.display_settings['vmax']))
         self.vmax_input.editingFinished.connect(self._on_vmax_changed)
         img_ctrl.addWidget(self.vmax_input)
-        
-        img_ctrl.addWidget(QLabel("cmap:"))
+
+        img_ctrl.addWidget(QLabel("Colormap"))
         self.cmap_selector = QComboBox()
         self.cmap_selector.addItems(list(SUPPORTED_IMAGE_COLORMAPS))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.cmap_selector.currentTextChanged.connect(self._on_cmap_changed)
         img_ctrl.addWidget(self.cmap_selector)
-        
-        img_ctrl.addWidget(QLabel("scale:"))
+
+        img_ctrl.addWidget(QLabel("Scale"))
         self.img_scale_combo = QComboBox()
         self.img_scale_combo.addItems(list(SUPPORTED_IMAGE_SCALES))
         self.img_scale_combo.setCurrentText(self.display_settings['scale'])
         self.img_scale_combo.currentTextChanged.connect(self._on_scale_changed)
         img_ctrl.addWidget(self.img_scale_combo)
+
         layout.addLayout(img_ctrl)
         
         return panel
+
+    def _overlay_calibration(self):
+        if hasattr(self.parent_app, 'get_shared_calibration'):
+            calibration = self.parent_app.get_shared_calibration(self.image_data)
+            if calibration is not None:
+                return calibration
+        calibration = getattr(self.image_data, 'calibration', None)
+        return calibration if calibration is not None else self.calibration
+
+    def _overlay_mask(self):
+        if hasattr(self.parent_app, 'get_shared_mask'):
+            return self.parent_app.get_shared_mask()
+        return getattr(self.parent_app, 'mask', None)
+
+    def _draw_beam_center_overlay(self, viewer, center_x: float, center_y: float) -> None:
+        viewer.add_points(
+            'shared-beam-center',
+            [center_x],
+            [center_y],
+            group='shared-image-overlays',
+            color='#00d1ff',
+            size=7.0,
+        )
+
+    def _draw_shared_image_overlays(self, viewer):
+        viewer.clear_overlays(group='shared-image-overlays')
+        image = viewer.source_array
+        if image is None:
+            return
+
+        if self.image_viewer.beam_center_overlay_button.isChecked():
+            calibration = self._overlay_calibration()
+            center_x = getattr(calibration, 'x0', None) if calibration is not None else None
+            center_y = getattr(calibration, 'y0', None) if calibration is not None else None
+            if center_x is not None and center_y is not None:
+                self._draw_beam_center_overlay(viewer, float(center_x), float(center_y))
+
+        if self.image_viewer.mask_overlay_button.isChecked():
+            from sciview.masking.io import coerce_mask_to_bool
+            mask = coerce_mask_to_bool(self._overlay_mask(), image.shape)
+            if mask is not None:
+                viewer.add_mask_overlay(
+                    'shared-mask',
+                    mask,
+                    group='shared-image-overlays',
+                    color='#ef4444',
+                    alpha=0.50,
+                )
+
+    def _refresh_shared_image_overlays(self, *_args):
+        if hasattr(self, 'image_viewer'):
+            self._draw_shared_image_overlays(self.image_viewer)
 
     def _create_image_info_panel(self):
         """Create the image information display panel (reusable across tabs)"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
         layout.setSpacing(1)
 
         # Title
@@ -482,6 +599,7 @@ class BaseImageTab(QWidget):
         self.image_viewer.set_image(img_array, preserve_view=preserve_view)
 
         # Call post-display hooks for tab-specific customizations
+        self._draw_shared_image_overlays(self.image_viewer)
         for hook in self.post_display_hooks:
             hook(self.image_viewer)
 
@@ -650,7 +768,7 @@ class BaseImageTab(QWidget):
     def create_filename_label(self, parent_layout=None):
         """Create a standardized filename display label"""
         self.filename_label = QLabel("File Name: No image loaded")
-        self.filename_label.setStyleSheet("font-size: 10px;")
+        apply_info_style(self.filename_label)
         if parent_layout:
             parent_layout.addWidget(self.filename_label)
         return self.filename_label

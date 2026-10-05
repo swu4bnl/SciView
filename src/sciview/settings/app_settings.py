@@ -94,8 +94,11 @@ EXPORT_SETTINGS = {
 
 GUI_SETTINGS = {
     "default_window_size": (1200, 900),
+    "default_window_screen_fraction": (0.9, 0.88),
     "minimum_window_size": (1024, 768),
-    "visualization_ratio": 3,
+    "minimum_window_screen_fraction": (0.75, 0.72),
+    "minimum_window_floor": (720, 560),
+    "visualization_ratio": 2,
     "controls_ratio": 1,
     "image_plot_ratio": 3,
     "plot_ratio": 1,
@@ -120,4 +123,41 @@ DEFAULT_DISPLAY_SETTINGS = {
     "vmax": 1000,
     "cmap": "gray",
     "scale": "linear",
+    "show_beam_center": True,
+    "show_mask": True,
+}
+
+# Spin-box configuration for tabs that share similar controls.
+# Each entry: (min, max, default, step, decimals)
+#
+# Grouped by *shape* (the value's valid sign/range), not by which tab uses
+# it — reuse a key only if its shape actually matches (e.g. don't reuse a
+# non-negative "magnitude" range for a signed axis; that caused a bug where
+# Q Image's qx/qz min spinboxes couldn't go negative and clamped to 0).
+SPINBOX_CONFIG = {
+    # Non-negative |q| magnitude (radial q, or q-phi's q axis).
+    "q_min": (0.0,   100.0, 0.0, 0.01, 4),
+    "q_max": (0.001, 100.0, 2.0, 0.01, 4),
+    # Signed axis crop for qx/qz/qr, which straddle zero — used by Q Image
+    # and Qr-Qz Image crops.
+    "crop_min": (-100.0, 100.0, -2.0, 0.01, 4),
+    "crop_max": (-100.0, 100.0,  2.0, 0.01, 4),
+    # Angles in degrees.
+    "phi_min": (-360.0, 360.0, -180.0, 1.0, 2),
+    "phi_max": (-360.0, 360.0,  180.0, 1.0, 2),
+    "sector_start": (0.0, 360.0,  0.0, 1.0, 1),
+    "sector_end":   (0.0, 360.0, 30.0, 1.0, 1),
+    "line_chi0":    (-180.0, 180.0, 0.0, 1.0, 2),
+    # Bin counts.
+    "bins_phi": (16, 1440, 360, 1, None),
+    "bins_relative": (0.1, 3.0, 1.0, 0.05, 2),  # SciAnalysis's native bins_relative (circular/sector/all 3 transforms)
+    # Line-cut params.
+    "line_dq":    (0.0001, 100.0, 0.01, 0.001, 4),
+    "line_value": (-10.0,  10.0,  0.0, 0.01,  4),
+    # Grazing-incidence angle (GISAXS/GIWAXS), used only by Q Image / Qr-Qz Image —
+    # SciAnalysis folds this into its qz/qr calculation (see CalibrationRQconv.calc_from_XY).
+    "incident_angle_deg": (-90.0, 90.0, 0.0, 0.01, 3),
+    # Azimuthal (phi) reference offset for sample-stage misalignment; feeds into
+    # Qx/Qy/phi for all three transform maps (see CalibrationRQconv.calc_from_XY).
+    "sample_normal_deg": (-180.0, 180.0, 0.0, 0.01, 3),
 }

@@ -10,6 +10,7 @@ import os
 import subprocess
 import shutil
 import tempfile
+import tomllib
 from pathlib import Path
 import numpy as np
 
@@ -49,7 +50,7 @@ from PyQt5.QtCore import Qt, QTimer
 
 # Import configuration from package modules.
 from sciview.interfaces.theme.app_style import AppStyle, apply_info_style
-from sciview.profiles.cms_profile import BEAMLINE_NAME, DEFAULT_CALIBRATION
+from sciview.profiles.cms_profile import BEAMLINE_NAME, DEFAULT_CALIBRATION, get_calibration_class
 from sciview.settings.app_settings import (
     DEFAULT_DISPLAY_SETTINGS,
     GUI_SETTINGS,
@@ -57,13 +58,11 @@ from sciview.settings.app_settings import (
     SCIANALYSIS_SOURCE_MODE,
     SCIANALYSIS_SOURCE_ROOT,
 )
+from sciview.settings.plot_style import DEFAULT_PLOT_STYLE, PlotStyle
 
-# Import SciAnalysis dependencies only if available  
-if SCIANALYSIS_AVAILABLE:
-    from SciAnalysis.XSAnalysis.Data import Data2DScattering
-    from SciAnalysis.XSAnalysis.DataRQconv import CalibrationRQconv
 from sciview.interfaces.stable_qt.utils.resource_monitor import get_resource_monitor
-from sciview.interfaces.stable_qt.utils.file_dialog_state import dialog_open_file
+from sciview.session.session_cache import choose_path
+from sciview.session import session_cache
 
 
 def _build_placeholder_tab(message):
@@ -81,63 +80,83 @@ class SciAnaApp(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"SciView - {BEAMLINE_NAME}")
+        self.setWindowTitle(f"{QApplication.applicationName()} - {BEAMLINE_NAME}")
         self.status = self.statusBar()
         self._workspace_root = Path(__file__).resolve().parent
+
+        # Shared application state
+        self.image_data = None
+        self.image_path = None
+        self.calibration = None
+        self.mask = None
+        self.shared_info_text = None
+        self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
+        self.plot_style = DEFAULT_PLOT_STYLE
+        self._shared_image_revision = 0
+        self._batch_recipe_bus: dict = {}
+        self.shared_file_list: list[str] = []
+        self.shared_file_list_info: dict[str, str] = {
+            "folder": "",
+            "pattern": "*",
+            "source": "",
+        }
         
         # Tab widget
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
         self._last_tab_index = -1
+        self._tab_icon_keys = {}
         self.tab_widget.currentChanged.connect(self._on_current_tab_changed)
         tab_bar = self.tab_widget.tabBar()
+        tab_bar.setFont(AppStyle.tab_font())
         tab_bar.setIconSize(AppStyle.tab_icon_size())
+        tab_bar.setMinimumHeight(AppStyle.tab_min_height())
         tab_bar.setExpanding(False)
         self.tab_widget.setStyleSheet(AppStyle.tab_widget_stylesheet())
         
         self._icon_dir = AppStyle.icon_directory(self._workspace_root)
 
         # Use local transparent icons for platform-consistent button visuals.
+        corner_button_size = AppStyle.corner_button_size()
         self.refresh_button = QPushButton("")
+        self.refresh_button.setProperty("sciview_compact_button", True)
         self.refresh_button.setIcon(
             AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['refresh'])
         )
         self.refresh_button.setIconSize(AppStyle.corner_button_icon_size())
         self.refresh_button.setToolTip("Reload current tab and clear cache (Ctrl+R)")
-        corner_button_size = AppStyle.corner_button_size()
         self.refresh_button.setFixedSize(corner_button_size)
         self.refresh_button.clicked.connect(self._refresh_current_tab)
 
-        self.update_scianalysis_button = QPushButton("")
-        self.update_scianalysis_button.setIcon(
-            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['sci_update'])
-        )
-        self.update_scianalysis_button.setIconSize(AppStyle.corner_button_icon_size())
-        source_label = {
-            "pixi": "Pixi package",
-            "local": "local SciAnalysis checkout",
-            "custom": "custom SciAnalysis checkout",
-        }.get(SCIANALYSIS_SOURCE_MODE, "selected SciAnalysis source")
-        self.update_scianalysis_button.setToolTip(f"Update the {source_label} (restart after it finishes)")
-        self.update_scianalysis_button.setFixedSize(corner_button_size)
-        self.update_scianalysis_button.clicked.connect(self._update_scianalysis_source)
+        self.style_inspector_button = QPushButton("I")
+        self.style_inspector_button.setProperty("sciview_compact_button", True)
+        self.style_inspector_button.setToolTip("Open Style Inspector [dev] (Ctrl+Shift+I)")
+        self.style_inspector_button.setFixedSize(corner_button_size)
+        self.style_inspector_button.setEnabled(False)
+        self.style_inspector_button.clicked.connect(self._show_style_inspector)
 
-        self.update_sciview_button = QPushButton("")
-        self.update_sciview_button.setIcon(
-            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['app_update'])
+        self.theme_toggle_button = QPushButton()
+        self.theme_toggle_button.setProperty("sciview_compact_button", True)
+        self.theme_toggle_button.setFixedSize(corner_button_size)
+        self.theme_toggle_button.clicked.connect(self._toggle_dark_light_theme)
+        self._update_theme_toggle_icon()
+
+        self.clear_session_button = QPushButton("D")
+        self.clear_session_button.setProperty("sciview_compact_button", True)
+        self.clear_session_button.setToolTip(
+            "Clear saved session cache (last image/calibration/mask/batch queue restore data)"
         )
-        self.update_sciview_button.setIconSize(AppStyle.corner_button_icon_size())
-        self.update_sciview_button.setToolTip("Update the SciView checkout from GitHub (git pull --ff-only)")
-        self.update_sciview_button.setFixedSize(corner_button_size)
-        self.update_sciview_button.clicked.connect(self._update_sciview_source)
-        
+        self.clear_session_button.setFixedSize(corner_button_size)
+        self.clear_session_button.clicked.connect(self._clear_session_cache)
+
         corner_widget = QWidget()
         corner_layout = QHBoxLayout(corner_widget)
         corner_layout.setContentsMargins(0, 0, 0, 0)
         corner_layout.setSpacing(AppStyle.CORNER_BUTTON_UI['spacing'])
+        corner_layout.addWidget(self.theme_toggle_button)
         corner_layout.addWidget(self.refresh_button)
-        corner_layout.addWidget(self.update_sciview_button)
-        corner_layout.addWidget(self.update_scianalysis_button)
+        corner_layout.addWidget(self.clear_session_button)
+        corner_layout.addWidget(self.style_inspector_button)
         corner_layout.addStretch()
 
         # Use QTabWidget's corner widget feature to place buttons on same line as tabs
@@ -154,23 +173,8 @@ class SciAnaApp(QMainWindow):
         self._scianalysis_source_mode = SCIANALYSIS_SOURCE_MODE
         self._scianalysis_source_root = Path(SCIANALYSIS_SOURCE_ROOT) if SCIANALYSIS_SOURCE_ROOT else None
         
-        # Shared application state
-        self.image_data = None
-        self.image_path = None
-        self.calibration = None
-        self.mask = None
-        self.shared_info_text = None
-        self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
-        self._shared_image_revision = 0
-        
-        # Set initial window size from config
-        window_size = GUI_SETTINGS['default_window_size']
-        self.resize(*window_size)
-
-        # Keep app usable on small displays by enforcing configurable minimums
-        min_window_size = GUI_SETTINGS.get('minimum_window_size')
-        if min_window_size:
-            self.setMinimumSize(*min_window_size)
+        # Set window sizing from config with screen-aware bounds.
+        self._apply_window_size_from_config()
         
         # Setup resource monitoring
         self._setup_resource_monitor()
@@ -180,17 +184,206 @@ class SciAnaApp(QMainWindow):
         from PyQt5.QtGui import QKeySequence
         self.refresh_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         self.refresh_shortcut.activated.connect(self._refresh_current_tab)
+        self.theme_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
+        self.theme_shortcut.activated.connect(self._toggle_dark_light_theme)
+
+        # Dev tools: hot-reload + style inspector (only when DEV_TOOLS=1)
+        self._style_hot_reloader = None
+        self._inspector_shortcut = None
+        if os.environ.get("DEV_TOOLS") == "1":
+            self._start_dev_tools()
+
+    def _toggle_dark_light_theme(self):
+        """Switch between qdarktheme dark and light."""
+        if AppStyle.theme_is_dark():
+            AppStyle.apply_qdarktheme('light')
+        else:
+            AppStyle.apply_qdarktheme('dark')
+
+    def _update_theme_toggle_icon(self):
+        if AppStyle.theme_is_dark():
+            self.theme_toggle_button.setText("\u2600")  # sun = click to go light
+            self.theme_toggle_button.setToolTip("Switch to light mode (Ctrl+D)")
+        else:
+            self.theme_toggle_button.setText("\U0001f319")  # moon = click to go dark
+            self.theme_toggle_button.setToolTip("Switch to dark mode (Ctrl+D)")
+
+    def _show_style_inspector(self):
+        """Open the dev style inspector when dev tools are enabled."""
+        if self._style_hot_reloader is None:
+            self.show_status("Style Inspector is available only when DEV_TOOLS=1")
+            return
+        self._style_hot_reloader.show_inspector()
+
+    def _start_dev_tools(self):
+        """Start hot-reloader and register Ctrl+Shift+I for the style inspector."""
+        try:
+            from sciview.dev.style_inspector import StyleHotReloader
+            from PyQt5.QtWidgets import QShortcut
+            from PyQt5.QtGui import QKeySequence
+            self._style_hot_reloader = StyleHotReloader()
+            self._inspector_shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
+            self._inspector_shortcut.setContext(Qt.ApplicationShortcut)
+            self._inspector_shortcut.activated.connect(self._show_style_inspector)
+            self.style_inspector_button.setEnabled(True)
+            self.show_status("Dev tools active: hot-reload ON  |  Ctrl+Shift+I or corner I button = Style Inspector")
+        except Exception as exc:
+            print(f"[dev tools] failed to start: {exc}")
+
+    @staticmethod
+    def _pair_from_config(value, fallback):
+        """Parse a 2-item config sequence into numeric pair with fallback."""
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            return fallback
+        try:
+            return float(value[0]), float(value[1])
+        except (TypeError, ValueError):
+            return fallback
+
+    def _apply_window_size_from_config(self):
+        """Apply responsive window size and minimums without hard-coded screen assumptions."""
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            default_size = GUI_SETTINGS.get('default_window_size', (1200, 900))
+            self.resize(*default_size)
+            min_window_size = GUI_SETTINGS.get('minimum_window_size')
+            if min_window_size:
+                self.setMinimumSize(*min_window_size)
+            return
+
+        available = screen.availableGeometry()
+        available_w = max(1, available.width())
+        available_h = max(1, available.height())
+
+        default_size = self._pair_from_config(GUI_SETTINGS.get('default_window_size'), (1200.0, 900.0))
+        default_fraction = self._pair_from_config(
+            GUI_SETTINGS.get('default_window_screen_fraction'),
+            (0.9, 0.88),
+        )
+        target_w = int(default_fraction[0] * available_w)
+        target_h = int(default_fraction[1] * available_h)
+
+        # If configured fraction is invalid, fall back to configured absolute size.
+        if target_w <= 0 or target_h <= 0:
+            target_w, target_h = int(default_size[0]), int(default_size[1])
+
+        target_w = min(max(640, target_w), available_w)
+        target_h = min(max(480, target_h), available_h)
+
+        min_size_cfg = self._pair_from_config(GUI_SETTINGS.get('minimum_window_size'), (1024.0, 768.0))
+        min_size_floor = self._pair_from_config(GUI_SETTINGS.get('minimum_window_floor'), (720.0, 560.0))
+        min_fraction = self._pair_from_config(GUI_SETTINGS.get('minimum_window_screen_fraction'), (0.75, 0.72))
+        min_w_from_fraction = int(min_fraction[0] * available_w)
+        min_h_from_fraction = int(min_fraction[1] * available_h)
+
+        min_w = int(max(min_size_floor[0], min(min_size_cfg[0], min_w_from_fraction)))
+        min_h = int(max(min_size_floor[1], min(min_size_cfg[1], min_h_from_fraction)))
+        min_w = min(min_w, target_w)
+        min_h = min(min_h, target_h)
+
+        self.setMinimumSize(max(480, min_w), max(360, min_h))
+        self.resize(target_w, target_h)
 
     def add_tab(self, widget, name, icon_key=None):
         """Add a tab to the main interface"""
         index = self.tab_widget.addTab(widget, name)
         if icon_key:
+            self._tab_icon_keys[index] = icon_key
             icon_filename = AppStyle.TAB_ICON_FILES.get(icon_key)
             if icon_filename:
                 self.tab_widget.setTabIcon(
                     index,
                     AppStyle.load_icon(self._workspace_root, icon_filename),
                 )
+
+    def _collect_session_state(self) -> dict:
+        """Gather per-tab restart state, keyed by each tab's stable icon_key."""
+        state = {"display_settings": dict(self.display_settings)}
+        for index in range(self.tab_widget.count()):
+            key = self._tab_icon_keys.get(index)
+            widget = self.tab_widget.widget(index)
+            if not key or not hasattr(widget, "get_session_state"):
+                continue
+            try:
+                tab_state = widget.get_session_state()
+            except Exception as exc:
+                print(f"[session] failed to collect state for '{key}': {exc}")
+                continue
+            if tab_state:
+                state[key] = tab_state
+        return state
+
+    def save_session_state(self) -> None:
+        """Persist current tab state for restore on next launch (best-effort)."""
+        try:
+            session_cache.save_session(self._collect_session_state())
+        except Exception as exc:
+            print(f"[session] failed to save session cache: {exc}")
+
+    def restore_session_state(self) -> None:
+        """Restore last-saved tab state, if any. Never blocks or fails startup."""
+        state = session_cache.load_session()
+        if not state:
+            return
+        display_settings = state.get("display_settings")
+        if display_settings:
+            try:
+                self.publish_shared_display_settings(display_settings)
+            except Exception as exc:
+                print(f"[session] failed to restore display settings: {exc}")
+        for index in range(self.tab_widget.count()):
+            key = self._tab_icon_keys.get(index)
+            widget = self.tab_widget.widget(index)
+            if not key or key not in state or not hasattr(widget, "restore_session_state"):
+                continue
+            try:
+                widget.restore_session_state(state[key])
+            except Exception as exc:
+                print(f"[session] failed to restore state for '{key}': {exc}")
+
+    def _clear_session_cache(self) -> None:
+        """Manually wipe the on-disk session cache (no auto-pruning)."""
+        response = QMessageBox.question(
+            self,
+            "Clear Session Cache",
+            "This deletes the saved last-session restore data (image path, "
+            "calibration, mask layers, batch queue). Continue?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if response != QMessageBox.Yes:
+            return
+        session_cache.clear_session()
+        self.show_status("Session cache cleared")
+
+    def closeEvent(self, event):
+        self.save_session_state()
+        session_cache.clear_scratch()
+        super().closeEvent(event)
+
+    def refresh_theme(self):
+        """Refresh native sizing and theme-aware icons after a style change."""
+        self.tab_widget.setStyleSheet(AppStyle.tab_widget_stylesheet())
+        self._update_theme_toggle_icon()
+        tab_bar = self.tab_widget.tabBar()
+        tab_bar.setFont(AppStyle.tab_font())
+        tab_bar.setIconSize(AppStyle.tab_icon_size())
+        tab_bar.setMinimumHeight(AppStyle.tab_min_height())
+
+        for index, icon_key in self._tab_icon_keys.items():
+            icon_filename = AppStyle.TAB_ICON_FILES.get(icon_key)
+            if icon_filename:
+                self.tab_widget.setTabIcon(index, AppStyle.load_icon(self._workspace_root, icon_filename))
+
+        corner_button_size = AppStyle.corner_button_size()
+        corner_icon_size = AppStyle.corner_button_icon_size()
+
+        self.refresh_button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['refresh']))
+        self.refresh_button.setIconSize(corner_icon_size)
+        self.refresh_button.setFixedSize(corner_button_size)
+
+        self.style_inspector_button.setFixedSize(corner_button_size)
+        self.theme_toggle_button.setFixedSize(corner_button_size)
 
     def publish_shared_image(self, image_data, image_path=None, source_tab=None):
         """Publish active image into shared app state and propagate to tabs."""
@@ -219,7 +412,7 @@ class SciAnaApp(QMainWindow):
             self.sync_tabs_from_shared(source_tab=source_tab)
 
     def publish_shared_display_settings(self, settings, source_tab=None):
-        """Publish image display settings so all image tabs share contrast and colormap."""
+        """Publish image display settings so image tabs share rendering and overlay state."""
         self.display_settings.update(settings)
         current_tab = self.tab_widget.currentWidget()
         if current_tab is not None and current_tab != source_tab and hasattr(current_tab, 'apply_shared_display_settings'):
@@ -227,6 +420,16 @@ class SciAnaApp(QMainWindow):
                 current_tab.apply_shared_display_settings(self.display_settings)
             except Exception as e:
                 print(f"DEBUG: Error applying display settings to current tab: {e}")
+
+    def publish_shared_plot_style(self, style, source_tab=None):
+        """Publish one plot style to previews and future batch recipes."""
+        self.plot_style = style if isinstance(style, PlotStyle) else PlotStyle.from_dict(style)
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            if tab == source_tab:
+                continue
+            if hasattr(tab, "on_plot_style_changed"):
+                tab.on_plot_style_changed()
 
     def publish_shared_info_text(self, info_text, source_tab=None):
         """Publish image information text to dedicated info consumers."""
@@ -240,6 +443,63 @@ class SciAnaApp(QMainWindow):
                     tab.set_shared_info_text(info_text)
                 except Exception as e:
                     print(f"DEBUG: Error syncing shared info for tab {i}: {e}")
+
+    def push_recipe_to_batch(self, recipe_payload: dict, source: str = "") -> None:
+        """Register a protocol recipe from a processing tab and forward to the batch tab."""
+        key = recipe_payload.get("name") or source or recipe_payload.get("operation", "recipe")
+        recipe_payload = dict(recipe_payload)
+        recipe_payload.setdefault("source", source)
+        self._batch_recipe_bus[key] = recipe_payload
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            if hasattr(tab, "receive_recipe"):
+                tab.receive_recipe(key, recipe_payload)
+                break
+
+    def publish_shared_file_list(
+        self,
+        file_paths,
+        *,
+        folder: str = "",
+        pattern: str = "*",
+        source: str = "",
+        source_tab=None,
+    ) -> None:
+        """Publish a canonical file-backed image list shared across tabs."""
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for item in file_paths or []:
+            token = str(item).strip()
+            if not token:
+                continue
+            if token not in seen:
+                seen.add(token)
+                normalized.append(token)
+
+        self.shared_file_list = normalized
+        self.shared_file_list_info = {
+            "folder": str(folder or ""),
+            "pattern": str(pattern or "*"),
+            "source": str(source or ""),
+        }
+
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            if tab == source_tab:
+                continue
+            if hasattr(tab, "on_shared_file_list_changed"):
+                try:
+                    tab.on_shared_file_list_changed(list(self.shared_file_list), dict(self.shared_file_list_info))
+                except Exception as exc:
+                    print(f"DEBUG: Error syncing shared file list for tab {i}: {exc}")
+
+    def get_shared_file_list(self) -> list[str]:
+        """Return the current shared local file list published by source tabs."""
+        return list(self.shared_file_list)
+
+    def get_shared_file_list_info(self) -> dict[str, str]:
+        """Return metadata associated with the shared local file list."""
+        return dict(self.shared_file_list_info)
 
     def get_shared_calibration(self, fallback_image_data=None):
         """Return shared calibration, with optional image calibration fallback."""
@@ -301,6 +561,11 @@ class SciAnaApp(QMainWindow):
 
         if 0 <= previous_index < self.tab_widget.count():
             previous_tab = self.tab_widget.widget(previous_index)
+            if hasattr(previous_tab, 'auto_publish_current_file_list'):
+                try:
+                    previous_tab.auto_publish_current_file_list()
+                except Exception as e:
+                    print(f"DEBUG: Error auto-publishing file list from previous tab: {e}")
             if hasattr(previous_tab, 'auto_publish_current_image'):
                 try:
                     if previous_tab.auto_publish_current_image():
@@ -312,11 +577,17 @@ class SciAnaApp(QMainWindow):
 
     def _render_current_tab_from_shared(self, *_args):
         """Render shared image data when a tab becomes active."""
-        if self.image_data is None:
-            return
-
         tab = self.tab_widget.currentWidget()
         if tab is None:
+            return
+
+        if hasattr(tab, 'apply_shared_display_settings'):
+            try:
+                tab.apply_shared_display_settings(self.display_settings)
+            except Exception as e:
+                print(f"DEBUG: Error applying display settings to active tab: {e}")
+
+        if self.image_data is None:
             return
 
         if hasattr(tab, 'image_data'):
@@ -343,13 +614,6 @@ class SciAnaApp(QMainWindow):
                 return
             except Exception as e:
                 print(f"DEBUG: Error refreshing active tab shared state: {e}")
-
-        if hasattr(tab, 'apply_shared_display_settings'):
-            try:
-                tab.apply_shared_display_settings(self.display_settings)
-                return
-            except Exception as e:
-                print(f"DEBUG: Error applying display settings to active tab: {e}")
 
         if hasattr(tab, 'update_plot'):
             try:
@@ -415,18 +679,32 @@ class SciAnaApp(QMainWindow):
             self.show_status("Error: SciAnalysis not available")
             return None, None
             
-        path, _ = dialog_open_file(self, "Open Image File", file_filters, key="image_open")
+        path, _ = choose_path(self, "Open Image File", file_filter=file_filters, key="image_open")
         if not path:
             return None, None
             
         try:
-            # Use provided calibration or create a default one
+            # Use provided calibration, active shared calibration, or create a default one
             if calibration is None:
-                calibration = CalibrationRQconv(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
-                calibration.set_pixel_size(pixel_size_um=DEFAULT_CALIBRATION['pixel_size_um'])
-                calibration.set_distance(DEFAULT_CALIBRATION['distance_m'])
+                if self.calibration is not None:
+                    calibration = self.calibration
+                else:
+                    cal_cls = get_calibration_class()
+                    calibration = cal_cls(wavelength_A=DEFAULT_CALIBRATION['wavelength_A'])
+                    calibration.set_pixel_size(pixel_size_um=DEFAULT_CALIBRATION['pixel_size_um'])
+                    calibration.set_distance(DEFAULT_CALIBRATION['distance_m'])
+                    if hasattr(calibration, 'set_angles'):
+                        calibration.set_angles(
+                            det_orient=DEFAULT_CALIBRATION['detector_orient_deg'],
+                            det_tilt=DEFAULT_CALIBRATION['detector_tilt_deg'],
+                            det_phi=DEFAULT_CALIBRATION['detector_phi_deg'],
+                        )
             
-            image_data = Data2DScattering(path, calibration=calibration)
+            if SCIANALYSIS_AVAILABLE:
+                from SciAnalysis.XSAnalysis.Data import Data2DScattering
+                image_data = Data2DScattering(path, calibration=calibration)
+            else:
+                image_data = None
             
             # Store and propagate shared state
             self.publish_shared_image(image_data, image_path=path)
@@ -482,6 +760,7 @@ class SciAnaApp(QMainWindow):
                     "Mask Editing": "tabs.mask_tab.MaskApp",
                     "Reduction": "tabs.reduction_tab.ReductionTab",
                     "Transform": "tabs.transform_tab.TransformTab",
+                    "Batch": "tabs.batch_tab.BatchTab",
                 }
                 
                 if tab_name not in module_map:
@@ -515,8 +794,6 @@ class SciAnaApp(QMainWindow):
 
     def _set_update_ui_enabled(self, enabled: bool):
         self.refresh_button.setEnabled(enabled)
-        self.update_sciview_button.setEnabled(enabled)
-        self.update_scianalysis_button.setEnabled(enabled)
 
     def _start_update_process(
         self,
@@ -725,102 +1002,147 @@ class SciAnaApp(QMainWindow):
 
 def create_application():
     """Create and configure the main application"""
+    print("[SciView] Starting up...")
     app = QApplication(sys.argv)
+
+    # Load layout/sizing ratios from runtime configuration before creating widgets.
+    AppStyle.apply_gui_settings(GUI_SETTINGS)
+
+    # Resolve the system theme before widgets create palette-derived styles and icons.
+    if not AppStyle.apply_qdarktheme('auto', app):
+        AppStyle.apply_global_style(app)
     
-    # Apply global styling
-    AppStyle.apply_global_style(app)
-    
-    # Set application properties
-    app.setApplicationName("SciAnalysis GUI")
-    app.setApplicationVersion("2.0")
-    app.setOrganizationName(BEAMLINE_NAME)
+    with (Path(__file__).resolve().parent / "pyproject.toml").open("rb") as handle:
+        metadata = tomllib.load(handle)
+    project = metadata["project"]
+    app.setApplicationName(metadata["tool"]["sciview"]["display_name"])
+    app.setApplicationVersion(project["version"])
+    app.setOrganizationName(project["name"])
     
     # Create main window
+    print("[SciView] Initializing main window...")
     main_window = SciAnaApp()
     
     # Add tabs
-    
-    # Image Browser tab (first tab for primary image loading)
+    import time as _time
+
+    _TAB_TOTAL = 8
+    _tab_idx = 0
+
+    def _tab_start(name):
+        nonlocal _tab_idx
+        _tab_idx += 1
+        print(f"[SciView]  [{_tab_idx}/{_TAB_TOTAL}] Loading {name}...", end="", flush=True)
+        return _time.perf_counter()
+
+    def _tab_done(t0, *, failed=False):
+        elapsed = (_time.perf_counter() - t0) * 1000
+        status = "FAILED" if failed else "ok"
+        print(f" {status} ({elapsed:.0f}ms)")
+
+    # Image Browser
+    t0 = _tab_start("Image Browser")
     try:
         from tabs.image_browser_tab import ImageBrowserApp
         image_browser_tab = ImageBrowserApp(main_window)
         main_window.add_tab(image_browser_tab, "Image Browser", icon_key="image_browser")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load image browser tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Image Browser Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Image Browser", icon_key="image_browser")
 
-    # Tiled Browser tab (metadata-first browsing and Tiled scan preview)
+    # Tiled Browser
+    t0 = _tab_start("Tiled Browser")
     try:
         from tabs.tiled_browser_tab import TiledBrowserTab
         tiled_browser_tab = TiledBrowserTab(main_window)
         main_window.add_tab(tiled_browser_tab, "Tiled Browser", icon_key="tiled_browser")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load tiled browser tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Tiled Browser Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Tiled Browser", icon_key="tiled_browser")
-    
-    # Calibration tab
+
+    # Calibration
+    t0 = _tab_start("Calibration")
     try:
         if SCIANALYSIS_AVAILABLE:
             from tabs.calibration_tab import CalibrationApp
             calibration_tab = CalibrationApp(main_window)
             main_window.add_tab(calibration_tab, "Calibration", icon_key="calibration")
+            _tab_done(t0)
         else:
+            _tab_done(t0, failed=True)
             placeholder = _build_placeholder_tab("Calibration Tab\\n(SciAnalysis not available)")
             main_window.add_tab(placeholder, "Calibration", icon_key="calibration")
-    
     except ImportError as e:
-        print(f"Warning: Could not load calibration tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Calibration Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Calibration", icon_key="calibration")
-    
-    # Mask editing tab
+
+    # Mask Editing
+    t0 = _tab_start("Mask Editing")
     try:
         from tabs.mask_tab import MaskApp
         mask_tab = MaskApp(main_window)
         main_window.add_tab(mask_tab, "Mask Editing", icon_key="mask_editing")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load mask tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Mask Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Mask Editing", icon_key="mask_editing")
 
-    # Reduction tab
+    # Reduction
+    t0 = _tab_start("Reduction")
     try:
         from tabs.reduction_tab import ReductionTab
         reduction_tab = ReductionTab(main_window)
         main_window.add_tab(reduction_tab, "Reduction", icon_key="reduction")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load reduction tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Reduction Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Reduction", icon_key="reduction")
 
-    # Transform tab
+    # Transform
+    t0 = _tab_start("Transform")
     try:
         from tabs.transform_tab import TransformTab
         transform_tab = TransformTab(main_window)
         main_window.add_tab(transform_tab, "Transform", icon_key="transform")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load transform tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Transform Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Transform", icon_key="transform")
 
-    # Batch tab placeholder (reserved for future development)
-    batch_placeholder = _build_placeholder_tab(
-        "Batch Tab\\n(Placeholder for future batch processing workflows)"
-    )
-    main_window.add_tab(batch_placeholder, "Batch", icon_key="batch")
+    # Batch
+    t0 = _tab_start("Batch")
+    try:
+        from tabs.batch_tab import BatchTab
+        batch_tab = BatchTab(main_window)
+        main_window.add_tab(batch_tab, "Batch", icon_key="batch")
+        _tab_done(t0)
+    except ImportError as e:
+        _tab_done(t0, failed=True)
+        placeholder = _build_placeholder_tab(f"Batch Tab\\n(Import error: {e})")
+        main_window.add_tab(placeholder, "Batch", icon_key="batch")
 
-    # Info tab
+    # Info
+    t0 = _tab_start("Info")
     try:
         from tabs.info_tab import InfoTab
         info_tab = InfoTab(main_window)
         main_window.add_tab(info_tab, "Info", icon_key="info")
+        _tab_done(t0)
     except ImportError as e:
-        print(f"Warning: Could not load info tab: {e}")
+        _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(f"Info Tab\\n(Import error: {e})")
         main_window.add_tab(placeholder, "Info", icon_key="info")
-    
+
+    print("[SciView] All tabs loaded. Launching window...")
+    main_window.restore_session_state()
     return app, main_window
 
 
@@ -830,18 +1152,22 @@ def main():
         app, main_window = create_application()
         main_window.show()
         
-        # Show startup status
+        # Show startup status in GUI status bar
         status_msg = f"SciAnalysis GUI started for {BEAMLINE_NAME}"
         if SCIANALYSIS_AVAILABLE:
             status_msg += " - SciAnalysis loaded successfully"
         else:
             status_msg += " - SciAnalysis not available"
         main_window.show_status(status_msg)
+
+        sa_status = "available" if SCIANALYSIS_AVAILABLE else "NOT available"
+        print(f"[SciView] Ready  |  Beamline: {BEAMLINE_NAME}  |  SciAnalysis: {sa_status}")
+        print("[SciView] *** Do not close this window — it keeps the app running ***")
         
         sys.exit(app.exec_())
         
     except Exception as e:
-        print(f"Fatal error starting application: {e}")
+        print(f"[SciView] Fatal error starting application: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
