@@ -133,7 +133,7 @@ def tiled_authenticate(
     compatibility but are not used by the current external-provider flow.
     """
 
-    del username, password, interactive_fallback
+    del username, password
     profile_name = profile_name or tiled_default_profile() or ""
     if not tiled_is_available():
         return TiledAuthState(profile_name, False, error=tiled_import_error())
@@ -144,6 +144,7 @@ def tiled_authenticate(
         profile_name,
         authorization_callback=authorization_callback,
         cancellation_requested=cancellation_requested,
+        interactive_fallback=interactive_fallback,
     )
     if client is None:
         return TiledAuthState(profile_name, False, error=f"Could not connect to {profile_name}")

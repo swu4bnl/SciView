@@ -146,17 +146,18 @@ class TiledLiveMonitor:
                         metadata=summary.metadata,
                     )
                 )
-            self._emit(
-                TiledLiveEvent(
-                    profile_name=self.profile_name,
-                    event_type="new_data",
-                    uid=run_uid,
-                    scan_id=summary.scan_id,
-                    key=str(update.stream_name),
-                    scan=summary,
-                    metadata=summary.metadata,
+            else:
+                self._emit(
+                    TiledLiveEvent(
+                        profile_name=self.profile_name,
+                        event_type="new_data",
+                        uid=run_uid,
+                        scan_id=summary.scan_id,
+                        key=str(update.stream_name),
+                        scan=summary,
+                        metadata=summary.metadata,
+                    )
                 )
-            )
         except Exception as exc:
             self._emit_error(exc)
 

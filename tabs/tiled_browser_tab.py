@@ -329,6 +329,10 @@ class TiledBrowserTab(BaseImageTab):
     def _cancel_operation(self) -> None:
         if self._auth_cancel_event is not None:
             self._auth_cancel_event.set()
+            self._auth_cancel_event = None
+        if self._auth_dialog is not None:
+            self._auth_dialog.reject()
+            self._auth_dialog = None
         self._operation_token += 1
         self._stop_playback()
         self._finish_operation()
@@ -738,7 +742,8 @@ class TiledBrowserTab(BaseImageTab):
         if profile is None:
             return
         self.parent_app.show_status("Preparing Tiled login...")
-        self._auth_cancel_event = threading.Event()
+        auth_cancel_event = threading.Event()
+        self._auth_cancel_event = auth_cancel_event
 
         authorization_emit_box: list[Callable | None] = [None]
 
@@ -747,7 +752,7 @@ class TiledBrowserTab(BaseImageTab):
                 profile_name=profile,
                 interactive_fallback=False,
                 authorization_callback=authorization_emit_box[0],
-                cancellation_requested=self._auth_cancel_event.is_set,
+                cancellation_requested=auth_cancel_event.is_set,
             )
 
         def done(auth):
@@ -789,6 +794,8 @@ class TiledBrowserTab(BaseImageTab):
         thread.start()
 
     def _show_authorization_dialog(self, authorization) -> None:
+        if self._auth_cancel_event is None or self._auth_cancel_event.is_set():
+            return
         if self._auth_dialog is not None:
             self._auth_dialog.close()
         self._auth_dialog = _TiledAuthorizationDialog(authorization, self)

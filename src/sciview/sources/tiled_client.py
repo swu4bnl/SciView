@@ -98,6 +98,7 @@ class TiledClientManager:
         profile_name: Optional[str] = None,
         authorization_callback: Optional[Callable[[TiledDeviceAuthorization], None]] = None,
         cancellation_requested: Optional[Callable[[], bool]] = None,
+        interactive_fallback: bool = True,
     ) -> Optional[Any]:
         """
         Get existing authenticated client or create new one
@@ -131,6 +132,7 @@ class TiledClientManager:
             profile_name,
             authorization_callback=authorization_callback,
             cancellation_requested=cancellation_requested,
+            interactive_fallback=interactive_fallback,
         )
     
     def _is_client_valid(self, client) -> bool:
@@ -149,6 +151,7 @@ class TiledClientManager:
         *,
         authorization_callback: Optional[Callable[[TiledDeviceAuthorization], None]] = None,
         cancellation_requested: Optional[Callable[[], bool]] = None,
+        interactive_fallback: bool = True,
     ) -> Optional[Any]:
         """Create and authenticate new tiled client"""
         if profile_name not in TILED_PROFILES:
@@ -175,6 +178,13 @@ class TiledClientManager:
                     authorization_callback,
                     cancellation_requested=cancellation_requested,
                 )
+                client = from_context(context, node_path_parts=node_path_parts)
+            elif profile.get('requires_login', False):
+                context, node_path_parts = Context.from_any_uri(profile['uri'], timeout=timeout)
+                if not context.authenticated and not context.use_cached_tokens():
+                    if not interactive_fallback:
+                        raise RuntimeError(f"Authentication required for {profile_name}")
+                    context.authenticate(remember_me=True)
                 client = from_context(context, node_path_parts=node_path_parts)
             elif timeout is not None:
                 client = from_uri(profile['uri'], timeout=timeout)
@@ -266,6 +276,9 @@ class TiledClientManager:
                 payload = access_response.json()
                 error = payload.get("error") or payload.get("detail", {}).get("error")
                 if error == "authorization_pending":
+                    continue
+                if error == "slow_down":
+                    interval += 5.0
                     continue
                 raise RuntimeError(f"Tiled authorization failed: {error or access_response.text}")
             access_response.raise_for_status()
