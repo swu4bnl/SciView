@@ -741,6 +741,10 @@ class TiledBrowserTab(BaseImageTab):
         profile = self._active_profile()
         if profile is None:
             return
+        # Reject login if another operation is active
+        if self._active_thread is not None or self._auth_cancel_event is not None:
+            self.parent_app.show_status("Another operation is already in progress")
+            return
         self.parent_app.show_status("Preparing Tiled login...")
         auth_cancel_event = threading.Event()
         self._auth_cancel_event = auth_cancel_event

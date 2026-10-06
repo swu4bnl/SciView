@@ -367,9 +367,9 @@ class TiledClientManager:
         # Check if already cached
         if profile_name in self._catalogs:
             return self._catalogs[profile_name]
-        
-        # Get client
-        client = self.get_or_create_client(profile_name)
+
+        # Get client (non-interactive to force GUI login flow)
+        client = self.get_or_create_client(profile_name, interactive_fallback=False)
         if client is None:
             return None
         
@@ -529,7 +529,7 @@ class TiledClientManager:
             }
             
             # Load image data based on profile structure; attach retry hooks first.
-            client = self.get_or_create_client(profile_name)
+            client = self.get_or_create_client(profile_name, interactive_fallback=False)
             if client is not None:
                 self._add_retry_hooks_to_client(client, retry_callback)
 
@@ -569,7 +569,7 @@ class TiledClientManager:
             Tuple of (image_array, metadata) or (None, error_info)
         """
         try:
-            client = self.get_or_create_client(profile_name)
+            client = self.get_or_create_client(profile_name, interactive_fallback=False)
             if client is None:
                 return None, {'error': f'Failed to connect to tiled server: {profile_name}'}
 
