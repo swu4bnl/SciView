@@ -47,10 +47,11 @@ The selected image is shared with the analysis tabs when you switch tabs.
 ### Tiled Data (On development)
 
 1. Open **Tiled Browser** and choose a catalog.
-2. Log in if required.
-3. Search by scan ID or by cycle and proposal.
-4. Select a result and choose **Load**.
-5. For stacked data, select the frame you want to use.
+2. Choose **Login** if required. SciView displays an authorization code and sign-in link in a separate window.
+3. Copy the code, choose **Open sign-in page**, and paste the code into the NSLS-II sign-in page.
+4. Search by scan ID or by cycle and proposal.
+5. Select a result and choose **Load**.
+6. For stacked data, select the frame you want to use.
 
 The loaded image or frame is shared with the analysis tabs.
 

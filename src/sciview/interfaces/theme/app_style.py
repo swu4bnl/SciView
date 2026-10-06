@@ -176,6 +176,8 @@ class AppStyle:
         'tiled_metadata_max_height': 72,
         'tiled_results_min_height': 260,
         'tiled_results_column_widths': [70, 100, 150, 95, 85, 120, 60, 145],
+        'tiled_auth_dialog_width': 460,
+        'tiled_auth_progress_height': 4,
         # Mask panel ratios
         'mask_controls_ratio': [14, 20, 3, 6],
         # Splitter handle (also used in CSS via format_style; kept here so

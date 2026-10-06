@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
-from PyQt5.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtCore import QObject, Qt, QThread, QTimer, QUrl, pyqtSignal
+from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
+    QDialog,
     QFormLayout,
     QGridLayout,
     QGroupBox,
@@ -34,7 +38,12 @@ from PyQt5.QtWidgets import (
 
 from sciview.interfaces.theme.app_style import (
     AppStyle,
+    apply_body_style,
     apply_info_style,
+    apply_input_style,
+    apply_primary_button_style,
+    apply_secondary_button_style,
+    apply_status_style,
     apply_subtitle_style,
     setup_splitter_layout,
     apply_title_style,
@@ -52,6 +61,7 @@ class _OperationWorker(QObject):
     finished = pyqtSignal(int, object, object)
     progress_updated = pyqtSignal(int, int)
     retry_detected = pyqtSignal(int, str)
+    authorization_requested = pyqtSignal(object)
 
     def __init__(self, token: int, action: Callable):
         super().__init__()
@@ -67,6 +77,95 @@ class _OperationWorker(QObject):
 
 class _LiveEventBridge(QObject):
     event_received = pyqtSignal(object)
+
+
+class _TiledAuthorizationDialog(QDialog):
+    """Display OAuth device instructions while the backend waits for approval."""
+
+    def __init__(self, authorization, parent=None):
+        super().__init__(parent)
+        self.authorization = authorization
+        self._copy_feedback_timer = QTimer(self)
+        self._copy_feedback_timer.setSingleShot(True)
+        self._copy_feedback_timer.timeout.connect(self._reset_copy_button)
+        self.setWindowTitle("Sign in to Tiled")
+        self.setModal(False)
+        self.setMinimumWidth(AppStyle.LAYOUT['tiled_auth_dialog_width'])
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
+        layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
+
+        title = QLabel("Authorize SciView")
+        apply_title_style(title)
+        layout.addWidget(title)
+
+        instruction = QLabel("Use this one-time code to complete sign-in in your browser.")
+        instruction.setWordWrap(True)
+        apply_body_style(instruction)
+        layout.addWidget(instruction)
+
+        code_label = QLabel("Device code")
+        apply_subtitle_style(code_label)
+        layout.addWidget(code_label)
+
+        code_row = QHBoxLayout()
+        code_row.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
+        self.code_input = QLineEdit(authorization.user_code)
+        self.code_input.setReadOnly(True)
+        self.code_input.setAlignment(Qt.AlignCenter)
+        self.code_input.setToolTip("Tiled device authorization code")
+        apply_input_style(self.code_input)
+        code_row.addWidget(self.code_input, 1)
+
+        self.copy_button = QPushButton("Copy code")
+        parent_app = getattr(parent, "parent_app", None)
+        workspace_root = getattr(parent_app, "_workspace_root", Path(__file__).resolve().parent.parent)
+        self.copy_button.setIcon(AppStyle.load_icon(workspace_root, "viewer_copy.svg"))
+        self.copy_button.setToolTip("Copy the device code to the clipboard")
+        apply_secondary_button_style(self.copy_button)
+        self.copy_button.clicked.connect(self._copy_code)
+        code_row.addWidget(self.copy_button)
+        layout.addLayout(code_row)
+
+        self.url_label = QLabel(authorization.verification_uri)
+        self.url_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.url_label.setWordWrap(True)
+        apply_info_style(self.url_label)
+        layout.addWidget(self.url_label)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setFixedHeight(AppStyle.LAYOUT['tiled_auth_progress_height'])
+        layout.addWidget(self.progress_bar)
+
+        self.status_label = QLabel("Waiting for authorization")
+        apply_status_style(self.status_label)
+        layout.addWidget(self.status_label)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        cancel_button = QPushButton("Cancel")
+        apply_secondary_button_style(cancel_button)
+        cancel_button.clicked.connect(self.reject)
+        buttons.addWidget(cancel_button)
+        self.open_button = QPushButton("Open sign-in page")
+        apply_primary_button_style(self.open_button)
+        self.open_button.setDefault(True)
+        self.open_button.clicked.connect(self._open_browser)
+        buttons.addWidget(self.open_button)
+        layout.addLayout(buttons)
+
+    def _copy_code(self) -> None:
+        QApplication.clipboard().setText(self.authorization.user_code)
+        self.copy_button.setText("Copied")
+        self._copy_feedback_timer.start(1500)
+
+    def _reset_copy_button(self) -> None:
+        self.copy_button.setText("Copy code")
+
+    def _open_browser(self) -> None:
+        QDesktopServices.openUrl(QUrl(self.authorization.verification_uri))
 
 
 class TiledBrowserTab(BaseImageTab):
@@ -86,6 +185,8 @@ class TiledBrowserTab(BaseImageTab):
         self._operation_token = 0
         self._active_thread: QThread | None = None
         self._active_worker: _OperationWorker | None = None
+        self._auth_dialog: _TiledAuthorizationDialog | None = None
+        self._auth_cancel_event: threading.Event | None = None
         self._live_monitor: TiledLiveMonitor | None = None
         self._live_auto_load_attempts: dict[str, int] = {}
         self._live_event_bridge = _LiveEventBridge(self)
@@ -226,6 +327,12 @@ class TiledBrowserTab(BaseImageTab):
         on_success(result)
 
     def _cancel_operation(self) -> None:
+        if self._auth_cancel_event is not None:
+            self._auth_cancel_event.set()
+            self._auth_cancel_event = None
+        if self._auth_dialog is not None:
+            self._auth_dialog.reject()
+            self._auth_dialog = None
         self._operation_token += 1
         self._stop_playback()
         self._finish_operation()
@@ -634,17 +741,73 @@ class TiledBrowserTab(BaseImageTab):
         profile = self._active_profile()
         if profile is None:
             return
-        self.parent_app.show_status("Watch the terminal for any Tiled login prompts")
+        # Reject login if another operation is active
+        if self._active_thread is not None or self._auth_cancel_event is not None:
+            self.parent_app.show_status("Another operation is already in progress")
+            return
+        self.parent_app.show_status("Preparing Tiled login...")
+        auth_cancel_event = threading.Event()
+        self._auth_cancel_event = auth_cancel_event
+
+        authorization_emit_box: list[Callable | None] = [None]
 
         def do_login():
-            return self.image_service.tiled_authenticate(profile_name=profile, interactive_fallback=True)
+            return self.image_service.tiled_authenticate(
+                profile_name=profile,
+                interactive_fallback=False,
+                authorization_callback=authorization_emit_box[0],
+                cancellation_requested=auth_cancel_event.is_set,
+            )
 
         def done(auth):
             self._refresh_auth_state()
+            if self._auth_dialog is not None:
+                self._auth_dialog.accept()
+                self._auth_dialog = None
+            self._auth_cancel_event = None
             if not auth.authenticated:
                 QMessageBox.warning(self, "Login failed", auth.error or "Could not authenticate")
+                return
+            self.parent_app.show_status(f"Logged in to Tiled profile {profile}")
 
-        self._run_background(f"Connecting to Tiled profile {profile}...", do_login, done)
+        def failed(error: Exception) -> None:
+            if self._auth_dialog is not None:
+                self._auth_dialog.reject()
+                self._auth_dialog = None
+            self._auth_cancel_event = None
+            if str(error) == "Tiled login cancelled":
+                self.parent_app.show_status("Tiled login cancelled")
+                return
+            QMessageBox.warning(self, "Login failed", str(error))
+
+        token = self._begin_operation(f"Connecting to Tiled profile {profile}...")
+        thread = QThread(self)
+        worker = _OperationWorker(token, do_login)
+        authorization_emit_box[0] = worker.authorization_requested.emit
+        worker.authorization_requested.connect(self._show_authorization_dialog)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(lambda done_token, result, error: self._handle_background_result(
+            done_token, result, error, done, thread, worker, failed
+        ))
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        self._active_thread = thread
+        self._active_worker = worker
+        thread.start()
+
+    def _show_authorization_dialog(self, authorization) -> None:
+        if self._auth_cancel_event is None or self._auth_cancel_event.is_set():
+            return
+        if self._auth_dialog is not None:
+            self._auth_dialog.close()
+        self._auth_dialog = _TiledAuthorizationDialog(authorization, self)
+        if self._auth_cancel_event is not None:
+            self._auth_dialog.rejected.connect(self._auth_cancel_event.set)
+        self._auth_dialog.show()
+        self._auth_dialog.raise_()
+        self._auth_dialog.activateWindow()
 
     def _on_catalog_changed(self) -> None:
         self._stop_live_monitor()
