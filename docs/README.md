@@ -19,12 +19,12 @@ Reorganized 2026-10-03 — see git history on this folder for what changed and w
 
 ## Generic / reusable (not SciView-specific; apply only when relevant)
 
-
-| Doc                                                              | Purpose                                                                                                                                                               |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [AI_CODING_WORKFLOW.md](AI_CODING_WORKFLOW.md)                   | SciView-flavored prompt templates for keeping AI coding tasks small and bounded.                                                                                      |
-| [ai-collaboration-guidelines.md](ai-collaboration-guidelines.md) | Project-agnostic collaboration/working-method notes. Not the file Copilot auto-loads — that is[.github/copilot-instructions.md](../.github/copilot-instructions.md). |
-| [taste-skill-core.optional.md](taste-skill-core.optional.md)     | Optional visual-design-review reference; explicitly not a default instruction.                                                                                        |
+| Doc | Purpose |
+| --- | --- |
+| [AI_CODING_WORKFLOW.md](AI_CODING_WORKFLOW.md) | SciView-flavored prompt templates for keeping AI coding tasks small and bounded. |
+| [ai-collaboration-guidelines.md](ai-collaboration-guidelines.md) | Project-agnostic collaboration notes. The file that Copilot loads is [.github/copilot-instructions.md](../.github/copilot-instructions.md). |
+| [simplified-technical-english.optional.md](simplified-technical-english.optional.md) | Optional clarity reference for UI text, errors, procedures, and agent-facing instructions. |
+| [taste-skill-core.optional.md](taste-skill-core.optional.md) | Optional visual-design-review reference; explicitly not a default instruction. |
 
 ## Moved out of this folder
 
