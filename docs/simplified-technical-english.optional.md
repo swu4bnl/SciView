@@ -33,7 +33,8 @@ Use the same term for the same object or action within a workflow. Do not rotate
 
 For example, choose the term that matches the actual action:
 
-- **Open** selects a file or folder through the operating system.
+- **Browse** selects a file or folder through the operating system.
+- **Open** displays a selected item in SciView.
 - **Load** reads data into SciView.
 - **Save** writes the current SciView state or configuration.
 - **Export** writes a result for use outside the current workflow.
@@ -149,7 +150,7 @@ Do not show a traceback, internal class name, or raw exception as the only user-
 
 Name the action and its consequence. Avoid a confirmation that says only "Are you sure?"
 
-- Prefer: "Clear all images from this session? Unsaved session changes will be lost."
+- Prefer: "Clear all images and references from this session?"
 - Avoid: "Are you sure you want to continue?"
 
 Prefer undo over confirmation for a routine reversible action. Use confirmation for actions that are destructive, expensive, or difficult to recover.
@@ -162,8 +163,6 @@ State the missing requirement in the terminology used by the related control.
 - Prefer: "Load an image before you create a mask layer."
 - Avoid: "No data available."
 
-Disable an unavailable command when the precondition is visible and stable. Keep a guard in the command handler because code can invoke the handler without a button click.
-
 ## Review Process
 
 1. Identify the user task and the UI state in which the text appears.
@@ -171,9 +170,7 @@ Disable an unavailable command when the precondition is visible and stable. Keep
 3. Preserve scientific terms, values, units, uncertainty, and scope.
 4. Use consistent terms and direct verbs.
 5. Split unrelated claims or instructions.
-6. Review related loading, empty, success, error, disabled, and recovery states together.
-7. Inspect the rendered interface at practical window sizes and in supported themes.
-8. Check keyboard access, focus order, clipping, and whether a tooltip adds useful information.
+6. Read the text in its interface context. Remove words that only repeat a nearby label, control, or visible state.
 
 If the original text is already clear, leave it unchanged. Do not force a rewrite to satisfy a checklist.
 

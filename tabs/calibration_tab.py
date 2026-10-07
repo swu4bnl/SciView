@@ -276,7 +276,7 @@ class CalibrationApp(BaseImageTab):
         # Snap options come first so they're set before the user starts picking.
         snap_row = QHBoxLayout()
         snap_row.setContentsMargins(0, 0, 0, 0)
-        snap_row.setSpacing(6)
+        snap_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
         self.snap_to_max_check = QCheckBox("Snap to Peak")
         self.snap_to_max_check.setToolTip("Snap each right-click to the brightest nearby pixel")
         self.snap_to_max_check.setChecked(True)
@@ -321,7 +321,7 @@ class CalibrationApp(BaseImageTab):
         # Calculate is only clickable once enough points are picked.
         controls_row = QHBoxLayout()
         controls_row.setContentsMargins(0, 0, 0, 0)
-        controls_row.setSpacing(6)
+        controls_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
         self.calc_ring_button = QPushButton("Calculate")
         self.calc_ring_button.clicked.connect(self.calculate_ring_center)
         self.calc_ring_button.setMinimumWidth(AppStyle.action_button_min_width())
@@ -377,7 +377,7 @@ class CalibrationApp(BaseImageTab):
         apply_info_style(self.standards_info_label)
         layout.addWidget(self.standards_info_label)
 
-        panel.setMaximumHeight(150)
+        panel.setMaximumHeight(AppStyle.LAYOUT['compact_panel_max_height'])
 
         return panel
 
@@ -528,12 +528,12 @@ class CalibrationApp(BaseImageTab):
             for i in picked_indices:
                 self._set_ring_point_indicator(i, 'error')
             self.ring_result_label.setText(f"Fit failed: {str(e)}")
-            self.parent_app.show_status(f"Error calculating ring center: {str(e)}")
+            self.parent_app.show_status(f"SciView could not calculate the ring center: {str(e)}")
         except Exception as e:
             for i in picked_indices:
                 self._set_ring_point_indicator(i, 'error')
             self.ring_result_label.setText(f"Fit failed: {str(e)}")
-            self.parent_app.show_status(f"Unexpected error: {str(e)}")
+            self.parent_app.show_status(f"SciView could not calculate the ring center: {str(e)}")
 
     def clear_ring_points(self):
         """Clear all picked ring points, indicators, and markers"""

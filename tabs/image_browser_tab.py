@@ -749,7 +749,7 @@ class ImageBrowserApp(BaseImageTab):
 
     # Loading Methods
     def _load_from_folder(self):
-        """Import the current folder browser list as deferred session references."""
+        """Add the current folder browser list to the session as deferred references."""
         self._stop_folder_playback()
         file_paths = self._get_folder_image_paths()
 
@@ -766,7 +766,7 @@ class ImageBrowserApp(BaseImageTab):
         self._update_display()
 
         self.loading_status_label.setText(f"Added {len(file_paths)} files to session")
-        self.parent_app.show_status(f"Imported {len(file_paths)} file references from folder")
+        self.parent_app.show_status(f"Added {len(file_paths)} file references from folder to the session")
 
     def _on_session_changed(self, session_manager):
         """Handle session changes"""
@@ -1280,8 +1280,8 @@ class ImageBrowserApp(BaseImageTab):
 
     def _clear_session(self):
         """Clear the session"""
-        reply = QMessageBox.question(self, "Clear Session", 
-                                   "Are you sure you want to clear all images from the session?",
+        reply = QMessageBox.question(self, "Clear Session",
+                                   "Clear all images and references from this session?",
                                    QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             self.session_manager.clear_session()

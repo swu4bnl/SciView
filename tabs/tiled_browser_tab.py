@@ -743,7 +743,9 @@ class TiledBrowserTab(BaseImageTab):
         if attempts >= self.live_auto_load_max_attempts:
             suffix = f": {error}" if error is not None else ""
             self.live_status_label.setText(f"Live scan not ready after {attempts} attempts{suffix}")
-            self.parent_app.show_status(f"Live scan {scan.scan_id} did not auto-load{suffix}")
+            self.parent_app.show_status(
+                f"SciView could not auto-load live scan {scan.scan_id} after {attempts} attempts{suffix}"
+            )
             return
 
         self.live_status_label.setText(

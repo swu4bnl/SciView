@@ -144,8 +144,12 @@ class SciAnaApp(QMainWindow):
         self.theme_toggle_button.clicked.connect(self._toggle_dark_light_theme)
         self._update_theme_toggle_icon()
 
-        self.clear_session_button = QPushButton("D")
+        self.clear_session_button = QPushButton()
         self.clear_session_button.setProperty("sciview_compact_button", True)
+        self.clear_session_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['clear_session'])
+        )
+        self.clear_session_button.setIconSize(AppStyle.corner_button_icon_size())
         self.clear_session_button.setToolTip(
             "Clear saved session cache (last image/calibration/mask/batch queue restore data)"
         )
@@ -384,6 +388,12 @@ class SciAnaApp(QMainWindow):
         self.refresh_button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['refresh']))
         self.refresh_button.setIconSize(corner_icon_size)
         self.refresh_button.setFixedSize(corner_button_size)
+
+        self.clear_session_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['clear_session'])
+        )
+        self.clear_session_button.setIconSize(corner_icon_size)
+        self.clear_session_button.setFixedSize(corner_button_size)
 
         self.style_inspector_button.setFixedSize(corner_button_size)
         self.theme_toggle_button.setFixedSize(corner_button_size)
@@ -694,7 +704,7 @@ class SciAnaApp(QMainWindow):
             tuple: (image_data, file_path) or (None, None) if failed
         """
         if not SCIANALYSIS_AVAILABLE:
-            self.show_status("Error: SciAnalysis not available")
+            self.show_status("SciView could not load the image: the SciAnalysis package is not installed.")
             return None, None
             
         path, _ = choose_path(self, "Open Image File", file_filter=file_filters, key="image_open")
@@ -739,8 +749,7 @@ class SciAnaApp(QMainWindow):
             return image_data, path
             
         except Exception as e:
-            self.show_status(f"Error loading image: {str(e)}")
-            print(f"Error loading image: {e}")
+            self.report_error(f"SciView could not load the image {os.path.basename(path)}: {e}", exc=e)
             return None, None
     
     def get_image_path(self):

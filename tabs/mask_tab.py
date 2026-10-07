@@ -389,7 +389,7 @@ class MaskApp(BaseImageTab):
         utility_widget = QWidget()
         utility_row = QHBoxLayout(utility_widget)
         utility_row.setContentsMargins(0, 0, 0, 0)
-        utility_row.setSpacing(6)
+        utility_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
         for index, (title, tools) in enumerate((
             ("View", navigation_tools),
             ("Refine", refine_tools),
@@ -462,7 +462,7 @@ class MaskApp(BaseImageTab):
         group = QWidget()
         layout = QVBoxLayout(group)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(3)
+        layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
         column_count = min(columns, max(1, len(tools)))
         group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         if title:
@@ -547,7 +547,7 @@ class MaskApp(BaseImageTab):
         layout = QVBoxLayout(panel)
 
         self.layer_list = QListWidget()
-        self.layer_list.setMinimumHeight(120)
+        self.layer_list.setMinimumHeight(AppStyle.LAYOUT['record_list_min_height'])
         self.layer_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.layer_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.layer_list.customContextMenuRequested.connect(self._show_layer_context_menu)
@@ -562,13 +562,11 @@ class MaskApp(BaseImageTab):
         button_row.addWidget(self.add_layer_button, 1)
 
         self.remove_layer_button = QPushButton("Remove")
-        self.remove_layer_button.setToolTip("Remove the selected layer")
         self.remove_layer_button.clicked.connect(self._remove_selected_layer)
         self.remove_layer_button.setEnabled(False)
         button_row.addWidget(self.remove_layer_button)
 
         self.clear_layers_button = QPushButton("Clear Layers")
-        self.clear_layers_button.setToolTip("Remove all layers")
         self.clear_layers_button.clicked.connect(self._clear_all_layers)
         button_row.addWidget(self.clear_layers_button)
         layout.addLayout(button_row)
@@ -669,7 +667,7 @@ class MaskApp(BaseImageTab):
         layout.addLayout(histogram_controls)
 
         self.threshold_plot = pg.PlotWidget()
-        self.threshold_plot.setMaximumHeight(150)
+        self.threshold_plot.setMaximumHeight(AppStyle.LAYOUT['compact_panel_max_height'])
         self.threshold_plot.setMinimumHeight(110)
         self.threshold_plot.setMouseEnabled(x=True, y=False)
         self.threshold_plot.hideAxis('left')
@@ -1277,7 +1275,7 @@ class MaskApp(BaseImageTab):
             self.parent_app.show_status("Added empty layer")
             
         except Exception as e:
-            self.parent_app.show_status(f"Error creating empty layer: {str(e)}")
+            self.parent_app.show_status(f"SciView could not create the empty mask layer: {str(e)}")
             print(f"DEBUG: _add_empty_layer error: {e}")
             print(f"DEBUG: image_data type: {type(self.image_data)}")
     
@@ -1293,15 +1291,8 @@ class MaskApp(BaseImageTab):
         self.parent_app.show_status(f"Removed layer: {removed_layer.name}")
 
     def _clear_all_layers(self) -> None:
-        """Remove every mask layer after confirmation."""
+        """Remove every mask layer through the undo stack."""
         if not self.mask_layers:
-            return
-        reply = QMessageBox.question(
-            self, "Clear Layers",
-            "Remove all mask layers?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
             return
         if self.drawing_mode:
             self._set_drawing_enabled_from_session(False)
@@ -1760,7 +1751,7 @@ class MaskApp(BaseImageTab):
                 )
                 
         except Exception as e:
-            self.parent_app.show_status(f"Error loading instrument mask: {str(e)}")
+            self.parent_app.show_status(f"SciView could not load the instrument mask: {str(e)}")
     
     def _load_custom_mask(self):
         """Load a custom mask file"""
@@ -1787,7 +1778,7 @@ class MaskApp(BaseImageTab):
         try:
             return backend_load_mask_file(file_path)
         except Exception as e:
-            self.parent_app.show_status(f"Error loading mask file: {str(e)}")
+            self.parent_app.show_status(f"SciView could not load the mask file: {str(e)}")
             return None
     
     # ===== Export Methods =====
@@ -1847,7 +1838,7 @@ class MaskApp(BaseImageTab):
             
         except Exception as e:
             import traceback
-            self.parent_app.show_status(f"✗ Error exporting mask: {str(e)}")
+            self.parent_app.show_status(f"✗ SciView could not export the mask: {str(e)}")
             print(f"Export error details:\n{traceback.format_exc()}")
     
     # ===== Display Methods =====

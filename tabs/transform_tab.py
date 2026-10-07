@@ -211,7 +211,7 @@ class TransformTab(BaseImageTab):
         layout = QVBoxLayout(group)
         self.payload_view = QTextEdit()
         self.payload_view.setFontFamily("monospace")
-        self.payload_view.setMinimumHeight(150)
+        self.payload_view.setMinimumHeight(AppStyle.LAYOUT['payload_view_min_height'])
         layout.addWidget(self.payload_view, 1)
         return group
 
@@ -582,7 +582,7 @@ class TransformTab(BaseImageTab):
             self.parent_app.show_status(f"Loaded custom calibration: {self._custom_calibration_label}")
             self._on_parameters_changed()
         except Exception as exc:
-            self.parent_app.show_status(f"Failed to load custom calibration: {exc}")
+            self.parent_app.show_status(f"SciView could not load the custom calibration file: {exc}")
 
     def _load_custom_mask(self):
         file_path, _ = choose_path(
@@ -602,7 +602,7 @@ class TransformTab(BaseImageTab):
             self.parent_app.show_status(f"Loaded custom mask: {self._custom_mask_label}")
             self._on_parameters_changed()
         except Exception as exc:
-            self.parent_app.show_status(f"Failed to load custom mask: {exc}")
+            self.parent_app.show_status(f"SciView could not load the custom mask file: {exc}")
 
     def _refresh_source_status(self):
         if hasattr(self.parent_app, "get_shared_calibration"):
@@ -982,7 +982,7 @@ class TransformTab(BaseImageTab):
         try:
             data = yaml.safe_load(self.payload_view.toPlainText()) or {}
         except yaml.YAMLError as exc:
-            self.parent_app.show_status(f"Invalid YAML: {exc}")
+            self.parent_app.show_status(f"SciView could not apply the recipe: invalid YAML — {exc}")
             return
         if not isinstance(data, dict):
             self.parent_app.show_status("Invalid recipe: expected a YAML mapping")

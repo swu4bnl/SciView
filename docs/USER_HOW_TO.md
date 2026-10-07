@@ -40,11 +40,11 @@ The buttons beside the tabs switch the theme, refresh the current tab, and clear
 1. Open **Image Browser** and select **Open Folder**.
 2. Choose a folder and select an image from the file list.
 3. Use the filename filter when the folder contains unrelated files.
-4. Adjust the display range, scale, or colormap if needed. The magic wand tool can help automatically select the color range.
+4. Adjust the display range, scale, or colormap if needed. Choose **Auto** to set the color limits from the image automatically.
 
 The selected image is shared with the analysis tabs when you switch tabs.
 
-### Tiled Data (On development)
+### Tiled Data (In development)
 
 1. Open **Tiled Browser** and choose a catalog.
 2. Log in if required.
@@ -61,9 +61,8 @@ Use **Calibration** to set the beam center, detector distance, pixel size, wavel
 1. Load an image and open **Calibration**.
 2. Check the beam-center marker and current parameters.
 3. If needed, right click to select points on a diffraction ring and calculate a new center, or use middle-click to pick the center manually.
-4. Compare the 1D profile with a standard material when available.
-5. You can use the 1D profile to verify the calibration against a standard material, or adjust the parameters until the profile matches the expected pattern.
-6. Export the calibration when the geometry is correct.
+4. Compare the 1D profile with a standard material when available. Adjust the parameters until the profile matches the expected pattern.
+5. Export the calibration when the geometry is correct.
 
 ## Mask Editing
 
@@ -80,6 +79,7 @@ Useful mask controls:
 - **Eraser** removes masked pixels. Hold Alt to temporarily invert the active drawing effect.
 - **OR** adds a layer to the combined mask; **AND** keeps only its overlap with the preceding result.
 - Layers are combined from top to bottom. Hidden layers are not included.
+- **Remove** deletes the selected layer. **Clear Layers** deletes all layers.
 - Undo and Redo apply to drawing and layer refinement changes.
 
 ## Reduction
@@ -110,11 +110,11 @@ Batch uses the files loaded in **Image Browser**.
 
 1. Open **Batch** and refresh the file list if needed.
 2. Add reduction or transform operations to the protocol queue.
-3. Reorder the queue and adjust selected protocol parameters when needed.
+3. Reorder the queue and adjust selected protocol parameters when needed. Use **Remove** to delete one queued protocol, or **Clear Queue** to delete all of them.
 4. Choose the plot output style if needed.
 5. Select **Run Batch**.
 
-The progress bar, output log, and results table show the status of each operation. Recipes (On development) can be saved and loaded for repeated workflows. Use **Stop** to cancel a running batch.
+The progress bar, output log, and results table show the status of each operation. Recipes (In development) can be saved and loaded for repeated workflows. Use **Stop** to cancel a running batch.
 
 ## Info
 
