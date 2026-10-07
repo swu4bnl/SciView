@@ -401,6 +401,7 @@ class ReductionTab(BaseImageTab):
         self.preview_button.clicked.connect(self.refresh_preview)
         self.export_button = QPushButton("Export Data")
         self.export_button.clicked.connect(self.export_result)
+        self.export_button.setEnabled(self._current_result is not None)
         self.send_to_batch_button = QPushButton("Send to Batch")
         self.send_to_batch_button.setToolTip("Push current settings as a protocol to the Batch tab")
         self.send_to_batch_button.clicked.connect(self._send_to_batch)
@@ -790,12 +791,14 @@ class ReductionTab(BaseImageTab):
             result = self.backend.run(request)
         except Exception as exc:
             self._current_result = None
+            self.export_button.setEnabled(False)
             self._update_preview_plot(None, message=f"Preview failed: {exc}")
             self.result_summary.setText(f"Preview failed: {exc}")
             self.parent_app.show_status(f"Reduction failed: {exc}")
             return
 
         self._current_result = result
+        self.export_button.setEnabled(True)
         self._update_preview_plot(result)
         point_count = int(np.count_nonzero(np.isfinite(result.y)))
         operation_name = result.operation.replace('_', ' ').title()

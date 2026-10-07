@@ -564,6 +564,7 @@ class MaskApp(BaseImageTab):
         self.remove_layer_button = QPushButton("Remove")
         self.remove_layer_button.setToolTip("Remove the selected layer")
         self.remove_layer_button.clicked.connect(self._remove_selected_layer)
+        self.remove_layer_button.setEnabled(False)
         button_row.addWidget(self.remove_layer_button)
 
         self.clear_layers_button = QPushButton("Clear Layers")
@@ -613,11 +614,12 @@ class MaskApp(BaseImageTab):
         self.mask_coverage_bar.setTextVisible(True)
         self.mask_coverage_bar.setToolTip("Fraction of visible image pixels included in the combined mask")
         appearance.addWidget(self.mask_coverage_bar)
-        export_combined_button = QPushButton("Export Combined Mask")
-        export_combined_button.setToolTip("Export the combined mask from all visible layers")
-        export_combined_button.clicked.connect(self._export_combined_mask)
-        apply_emphasis_button_style(export_combined_button)
-        appearance.addWidget(export_combined_button)
+        self.export_combined_button = QPushButton("Export Combined Mask")
+        self.export_combined_button.setToolTip("Export the combined mask from all visible layers")
+        self.export_combined_button.clicked.connect(self._export_combined_mask)
+        self.export_combined_button.setEnabled(self.combined_mask is not None)
+        apply_emphasis_button_style(self.export_combined_button)
+        appearance.addWidget(self.export_combined_button)
         self.layer_appearance_panel.setVisible(bool(self.mask_layers))
         layout.addWidget(self.layer_appearance_panel)
         return panel
@@ -1054,6 +1056,7 @@ class MaskApp(BaseImageTab):
         if self.mask_layers:
             target = active_index if active_index is not None else len(self.mask_layers) - 1
             self.layer_list.setCurrentRow(self._list_row_for_layer(target))
+        self.remove_layer_button.setEnabled(bool(self.mask_layers))
         self._refresh_edit_target()
         self._update_combined_mask()
     
@@ -1132,7 +1135,9 @@ class MaskApp(BaseImageTab):
         """Handle layer selection"""
         item = self.layer_list.item(row) if row >= 0 else None
         layer_index = item.data(Qt.UserRole) if item is not None else None
-        if not isinstance(layer_index, int) or not (0 <= layer_index < len(self.mask_layers)):
+        has_active_layer = isinstance(layer_index, int) and (0 <= layer_index < len(self.mask_layers))
+        self.remove_layer_button.setEnabled(has_active_layer)
+        if not has_active_layer:
             self._refresh_edit_target()
             return
         layer = self.mask_layers[layer_index]
@@ -1408,6 +1413,7 @@ class MaskApp(BaseImageTab):
         """Compose visible layers in list order using each incoming operator."""
         self._preview_mask = None
         self.combined_mask = compose_mask_layers(self.mask_layers)
+        self.export_combined_button.setEnabled(self.combined_mask is not None)
         if self.combined_mask is None:
             if hasattr(self.parent_app, 'publish_shared_mask'):
                 self.parent_app.publish_shared_mask(None, source_tab=self)

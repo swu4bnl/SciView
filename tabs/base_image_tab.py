@@ -137,7 +137,7 @@ class BaseImageTab(QWidget):
                         det_phi=DEFAULT_CALIBRATION['detector_phi_deg'],
                     )
             except Exception as e:
-                print(f"Warning: Failed to initialize SciAnalysis calibration: {e}")
+                self.parent_app.report_error(f"Failed to initialize SciAnalysis calibration: {e}", exc=e)
                 self.calibration = None
         else:
             self.calibration = None
@@ -185,7 +185,7 @@ class BaseImageTab(QWidget):
             return calibration
             
         except Exception as e:
-            print(f"Warning: Could not create calibration: {e}")
+            self.parent_app.report_error(f"Could not create calibration: {e}", exc=e)
             return None
 
     def create_data2d_object(self, image_array, file_path):
@@ -237,9 +237,8 @@ class BaseImageTab(QWidget):
                 return image_array
                 
         except Exception as e:
-            print(f"Warning: Could not create Data2DScattering object: {e}")
-            import traceback
-            traceback.print_exc()
+            # logger.exception (inside report_error) already captures the traceback.
+            self.parent_app.report_error(f"Could not create Data2DScattering object: {e}", exc=e)
             return image_array
 
     def add_display_hook(self, hook_func, position='post'):

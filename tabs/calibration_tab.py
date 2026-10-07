@@ -251,7 +251,6 @@ class CalibrationApp(BaseImageTab):
         btn_export.clicked.connect(self.export_calibration)
         # btn_export.setMaximumWidth(90)
         btns_layout.addWidget(btn_export)
-        # apply_primary_button_style(btn_export)
         layout.addLayout(btns_layout)
         
         layout.addStretch()

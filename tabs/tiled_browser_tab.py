@@ -34,6 +34,7 @@ from PyQt5.QtWidgets import (
 
 from sciview.interfaces.theme.app_style import (
     AppStyle,
+    apply_emphasis_button_style,
     apply_info_style,
     apply_subtitle_style,
     setup_splitter_layout,
@@ -474,7 +475,14 @@ class TiledBrowserTab(BaseImageTab):
         row = QHBoxLayout()
         self.load_button = QPushButton("Load")
         self.load_button.setToolTip("Load selected image and metadata")
-        apply_toolbar_text_button_style(self.load_button)
+        apply_emphasis_button_style(self.load_button)
+        # apply_emphasis_button_style calls setDefault(True) under native Qt themes
+        # (purely for the native "default button" highlight look). Qt's Enter-key
+        # auto-dispatch to the default button is implemented in QDialog, not in a
+        # plain QWidget/QMainWindow tab like this one, so it has no behavioral
+        # effect here today — setAutoDefault(False) is defensive insurance in case
+        # this tab is ever hosted inside a dialog.
+        self.load_button.setAutoDefault(False)
         self.load_button.setEnabled(False)
         self.load_button.clicked.connect(self._load_selected_scan)
         row.addWidget(self.load_button)
