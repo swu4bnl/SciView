@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
     QFileDialog, QMessageBox, QScrollArea, QGridLayout, QTableWidget, QSplitter,
     QTableWidgetItem, QHeaderView, QFrame
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
+from PyQt5.QtCore import QSignalBlocker, Qt, QThread, pyqtSignal, QTimer, QSize
 from PyQt5.QtGui import QPixmap, QIcon
 
 # Import base class and configuration
@@ -620,8 +620,7 @@ class ImageBrowserApp(BaseImageTab):
 
         layout.addWidget(QLabel("Images:"))
         self.folder_files_list = QListWidget()
-        self.folder_files_list.itemClicked.connect(self._open_folder_file)
-        self.folder_files_list.itemActivated.connect(self._open_folder_file)
+        self.folder_files_list.currentItemChanged.connect(self._open_folder_file)
         layout.addWidget(self.folder_files_list, 1)
 
         controls_layout = QHBoxLayout()
@@ -1151,17 +1150,16 @@ class ImageBrowserApp(BaseImageTab):
         current_item = self.folder_files_list.currentItem()
         current_path = current_item.data(Qt.UserRole) if current_item is not None else None
 
-        self.folder_files_list.clear()
-
-        for path in file_paths:
-            item = QListWidgetItem(path.name)
-            item.setData(Qt.UserRole, str(path))
-            self.folder_files_list.addItem(item)
+        with QSignalBlocker(self.folder_files_list):
+            self.folder_files_list.clear()
+            for path in file_paths:
+                item = QListWidgetItem(path.name)
+                item.setData(Qt.UserRole, str(path))
+                self.folder_files_list.addItem(item)
+            if current_path in path_strings:
+                self.folder_files_list.setCurrentRow(path_strings.index(current_path))
 
         self._folder_browser_paths = path_strings
-
-        if current_path in path_strings:
-            self.folder_files_list.setCurrentRow(path_strings.index(current_path))
 
         if self.folder_path_input.text() and hasattr(self, 'loading_status_label'):
             self.loading_status_label.setText(f"Found {len(file_paths)} images")
@@ -1188,7 +1186,9 @@ class ImageBrowserApp(BaseImageTab):
             self.folder_refresh_timer.stop()
 
     def _open_folder_file(self, item):
-        """Show the clicked folder image using deferred loading."""
+        """Show the selected folder image using deferred loading."""
+        if item is None:
+            return
         file_path = item.data(Qt.UserRole)
         if not file_path:
             return
@@ -1273,12 +1273,10 @@ class ImageBrowserApp(BaseImageTab):
 
     def _select_folder_browser_row(self, row):
         """Select and display a row from the visible folder browser list."""
-        item = self.folder_files_list.item(row)
-        if item is None:
+        if self.folder_files_list.item(row) is None:
             return
 
         self.folder_files_list.setCurrentRow(row)
-        self._open_folder_file(item)
 
     def _clear_session(self):
         """Clear the session"""

@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QFormLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QProgressBar, QPushButton, QSpinBox, QSplitter, QTableWidget,
+    QMessageBox, QProgressBar, QPushButton, QSpinBox, QSplitter, QTableWidget,
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
@@ -300,10 +300,14 @@ class BatchTab(QWidget):
 
         br = QHBoxLayout()
         self.btn_remove = QPushButton("Remove")
+        self.btn_remove.setToolTip("Remove the selected protocol")
         self.btn_remove.clicked.connect(self._remove_protocol)
+        self.btn_clear_queue = QPushButton("Clear Queue")
+        self.btn_clear_queue.setToolTip("Remove all queued protocols")
+        self.btn_clear_queue.clicked.connect(self._clear_protocol_queue)
         self.btn_up = QPushButton("↑"); self.btn_up.clicked.connect(self._move_up)
         self.btn_dn = QPushButton("↓"); self.btn_dn.clicked.connect(self._move_down)
-        for b in (self.btn_remove, self.btn_up, self.btn_dn):
+        for b in (self.btn_remove, self.btn_clear_queue, self.btn_up, self.btn_dn):
             br.addWidget(b)
         br.addStretch()
         pv.addLayout(br)
@@ -415,6 +419,24 @@ class BatchTab(QWidget):
         else:
             self.param_name_label.setText("No protocol selected")
             self.param_editor.clear()
+
+    def _clear_protocol_queue(self) -> None:
+        """Remove every queued protocol after confirmation."""
+        if not self._protocols:
+            return
+        reply = QMessageBox.question(
+            self, "Clear Protocol Queue",
+            "Remove all queued protocols?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        self._selected_proto_row = -1
+        self.protocol_list.clear()
+        self._protocols.clear()
+        self.param_name_label.setText("No protocol selected")
+        self.param_editor.clear()
+        self.parent_app.show_status("Batch: cleared protocol queue")
 
     def _move_up(self) -> None:
         row = self.protocol_list.currentRow()

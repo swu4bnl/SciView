@@ -43,7 +43,7 @@ from PyQt5.QtWidgets import (
     QGroupBox, QSlider, QDoubleSpinBox, QGridLayout,
     QScrollArea, QSplitter, QButtonGroup, QFrame, QMenu, QToolButton,
     QSizePolicy, QProgressBar, QUndoCommand, QUndoStack, QApplication,
-    QShortcut, QInputDialog, QColorDialog
+    QShortcut, QInputDialog, QColorDialog, QMessageBox
 )
 from PyQt5.QtCore import QEvent, Qt
 from PyQt5.QtGui import QIcon, QCursor, QColor, QKeySequence
@@ -117,6 +117,28 @@ class _LayerAddCommand(QUndoCommand):
     def redo(self):
         if self._layer not in self._layers:
             self._layers.insert(min(self._index, len(self._layers)), self._layer)
+        self._refresh()
+
+
+class _LayerClearCommand(QUndoCommand):
+    """Clear and restore a layer stack as one edit."""
+
+    def __init__(self, layers: list[MaskLayer], refresh):
+        super().__init__("Clear mask layers")
+        self._layers = layers
+        self._removed = list(layers)
+        self._refresh = refresh
+
+    def undo(self):
+        present = {id(layer) for layer in self._layers}
+        for index, layer in enumerate(self._removed):
+            if id(layer) not in present:
+                self._layers.insert(min(index, len(self._layers)), layer)
+        self._refresh()
+
+    def redo(self):
+        removed = {id(layer) for layer in self._removed}
+        self._layers[:] = [layer for layer in self._layers if id(layer) not in removed]
         self._refresh()
 
 
@@ -538,6 +560,16 @@ class MaskApp(BaseImageTab):
         self.add_layer_button.clicked.connect(self._add_layer_menu)
         apply_emphasis_button_style(self.add_layer_button)
         button_row.addWidget(self.add_layer_button, 1)
+
+        self.remove_layer_button = QPushButton("Remove")
+        self.remove_layer_button.setToolTip("Remove the selected layer")
+        self.remove_layer_button.clicked.connect(self._remove_selected_layer)
+        button_row.addWidget(self.remove_layer_button)
+
+        self.clear_layers_button = QPushButton("Clear Layers")
+        self.clear_layers_button.setToolTip("Remove all layers")
+        self.clear_layers_button.clicked.connect(self._clear_all_layers)
+        button_row.addWidget(self.clear_layers_button)
         layout.addLayout(button_row)
 
         self.layer_empty_hint = QLabel("Create a mask from the threshold above, or add an empty layer for manual drawing.")
@@ -1254,6 +1286,22 @@ class MaskApp(BaseImageTab):
         removed_layer = self.mask_layers.pop(current_row)
         self._update_layer_list()
         self.parent_app.show_status(f"Removed layer: {removed_layer.name}")
+
+    def _clear_all_layers(self) -> None:
+        """Remove every mask layer after confirmation."""
+        if not self.mask_layers:
+            return
+        reply = QMessageBox.question(
+            self, "Clear Layers",
+            "Remove all mask layers?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        if self.drawing_mode:
+            self._set_drawing_enabled_from_session(False)
+        self.undo_stack.push(_LayerClearCommand(self.mask_layers, self._update_layer_list))
+        self.parent_app.show_status("Cleared all mask layers")
 
     def _rename_selected_layer(self) -> None:
         layer = self._get_active_layer()
