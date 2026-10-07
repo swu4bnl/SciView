@@ -104,7 +104,20 @@ def tiled_auth_state(profile_name: str | None = None) -> TiledAuthState:
     if not tiled_is_available():
         return TiledAuthState(profile_name, False, error=tiled_import_error())
 
+    # Check if client already exists in memory
     client = tiled_manager._clients.get(profile_name)
+
+    # If not in memory, attempt to load from disk cache (non-interactive)
+    if client is None:
+        try:
+            client = tiled_manager.get_or_create_client(
+                profile_name,
+                interactive_fallback=False
+            )
+        except Exception:
+            # No cached tokens or connection failed
+            return TiledAuthState(profile_name, False)
+
     if client is None:
         return TiledAuthState(profile_name, False)
 
