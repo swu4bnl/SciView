@@ -9,7 +9,9 @@ tiled servers in a beamline-agnostic way.
 import itertools
 import os
 import sys
+import time
 import numpy as np
+from dataclasses import dataclass
 from typing import Callable, Optional, Dict, Any, Tuple, List
 
 # Compatibility shim for environments with older typing_extensions.
@@ -31,7 +33,8 @@ if _typing_extensions is not None and not hasattr(_typing_extensions, "Sentinel"
 
 # Try to import tiled for beamline data access
 try:
-    from tiled.client import from_uri
+    from tiled.client import from_context, from_uri
+    from tiled.client.context import Context
     from tiled.queries import Key
     import httpx
     TILED_AVAILABLE = True
@@ -45,6 +48,15 @@ except ImportError as exc:
 from sciview.profiles.cms_profile import TILED_PROFILES, get_default_tiled_settings
 
 ProgressCallback = Callable[[int, int | str], None]
+
+
+@dataclass(frozen=True, slots=True)
+class TiledDeviceAuthorization:
+    """User-facing details for an OAuth device authorization request."""
+
+    verification_uri: str
+    user_code: str
+    expires_in: float
 
 
 class TiledClientManager:
@@ -81,7 +93,13 @@ class TiledClientManager:
         """Get default profile and detector from configuration"""
         return get_default_tiled_settings()
     
-    def get_or_create_client(self, profile_name: Optional[str] = None) -> Optional[Any]:
+    def get_or_create_client(
+        self,
+        profile_name: Optional[str] = None,
+        authorization_callback: Optional[Callable[[TiledDeviceAuthorization], None]] = None,
+        cancellation_requested: Optional[Callable[[], bool]] = None,
+        interactive_fallback: bool = True,
+    ) -> Optional[Any]:
         """
         Get existing authenticated client or create new one
         
@@ -110,7 +128,12 @@ class TiledClientManager:
                 del self._clients[profile_name]
         
         # Create new client
-        return self._create_new_client(profile_name)
+        return self._create_new_client(
+            profile_name,
+            authorization_callback=authorization_callback,
+            cancellation_requested=cancellation_requested,
+            interactive_fallback=interactive_fallback,
+        )
     
     def _is_client_valid(self, client) -> bool:
         """Test if client connection is still valid"""
@@ -122,7 +145,14 @@ class TiledClientManager:
         except Exception:
             return False
     
-    def _create_new_client(self, profile_name: str) -> Optional[Any]:
+    def _create_new_client(
+        self,
+        profile_name: str,
+        *,
+        authorization_callback: Optional[Callable[[TiledDeviceAuthorization], None]] = None,
+        cancellation_requested: Optional[Callable[[], bool]] = None,
+        interactive_fallback: bool = True,
+    ) -> Optional[Any]:
         """Create and authenticate new tiled client"""
         if profile_name not in TILED_PROFILES:
             print(f"Error: Unknown tiled profile: {profile_name}")
@@ -134,22 +164,32 @@ class TiledClientManager:
             # Connect to tiled server with a short connect timeout and a longer
             # read timeout so failed services do not make the GUI look frozen.
             timeout_config = profile.get("timeout", {})
+            timeout = None
             if timeout_config and "httpx" in sys.modules:
                 timeout = httpx.Timeout(
                     float(timeout_config.get("connect_s", 5.0)),
                     read=float(timeout_config.get("read_s", 120.0)),
                 )
+
+            if authorization_callback is not None:
+                context, node_path_parts = Context.from_any_uri(profile['uri'], timeout=timeout)
+                self._device_login(
+                    context,
+                    authorization_callback,
+                    cancellation_requested=cancellation_requested,
+                )
+                client = from_context(context, node_path_parts=node_path_parts)
+            elif profile.get('requires_login', False):
+                context, node_path_parts = Context.from_any_uri(profile['uri'], timeout=timeout)
+                if not context.authenticated and not context.use_cached_tokens():
+                    if not interactive_fallback:
+                        raise RuntimeError(f"Authentication required for {profile_name}")
+                    context.authenticate(remember_me=True)
+                client = from_context(context, node_path_parts=node_path_parts)
+            elif timeout is not None:
                 client = from_uri(profile['uri'], timeout=timeout)
             else:
                 client = from_uri(profile['uri'])
-            
-            # Login if required
-            if profile.get('requires_login', False):
-                try:
-                    client.login()
-                except Exception as e:
-                    print(f"Authentication failed for {profile_name}: {e}")
-                    return None
             
             # Cache the authenticated client
             self._clients[profile_name] = client
@@ -158,8 +198,93 @@ class TiledClientManager:
             return client
             
         except Exception as e:
+            if authorization_callback is not None:
+                raise
             print(f"Failed to connect to tiled server {profile_name}: {e}")
             return None
+
+    @staticmethod
+    def _device_login(
+        context: Any,
+        callback: Callable[[TiledDeviceAuthorization], None],
+        *,
+        cancellation_requested: Optional[Callable[[], bool]] = None,
+    ) -> None:
+        """Authenticate an external provider without terminal input or browser side effects."""
+        providers = list(context.server_info.authentication.providers)
+        external = [provider for provider in providers if provider.mode == "external"]
+        if len(external) != 1:
+            raise RuntimeError("SciView requires exactly one external Tiled authentication provider")
+
+        provider = external[0]
+        auth_endpoint = provider.links["auth_endpoint"]
+        client_id = provider.links.get("client_id")
+        token_endpoint = provider.links.get("token_endpoint")
+        scopes = " ".join(sorted({"openid", "offline_access"} | set(provider.extra_scopes or [])))
+
+        if client_id and token_endpoint:
+            response = context.http_client.post(
+                auth_endpoint,
+                data={"client_id": client_id, "scope": scopes},
+            )
+            response.raise_for_status()
+            verification = response.json()
+            verification_uri = next(
+                (
+                    verification.get(key)
+                    for key in ("verification_uri_complete", "verification_uri", "verification_url")
+                    if verification.get(key)
+                ),
+                None,
+            )
+            access_request = lambda: context.http_client.post(
+                token_endpoint,
+                data={
+                    "device_code": verification["device_code"],
+                    "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                    "client_id": client_id,
+                },
+            )
+        else:
+            response = context.http_client.post(auth_endpoint)
+            response.raise_for_status()
+            verification = response.json()
+            verification_uri = verification.get("authorization_uri")
+            token_endpoint = verification["verification_uri"]
+            access_request = lambda: context.http_client.post(
+                token_endpoint,
+                json={
+                    "device_code": verification["device_code"],
+                    "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                },
+                auth=None,
+            )
+
+        if not verification_uri:
+            raise RuntimeError("Tiled authentication response did not include a verification URL")
+
+        expires_in = float(verification["expires_in"])
+        callback(TiledDeviceAuthorization(verification_uri, str(verification["user_code"]), expires_in))
+        deadline = time.monotonic() + expires_in
+        interval = float(verification.get("interval", 5.0))
+        while time.monotonic() < deadline:
+            if cancellation_requested is not None and cancellation_requested():
+                raise RuntimeError("Tiled login cancelled")
+            time.sleep(interval)
+            access_response = access_request()
+            if access_response.status_code == 400:
+                payload = access_response.json()
+                error = payload.get("error") or payload.get("detail", {}).get("error")
+                if error == "authorization_pending":
+                    continue
+                if error == "slow_down":
+                    interval += 5.0
+                    continue
+                raise RuntimeError(f"Tiled authorization failed: {error or access_response.text}")
+            access_response.raise_for_status()
+            context.configure_auth(access_response.json(), remember_me=True)
+            return
+        raise TimeoutError("Tiled authorization code expired")
 
     @staticmethod
     def _add_retry_hooks_to_client(client, retry_callback: Optional[Callable]) -> None:
@@ -242,9 +367,9 @@ class TiledClientManager:
         # Check if already cached
         if profile_name in self._catalogs:
             return self._catalogs[profile_name]
-        
-        # Get client
-        client = self.get_or_create_client(profile_name)
+
+        # Get client (non-interactive to force GUI login flow)
+        client = self.get_or_create_client(profile_name, interactive_fallback=False)
         if client is None:
             return None
         
@@ -404,7 +529,7 @@ class TiledClientManager:
             }
             
             # Load image data based on profile structure; attach retry hooks first.
-            client = self.get_or_create_client(profile_name)
+            client = self.get_or_create_client(profile_name, interactive_fallback=False)
             if client is not None:
                 self._add_retry_hooks_to_client(client, retry_callback)
 
@@ -444,7 +569,7 @@ class TiledClientManager:
             Tuple of (image_array, metadata) or (None, error_info)
         """
         try:
-            client = self.get_or_create_client(profile_name)
+            client = self.get_or_create_client(profile_name, interactive_fallback=False)
             if client is None:
                 return None, {'error': f'Failed to connect to tiled server: {profile_name}'}
 

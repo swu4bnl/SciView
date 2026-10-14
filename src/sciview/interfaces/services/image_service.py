@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +11,7 @@ from PIL import Image
 from sciview.data.models import Dataset, ImageRef
 from sciview.sources.filesystem_source import open_dataset, resolve_local_path, scan_directory
 from sciview.sources import tiled_source
+from sciview.sources.tiled_client import TiledDeviceAuthorization
 from sciview.sources.tiled_stream import TiledLiveMonitor, create_tiled_live_monitor
 
 
@@ -55,12 +57,16 @@ class ImageService:
         username: str | None = None,
         password: str | None = None,
         interactive_fallback: bool = True,
+        authorization_callback: Callable[[TiledDeviceAuthorization], None] | None = None,
+        cancellation_requested: Callable[[], bool] | None = None,
     ) -> tiled_source.TiledAuthState:
         return tiled_source.tiled_authenticate(
             profile_name,
             username=username,
             password=password,
             interactive_fallback=interactive_fallback,
+            authorization_callback=authorization_callback,
+            cancellation_requested=cancellation_requested,
         )
 
     def tiled_search_by_filters(

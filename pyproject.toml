@@ -21,7 +21,8 @@ dependencies = [
     "qt-material>=2.14",
     "scipy>=1.11",
     "scitoolsscianalysis>=2.6.6",
-    "tiled>=0.1,<0.2",
+    "tiled>=0.2.15,<0.3",
+    "bluesky-tiled-plugins @ git+https://github.com/bluesky/bluesky-tiled-plugins.git@2d1d76a3c72be7d68fb123782734538dd2bdde29",
 ]
 
 [tool.setuptools]
