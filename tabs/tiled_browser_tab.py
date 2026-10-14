@@ -39,6 +39,7 @@ from PyQt5.QtWidgets import (
 from sciview.interfaces.theme.app_style import (
     AppStyle,
     apply_body_style,
+    apply_emphasis_button_style,
     apply_info_style,
     apply_input_style,
     apply_primary_button_style,
@@ -580,8 +581,7 @@ class TiledBrowserTab(BaseImageTab):
 
         row = QHBoxLayout()
         self.load_button = QPushButton("Load")
-        self.load_button.setToolTip("Load selected image and metadata")
-        apply_toolbar_text_button_style(self.load_button)
+        apply_emphasis_button_style(self.load_button)
         self.load_button.setEnabled(False)
         self.load_button.clicked.connect(self._load_selected_scan)
         row.addWidget(self.load_button)
@@ -906,7 +906,9 @@ class TiledBrowserTab(BaseImageTab):
         if attempts >= self.live_auto_load_max_attempts:
             suffix = f": {error}" if error is not None else ""
             self.live_status_label.setText(f"Live scan not ready after {attempts} attempts{suffix}")
-            self.parent_app.show_status(f"Live scan {scan.scan_id} did not auto-load{suffix}")
+            self.parent_app.show_status(
+                f"Could not auto-load live scan {scan.scan_id} after {attempts} attempts{suffix}"
+            )
             return
 
         self.live_status_label.setText(
@@ -1184,7 +1186,7 @@ class TiledBrowserTab(BaseImageTab):
         display_frame = self._frame_at(image_array, self.frame_slider.value())
         self.current_frame_array = display_frame
         self.image_data = display_frame
-        self.update_plot(display_frame)
+        self.update_plot(display_frame, display_name=self._current_display_name())
         self.current_image_label.setText(
             f"scan_id={scan.scan_id} detector={detector} sample={scan.sample_name or scan.sample_savename or '?'}"
         )
@@ -1234,7 +1236,12 @@ class TiledBrowserTab(BaseImageTab):
         self.current_frame_array = frame
         self.image_data = frame
         self.frame_label.setText(f"{frame_index + 1} / {frame_count}")
-        self.update_plot(frame)
+        self.update_plot(frame, display_name=self._current_display_name())
+
+    def _current_display_name(self) -> str:
+        if self.current_scan is None:
+            return str(self.current_image_source or '')
+        return f"Scan {self.current_scan.scan_id} - {self.current_detector}"
 
     def _on_slider_changed(self, position: int) -> None:
         if self.scan_rows and 0 <= position < len(self.scan_rows):

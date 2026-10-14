@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
     QFileDialog, QMessageBox, QScrollArea, QGridLayout, QTableWidget, QSplitter,
     QTableWidgetItem, QHeaderView, QFrame
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
+from PyQt5.QtCore import QSignalBlocker, Qt, QThread, pyqtSignal, QTimer, QSize
 from PyQt5.QtGui import QPixmap, QIcon
 
 # Import base class and configuration
@@ -620,8 +620,8 @@ class ImageBrowserApp(BaseImageTab):
 
         layout.addWidget(QLabel("Images:"))
         self.folder_files_list = QListWidget()
-        self.folder_files_list.itemClicked.connect(self._open_folder_file)
-        self.folder_files_list.itemActivated.connect(self._open_folder_file)
+        self.folder_files_list.currentItemChanged.connect(self._open_folder_file)
+        self.folder_files_list.itemClicked.connect(self._reopen_folder_file)
         layout.addWidget(self.folder_files_list, 1)
 
         controls_layout = QHBoxLayout()
@@ -750,7 +750,7 @@ class ImageBrowserApp(BaseImageTab):
 
     # Loading Methods
     def _load_from_folder(self):
-        """Import the current folder browser list as deferred session references."""
+        """Add the current folder browser list to the session as deferred references."""
         self._stop_folder_playback()
         file_paths = self._get_folder_image_paths()
 
@@ -766,8 +766,8 @@ class ImageBrowserApp(BaseImageTab):
         self.is_batch_loading = False
         self._update_display()
 
-        self.loading_status_label.setText(f"Added {len(file_paths)} files to session")
-        self.parent_app.show_status(f"Imported {len(file_paths)} file references from folder")
+        self.loading_status_label.setText(f"Added {len(file_paths)} images")
+        self.parent_app.show_status(f"Added {len(file_paths)} images from folder")
 
     def _on_session_changed(self, session_manager):
         """Handle session changes"""
@@ -1151,17 +1151,16 @@ class ImageBrowserApp(BaseImageTab):
         current_item = self.folder_files_list.currentItem()
         current_path = current_item.data(Qt.UserRole) if current_item is not None else None
 
-        self.folder_files_list.clear()
-
-        for path in file_paths:
-            item = QListWidgetItem(path.name)
-            item.setData(Qt.UserRole, str(path))
-            self.folder_files_list.addItem(item)
+        with QSignalBlocker(self.folder_files_list):
+            self.folder_files_list.clear()
+            for path in file_paths:
+                item = QListWidgetItem(path.name)
+                item.setData(Qt.UserRole, str(path))
+                self.folder_files_list.addItem(item)
+            if current_path in path_strings:
+                self.folder_files_list.setCurrentRow(path_strings.index(current_path))
 
         self._folder_browser_paths = path_strings
-
-        if current_path in path_strings:
-            self.folder_files_list.setCurrentRow(path_strings.index(current_path))
 
         if self.folder_path_input.text() and hasattr(self, 'loading_status_label'):
             self.loading_status_label.setText(f"Found {len(file_paths)} images")
@@ -1188,7 +1187,9 @@ class ImageBrowserApp(BaseImageTab):
             self.folder_refresh_timer.stop()
 
     def _open_folder_file(self, item):
-        """Show the clicked folder image using deferred loading."""
+        """Show the selected folder image using deferred loading."""
+        if item is None:
+            return
         file_path = item.data(Qt.UserRole)
         if not file_path:
             return
@@ -1204,6 +1205,13 @@ class ImageBrowserApp(BaseImageTab):
             self.session_manager.set_current_index(existing_index)
 
         self.loading_status_label.setText(f"Selected {os.path.basename(file_path)}")
+
+    def _reopen_folder_file(self, item) -> None:
+        """Reopen a selected folder row after session navigation."""
+        current_image = self.session_manager.get_current_image()
+        file_path = item.data(Qt.UserRole)
+        if current_image is None or current_image['path'] != file_path:
+            self._open_folder_file(item)
 
     def _toggle_folder_playback(self):
         """Play through the visible folder image list."""
@@ -1273,17 +1281,15 @@ class ImageBrowserApp(BaseImageTab):
 
     def _select_folder_browser_row(self, row):
         """Select and display a row from the visible folder browser list."""
-        item = self.folder_files_list.item(row)
-        if item is None:
+        if self.folder_files_list.item(row) is None:
             return
 
         self.folder_files_list.setCurrentRow(row)
-        self._open_folder_file(item)
 
     def _clear_session(self):
         """Clear the session"""
-        reply = QMessageBox.question(self, "Clear Session", 
-                                   "Are you sure you want to clear all images from the session?",
+        reply = QMessageBox.question(self, "Clear Session",
+                                   "Clear all images and references from this session?",
                                    QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             self.session_manager.clear_session()

@@ -255,7 +255,7 @@ class ReductionTab(BaseImageTab):
         layout = QVBoxLayout(group)
         self.payload_view = QTextEdit()
         self.payload_view.setFontFamily("monospace")
-        self.payload_view.setMinimumHeight(150)
+        self.payload_view.setMinimumHeight(AppStyle.LAYOUT['payload_view_min_height'])
         layout.addWidget(self.payload_view, 1)
         return group
 
@@ -401,6 +401,7 @@ class ReductionTab(BaseImageTab):
         self.preview_button.clicked.connect(self.refresh_preview)
         self.export_button = QPushButton("Export Data")
         self.export_button.clicked.connect(self.export_result)
+        self.export_button.setEnabled(self._current_result is not None)
         self.send_to_batch_button = QPushButton("Send to Batch")
         self.send_to_batch_button.setToolTip("Push current settings as a protocol to the Batch tab")
         self.send_to_batch_button.clicked.connect(self._send_to_batch)
@@ -613,7 +614,7 @@ class ReductionTab(BaseImageTab):
             self.parent_app.show_status(f"Loaded custom calibration: {self._custom_calibration_label}")
             self._on_parameters_changed()
         except Exception as exc:
-            self.parent_app.show_status(f"Failed to load custom calibration: {exc}")
+            self.parent_app.show_status(f"Could not load the custom calibration file: {exc}")
 
     def _load_custom_mask(self):
         file_path, _ = choose_path(
@@ -633,7 +634,7 @@ class ReductionTab(BaseImageTab):
             self.parent_app.show_status(f"Loaded custom mask: {self._custom_mask_label}")
             self._on_parameters_changed()
         except Exception as exc:
-            self.parent_app.show_status(f"Failed to load custom mask: {exc}")
+            self.parent_app.show_status(f"Could not load the custom mask file: {exc}")
 
     def _selected_calibration(self):
         if self.calibration_source_combo.currentData() == "Custom profile":
@@ -782,6 +783,7 @@ class ReductionTab(BaseImageTab):
     def refresh_preview(self):
         request = self._build_request()
         if request is None:
+            self._set_current_result(None)
             self.result_summary.setText("No image loaded")
             self._update_preview_plot(None, message="No image loaded")
             return
@@ -789,13 +791,13 @@ class ReductionTab(BaseImageTab):
         try:
             result = self.backend.run(request)
         except Exception as exc:
-            self._current_result = None
+            self._set_current_result(None)
             self._update_preview_plot(None, message=f"Preview failed: {exc}")
             self.result_summary.setText(f"Preview failed: {exc}")
             self.parent_app.show_status(f"Reduction failed: {exc}")
             return
 
-        self._current_result = result
+        self._set_current_result(result)
         self._update_preview_plot(result)
         point_count = int(np.count_nonzero(np.isfinite(result.y)))
         operation_name = result.operation.replace('_', ' ').title()
@@ -984,7 +986,7 @@ class ReductionTab(BaseImageTab):
         try:
             data = yaml.safe_load(self.payload_view.toPlainText()) or {}
         except yaml.YAMLError as exc:
-            self.parent_app.show_status(f"Invalid YAML: {exc}")
+            self.parent_app.show_status(f"Could not apply the recipe: invalid YAML — {exc}")
             return
         if not isinstance(data, dict):
             self.parent_app.show_status("Invalid recipe: expected a YAML mapping")
@@ -1266,7 +1268,7 @@ class ReductionTab(BaseImageTab):
             display_data = self.parent_app.image_data
 
         if display_data is None:
-            self._current_result = None
+            self._set_current_result(None)
             self._update_preview_plot(None)
             return
 
@@ -1287,6 +1289,10 @@ class ReductionTab(BaseImageTab):
 
         if self.auto_update_check.isChecked():
             self.refresh_preview()
+
+    def _set_current_result(self, result) -> None:
+        self._current_result = result
+        self.export_button.setEnabled(result is not None)
 
     def on_shared_state_activated(self):
         """Refresh reduction state when shared image/calibration/mask changes become active."""

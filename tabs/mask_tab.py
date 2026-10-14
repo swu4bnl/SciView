@@ -43,7 +43,7 @@ from PyQt5.QtWidgets import (
     QGroupBox, QSlider, QDoubleSpinBox, QGridLayout,
     QScrollArea, QSplitter, QButtonGroup, QFrame, QMenu, QToolButton,
     QSizePolicy, QProgressBar, QUndoCommand, QUndoStack, QApplication,
-    QShortcut, QInputDialog, QColorDialog
+    QShortcut, QInputDialog, QColorDialog, QMessageBox
 )
 from PyQt5.QtCore import QEvent, Qt
 from PyQt5.QtGui import QIcon, QCursor, QColor, QKeySequence
@@ -117,6 +117,28 @@ class _LayerAddCommand(QUndoCommand):
     def redo(self):
         if self._layer not in self._layers:
             self._layers.insert(min(self._index, len(self._layers)), self._layer)
+        self._refresh()
+
+
+class _LayerClearCommand(QUndoCommand):
+    """Clear and restore a layer stack as one edit."""
+
+    def __init__(self, layers: list[MaskLayer], refresh):
+        super().__init__("Clear mask layers")
+        self._layers = layers
+        self._removed = list(layers)
+        self._refresh = refresh
+
+    def undo(self):
+        present = {id(layer) for layer in self._layers}
+        for index, layer in enumerate(self._removed):
+            if id(layer) not in present:
+                self._layers.insert(min(index, len(self._layers)), layer)
+        self._refresh()
+
+    def redo(self):
+        removed = {id(layer) for layer in self._removed}
+        self._layers[:] = [layer for layer in self._layers if id(layer) not in removed]
         self._refresh()
 
 
@@ -367,7 +389,7 @@ class MaskApp(BaseImageTab):
         utility_widget = QWidget()
         utility_row = QHBoxLayout(utility_widget)
         utility_row.setContentsMargins(0, 0, 0, 0)
-        utility_row.setSpacing(6)
+        utility_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
         for index, (title, tools) in enumerate((
             ("View", navigation_tools),
             ("Refine", refine_tools),
@@ -440,7 +462,7 @@ class MaskApp(BaseImageTab):
         group = QWidget()
         layout = QVBoxLayout(group)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(3)
+        layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
         column_count = min(columns, max(1, len(tools)))
         group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         if title:
@@ -456,7 +478,7 @@ class MaskApp(BaseImageTab):
             cell.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             cell_layout = QVBoxLayout(cell)
             cell_layout.setContentsMargins(0, 0, 0, 0)
-            cell_layout.setSpacing(1)
+            cell_layout.setSpacing(AppStyle.LAYOUT['tool_label_spacing'])
             cell_layout.addWidget(button, 0, Qt.AlignHCenter)
             label = QLabel(label_text)
             label.setAlignment(Qt.AlignHCenter)
@@ -525,7 +547,7 @@ class MaskApp(BaseImageTab):
         layout = QVBoxLayout(panel)
 
         self.layer_list = QListWidget()
-        self.layer_list.setMinimumHeight(120)
+        self.layer_list.setMinimumHeight(AppStyle.LAYOUT['record_list_min_height'])
         self.layer_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.layer_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.layer_list.customContextMenuRequested.connect(self._show_layer_context_menu)
@@ -538,6 +560,15 @@ class MaskApp(BaseImageTab):
         self.add_layer_button.clicked.connect(self._add_layer_menu)
         apply_emphasis_button_style(self.add_layer_button)
         button_row.addWidget(self.add_layer_button, 1)
+
+        self.remove_layer_button = QPushButton("Remove")
+        self.remove_layer_button.clicked.connect(self._remove_selected_layer)
+        self.remove_layer_button.setEnabled(False)
+        button_row.addWidget(self.remove_layer_button)
+
+        self.clear_layers_button = QPushButton("Clear Layers")
+        self.clear_layers_button.clicked.connect(self._clear_all_layers)
+        button_row.addWidget(self.clear_layers_button)
         layout.addLayout(button_row)
 
         self.layer_empty_hint = QLabel("Create a mask from the threshold above, or add an empty layer for manual drawing.")
@@ -581,11 +612,12 @@ class MaskApp(BaseImageTab):
         self.mask_coverage_bar.setTextVisible(True)
         self.mask_coverage_bar.setToolTip("Fraction of visible image pixels included in the combined mask")
         appearance.addWidget(self.mask_coverage_bar)
-        export_combined_button = QPushButton("Export Combined Mask")
-        export_combined_button.setToolTip("Export the combined mask from all visible layers")
-        export_combined_button.clicked.connect(self._export_combined_mask)
-        apply_emphasis_button_style(export_combined_button)
-        appearance.addWidget(export_combined_button)
+        self.export_combined_button = QPushButton("Export Combined Mask")
+        self.export_combined_button.setToolTip("Export the combined mask from all visible layers")
+        self.export_combined_button.clicked.connect(self._export_combined_mask)
+        self.export_combined_button.setEnabled(self.combined_mask is not None)
+        apply_emphasis_button_style(self.export_combined_button)
+        appearance.addWidget(self.export_combined_button)
         self.layer_appearance_panel.setVisible(bool(self.mask_layers))
         layout.addWidget(self.layer_appearance_panel)
         return panel
@@ -635,7 +667,7 @@ class MaskApp(BaseImageTab):
         layout.addLayout(histogram_controls)
 
         self.threshold_plot = pg.PlotWidget()
-        self.threshold_plot.setMaximumHeight(150)
+        self.threshold_plot.setMaximumHeight(AppStyle.LAYOUT['compact_panel_max_height'])
         self.threshold_plot.setMinimumHeight(110)
         self.threshold_plot.setMouseEnabled(x=True, y=False)
         self.threshold_plot.hideAxis('left')
@@ -1022,6 +1054,7 @@ class MaskApp(BaseImageTab):
         if self.mask_layers:
             target = active_index if active_index is not None else len(self.mask_layers) - 1
             self.layer_list.setCurrentRow(self._list_row_for_layer(target))
+        self.remove_layer_button.setEnabled(bool(self.mask_layers))
         self._refresh_edit_target()
         self._update_combined_mask()
     
@@ -1100,7 +1133,9 @@ class MaskApp(BaseImageTab):
         """Handle layer selection"""
         item = self.layer_list.item(row) if row >= 0 else None
         layer_index = item.data(Qt.UserRole) if item is not None else None
-        if not isinstance(layer_index, int) or not (0 <= layer_index < len(self.mask_layers)):
+        has_active_layer = isinstance(layer_index, int) and (0 <= layer_index < len(self.mask_layers))
+        self.remove_layer_button.setEnabled(has_active_layer)
+        if not has_active_layer:
             self._refresh_edit_target()
             return
         layer = self.mask_layers[layer_index]
@@ -1240,7 +1275,7 @@ class MaskApp(BaseImageTab):
             self.parent_app.show_status("Added empty layer")
             
         except Exception as e:
-            self.parent_app.show_status(f"Error creating empty layer: {str(e)}")
+            self.parent_app.show_status(f"Could not create the empty mask layer: {str(e)}")
             print(f"DEBUG: _add_empty_layer error: {e}")
             print(f"DEBUG: image_data type: {type(self.image_data)}")
     
@@ -1254,6 +1289,15 @@ class MaskApp(BaseImageTab):
         removed_layer = self.mask_layers.pop(current_row)
         self._update_layer_list()
         self.parent_app.show_status(f"Removed layer: {removed_layer.name}")
+
+    def _clear_all_layers(self) -> None:
+        """Remove every mask layer through the undo stack."""
+        if not self.mask_layers:
+            return
+        if self.drawing_mode:
+            self._set_drawing_enabled_from_session(False)
+        self.undo_stack.push(_LayerClearCommand(self.mask_layers, self._update_layer_list))
+        self.parent_app.show_status("Cleared all mask layers")
 
     def _rename_selected_layer(self) -> None:
         layer = self._get_active_layer()
@@ -1360,6 +1404,7 @@ class MaskApp(BaseImageTab):
         """Compose visible layers in list order using each incoming operator."""
         self._preview_mask = None
         self.combined_mask = compose_mask_layers(self.mask_layers)
+        self.export_combined_button.setEnabled(self.combined_mask is not None)
         if self.combined_mask is None:
             if hasattr(self.parent_app, 'publish_shared_mask'):
                 self.parent_app.publish_shared_mask(None, source_tab=self)
@@ -1706,7 +1751,7 @@ class MaskApp(BaseImageTab):
                 )
                 
         except Exception as e:
-            self.parent_app.show_status(f"Error loading instrument mask: {str(e)}")
+            self.parent_app.show_status(f"Could not load the instrument mask: {str(e)}")
     
     def _load_custom_mask(self):
         """Load a custom mask file"""
@@ -1733,7 +1778,7 @@ class MaskApp(BaseImageTab):
         try:
             return backend_load_mask_file(file_path)
         except Exception as e:
-            self.parent_app.show_status(f"Error loading mask file: {str(e)}")
+            self.parent_app.show_status(f"Could not load the mask file: {str(e)}")
             return None
     
     # ===== Export Methods =====
@@ -1793,7 +1838,7 @@ class MaskApp(BaseImageTab):
             
         except Exception as e:
             import traceback
-            self.parent_app.show_status(f"✗ Error exporting mask: {str(e)}")
+            self.parent_app.show_status(f"Could not export the mask: {str(e)}")
             print(f"Export error details:\n{traceback.format_exc()}")
     
     # ===== Display Methods =====

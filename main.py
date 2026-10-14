@@ -11,8 +11,11 @@ import subprocess
 import shutil
 import tempfile
 import tomllib
+import logging
 from pathlib import Path
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def _ensure_numpy_compat_aliases():
@@ -141,8 +144,13 @@ class SciAnaApp(QMainWindow):
         self.theme_toggle_button.clicked.connect(self._toggle_dark_light_theme)
         self._update_theme_toggle_icon()
 
-        self.clear_session_button = QPushButton("D")
+        self.clear_session_button = QPushButton()
+        self.clear_session_button.setAccessibleName("Clear saved session")
         self.clear_session_button.setProperty("sciview_compact_button", True)
+        self.clear_session_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['clear_session'])
+        )
+        self.clear_session_button.setIconSize(AppStyle.corner_button_icon_size())
         self.clear_session_button.setToolTip(
             "Clear saved session cache (last image/calibration/mask/batch queue restore data)"
         )
@@ -382,6 +390,12 @@ class SciAnaApp(QMainWindow):
         self.refresh_button.setIconSize(corner_icon_size)
         self.refresh_button.setFixedSize(corner_button_size)
 
+        self.clear_session_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['clear_session'])
+        )
+        self.clear_session_button.setIconSize(corner_icon_size)
+        self.clear_session_button.setFixedSize(corner_button_size)
+
         self.style_inspector_button.setFixedSize(corner_button_size)
         self.theme_toggle_button.setFixedSize(corner_button_size)
 
@@ -554,6 +568,21 @@ class SciAnaApp(QMainWindow):
         """Display status message"""
         self.status.showMessage(msg)
 
+    def report_error(self, message, exc=None, *, user_visible=True):
+        """Log an error and optionally surface it in the status bar.
+
+        Always logged (with traceback when `exc` is given) so developers keep
+        terminal visibility. Set `user_visible=False` for internal per-tab sync
+        loops where a status message would be non-actionable noise or get
+        overwritten mid-loop by the next tab's message.
+        """
+        if exc is not None:
+            logger.exception(message)
+        else:
+            logger.error(message)
+        if user_visible:
+            self.show_status(message)
+
     def _on_current_tab_changed(self, index):
         """Publish outgoing tab state and render the newly active tab."""
         previous_index = self._last_tab_index
@@ -676,7 +705,7 @@ class SciAnaApp(QMainWindow):
             tuple: (image_data, file_path) or (None, None) if failed
         """
         if not SCIANALYSIS_AVAILABLE:
-            self.show_status("Error: SciAnalysis not available")
+            self.show_status("Could not load the image: SciAnalysis is not installed.")
             return None, None
             
         path, _ = choose_path(self, "Open Image File", file_filter=file_filters, key="image_open")
@@ -721,8 +750,7 @@ class SciAnaApp(QMainWindow):
             return image_data, path
             
         except Exception as e:
-            self.show_status(f"Error loading image: {str(e)}")
-            print(f"Error loading image: {e}")
+            self.report_error(f"Could not load {os.path.basename(path)}: {e}", exc=e)
             return None, None
     
     def get_image_path(self):
@@ -756,11 +784,13 @@ class SciAnaApp(QMainWindow):
             if not module_name or 'tabs.' not in module_name:
                 module_map = {
                     "Image Browser": "tabs.image_browser_tab.ImageBrowserApp",
+                    "Tiled Browser": "tabs.tiled_browser_tab.TiledBrowserTab",
                     "Calibration": "tabs.calibration_tab.CalibrationApp",
                     "Mask Editing": "tabs.mask_tab.MaskApp",
                     "Reduction": "tabs.reduction_tab.ReductionTab",
                     "Transform": "tabs.transform_tab.TransformTab",
                     "Batch": "tabs.batch_tab.BatchTab",
+                    "Info": "tabs.info_tab.InfoTab",
                 }
                 
                 if tab_name not in module_map:

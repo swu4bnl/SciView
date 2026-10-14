@@ -137,7 +137,7 @@ class BaseImageTab(QWidget):
                         det_phi=DEFAULT_CALIBRATION['detector_phi_deg'],
                     )
             except Exception as e:
-                print(f"Warning: Failed to initialize SciAnalysis calibration: {e}")
+                self.parent_app.report_error(f"Could not initialize the calibration: {e}", exc=e)
                 self.calibration = None
         else:
             self.calibration = None
@@ -185,7 +185,7 @@ class BaseImageTab(QWidget):
             return calibration
             
         except Exception as e:
-            print(f"Warning: Could not create calibration: {e}")
+            self.parent_app.report_error(f"Could not create the calibration: {e}", exc=e)
             return None
 
     def create_data2d_object(self, image_array, file_path):
@@ -237,9 +237,11 @@ class BaseImageTab(QWidget):
                 return image_array
                 
         except Exception as e:
-            print(f"Warning: Could not create Data2DScattering object: {e}")
-            import traceback
-            traceback.print_exc()
+            # logger.exception (inside report_error) already captures the traceback.
+            self.parent_app.report_error(
+                f"Could not attach calibration to the image; showing the raw image instead: {e}",
+                exc=e,
+            )
             return image_array
 
     def add_display_hook(self, hook_func, position='post'):
@@ -378,7 +380,7 @@ class BaseImageTab(QWidget):
         self.image_viewer.set_levels(display_vals['vmin'], display_vals['vmax'])
         self._refresh_shared_image_overlays()
 
-    def _create_image_panel(self, show_header: bool = True):
+    def _create_image_panel(self, show_header: bool = False):
         """Create the image display panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
@@ -552,13 +554,15 @@ class BaseImageTab(QWidget):
             if hasattr(self, 'update_plot'):
                 self.update_plot()
 
-    def update_plot(self, image_data=None):
+    def update_plot(self, image_data=None, *, display_name: str | None = None):
         """Update plots based on current image data - THE SINGLE METHOD FOR ALL IMAGE DISPLAY
         
         Args:
             image_data: Optional image data to display. If None, uses self.image_data.
                        Allows passing data directly without storing in self.image_data,
                        which improves memory efficiency for on-demand loading.
+            display_name: Optional title for locally rendered data. Shared data falls
+                          back to its source path when no name is provided.
         """
         # Use provided data or fall back to instance variable
         display_data = image_data if image_data is not None else self.image_data
@@ -570,9 +574,11 @@ class BaseImageTab(QWidget):
         if display_data is None:
             return
 
-        # Refresh image filename display if available
-        if hasattr(self, 'filename_label') and hasattr(display_data, 'name'):
-            self.filename_label.setText(f"File Name: {display_data.name}")
+        resolved_name = display_name or getattr(display_data, 'name', '')
+        if not resolved_name and display_data is getattr(self.parent_app, 'image_data', None):
+            image_path = getattr(self.parent_app, 'image_path', None)
+            resolved_name = os.path.basename(image_path) if image_path else ''
+        self.image_viewer.set_title(str(resolved_name or ''))
 
         # Call pre-display hooks
         for hook in self.pre_display_hooks:

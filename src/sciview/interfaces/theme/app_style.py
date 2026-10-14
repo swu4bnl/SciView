@@ -62,6 +62,7 @@ class AppStyle:
         'refresh': 'refresh.svg',
         'app_update': 'app_update.svg',
         'sci_update': 'sci_update.svg',
+        'clear_session': 'tool_delete.svg',
     }
 
     TAB_ICON_FILES = {
@@ -190,9 +191,14 @@ class AppStyle:
         'panel_inner_margin': 2, # inner margins of content sub-panels
         'panel_spacing': 3,
         'toolbar_spacing': 4,    # spacing inside icon/button toolbars
+        'tool_label_spacing': 1, # spacing between a tool icon and its caption
         'section_spacing': 6,    # spacing between major items in right-panel layouts
         # Image browser specifics
         'image_browser_current_label_max_height': 30,
+        # Each of these is reused by 2+ tabs for the same semantic role:
+        'compact_panel_max_height': 150,  # a secondary sub-panel that must not dominate its form
+        'payload_view_min_height': 150,   # the YAML recipe/payload text editor in recipe-driven tabs
+        'record_list_min_height': 120,    # a scrollable list/table of session records (layers, results)
     }
     _BASE_LAYOUT: dict = deepcopy(LAYOUT)
     

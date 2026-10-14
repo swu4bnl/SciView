@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QFormLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QProgressBar, QPushButton, QSpinBox, QSplitter, QTableWidget,
+    QMessageBox, QProgressBar, QPushButton, QSpinBox, QSplitter, QTableWidget,
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
@@ -201,7 +201,6 @@ class BatchTab(QWidget):
         form = QVBoxLayout(group)
 
         btn_load = QPushButton("Refresh File List")
-        btn_load.setToolTip("File list auto-syncs with Image Browser; use this if it hasn't yet")
         apply_emphasis_button_style(btn_load)
         btn_load.clicked.connect(self._load_from_session)
         form.addWidget(btn_load)
@@ -251,7 +250,7 @@ class BatchTab(QWidget):
         self.results_table.horizontalHeader().setStretchLastSection(True)
         self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.results_table.setMinimumHeight(120)
+        self.results_table.setMinimumHeight(AppStyle.LAYOUT['record_list_min_height'])
         lay.addWidget(self.results_table, 1)
         return panel
 
@@ -301,9 +300,11 @@ class BatchTab(QWidget):
         br = QHBoxLayout()
         self.btn_remove = QPushButton("Remove")
         self.btn_remove.clicked.connect(self._remove_protocol)
+        self.btn_clear_queue = QPushButton("Clear Queue")
+        self.btn_clear_queue.clicked.connect(self._clear_protocol_queue)
         self.btn_up = QPushButton("↑"); self.btn_up.clicked.connect(self._move_up)
         self.btn_dn = QPushButton("↓"); self.btn_dn.clicked.connect(self._move_down)
-        for b in (self.btn_remove, self.btn_up, self.btn_dn):
+        for b in (self.btn_remove, self.btn_clear_queue, self.btn_up, self.btn_dn):
             br.addWidget(b)
         br.addStretch()
         pv.addLayout(br)
@@ -416,6 +417,24 @@ class BatchTab(QWidget):
             self.param_name_label.setText("No protocol selected")
             self.param_editor.clear()
 
+    def _clear_protocol_queue(self) -> None:
+        """Remove every queued protocol after confirmation."""
+        if not self._protocols:
+            return
+        reply = QMessageBox.question(
+            self, "Clear Protocol Queue",
+            "Clear all protocols from the queue? This cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        self._selected_proto_row = -1
+        self.protocol_list.clear()
+        self._protocols.clear()
+        self.param_name_label.setText("No protocol selected")
+        self.param_editor.clear()
+        self.parent_app.show_status("Batch: cleared protocol queue")
+
     def _move_up(self) -> None:
         row = self.protocol_list.currentRow()
         if row <= 0:
@@ -485,7 +504,7 @@ class BatchTab(QWidget):
             self.protocol_list.item(row).setText(self._proto_label(self._protocols[row]))
             self.parent_app.show_status("Batch: recipe updated")
         except Exception as exc:
-            self.parent_app.show_status(f"Batch: invalid YAML — {exc}")
+            self.parent_app.show_status(f"Batch: could not apply the recipe — invalid YAML: {exc}")
 
     def _reset_params(self) -> None:
         """Reset the selected protocol's params to registered defaults, keeping
@@ -558,7 +577,7 @@ class BatchTab(QWidget):
                 self.param_editor.clear()
             self.parent_app.show_status(f"Recipe loaded: {len(self._protocols)} protocols")
         except Exception as exc:
-            self.parent_app.show_status(f"Batch: load failed — {exc}")
+            self.parent_app.show_status(f"Batch: could not load the recipe — {exc}")
 
     def get_session_state(self) -> dict:
         """Serialize the protocol queue for restart restore (same shape as _save_recipe)."""

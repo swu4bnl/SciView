@@ -42,6 +42,7 @@ class ImagePointerEvent:
     button: object
     modifiers: object
     inside_image: bool
+    inside_canvas: bool
 
 
 class ImageViewer(QWidget):
@@ -129,8 +130,6 @@ class ImageViewer(QWidget):
         self._zoom_button.setCheckable(True)
         self.beam_center_overlay_button.setCheckable(True)
         self.mask_overlay_button.setCheckable(True)
-        self.beam_center_overlay_button.setVisible(False)
-        self.mask_overlay_button.setVisible(False)
         self._pan_button.setChecked(True)
         self._pan_button.clicked.connect(self._activate_pan_mode)
         self._zoom_button.clicked.connect(self._activate_zoom_mode)
@@ -143,15 +142,24 @@ class ImageViewer(QWidget):
 
         self._toolbar_layout = QHBoxLayout()
         self._toolbar_layout.setContentsMargins(0, 0, 0, 0)
-        self._toolbar_layout.setSpacing(2)
-        self._toolbar_layout.addWidget(self._pan_button)
-        self._toolbar_layout.addWidget(self._zoom_button)
-        self._toolbar_layout.addWidget(self.beam_center_overlay_button)
-        self._toolbar_layout.addWidget(self.mask_overlay_button)
-        self._toolbar_layout.addWidget(self._home_button)
-        self._toolbar_layout.addWidget(self._auto_levels_button)
-        self._toolbar_layout.addWidget(self._copy_button)
-        self._toolbar_layout.addWidget(self._save_button)
+        self._toolbar_layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
+        toolbar_buttons = {
+            "pan": self._pan_button,
+            "zoom": self._zoom_button,
+            "beam_center": self.beam_center_overlay_button,
+            "mask": self.mask_overlay_button,
+            "home": self._home_button,
+            "auto": self._auto_levels_button,
+            "copy": self._copy_button,
+            "save": self._save_button,
+        }
+        self._toolbar_cells = {}
+        for action in VIEWER_TOOLBAR_ACTIONS:
+            cell = self._make_labeled_tool_cell(action.label, toolbar_buttons[action.key])
+            self._toolbar_cells[action.key] = cell
+            self._toolbar_layout.addWidget(cell)
+        self._toolbar_cells["beam_center"].setVisible(False)
+        self._toolbar_cells["mask"].setVisible(False)
         self._toolbar_layout.addWidget(self._palette_info_label)
 
         layout = QVBoxLayout(self)
@@ -228,6 +236,7 @@ class ImageViewer(QWidget):
         self._message_item.setText(message or "")
         self._message_item.setPos(0.5, 0.5)
         self._message_item.setVisible(bool(message))
+        self.set_title("")
 
     def set_levels(self, vmin: float | None, vmax: float | None) -> None:
         self._levels = (self._finite_or_none(vmin), self._finite_or_none(vmax))
@@ -303,6 +312,8 @@ class ImageViewer(QWidget):
         if not locked:
             self._release_pointer_capture()
         self._view_box.setMouseEnabled(x=not locked, y=not locked)
+        self._pan_button.setEnabled(not locked)
+        self._zoom_button.setEnabled(not locked)
         if locked:
             self._pan_button.setChecked(False)
             self._zoom_button.setChecked(False)
@@ -319,8 +330,8 @@ class ImageViewer(QWidget):
 
     def enable_overlay_tools(self) -> None:
         """Show the beam-center and mask toolbar controls."""
-        self.beam_center_overlay_button.setVisible(True)
-        self.mask_overlay_button.setVisible(True)
+        self._toolbar_cells["beam_center"].setVisible(True)
+        self._toolbar_cells["mask"].setVisible(True)
 
     def activate_navigation_mode(self, mode: str) -> None:
         """Unlock drawing input and select a supported viewer navigation mode."""
@@ -620,8 +631,14 @@ class ImageViewer(QWidget):
         view_pos = self._view_box.mapSceneToView(scene_pos)
         x = float(view_pos.x())
         y = float(view_pos.y())
-        inside = self._is_inside_image(x, y)
-        return ImagePointerEvent(x=x, y=y, button=button, modifiers=modifiers, inside_image=inside)
+        return ImagePointerEvent(
+            x=x,
+            y=y,
+            button=button,
+            modifiers=modifiers,
+            inside_image=self._is_inside_image(x, y),
+            inside_canvas=self._view_box.sceneBoundingRect().contains(scene_pos),
+        )
 
     def _on_scene_mouse_moved(self, scene_pos: QPointF) -> None:
         if self._source_array is None:
@@ -706,6 +723,7 @@ class ImageViewer(QWidget):
     @staticmethod
     def _make_tool_button(action: Any, icon: QIcon) -> QToolButton:
         button = QToolButton()
+        button.setAccessibleName(action.label)
         button.setAutoRaise(False)
         button.setFixedSize(AppStyle.toolbar_symbol_button_size())
         AppStyle.apply_widget_style(button, 'compact_button')
@@ -718,6 +736,19 @@ class ImageViewer(QWidget):
             button.setIconSize(QSize(icon_size, icon_size))
         button.setToolTip(action.tooltip)
         return button
+
+    @staticmethod
+    def _make_labeled_tool_cell(label_text: str, button: QToolButton) -> QWidget:
+        cell = QWidget()
+        layout = QVBoxLayout(cell)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(AppStyle.LAYOUT['tool_label_spacing'])
+        layout.addWidget(button, 0, Qt.AlignHCenter)
+        label = QLabel(label_text)
+        label.setAlignment(Qt.AlignHCenter)
+        AppStyle.set_font_role(label, 'toolbar_text')
+        layout.addWidget(label)
+        return cell
 
     @staticmethod
     def _finite_or_none(value: float | None) -> float | None:
