@@ -704,7 +704,7 @@ class SciAnaApp(QMainWindow):
             tuple: (image_data, file_path) or (None, None) if failed
         """
         if not SCIANALYSIS_AVAILABLE:
-            self.show_status("SciView could not load the image: the SciAnalysis package is not installed.")
+            self.show_status("Could not load the image: SciAnalysis is not installed.")
             return None, None
             
         path, _ = choose_path(self, "Open Image File", file_filter=file_filters, key="image_open")
@@ -749,7 +749,7 @@ class SciAnaApp(QMainWindow):
             return image_data, path
             
         except Exception as e:
-            self.report_error(f"SciView could not load the image {os.path.basename(path)}: {e}", exc=e)
+            self.report_error(f"Could not load {os.path.basename(path)}: {e}", exc=e)
             return None, None
     
     def get_image_path(self):

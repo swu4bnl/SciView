@@ -201,7 +201,6 @@ class BatchTab(QWidget):
         form = QVBoxLayout(group)
 
         btn_load = QPushButton("Refresh File List")
-        btn_load.setToolTip("File list auto-syncs with Image Browser; use this if it hasn't yet")
         apply_emphasis_button_style(btn_load)
         btn_load.clicked.connect(self._load_from_session)
         form.addWidget(btn_load)

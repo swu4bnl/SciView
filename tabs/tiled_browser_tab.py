@@ -581,15 +581,7 @@ class TiledBrowserTab(BaseImageTab):
 
         row = QHBoxLayout()
         self.load_button = QPushButton("Load")
-        self.load_button.setToolTip("Load selected image and metadata")
         apply_emphasis_button_style(self.load_button)
-        # apply_emphasis_button_style calls setDefault(True) under native Qt themes
-        # (purely for the native "default button" highlight look). Qt's Enter-key
-        # auto-dispatch to the default button is implemented in QDialog, not in a
-        # plain QWidget/QMainWindow tab like this one, so it has no behavioral
-        # effect here today — setAutoDefault(False) is defensive insurance in case
-        # this tab is ever hosted inside a dialog.
-        self.load_button.setAutoDefault(False)
         self.load_button.setEnabled(False)
         self.load_button.clicked.connect(self._load_selected_scan)
         row.addWidget(self.load_button)
@@ -915,7 +907,7 @@ class TiledBrowserTab(BaseImageTab):
             suffix = f": {error}" if error is not None else ""
             self.live_status_label.setText(f"Live scan not ready after {attempts} attempts{suffix}")
             self.parent_app.show_status(
-                f"SciView could not auto-load live scan {scan.scan_id} after {attempts} attempts{suffix}"
+                f"Could not auto-load live scan {scan.scan_id} after {attempts} attempts{suffix}"
             )
             return
 

@@ -303,6 +303,8 @@ class ImageViewer(QWidget):
         if not locked:
             self._release_pointer_capture()
         self._view_box.setMouseEnabled(x=not locked, y=not locked)
+        self._pan_button.setEnabled(not locked)
+        self._zoom_button.setEnabled(not locked)
         if locked:
             self._pan_button.setChecked(False)
             self._zoom_button.setChecked(False)

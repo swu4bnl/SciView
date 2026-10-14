@@ -1275,7 +1275,7 @@ class MaskApp(BaseImageTab):
             self.parent_app.show_status("Added empty layer")
             
         except Exception as e:
-            self.parent_app.show_status(f"SciView could not create the empty mask layer: {str(e)}")
+            self.parent_app.show_status(f"Could not create the empty mask layer: {str(e)}")
             print(f"DEBUG: _add_empty_layer error: {e}")
             print(f"DEBUG: image_data type: {type(self.image_data)}")
     
@@ -1751,7 +1751,7 @@ class MaskApp(BaseImageTab):
                 )
                 
         except Exception as e:
-            self.parent_app.show_status(f"SciView could not load the instrument mask: {str(e)}")
+            self.parent_app.show_status(f"Could not load the instrument mask: {str(e)}")
     
     def _load_custom_mask(self):
         """Load a custom mask file"""
@@ -1778,7 +1778,7 @@ class MaskApp(BaseImageTab):
         try:
             return backend_load_mask_file(file_path)
         except Exception as e:
-            self.parent_app.show_status(f"SciView could not load the mask file: {str(e)}")
+            self.parent_app.show_status(f"Could not load the mask file: {str(e)}")
             return None
     
     # ===== Export Methods =====
@@ -1838,7 +1838,7 @@ class MaskApp(BaseImageTab):
             
         except Exception as e:
             import traceback
-            self.parent_app.show_status(f"✗ SciView could not export the mask: {str(e)}")
+            self.parent_app.show_status(f"Could not export the mask: {str(e)}")
             print(f"Export error details:\n{traceback.format_exc()}")
     
     # ===== Display Methods =====

@@ -621,6 +621,7 @@ class ImageBrowserApp(BaseImageTab):
         layout.addWidget(QLabel("Images:"))
         self.folder_files_list = QListWidget()
         self.folder_files_list.currentItemChanged.connect(self._open_folder_file)
+        self.folder_files_list.itemClicked.connect(self._reopen_folder_file)
         layout.addWidget(self.folder_files_list, 1)
 
         controls_layout = QHBoxLayout()
@@ -765,8 +766,8 @@ class ImageBrowserApp(BaseImageTab):
         self.is_batch_loading = False
         self._update_display()
 
-        self.loading_status_label.setText(f"Added {len(file_paths)} files to session")
-        self.parent_app.show_status(f"Added {len(file_paths)} file references from folder to the session")
+        self.loading_status_label.setText(f"Added {len(file_paths)} images")
+        self.parent_app.show_status(f"Added {len(file_paths)} images from folder")
 
     def _on_session_changed(self, session_manager):
         """Handle session changes"""
@@ -1204,6 +1205,13 @@ class ImageBrowserApp(BaseImageTab):
             self.session_manager.set_current_index(existing_index)
 
         self.loading_status_label.setText(f"Selected {os.path.basename(file_path)}")
+
+    def _reopen_folder_file(self, item) -> None:
+        """Reopen a selected folder row after session navigation."""
+        current_image = self.session_manager.get_current_image()
+        file_path = item.data(Qt.UserRole)
+        if current_image is None or current_image['path'] != file_path:
+            self._open_folder_file(item)
 
     def _toggle_folder_playback(self):
         """Play through the visible folder image list."""

@@ -528,12 +528,12 @@ class CalibrationApp(BaseImageTab):
             for i in picked_indices:
                 self._set_ring_point_indicator(i, 'error')
             self.ring_result_label.setText(f"Fit failed: {str(e)}")
-            self.parent_app.show_status(f"SciView could not calculate the ring center: {str(e)}")
+            self.parent_app.show_status(f"Could not calculate the ring center: {str(e)}")
         except Exception as e:
             for i in picked_indices:
                 self._set_ring_point_indicator(i, 'error')
             self.ring_result_label.setText(f"Fit failed: {str(e)}")
-            self.parent_app.show_status(f"SciView could not calculate the ring center: {str(e)}")
+            self.parent_app.show_status(f"Could not calculate the ring center: {str(e)}")
 
     def clear_ring_points(self):
         """Clear all picked ring points, indicators, and markers"""
