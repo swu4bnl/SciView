@@ -839,9 +839,17 @@ class TiledBrowserTab(BaseImageTab):
 
     def _stop_live_monitor(self) -> None:
         monitor = self._live_monitor
-        self._live_monitor = None
         if monitor is not None:
-            monitor.stop()
+            try:
+                monitor.stop()
+            except Exception as exc:
+                message = f"Could not stop Tiled live stream: {exc}"
+                self.live_start_button.setEnabled(False)
+                self.live_stop_button.setEnabled(True)
+                self.live_status_label.setText(message)
+                self.parent_app.show_status(message)
+                return
+            self._live_monitor = None
         if hasattr(self, "live_start_button"):
             self.live_start_button.setEnabled(self.image_service.tiled_is_available())
             self.live_stop_button.setEnabled(False)

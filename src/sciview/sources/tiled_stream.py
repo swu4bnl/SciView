@@ -7,9 +7,13 @@ must not call Tiled subscription objects directly.
 
 from __future__ import annotations
 
+import logging
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from bluesky_tiled_plugins.streaming import BlueskyStreamSubscription
 
 try:
     from bluesky_tiled_plugins import subscribe_to_streams
@@ -19,6 +23,8 @@ except ImportError:
 from sciview.sources.tiled_client import tiled_manager
 from sciview.sources.tiled_source import TiledScanSummary, _summary_from_run
 
+
+logger = logging.getLogger(__name__)
 
 LiveEventCallback = Callable[["TiledLiveEvent"], None]
 
@@ -72,7 +78,7 @@ class TiledLiveMonitor:
     def __init__(self, profile_name: str, *, catalog: Any | None = None):
         self.profile_name = profile_name
         self._catalog = catalog
-        self._catalog_subscription: Any | None = None
+        self._catalog_subscription: BlueskyStreamSubscription | None = None
         self._seen_runs: set[str] = set()
         self._seen_runs_lock = threading.Lock()
         self._callback: LiveEventCallback | None = None
@@ -90,7 +96,11 @@ class TiledLiveMonitor:
 
         _install_child_created_compatibility()
         self._callback = callback
-        catalog = self._catalog or tiled_manager.get_or_load_catalog(self.profile_name)
+        catalog = (
+            self._catalog
+            if self._catalog is not None
+            else tiled_manager.get_or_load_catalog(self.profile_name)
+        )
         if catalog is None:
             raise RuntimeError(f"Could not load Tiled catalog for profile: {self.profile_name}")
         if subscribe_to_streams is None:
@@ -117,9 +127,16 @@ class TiledLiveMonitor:
     def stop(self) -> None:
         """Stop all active live subscriptions."""
 
-        self._stop_subscription(self._catalog_subscription)
+        if self._catalog_subscription is not None:
+            try:
+                self._catalog_subscription.disconnect()
+            except Exception as exc:
+                self._emit_error(exc)
+                raise
+
         self._catalog_subscription = None
-        self._seen_runs.clear()
+        with self._seen_runs_lock:
+            self._seen_runs.clear()
         was_running = self._running
         self._running = False
         if was_running:
@@ -163,7 +180,10 @@ class TiledLiveMonitor:
 
     def _emit(self, event: TiledLiveEvent) -> None:
         if self._callback is not None:
-            self._callback(event)
+            try:
+                self._callback(event)
+            except Exception:
+                logger.exception("Tiled live event callback failed")
 
     def _emit_error(self, exc: Exception) -> None:
         self._emit(
@@ -173,17 +193,6 @@ class TiledLiveMonitor:
                 error=str(exc),
             )
         )
-
-    @staticmethod
-    def _stop_subscription(subscription: Any | None) -> None:
-        if subscription is None:
-            return
-        for method_name in ("disconnect", "stop", "close", "cancel"):
-            method = getattr(subscription, method_name, None)
-            if callable(method):
-                method()
-                return
-
 
 def create_tiled_live_monitor(profile_name: str) -> TiledLiveMonitor:
     """Create a live monitor for a configured Tiled profile."""
