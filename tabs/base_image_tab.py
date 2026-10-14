@@ -380,7 +380,7 @@ class BaseImageTab(QWidget):
         self.image_viewer.set_levels(display_vals['vmin'], display_vals['vmax'])
         self._refresh_shared_image_overlays()
 
-    def _create_image_panel(self, show_header: bool = True):
+    def _create_image_panel(self, show_header: bool = False):
         """Create the image display panel"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
@@ -572,9 +572,9 @@ class BaseImageTab(QWidget):
         if display_data is None:
             return
 
-        # Refresh image filename display if available
-        if hasattr(self, 'filename_label') and hasattr(display_data, 'name'):
-            self.filename_label.setText(f"File Name: {display_data.name}")
+        image_path = getattr(self.parent_app, 'image_path', None)
+        display_name = os.path.basename(image_path) if image_path else getattr(display_data, 'name', '')
+        self.image_viewer.set_title(str(display_name or ''))
 
         # Call pre-display hooks
         for hook in self.pre_display_hooks:

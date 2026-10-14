@@ -478,7 +478,7 @@ class MaskApp(BaseImageTab):
             cell.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             cell_layout = QVBoxLayout(cell)
             cell_layout.setContentsMargins(0, 0, 0, 0)
-            cell_layout.setSpacing(1)
+            cell_layout.setSpacing(AppStyle.LAYOUT['tool_label_spacing'])
             cell_layout.addWidget(button, 0, Qt.AlignHCenter)
             label = QLabel(label_text)
             label.setAlignment(Qt.AlignHCenter)

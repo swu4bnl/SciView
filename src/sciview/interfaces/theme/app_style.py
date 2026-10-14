@@ -191,6 +191,7 @@ class AppStyle:
         'panel_inner_margin': 2, # inner margins of content sub-panels
         'panel_spacing': 3,
         'toolbar_spacing': 4,    # spacing inside icon/button toolbars
+        'tool_label_spacing': 1, # spacing between a tool icon and its caption
         'section_spacing': 6,    # spacing between major items in right-panel layouts
         # Image browser specifics
         'image_browser_current_label_max_height': 30,

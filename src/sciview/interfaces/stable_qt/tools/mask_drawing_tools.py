@@ -145,25 +145,32 @@ class MaskDrawingSession:
         tool = self.get_tool()
         if not self.is_enabled() or tool is None:
             return
-        point = self._event_point(event, require_inside=True)
-        if point is None:
-            return
         self._sync_tool(tool)
         if isinstance(tool, PolygonDrawingTool):
             if not tool.vertices:
                 current_layer = self.get_active_layer()
                 if current_layer is None or not current_layer.visible:
                     return
-                self._begin_edit(current_layer)
-            elif self._edit_target() is None:
-                self.cancel_current_edit()
+            else:
+                target = self._edit_target()
+                if target is None:
+                    self.cancel_current_edit()
+                    return
+                _, current_layer = target
+            point = self._event_point_for_tool(event, tool, current_layer.data)
+            if point is None:
                 return
+            if not tool.vertices:
+                self._begin_edit(current_layer)
             tool.add_vertex(point)
             self._show_preview(point, tool)
             return
         layer_index = self.get_active_layer_index()
         current_layer = self.get_active_layer()
         if layer_index is None or current_layer is None or not current_layer.visible:
+            return
+        point = self._event_point_for_tool(event, tool, current_layer.data)
+        if point is None:
             return
         self._begin_edit(current_layer)
         tool.begin(point)
@@ -178,17 +185,20 @@ class MaskDrawingSession:
             return
         self._sync_tool(tool)
         if isinstance(tool, PolygonDrawingTool) and tool.vertices:
-            point = self._event_point(event, require_inside=False)
             target = self._edit_target()
-            if point is not None and target is not None:
+            if target is not None:
                 _, current_layer = target
-                point = self._clamp_point_to_mask(point, current_layer.data)
-                self._show_preview(point, tool)
+                point = self._event_point_for_tool(event, tool, current_layer.data)
+                if point is not None:
+                    self._show_preview(point, tool)
             return
         if not (tool.is_dragging and tool.is_active):
             return
         if isinstance(tool, BrushDrawingTool):
-            point = self._event_point(event, require_inside=True)
+            current_layer = self.get_active_layer()
+            if current_layer is None:
+                return
+            point = self._event_point_for_tool(event, tool, current_layer.data)
             if point is None:
                 return
             self._draw_brush_stroke(point, tool)
@@ -196,10 +206,9 @@ class MaskDrawingSession:
             current_layer = self.get_active_layer()
             if current_layer is None:
                 return
-            point = self._event_point(event, require_inside=False)
+            point = self._event_point_for_tool(event, tool, current_layer.data)
             if point is None:
                 return
-            point = self._clamp_point_to_mask(point, current_layer.data)
             tool.move(point)
             self._show_preview(point, tool)
 
@@ -213,7 +222,11 @@ class MaskDrawingSession:
         if tool.is_active:
             try:
                 if isinstance(tool, BrushDrawingTool):
-                    point = self._event_point(event, require_inside=True) or tool.last_draw_point
+                    target = self._edit_target()
+                    if target is None:
+                        return
+                    _, current_layer = target
+                    point = self._event_point_for_tool(event, tool, current_layer.data) or tool.last_draw_point
                     if point is None:
                         return
                 else:
@@ -221,10 +234,9 @@ class MaskDrawingSession:
                     if target is None:
                         return
                     _, current_layer = target
-                    point = self._event_point(event, require_inside=False) or tool.last_draw_point
+                    point = self._event_point_for_tool(event, tool, current_layer.data) or tool.last_draw_point
                     if point is None:
                         return
-                    point = self._clamp_point_to_mask(point, current_layer.data)
                     current_layer.data = tool.finalize(current_layer.data, point)
                 self.update_combined_mask()
                 self.update_plot()
@@ -332,6 +344,22 @@ class MaskDrawingSession:
             return int(y), int(x)
         except (TypeError, ValueError):
             return None
+
+    @classmethod
+    def _event_point_for_tool(
+        cls,
+        event,
+        tool: DrawingTool,
+        mask_layer: np.ndarray,
+    ) -> tuple[int, int] | None:
+        if not getattr(event, 'inside_canvas', True):
+            return None
+        point = cls._event_point(event, require_inside=False)
+        if point is None:
+            return None
+        if not getattr(event, 'inside_image', True) and isinstance(tool, WatershedFillTool):
+            return None
+        return cls._clamp_point_to_mask(point, mask_layer)
 
     @staticmethod
     def _clamp_point_to_mask(point: tuple[int, int], mask_layer: np.ndarray) -> tuple[int, int]:

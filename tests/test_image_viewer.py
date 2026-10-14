@@ -6,12 +6,17 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import numpy as np
 import pytest
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QListWidgetItem, QWidget
+from PyQt5.QtWidgets import QApplication, QLabel, QListWidgetItem, QWidget
 
 import pyqtgraph as pg
 
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
-from sciview.interfaces.stable_qt.tools.mask_drawing_tools import BrushDrawingTool, MaskDrawingSession
+from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
+    BrushDrawingTool,
+    MaskDrawingSession,
+    RectangleDrawingTool,
+    WatershedFillTool,
+)
 from sciview.masking.layers import MaskLayer, compose_mask_layers
 
 
@@ -121,6 +126,24 @@ def test_viewer_interaction_lock_disables_pan_zoom_controls(viewer):
     assert not viewer._interaction_locked
     assert viewer._pan_button.isEnabled()
     assert viewer._zoom_button.isEnabled()
+
+
+def test_viewer_toolbar_shows_action_labels(viewer):
+    labels = {
+        key: cell.findChild(QLabel).text()
+        for key, cell in viewer._toolbar_cells.items()
+    }
+
+    assert labels == {
+        "pan": "Pan",
+        "zoom": "Zoom",
+        "beam_center": "Beam Center",
+        "mask": "Mask",
+        "home": "Home",
+        "auto": "Auto",
+        "copy": "Copy",
+        "save": "Save",
+    }
 
 
 def test_linear_levels_and_colormap_do_not_change_source_or_view(viewer):
@@ -287,6 +310,21 @@ def test_folder_row_reopens_after_session_navigation(qapp, tmp_path):
         tab.folder_files_list.itemClicked.emit(first_item)
         assert tab.session_manager.current_index == 0
         assert notifications[-1] == 0
+    finally:
+        tab.close()
+
+
+def test_shared_image_panel_uses_canvas_filename_without_redundant_header(qapp, tmp_path):
+    from tabs.calibration_tab import CalibrationApp
+
+    parent = DummyParentApp()
+    parent.image_path = str(tmp_path / "detector-frame.tif")
+    tab = CalibrationApp(parent)
+    try:
+        tab.update_plot(np.ones((4, 6), dtype=float))
+
+        assert not tab.filename_label.isVisible()
+        assert tab.image_viewer._plot_item.titleLabel.text == "detector-frame.tif"
     finally:
         tab.close()
 
@@ -653,10 +691,75 @@ def test_mask_drawing_session_composes_preview_for_visible_layers():
 
 
 class DummyPointerEvent:
-    def __init__(self, x, y, inside_image=True):
+    def __init__(self, x, y, inside_image=True, inside_canvas=True):
         self.x = x
         self.y = y
         self.inside_image = inside_image
+        self.inside_canvas = inside_canvas
+
+
+def _drawing_session(tool, layer):
+    return MaskDrawingSession(
+        is_enabled=lambda: True,
+        get_tool=lambda: tool,
+        get_active_layer=lambda: layer,
+        get_active_layer_index=lambda: 0,
+        get_layers=lambda: [layer],
+        set_combined_mask=lambda mask: None,
+        update_combined_mask=lambda: None,
+        update_plot=lambda: None,
+        set_drawing_enabled=lambda enabled: None,
+        should_auto_disable=lambda: False,
+        get_brush_size=lambda: 1,
+        get_draw_value=lambda: True,
+        on_edit_finished=lambda *_args: None,
+    )
+
+
+def test_rectangle_clamps_plot_points_to_image_corners():
+    layer = MaskLayer(np.zeros((4, 6), dtype=bool))
+    tool = RectangleDrawingTool()
+    session = _drawing_session(tool, layer)
+
+    session.handle_press(DummyPointerEvent(-10, -10, inside_image=False))
+    session.handle_motion(DummyPointerEvent(20, 20, inside_image=False))
+    session.handle_release(DummyPointerEvent(20, 20, inside_image=False))
+
+    assert layer.data.all()
+
+
+def test_drawing_ignores_press_outside_plot_canvas():
+    layer = MaskLayer(np.zeros((4, 6), dtype=bool))
+    tool = RectangleDrawingTool()
+    session = _drawing_session(tool, layer)
+
+    session.handle_press(DummyPointerEvent(-10, -10, inside_image=False, inside_canvas=False))
+
+    assert not tool.is_active
+    assert not layer.data.any()
+
+
+def test_brush_clamps_active_stroke_to_image_edge():
+    layer = MaskLayer(np.zeros((4, 6), dtype=bool))
+    tool = BrushDrawingTool()
+    session = _drawing_session(tool, layer)
+
+    session.handle_press(DummyPointerEvent(1, 1))
+    session.handle_motion(DummyPointerEvent(20, 1, inside_image=False))
+    session.handle_release(DummyPointerEvent(20, 1, inside_image=False))
+
+    assert layer.data[1, -1]
+
+
+def test_smart_fill_rejects_seed_outside_image():
+    layer = MaskLayer(np.zeros((4, 6), dtype=bool))
+    tool = WatershedFillTool()
+    session = _drawing_session(tool, layer)
+
+    session.handle_press(DummyPointerEvent(-1, -1, inside_image=False))
+
+    assert not tool.is_active
+    assert not layer.data.any()
 
 
 def test_brush_session_uses_preview_refresh_until_release():
