@@ -145,6 +145,7 @@ class SciAnaApp(QMainWindow):
         self._update_theme_toggle_icon()
 
         self.clear_session_button = QPushButton()
+        self.clear_session_button.setAccessibleName("Clear saved session")
         self.clear_session_button.setProperty("sciview_compact_button", True)
         self.clear_session_button.setIcon(
             AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['clear_session'])

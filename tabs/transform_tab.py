@@ -731,6 +731,7 @@ class TransformTab(BaseImageTab):
     def refresh_preview(self):
         request = self._build_request()
         if request is None:
+            self._set_current_result(None)
             self.result_summary.setText("No image/calibration available")
             self._update_transform_plot(None, message="Load an image and calibration first")
             return
@@ -738,15 +739,13 @@ class TransformTab(BaseImageTab):
         try:
             result = self.backend.run(request)
         except Exception as exc:
-            self._current_result = None
-            self.export_button.setEnabled(False)
+            self._set_current_result(None)
             self._update_transform_plot(None, message=f"Preview failed: {exc}")
             self.result_summary.setText(f"Preview failed: {exc}")
             self.parent_app.show_status(f"Transform failed: {exc}")
             return
 
-        self._current_result = result
-        self.export_button.setEnabled(True)
+        self._set_current_result(result)
         try:
             self._update_transform_plot(result)
         except Exception as exc:
@@ -1064,7 +1063,7 @@ class TransformTab(BaseImageTab):
             display_data = self.parent_app.image_data
 
         if display_data is None:
-            self._current_result = None
+            self._set_current_result(None)
             self._update_transform_plot(None)
             return
 
@@ -1087,6 +1086,10 @@ class TransformTab(BaseImageTab):
                 self._schedule_preview()
             else:
                 self.refresh_preview()
+
+    def _set_current_result(self, result) -> None:
+        self._current_result = result
+        self.export_button.setEnabled(result is not None)
 
     def on_shared_state_activated(self):
         """Refresh transform state when shared image/calibration/mask becomes active."""

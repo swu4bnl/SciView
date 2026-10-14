@@ -319,12 +319,62 @@ def test_shared_image_panel_uses_canvas_filename_without_redundant_header(qapp, 
 
     parent = DummyParentApp()
     parent.image_path = str(tmp_path / "detector-frame.tif")
+    parent.image_data = np.ones((4, 6), dtype=float)
     tab = CalibrationApp(parent)
     try:
-        tab.update_plot(np.ones((4, 6), dtype=float))
+        tab.update_plot(parent.image_data)
 
         assert not tab.filename_label.isVisible()
         assert tab.image_viewer._plot_item.titleLabel.text == "detector-frame.tif"
+    finally:
+        tab.close()
+
+
+def test_tiled_local_image_title_does_not_reuse_shared_filename(qapp):
+    from tabs.tiled_browser_tab import TiledBrowserTab
+
+    parent = DummyParentApp()
+    parent.image_path = "old-shared-image.tif"
+    tab = TiledBrowserTab(parent)
+    try:
+        scan = SimpleNamespace(scan_id=42, sample_name="sample", sample_savename="")
+        image_ref = SimpleNamespace(source_uri="tiled://scan/42/detector")
+        tab._apply_loaded_image((scan, "detector", np.ones((4, 6)), image_ref))
+
+        assert tab.image_viewer._plot_item.titleLabel.text == "Scan 42 - detector"
+    finally:
+        tab.close()
+
+
+def test_clear_session_icon_has_accessible_name(qapp):
+    from main import SciAnaApp
+
+    app = SciAnaApp()
+    try:
+        assert app.clear_session_button.accessibleName() == "Clear saved session"
+    finally:
+        app.close()
+
+
+@pytest.mark.parametrize(
+    "module_name,class_name",
+    [
+        ("tabs.reduction_tab", "ReductionTab"),
+        ("tabs.transform_tab", "TransformTab"),
+    ],
+)
+def test_processing_result_reset_disables_export(qapp, module_name, class_name):
+    module = __import__(module_name, fromlist=[class_name])
+    tab_class = getattr(module, class_name)
+    tab = tab_class(DummyParentApp())
+    try:
+        tab._set_current_result(object())
+        assert tab.export_button.isEnabled()
+
+        tab.update_plot(None)
+
+        assert tab._current_result is None
+        assert not tab.export_button.isEnabled()
     finally:
         tab.close()
 
@@ -672,6 +722,33 @@ def test_mask_tool_buttons_toggle_canvas_lock(qapp):
         assert not tab.drawing_mode
         assert not tab.image_viewer._interaction_locked
         assert not tab.tool_buttons["Brush"].isChecked()
+    finally:
+        tab.close()
+
+
+def test_clear_layers_undo_restores_order_combined_mask_and_export(qapp):
+    from tabs.mask_tab import MaskApp
+
+    tab = MaskApp(DummyParentApp())
+    first = MaskLayer([[True, False], [False, False]], name="First")
+    second = MaskLayer([[False, True], [False, False]], name="Second")
+    tab.mask_layers.extend([first, second])
+    tab._update_layer_list()
+    expected_mask = tab.combined_mask.copy()
+    try:
+        assert tab.export_combined_button.isEnabled()
+
+        tab._clear_all_layers()
+
+        assert tab.mask_layers == []
+        assert tab.combined_mask is None
+        assert not tab.export_combined_button.isEnabled()
+
+        tab.undo_stack.undo()
+
+        assert tab.mask_layers == [first, second]
+        np.testing.assert_array_equal(tab.combined_mask, expected_mask)
+        assert tab.export_combined_button.isEnabled()
     finally:
         tab.close()
 

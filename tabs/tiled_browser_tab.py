@@ -1186,7 +1186,7 @@ class TiledBrowserTab(BaseImageTab):
         display_frame = self._frame_at(image_array, self.frame_slider.value())
         self.current_frame_array = display_frame
         self.image_data = display_frame
-        self.update_plot(display_frame)
+        self.update_plot(display_frame, display_name=self._current_display_name())
         self.current_image_label.setText(
             f"scan_id={scan.scan_id} detector={detector} sample={scan.sample_name or scan.sample_savename or '?'}"
         )
@@ -1236,7 +1236,12 @@ class TiledBrowserTab(BaseImageTab):
         self.current_frame_array = frame
         self.image_data = frame
         self.frame_label.setText(f"{frame_index + 1} / {frame_count}")
-        self.update_plot(frame)
+        self.update_plot(frame, display_name=self._current_display_name())
+
+    def _current_display_name(self) -> str:
+        if self.current_scan is None:
+            return str(self.current_image_source or '')
+        return f"Scan {self.current_scan.scan_id} - {self.current_detector}"
 
     def _on_slider_changed(self, position: int) -> None:
         if self.scan_rows and 0 <= position < len(self.scan_rows):

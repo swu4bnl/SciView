@@ -554,13 +554,15 @@ class BaseImageTab(QWidget):
             if hasattr(self, 'update_plot'):
                 self.update_plot()
 
-    def update_plot(self, image_data=None):
+    def update_plot(self, image_data=None, *, display_name: str | None = None):
         """Update plots based on current image data - THE SINGLE METHOD FOR ALL IMAGE DISPLAY
         
         Args:
             image_data: Optional image data to display. If None, uses self.image_data.
                        Allows passing data directly without storing in self.image_data,
                        which improves memory efficiency for on-demand loading.
+            display_name: Optional title for locally rendered data. Shared data falls
+                          back to its source path when no name is provided.
         """
         # Use provided data or fall back to instance variable
         display_data = image_data if image_data is not None else self.image_data
@@ -572,9 +574,11 @@ class BaseImageTab(QWidget):
         if display_data is None:
             return
 
-        image_path = getattr(self.parent_app, 'image_path', None)
-        display_name = os.path.basename(image_path) if image_path else getattr(display_data, 'name', '')
-        self.image_viewer.set_title(str(display_name or ''))
+        resolved_name = display_name or getattr(display_data, 'name', '')
+        if not resolved_name and display_data is getattr(self.parent_app, 'image_data', None):
+            image_path = getattr(self.parent_app, 'image_path', None)
+            resolved_name = os.path.basename(image_path) if image_path else ''
+        self.image_viewer.set_title(str(resolved_name or ''))
 
         # Call pre-display hooks
         for hook in self.pre_display_hooks:

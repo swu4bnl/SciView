@@ -783,6 +783,7 @@ class ReductionTab(BaseImageTab):
     def refresh_preview(self):
         request = self._build_request()
         if request is None:
+            self._set_current_result(None)
             self.result_summary.setText("No image loaded")
             self._update_preview_plot(None, message="No image loaded")
             return
@@ -790,15 +791,13 @@ class ReductionTab(BaseImageTab):
         try:
             result = self.backend.run(request)
         except Exception as exc:
-            self._current_result = None
-            self.export_button.setEnabled(False)
+            self._set_current_result(None)
             self._update_preview_plot(None, message=f"Preview failed: {exc}")
             self.result_summary.setText(f"Preview failed: {exc}")
             self.parent_app.show_status(f"Reduction failed: {exc}")
             return
 
-        self._current_result = result
-        self.export_button.setEnabled(True)
+        self._set_current_result(result)
         self._update_preview_plot(result)
         point_count = int(np.count_nonzero(np.isfinite(result.y)))
         operation_name = result.operation.replace('_', ' ').title()
@@ -1269,7 +1268,7 @@ class ReductionTab(BaseImageTab):
             display_data = self.parent_app.image_data
 
         if display_data is None:
-            self._current_result = None
+            self._set_current_result(None)
             self._update_preview_plot(None)
             return
 
@@ -1290,6 +1289,10 @@ class ReductionTab(BaseImageTab):
 
         if self.auto_update_check.isChecked():
             self.refresh_preview()
+
+    def _set_current_result(self, result) -> None:
+        self._current_result = result
+        self.export_button.setEnabled(result is not None)
 
     def on_shared_state_activated(self):
         """Refresh reduction state when shared image/calibration/mask changes become active."""
