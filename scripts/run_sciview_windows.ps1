@@ -1,6 +1,7 @@
 param(
     [switch]$SetupOnly,
     [switch]$NoAutoPull,
+    [switch]$AcceptPixiInstall,
 
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$LauncherArgs
@@ -33,63 +34,72 @@ function Test-TruthyFlag {
 }
 
 function Invoke-SourceAutoUpdate {
-    param([bool]$Enabled)
+    param(
+        [bool]$Enabled,
+        [string]$PixiExecutable
+    )
 
     if (-not $Enabled) {
         Write-Host "Skipping SciView source update check (--NoAutoPull)."
-        return
+        return $false
     }
 
     if (-not (Test-Path (Join-Path $ProjectRoot ".git"))) {
         Write-Host "Skipping SciView source update check (not a git checkout)."
-        return
+        return $false
     }
 
-    $git = Get-Command git -ErrorAction SilentlyContinue
-    if ($null -eq $git) {
-        Write-Host "Skipping SciView source update check (git not available)."
-        return
+    if ([string]::IsNullOrWhiteSpace($PixiExecutable)) {
+        Write-Host "Skipping SciView source update check (Pixi-managed git not available)."
+        return $false
     }
 
+    $gitPrefix = @("run", "--", "git", "-C", $ProjectRoot)
     Write-Step "Checking for SciView source updates..."
     try {
-        & $git.Source -C $ProjectRoot fetch --quiet
+        $fetchArgs = $gitPrefix + @("fetch", "--quiet")
+        & $PixiExecutable @fetchArgs
         if ($LASTEXITCODE -ne 0) {
             throw "git fetch exited with code $LASTEXITCODE"
         }
 
-        $upstreamOutput = & $git.Source -C $ProjectRoot rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>$null
+        $upstreamArgs = $gitPrefix + @("rev-parse", "--abbrev-ref", "--symbolic-full-name", '@{upstream}')
+        $upstreamOutput = & $PixiExecutable @upstreamArgs 2>$null
         $upstreamExitCode = $LASTEXITCODE
         $upstream = ([string]$upstreamOutput).Trim()
         if ($upstreamExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($upstream)) {
             Write-Host "Skipping SciView source update (current branch has no upstream)."
-            return
+            return $false
         }
 
-        $behind = [int](& $git.Source -C $ProjectRoot rev-list --count "HEAD..$upstream")
+        $behindArgs = $gitPrefix + @("rev-list", "--count", "HEAD..$upstream")
+        $behind = [int](& $PixiExecutable @behindArgs)
         if ($LASTEXITCODE -ne 0) {
             throw "Unable to compare the current branch with $upstream"
         }
         if ($behind -eq 0) {
             Write-Host "SciView is up to date."
-            return
+            return $false
         }
 
         Write-Host "$behind update commit(s) available from $upstream."
         $answer = Read-Host "Update SciView now? [y/N]"
         if ($answer -notmatch '^(y|yes)$') {
             Write-Host "Skipping SciView source update."
-            return
+            return $false
         }
 
-        & $git.Source -C $ProjectRoot merge --ff-only $upstream
+        $mergeArgs = $gitPrefix + @("merge", "--ff-only", $upstream)
+        & $PixiExecutable @mergeArgs | Out-Host
         if ($LASTEXITCODE -ne 0) {
             throw "git merge --ff-only exited with code $LASTEXITCODE"
         }
         Write-Host "SciView source updated."
+        return $true
     }
     catch {
         Write-Host "Skipping source auto-update (non-fatal): $($_.Exception.Message)"
+        return $false
     }
 }
 
@@ -120,9 +130,11 @@ function Install-ManagedPythonTool {
     Write-Host "No administrator permission is required."
     Write-Host ""
 
-    $answer = Read-Host "Install Pixi now? [Y/n]"
-    if ($answer -match '^(n|no)$') {
-        throw "Setup was cancelled. SciView cannot start until Pixi is installed."
+    if (-not $AcceptPixiInstall) {
+        $answer = Read-Host "Install Pixi now? [Y/n]"
+        if ($answer -match '^(n|no)$') {
+            throw "Setup was cancelled. SciView cannot start until Pixi is installed."
+        }
     }
 
     Write-Step "Downloading and installing Pixi..."
@@ -148,8 +160,6 @@ try {
         $autoPullEnabled = $false
     }
 
-    Invoke-SourceAutoUpdate -Enabled $autoPullEnabled
-
     $tool = Find-ManagedPythonTool
     if ($null -eq $tool) {
         $tool = Install-ManagedPythonTool
@@ -158,7 +168,16 @@ try {
     Write-Step "Preparing SciView dependencies..."
     & $tool install
     if ($LASTEXITCODE -ne 0) {
-        throw "Dependency setup failed. Check your internet connection and try again."
+        throw "SciView could not prepare its dependencies. Review the error above, then run the launcher again."
+    }
+
+    $sourceUpdated = Invoke-SourceAutoUpdate -Enabled $autoPullEnabled -PixiExecutable $tool
+    if ($sourceUpdated) {
+        Write-Step "Synchronizing updated SciView dependencies..."
+        & $tool install
+        if ($LASTEXITCODE -ne 0) {
+            throw "SciView updated its source but could not update its dependencies. Review the error above, then run the launcher again."
+        }
     }
 
     if ($SetupOnly) {

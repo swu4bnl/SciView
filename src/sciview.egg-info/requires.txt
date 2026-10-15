@@ -4,9 +4,14 @@ PyQt5>=5.15
 PyYAML>=6.0
 matplotlib>=3.8
 psutil>=7.1
+pyqtgraph>=0.13
+pyqtdarktheme>=2.1
+qdarkstyle>=3.2
+qt-material>=2.14
 scipy>=1.11
 scitoolsscianalysis>=2.6.6
-tiled<0.2,>=0.1
+tiled<0.3,>=0.2.19
+bluesky-tiled-plugins<3,>=2.0.12
 
 [dev]
 pytest>=8.0

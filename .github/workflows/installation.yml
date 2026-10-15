@@ -1,0 +1,67 @@
+name: Installation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installation:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+
+    steps:
+      - name: Check out SciView
+        uses: actions/checkout@v4
+
+      - name: Install through Windows launcher
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Get-Command pixi -ErrorAction SilentlyContinue) {
+              throw "The runner already has Pixi on PATH. The installer test requires a runner without Pixi."
+          }
+          ./scripts/run_sciview_windows.ps1 -SetupOnly -NoAutoPull -AcceptPixiInstall
+          $pixi = @(
+              "$env:LOCALAPPDATA\pixi\bin\pixi.exe"
+              "$env:USERPROFILE\.pixi\bin\pixi.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $pixi) {
+              throw "The launcher completed, but the test could not find Pixi."
+          }
+          & $pixi run verify-installation
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+          & $pixi run test
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+
+      - name: Install through Unix launcher
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          if command -v pixi >/dev/null 2>&1; then
+              echo "The runner already has Pixi on PATH. The installer test requires a runner without Pixi."
+              exit 1
+          fi
+          ./scripts/run_sciview_unix.sh --setup-only --no-auto-pull
+          "$HOME/.pixi/bin/pixi" run verify-installation
+          "$HOME/.pixi/bin/pixi" run test

@@ -6,8 +6,6 @@
 
 SciView is a desktop application for working with 2D X-ray scattering data. It gives you a unified interface to open and inspect images, refine calibration, mask problem areas, preview analysis results, and process multiple files.
 
-If you work with X-ray scattering data, SciView helps you move through these tasks in a connected workflow instead of switching between separate tools or writing scripts from scratch.
-
 SciView uses [SciAnalysis](https://github.com/CFN-softbio/SciAnalysis) as its core processing engine for X-ray scattering data.
 
 ## What you can do in SciView
@@ -42,11 +40,15 @@ From the repository folder, use the launcher for your system:
 - macOS: `./Launch-SciView-macOS.command`
 - Linux: `./Launch-SciView-linux.sh`
 
-The launcher will install Pixi if needed and prepare the SciView environment automatically. The first launch may take a little longer; later launches should be faster.
+On the first launch, the launcher installs Pixi and the SciView environment. Pixi also supplies Git. You do not need to install Git separately.
+
+### Verify an installation
+
+Run `pixi run verify-installation` to check Python, Git, and the required Python packages.
 
 > **Note**
 >
-> The launcher may offer to update SciView. You can safely decline and continue using the installed version. Please note that SciView is under active development, and new features or bug fixes may be available in the latest version. Be prepared to be surprised by new fancy features. :smile:
+> The launcher may offer to update SciView. You can decline the update and continue to use the installed version. An update can include new features and bug fixes.
 
 ## A typical SciView workflow
 
@@ -91,7 +93,23 @@ SciView separates the user interface from the analysis logic. The tab files cont
 
 - [scripts/](scripts): environment setup and platform launcher support
 
-The launcher checks the current Git branch's configured upstream and prompts only when new commits are available. Updates use fast-forward-only merges; branches without an upstream or with diverging commits are not changed. Disable the check with `Launch-SciView-win64.cmd -NoAutoPull` on Windows, `--no-auto-pull` on macOS or Linux, or `SCIVIEW_AUTO_PULL=0` on any platform.
+### Test installation
+
+Run `pixi run test-installation`. This command creates a temporary installation and removes it after the test. Add `--keep` to keep the temporary files.
+
+The `Installation` GitHub Actions workflow tests setup on Windows, Linux, and macOS.
+
+### Source updates
+
+The launcher checks the configured Git upstream. It offers an update only when new commits are available. The launcher does not update branches that have diverged or do not have an upstream.
+
+Source updates require a Git repository. Updates are not available in downloaded source archives.
+
+To disable the update check, use one of these options:
+
+- Windows: `Launch-SciView-win64.cmd -NoAutoPull`
+- macOS or Linux: `--no-auto-pull`
+- All systems: set `SCIVIEW_AUTO_PULL=0`
 
 ### If something is not working
 
