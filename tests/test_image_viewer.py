@@ -20,7 +20,7 @@ from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
 from sciview.masking.layers import MaskLayer, compose_mask_layers
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def qapp():
     app = QApplication.instance() or QApplication([])
     return app
