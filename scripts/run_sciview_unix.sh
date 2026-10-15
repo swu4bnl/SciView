@@ -73,10 +73,10 @@ find_pixi() {
 }
 
 install_pixi() {
-    echo "SciView needs Pixi to prepare the Python environment."
-    echo "Installing Pixi for this user account..."
-    if ! curl -fsSL https://pixi.sh/install.sh | bash; then
-        echo "ERROR: Pixi installation failed."
+    echo "SciView needs Pixi to prepare the Python environment." >&2
+    echo "Installing Pixi for this user account..." >&2
+    if ! curl -fsSL https://pixi.sh/install.sh | bash >&2; then
+        echo "ERROR: Pixi installation failed." >&2
         return 1
     fi
     export PATH="$HOME/.pixi/bin:$HOME/.local/bin:$PATH"
@@ -179,7 +179,9 @@ run_with_venv() {
 PIXI_BIN="$(find_pixi || true)"
 if [[ -z "$PIXI_BIN" ]]; then
     echo_step "Pixi not found. Installing..."
-    PIXI_BIN="$(install_pixi || true)"
+    if ! PIXI_BIN="$(install_pixi)"; then
+        PIXI_BIN=""
+    fi
 fi
 
 if [[ -n "$PIXI_BIN" ]]; then
