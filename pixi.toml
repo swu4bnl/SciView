@@ -29,4 +29,5 @@ debugpy = ">=1.8.20,<2"
 
 [pypi-dependencies]
 pyqtdarktheme = ">=2.1,<3"
-bluesky-tiled-plugins = { git = "https://github.com/bluesky/bluesky-tiled-plugins.git", rev = "2d1d76a3c72be7d68fb123782734538dd2bdde29" }
+
+bluesky-tiled-plugins = ">2.0"
