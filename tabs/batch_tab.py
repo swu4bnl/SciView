@@ -124,8 +124,8 @@ class BatchTab(QWidget):
 
         if not paths:
             browser = self._find_image_browser()
-            if browser is not None and hasattr(browser, "session_manager"):
-                paths = [img.get("path", "") for img in browser.session_manager.images]
+            if browser is not None and hasattr(browser, "get_current_file_list"):
+                paths = browser.get_current_file_list()
 
         self._apply_file_list(paths)
 

@@ -75,6 +75,7 @@ class ImageViewer(QWidget):
         self._levels: tuple[float | None, float | None] = (None, None)
         self._scale = "linear"
         self._colormap_name = SUPPORTED_IMAGE_COLORMAPS[0]
+        self._colormap_applied = False
         self._overlays: dict[str, tuple[Any, str | None]] = {}
         self._interaction_locked = False
         self._pointer_captured = False
@@ -239,7 +240,10 @@ class ImageViewer(QWidget):
         self.set_title("")
 
     def set_levels(self, vmin: float | None, vmax: float | None) -> None:
-        self._levels = (self._finite_or_none(vmin), self._finite_or_none(vmax))
+        levels = (self._finite_or_none(vmin), self._finite_or_none(vmax))
+        if levels == self._levels:
+            return
+        self._levels = levels
         self._refresh_display_image(preserve_view=True)
 
     def auto_levels(self) -> tuple[float, float] | None:
@@ -288,9 +292,12 @@ class ImageViewer(QWidget):
     def set_colormap(self, name: str) -> None:
         if name not in self._SUPPORTED_COLORMAPS:
             raise ValueError(f"Unsupported colormap: {name}")
+        if name == self._colormap_name and self._colormap_applied:
+            return
         self._colormap_name = name
         lut = self._artist_palette_lut(name) if name in ARTIST_IMAGE_COLORMAPS else self._matplotlib_lut(name)
         self._image_item.setLookupTable(lut)
+        self._colormap_applied = True
         self._update_palette_info_label(name)
         try:
             self._histogram.gradient.setColorMap(pg.ColorMap(np.linspace(0.0, 1.0, lut.shape[0]), lut))
@@ -300,6 +307,8 @@ class ImageViewer(QWidget):
     def set_scale(self, scale: str) -> None:
         if scale not in SUPPORTED_IMAGE_SCALES:
             raise ValueError(f"Unsupported image scale: {scale}")
+        if scale == self._scale:
+            return
         self._scale = scale
         self._refresh_display_image(preserve_view=True)
 

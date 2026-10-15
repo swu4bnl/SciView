@@ -112,6 +112,8 @@ IMAGE_BROWSER_SETTINGS = {
     "default_folder_patterns": ["*.tif", "*.tiff", "*.h5", "*saxs*.tif", "*waxs*.tif"],
     "max_recent_files": 10,
     "default_max_files": 500,
+    "playback_rates_fps": (0.1, 1.0, 5.0),
+    "default_playback_rate_fps": 1.0,
     "default_scan_id": 2334820,
     "show_tiled_progress": True,   # Set False to disable per-chunk progress bar and retry label
     "tiled_live_auto_load_delay_ms": 2500,

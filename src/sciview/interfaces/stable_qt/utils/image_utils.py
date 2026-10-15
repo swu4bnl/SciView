@@ -493,8 +493,6 @@ class ImageCacheManager:
     
     def _trim_cache(self) -> None:
         """Remove least recently used items when exceeding limit"""
-        import gc
-        
         while len(self.data_cache) > self.cache_limit:
             if self.cache_access_order:
                 # Remove least recently used
@@ -504,9 +502,6 @@ class ImageCacheManager:
             else:
                 # Fallback
                 self.data_cache.pop(next(iter(self.data_cache)))
-        
-        # Explicitly trigger GC for evicted items
-        gc.collect()
     
     def _notify_callbacks(self) -> None:
         """Notify all callbacks of cache changes"""
