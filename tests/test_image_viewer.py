@@ -23,6 +23,7 @@ from sciview.masking.layers import MaskLayer, compose_mask_layers
 @pytest.fixture(scope="session")
 def qapp():
     app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
     return app
 
 
