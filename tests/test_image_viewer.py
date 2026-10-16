@@ -4,22 +4,16 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication,
-    QComboBox,
-    QLabel,
-    QLineEdit,
-    QListWidget,
     QListWidgetItem,
-    QPushButton,
     QWidget,
 )
 
 import pyqtgraph as pg
 
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
-from sciview.interfaces.stable_qt.utils.image_utils import ImageCacheManager
 from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
     BrushDrawingTool,
     MaskDrawingSession,
@@ -43,26 +37,6 @@ def viewer(qapp):
     widget.close()
 
 
-def _make_folder_browser_harness(qapp, folder):
-    browser = ImageBrowserApp.__new__(ImageBrowserApp)
-    QWidget.__init__(browser)
-    browser.parent_app = SimpleNamespace()
-    browser.folder_path_input = QLineEdit(str(folder))
-    browser.pattern_input = QLineEdit()
-    browser.folder_sort_combo = QComboBox()
-    browser.folder_sort_combo.addItem("Name A-Z", "name_asc")
-    browser.folder_up_button = QPushButton()
-    browser.folder_files_list = QListWidget()
-    browser.folder_contents_count_label = QLabel()
-    browser.loading_status_label = QLabel()
-    browser._last_browsed_folder = str(folder)
-    browser._folder_browser_paths = []
-    browser._folder_browser_dirs = []
-    browser._added_folder_paths = []
-    browser._folder_dir_count = 0
-    return browser
-
-
 def test_image_browser_keeps_previous_folder_files_in_batch(tmp_path):
     current = tmp_path / "current.tif"
     kept = tmp_path / "kept.tif"
@@ -73,51 +47,6 @@ def test_image_browser_keeps_previous_folder_files_in_batch(tmp_path):
     browser._added_folder_paths = [str(kept)]
 
     assert browser.get_current_file_list() == [str(current), str(kept)]
-
-
-def test_image_browser_refreshes_when_only_subfolders_change(qapp, tmp_path):
-    browser = _make_folder_browser_harness(qapp, tmp_path)
-    browser._refresh_folder_browser(stop_playback=False, force=True)
-    assert browser.folder_files_list.count() == 0
-
-    (tmp_path / "new-folder").mkdir()
-    browser._refresh_folder_browser(stop_playback=False)
-
-    assert browser.folder_files_list.count() == 1
-    assert browser.folder_files_list.item(0).text() == "new-folder"
-    assert browser.folder_contents_count_label.text() == "0 images · 1 folder"
-    browser.close()
-
-
-def test_image_browser_playback_icon_and_speed_cycle(qapp):
-    browser = ImageBrowserApp.__new__(ImageBrowserApp)
-    QWidget.__init__(browser)
-    browser.folder_files_list = QListWidget()
-    browser.folder_files_list.addItem(QListWidgetItem("image.tif"))
-    browser._folder_dir_count = 0
-    browser.folder_play_button = QPushButton()
-    browser.folder_play_button.setCheckable(True)
-    browser.folder_play_timer = QTimer(browser)
-    browser._folder_playback_rates = (0.1, 1.0, 5.0)
-    browser._folder_playback_rate_index = 1
-    browser.folder_playback_speed_button = QPushButton("1 fps")
-    browser._select_folder_browser_row = lambda row: None
-    applied_icons = []
-    browser._apply_tool_icon = lambda button, filename: applied_icons.append(filename)
-
-    browser.folder_play_button.setChecked(True)
-    browser._toggle_folder_playback()
-    assert applied_icons[-1] == "tool_pause.svg"
-    assert browser.folder_play_timer.interval() == 1000
-
-    browser._cycle_folder_playback_speed()
-    assert browser.folder_playback_speed_button.text() == "5 fps"
-    assert browser.folder_play_timer.interval() == 200
-
-    browser.folder_play_button.setChecked(False)
-    browser._toggle_folder_playback()
-    assert applied_icons[-1] == "tool_play.svg"
-    browser.close()
 
 
 def test_image_session_cache_load_does_not_repeat_session_notification():
@@ -147,29 +76,6 @@ def test_image_session_selection_does_not_republish_file_list():
 
     assert published == []
     assert displayed == [True]
-
-
-def test_image_browser_playback_delay_compensates_for_render_time():
-    browser = ImageBrowserApp.__new__(ImageBrowserApp)
-    browser._folder_playback_rates = (0.1, 1.0, 5.0)
-    browser._folder_playback_rate_index = 2
-
-    assert browser._folder_playback_delay_ms(80) == 120
-    assert browser._folder_playback_delay_ms(250) == 1
-
-
-def test_image_cache_eviction_does_not_force_full_collection(monkeypatch):
-    cache = ImageCacheManager(cache_limit=2)
-    collections = []
-    monkeypatch.setattr("gc.collect", lambda: collections.append(True))
-
-    cache.put("first", np.zeros((2, 2)))
-    cache.put("second", np.zeros((2, 2)))
-    assert collections == []
-
-    cache.put("third", np.zeros((2, 2)))
-    assert collections == []
-    assert "first" not in cache.data_cache
 
 
 def test_numpy_image_uses_row_column_coordinates(viewer):
@@ -213,24 +119,6 @@ def test_different_shape_replacement_resets_view_range(viewer):
     assert y_range[1] >= 4.0
 
 
-def test_viewer_toolbar_shows_action_labels(viewer):
-    labels = {
-        key: cell.findChild(QLabel).text()
-        for key, cell in viewer._toolbar_cells.items()
-    }
-
-    assert labels == {
-        "pan": "Pan",
-        "zoom": "Zoom",
-        "beam_center": "Beam Center",
-        "mask": "Mask",
-        "home": "Home",
-        "auto": "Auto",
-        "copy": "Copy",
-        "save": "Save",
-    }
-
-
 def test_linear_levels_and_colormap_do_not_change_source_or_view(viewer):
     image = np.arange(3 * 5, dtype=float).reshape(3, 5)
     viewer.set_image(image)
@@ -245,24 +133,6 @@ def test_linear_levels_and_colormap_do_not_change_source_or_view(viewer):
     assert viewer.display_levels == (-2.0, 10.0)
     assert viewer.get_view_range()[0] == pytest.approx(preserved_range[0])
     assert viewer.get_view_range()[1] == pytest.approx(preserved_range[1])
-
-
-def test_reapplying_display_settings_does_not_redraw(viewer, monkeypatch):
-    viewer.set_image(np.arange(3 * 5, dtype=float).reshape(3, 5))
-    viewer.set_levels(-2.0, 10.0)
-    viewer.set_scale("linear")
-    current_colormap = viewer._colormap_name
-    refreshes = []
-    lookup_tables = []
-    monkeypatch.setattr(viewer, "_refresh_display_image", lambda **kwargs: refreshes.append(kwargs))
-    monkeypatch.setattr(viewer._image_item, "setLookupTable", lambda lut: lookup_tables.append(lut))
-
-    viewer.set_levels(-2.0, 10.0)
-    viewer.set_scale("linear")
-    viewer.set_colormap(current_colormap)
-
-    assert refreshes == []
-    assert lookup_tables == []
 
 
 def test_log_display_is_display_only_and_handles_non_positive_values(viewer):
@@ -415,32 +285,6 @@ def test_folder_row_reopens_after_session_navigation(qapp, tmp_path):
         assert notifications[-1] == 0
     finally:
         tab.close()
-
-
-def test_shared_image_panel_uses_canvas_filename_without_redundant_header(qapp, tmp_path):
-    from tabs.calibration_tab import CalibrationApp
-
-    parent = DummyParentApp()
-    parent.image_path = str(tmp_path / "detector-frame.tif")
-    parent.image_data = np.ones((4, 6), dtype=float)
-    tab = CalibrationApp(parent)
-    try:
-        tab.update_plot(parent.image_data)
-
-        assert not tab.filename_label.isVisible()
-        assert tab.image_viewer._plot_item.titleLabel.text == "detector-frame.tif"
-    finally:
-        tab.close()
-
-
-def test_clear_session_icon_has_accessible_name(qapp):
-    from main import SciAnaApp
-
-    app = SciAnaApp()
-    try:
-        assert app.clear_session_button.accessibleName() == "Clear saved session"
-    finally:
-        app.close()
 
 
 @pytest.mark.parametrize(

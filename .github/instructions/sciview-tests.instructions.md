@@ -1,34 +1,19 @@
 ---
 applyTo: "tests/**/*.py"
+description: "Use when deciding which tests to retain or changing SciView pytest coverage."
 ---
 
 # SciView testing instructions
 
-SciView tests must be deterministic and independent of live beamline infrastructure.
+## What belongs in the suite
 
-## Requirements
+- Retain coverage for scientific correctness, major workflows, public contracts, persistence, and consequential interactions between components.
+- Add a regression when failure would compromise those contracts, not for every isolated control, helper, or implementation branch.
+- Use one-off local checks for minor standalone UI behavior and cosmetics. Do not retain probes that lock down incidental wording, layout, assets, or internal call sequences.
+- When revising tests, remove redundant or low-value cases and their unused fixtures/imports without weakening meaningful coverage.
 
-- Use pytest.
-- Use tmp_path for file-system tests.
-- Use small NumPy arrays for image and mask tests.
-- Mock SciAnalysis when testing adapter behavior.
-- Mock Tiled when testing Tiled integration.
-- Do not require `/nsls2/data`.
-- Do not require network access.
-- Do not require a live Tiled server.
-- Do not require large detector files.
+## Execution
 
-## Test priorities
-
-Add tests for:
-
-- neutral data models
-- workspace save/load
-- local file-source behavior
-- beamline profile discovery
-- recipe validation
-- mask I/O
-- calibration I/O
-- SciAnalysis adapter request/result behavior
-- provenance generation
-- error handling
+- Use pytest with small NumPy arrays and `tmp_path` fixtures; no facility mounts, large detector files, network access, or live services.
+- Mock Tiled and expensive or unavailable SciAnalysis execution at the adapter boundary.
+- Run the smallest relevant selection; run the retained file after pruning it. Report actual results and unresolved failures.

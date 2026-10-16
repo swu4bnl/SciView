@@ -1,29 +1,12 @@
 ---
-applyTo: "src/sciview/interfaces/**/*.py"
+applyTo: "tabs/**/*.py,src/sciview/interfaces/**/*.py"
+description: "Use when changing SciView Qt tabs, shared viewer controls, or other interfaces."
 ---
 
 # SciView interface instructions
 
-Interfaces include the current Qt GUI, future napari plugin, and any later desktop shell.
-
-## Requirements
-
-- Keep interface code thin.
-- Interface code may collect user input, call backend functions, and display results.
-- Interface code must not contain core scientific processing logic.
-- Do not call SciAnalysis directly from widgets.
-- Do not parse CMS folder conventions directly in widgets.
-- Convert backend exceptions into concise user-facing messages.
-- Avoid duplicating logic across the stable Qt and napari interfaces.
-
-## Stable Qt GUI
-
-The current SciView GUI may remain useful for image viewing, calibration inspection, and mask-making.
-
-During refactor, preserve visible behavior where practical while moving backend logic into `sciview` modules.
-
-## Napari plugin
-
-The napari plugin should use napari layers for images, masks, overlays, and result maps.
-
-Napari widgets should call the same backend APIs as the stable Qt GUI.
+- Call shared backends; keep scientific computation, SciAnalysis calls, and beamline conventions out of widgets.
+- Use the existing `AppStyle` tokens and helpers for Qt styling instead of local color, size, or font literals. Follow the `sciview-ui-tweaks` skill for styling changes.
+- Keep controls compact and accessible. Expose scientific details when they affect interpretation, not incidental implementation mechanics.
+- Preserve shared-state ownership and established interactions; ask before changing workflows.
+- Surface backend failures with concise, actionable messages. Keep diagnostic details in logs.

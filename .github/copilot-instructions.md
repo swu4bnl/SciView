@@ -2,56 +2,29 @@
 
 SciView is a Python-first, beamline-neutral application for 2D X-ray scattering workflows.
 
-## Project priorities
+## Critical boundaries
 
-1. Maintainability
-2. Beamline neutrality
-3. Local file-system and Tiled data support
-4. SciAnalysis integration through a clean adapter
-5. AI-friendly testing and debugging
-6. Thin replaceable user interfaces
+- Keep scientific logic in GUI-independent backends callable from scripts, notebooks, tests, and replaceable interfaces. Widgets collect input, call backends, and display results.
+- Keep `core` and `data` beamline-neutral. Beamline conventions and filename interpretation belong in `profiles`; file-system and Tiled access in `sources`; SciAnalysis calls in `processing` adapters.
+- Preserve scientific meaning, units, source data, and provenance. Do not hide failures behind silent defaults or success-shaped results.
+- Keep changes bounded to the request. Preserve unrelated work and ask before substantial workflow changes or rewrites.
 
-## Required design pattern
+## Validation and test retention
 
-Use a backend-first architecture.
+- Validate the changed behavior with the smallest relevant existing tests or local checks. Backend behavior changes require pytest coverage.
+- Retain tests for scientific correctness, major workflows, public contracts, and consequential component interactions. Do not add permanent tests merely because a minor isolated feature changed.
+- Keep one-off UI, cosmetic, and implementation probes local and uncommitted; remove temporary artifacts after use. See [test instructions](instructions/sciview-tests.instructions.md).
 
-GUI widgets must call backend functions. GUI widgets must not contain scientific logic.
+## UI and documentation
 
-The backend must be callable from scripts, notebooks, command-line tools, tests, napari widgets, and future desktop interfaces.
+- Keep routine controls compact and self-explanatory. Preserve scientific precision where it affects decisions or results.
+- Document workflows and non-obvious consequences, not every feature. Keep reusable guidance concise and abstract rather than accumulating task-specific examples.
+- Follow [UI instructions](instructions/sciview-ui.instructions.md) for interface changes.
 
-## Core rules
+## Project conventions
 
-- Do not hard-code CMS behavior in `sciview.core`.
-- Do not hard-code `/nsls2/data` in tests.
-- Do not parse filenames in core modules.
-- Use beamline profiles for beamline-specific behavior.
-- Use data-source adapters for file-system and Tiled access.
-- Use processing adapters for SciAnalysis.
-- Keep SciAnalysis calls out of GUI widgets.
-- Use `pathlib.Path` for local paths.
-- Use type hints for public APIs.
-- Use dataclasses or Pydantic models for structured data.
-- Use YAML for recipes and beamline profile configuration.
-- Add pytest tests for backend changes.
+- Use `pathlib.Path` for local paths, typed public APIs, dataclasses or Pydantic models for structured data, and YAML for recipes and beamline profiles.
+- Tests must run without facility mounts or live services.
+- Do not introduce web stacks, databases, or cloud services unless requested.
 
-## Preferred modules
-
-```text
-src/sciview/core/         neutral models, workspace, jobs, provenance
-src/sciview/data/         ImageRef, Dataset, metadata models
-src/sciview/sources/      file-system and Tiled source adapters
-src/sciview/profiles/     beamline profiles such as CMS
-src/sciview/processing/   SciAnalysis adapter and recipe runner
-src/sciview/calibration/  calibration models and I/O
-src/sciview/masking/      mask models and I/O
-src/sciview/interfaces/   GUI and napari interfaces
-tests/                    pytest tests
-```
-
-## Avoid
-
-- Electron, React, FastAPI, databases, or cloud services unless explicitly requested.
-- Large rewrites.
-- Untested backend changes.
-- Hidden dependencies on a mounted beamline file system.
-- Duplicating scientific logic between GUI and backend.
+Module-specific rules live in [instructions/](instructions/). The [project reference](../docs/SciView-project-reference.md) provides broader context; [collaboration guidance](../docs/ai-collaboration-guidelines.md) records reusable working preferences.

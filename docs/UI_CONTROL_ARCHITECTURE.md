@@ -12,6 +12,12 @@ It is written for three audiences:
 
 The main goal is a single-source, predictable UI system that stays maintainable as the app evolves.
 
+## Product Language And Control Preferences
+
+- Keep controls compact, discoverable, and accessible; omit incidental technical detail.
+- Focus guidance on the main workflow and meaningful decisions, not self-explanatory secondary controls.
+- Preserve precision where it affects scientific interpretation, reproducibility, or results.
+
 ## Layer Map
 
 The UI stack is intentionally layered. Think of each layer as owning a different class of decision.

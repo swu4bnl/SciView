@@ -30,7 +30,6 @@ from sciview.interfaces.theme.app_style import (
     apply_info_style,
     apply_title_style,
     apply_toolbar_symbol_button_style,
-    apply_toolbar_text_button_style,
     setup_splitter_layout,
 )
 from sciview.settings.app_settings import SUPPORTED_FORMATS, IMAGE_BROWSER_SETTINGS
@@ -658,10 +657,9 @@ class ImageBrowserApp(BaseImageTab):
         self.folder_play_button.clicked.connect(self._toggle_folder_playback)
         controls_layout.addWidget(self.folder_play_button)
 
-        playback_rate = self._folder_playback_rates[self._folder_playback_rate_index]
-        self.folder_playback_speed_button = QPushButton(f"{playback_rate:g} fps")
-        self.folder_playback_speed_button.setToolTip("Playback speed; click to cycle through 0.1, 1, and 5 fps")
-        apply_toolbar_text_button_style(self.folder_playback_speed_button)
+        self.folder_playback_speed_button = QPushButton()
+        apply_toolbar_symbol_button_style(self.folder_playback_speed_button)
+        self._update_folder_playback_speed_button()
         self.folder_playback_speed_button.clicked.connect(self._cycle_folder_playback_speed)
         controls_layout.addWidget(self.folder_playback_speed_button)
 
@@ -1234,10 +1232,18 @@ class ImageBrowserApp(BaseImageTab):
         self._folder_playback_rate_index = (
             self._folder_playback_rate_index + 1
         ) % len(self._folder_playback_rates)
-        rate = self._folder_playback_rates[self._folder_playback_rate_index]
-        self.folder_playback_speed_button.setText(f"{rate:g} fps")
+        self._update_folder_playback_speed_button()
         if self.folder_play_timer.isActive():
             self.folder_play_timer.setInterval(self._folder_playback_interval_ms())
+
+    def _update_folder_playback_speed_button(self) -> None:
+        speed = ("Slow", "Medium", "Fast")[self._folder_playback_rate_index]
+        self.folder_playback_speed_button.setAccessibleName(f"Playback speed: {speed}")
+        self.folder_playback_speed_button.setToolTip(f"{speed} playback; click to change speed")
+        self._apply_tool_icon(
+            self.folder_playback_speed_button,
+            f'tool_speed_{self._folder_playback_rate_index + 1}.svg',
+        )
 
     def _stop_folder_playback(self):
         """Stop folder-list playback and reset the play button."""
@@ -1276,6 +1282,8 @@ class ImageBrowserApp(BaseImageTab):
         for button, filename in pairs:
             if button is not None:
                 self._apply_tool_icon(button, filename)
+        if getattr(self, 'folder_playback_speed_button', None) is not None:
+            self._update_folder_playback_speed_button()
 
     def _advance_folder_playback(self):
         """Advance to the next visible folder image during playback."""
