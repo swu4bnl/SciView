@@ -7,6 +7,10 @@ version = "0.1.0"
 
 [tasks]
 launch-app = { cmd = "python -m sciview.launchers app", env = { PYTHONPATH = "src" } }
+test = { cmd = "python -m pytest -m 'not experimental and not requires_auth'", env = { PYTHONPATH = "src", QT_QPA_PLATFORM = "offscreen" } }
+test-experimental = { cmd = "python -m pytest -m experimental", env = { PYTHONPATH = "src", QT_QPA_PLATFORM = "offscreen" } }
+verify-installation = { cmd = "python scripts/verify_installation.py", env = { QT_QPA_PLATFORM = "offscreen" } }
+test-installation = { cmd = "python scripts/test_installation.py", env = { QT_QPA_PLATFORM = "offscreen" } }
 
 [dependencies]
 python = "3.12.*"
@@ -22,12 +26,12 @@ qdarkstyle = ">=3.2.3,<4"
 qt-material = ">=2.14,<3"
 scitoolsscianalysis = ">=2.6.6,<3"
 psutil = ">=7.1.0,<8"
-tiled = ">=0.2.15,<0.3"
+tiled = ">=0.2.19,<0.3"
 ipython = ">=9.13.0,<10"
 ipdb = ">=0.13.13,<0.14"
 debugpy = ">=1.8.20,<2"
+git = ">=2.40,<3"
 
 [pypi-dependencies]
 pyqtdarktheme = ">=2.1,<3"
-
-bluesky-tiled-plugins = ">2.0"
+bluesky-tiled-plugins = ">=2.0.12,<3"

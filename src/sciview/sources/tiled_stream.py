@@ -29,34 +29,6 @@ logger = logging.getLogger(__name__)
 LiveEventCallback = Callable[["TiledLiveEvent"], None]
 
 
-def _install_child_created_compatibility() -> None:
-    """Accept access-tag messages produced by servers newer than Tiled 0.2.18."""
-    try:
-        from pydantic import Field
-        from tiled.client import stream as tiled_stream
-    except ImportError:
-        return
-
-    child_created = tiled_stream.UPDATE_MESSAGE_TYPES.get("container-child-created")
-    if child_created is None:
-        return
-    fields = child_created.model_fields
-    access_blob_field = fields.get("access_blob")
-    if "access_tags" in fields or access_blob_field is None or not access_blob_field.is_required():
-        return
-
-    class CompatibleLiveChildCreated(child_created):
-        access_blob: dict = Field(default_factory=dict)
-        access_tags: list[str] = Field(default_factory=list)
-
-        def _item(self) -> dict[str, Any]:
-            item = super()._item()
-            item["attributes"]["access_tags"] = self.access_tags
-            return item
-
-    tiled_stream.UPDATE_MESSAGE_TYPES["container-child-created"] = CompatibleLiveChildCreated
-
-
 @dataclass(slots=True)
 class TiledLiveEvent:
     """Structured event emitted by a live Tiled subscription."""
@@ -94,7 +66,6 @@ class TiledLiveMonitor:
         if self._running:
             raise RuntimeError("Tiled live monitor is already running")
 
-        _install_child_created_compatibility()
         self._callback = callback
         catalog = (
             self._catalog

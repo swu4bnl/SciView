@@ -20,39 +20,6 @@ from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
 from sciview.masking.layers import MaskLayer, compose_mask_layers
 
 
-def test_tiled_child_created_compatibility_accepts_access_tags(monkeypatch):
-    from tiled.client import stream as tiled_stream
-
-    from sciview.sources.tiled_stream import _install_child_created_compatibility
-
-    original_model = tiled_stream.LiveChildCreated
-    monkeypatch.setitem(
-        tiled_stream.UPDATE_MESSAGE_TYPES,
-        "container-child-created",
-        original_model,
-    )
-
-    _install_child_created_compatibility()
-
-    compatible_model = tiled_stream.UPDATE_MESSAGE_TYPES["container-child-created"]
-    update = compatible_model.model_validate(
-        {
-            "sequence": 1,
-            "timestamp": "2026-10-05T00:00:00Z",
-            "key": "run-uid",
-            "structure_family": "container",
-            "specs": [],
-            "metadata": {},
-            "data_sources": [],
-            "access_tags": ["pass-321599"],
-            "subscription": object.__new__(tiled_stream.ContainerSubscription),
-        }
-    )
-
-    assert update.access_blob == {}
-    assert update.access_tags == ["pass-321599"]
-
-
 @pytest.fixture(scope="module")
 def qapp():
     app = QApplication.instance() or QApplication([])
@@ -330,6 +297,7 @@ def test_shared_image_panel_uses_canvas_filename_without_redundant_header(qapp, 
         tab.close()
 
 
+@pytest.mark.experimental
 def test_tiled_local_image_title_does_not_reuse_shared_filename(qapp):
     from tabs.tiled_browser_tab import TiledBrowserTab
 
@@ -623,6 +591,7 @@ def test_leaving_auto_publish_tab_publishes_current_image(qapp):
         app.close()
 
 
+@pytest.mark.experimental
 def test_browser_tabs_do_not_expose_manual_sync_buttons(qapp):
     from tabs.image_browser_tab import ImageBrowserApp
     from tabs.tiled_browser_tab import TiledBrowserTab
@@ -638,6 +607,7 @@ def test_browser_tabs_do_not_expose_manual_sync_buttons(qapp):
         tiled_browser.close()
 
 
+@pytest.mark.experimental
 def test_tiled_browser_auto_publish_uses_shared_image_api(qapp):
     from tabs.tiled_browser_tab import TiledBrowserTab
 
@@ -877,6 +847,7 @@ def test_brush_session_uses_preview_refresh_until_release():
     assert calls["edit"] == 1
 
 
+@pytest.mark.experimental
 def test_tiled_device_login_reports_code_and_configures_auth(monkeypatch):
     from sciview.sources import tiled_client
 
@@ -939,6 +910,7 @@ def test_tiled_device_login_reports_code_and_configures_auth(monkeypatch):
     assert sleeps == [0.0, 5.0]
 
 
+@pytest.mark.experimental
 def test_tiled_client_honors_interactive_fallback(monkeypatch):
     from sciview.sources import tiled_client
 
@@ -979,6 +951,7 @@ def test_tiled_client_honors_interactive_fallback(monkeypatch):
     assert manager.get_or_create_client("test-login", interactive_fallback=False) is None
 
 
+@pytest.mark.experimental
 def test_tiled_live_monitor_uses_bluesky_stream_manager(monkeypatch):
     from sciview.sources import tiled_stream
     from sciview.sources.tiled_source import TiledScanSummary
@@ -1024,6 +997,7 @@ def test_tiled_live_monitor_uses_bluesky_stream_manager(monkeypatch):
     assert subscription.disconnected
 
 
+@pytest.mark.experimental
 def test_tiled_authorization_dialog_copies_code_and_opens_browser(qapp, monkeypatch):
     from sciview.sources.tiled_client import TiledDeviceAuthorization
     from tabs.tiled_browser_tab import _TiledAuthorizationDialog
