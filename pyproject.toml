@@ -44,7 +44,4 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q -m 'not experimental'"
-markers = [
-    "experimental: unfinished behavior that is excluded from the required test suite",
-]
+addopts = "-q"

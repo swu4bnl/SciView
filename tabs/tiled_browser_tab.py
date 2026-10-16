@@ -705,17 +705,21 @@ class TiledBrowserTab(BaseImageTab):
             self.parent_app.show_status(f"Tiled browser disabled: {msg}")
             return
 
-        for catalog in self.image_service.tiled_catalogs():
-            label = f"{catalog['catalog_label']} - {catalog['description']}"
-            self.catalog_combo.addItem(label, catalog["profile_name"])
+        self.catalog_combo.blockSignals(True)
+        try:
+            for catalog in self.image_service.tiled_catalogs():
+                label = f"{catalog['catalog_label']} - {catalog['description']}"
+                self.catalog_combo.addItem(label, catalog["profile_name"])
 
-        default_profile = self.image_service.tiled_default_profile()
-        if default_profile is not None:
-            idx = self.catalog_combo.findData(default_profile)
-            if idx >= 0:
-                self.catalog_combo.setCurrentIndex(idx)
+            default_profile = self.image_service.tiled_default_profile()
+            if default_profile is not None:
+                idx = self.catalog_combo.findData(default_profile)
+                if idx >= 0:
+                    self.catalog_combo.setCurrentIndex(idx)
+        finally:
+            self.catalog_combo.blockSignals(False)
 
-        self._on_catalog_changed()
+        self.auth_status_label.setText("Status: not connected")
 
     def _active_profile(self) -> str | None:
         data = self.catalog_combo.currentData()
@@ -813,7 +817,8 @@ class TiledBrowserTab(BaseImageTab):
         self._stop_live_monitor()
         self._cancel_operation()
         self._clear_selection()
-        self._refresh_auth_state()
+        self.auth_status_label.setText("Status: not connected")
+        self.auth_button.setText("Login")
 
     def _start_live_monitor(self) -> None:
         profile = self._active_profile()
