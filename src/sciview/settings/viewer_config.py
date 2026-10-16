@@ -34,6 +34,12 @@ class ViewerToolbarAction:
 
 
 @dataclass(frozen=True)
+class ViewerToolbarGroup:
+    key: str
+    actions: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ArtistPalette:
     key: str
     label: str
@@ -246,6 +252,13 @@ VIEWER_TOOLBAR_ACTIONS = (
     ViewerToolbarAction("auto", "Auto", "Set color limits from the current image."),
     ViewerToolbarAction("copy", "Copy", "Copy the rendered image view to the clipboard."),
     ViewerToolbarAction("save", "Save", "Save the rendered view with the current colormap and overlays."),
+)
+
+VIEWER_TOOLBAR_GROUPS = (
+    ViewerToolbarGroup("navigation", ("pan", "zoom", "home")),
+    ViewerToolbarGroup("overlays", ("beam_center", "mask")),
+    ViewerToolbarGroup("output", ("copy", "save")),
+    ViewerToolbarGroup("display", ("auto",)),
 )
 
 VIEWER_TOOL_ICON_FILES = {

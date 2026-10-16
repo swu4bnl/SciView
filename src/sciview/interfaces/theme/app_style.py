@@ -191,6 +191,8 @@ class AppStyle:
         'panel_inner_margin': 2, # inner margins of content sub-panels
         'panel_spacing': 3,
         'toolbar_spacing': 4,    # spacing inside icon/button toolbars
+        'toolbar_group_spacing': 12,
+        'viewer_toolbar_icon_ratio': 0.58,
         'tool_label_spacing': 1, # spacing between a tool icon and its caption
         'section_spacing': 6,    # spacing between major items in right-panel layouts
         # Image browser specifics
@@ -429,6 +431,15 @@ class AppStyle:
             }}
         """,
 
+        'viewer_toolbar': """
+            QWidget {{
+                background-color: transparent;
+                color: {text_primary};
+            }}
+            QWidget#imageViewerToolbar {{
+                background-color: {surface};
+            }}
+        """,
         'toolbar_symbol_button': """
             QPushButton {{
                 background-color: {surface};
@@ -706,6 +717,34 @@ class AppStyle:
         return QSize(size, max(cls.standard_button_min_height(), size - 2))
 
     @classmethod
+    def viewer_toolbar_button_size(cls):
+        """Return the fixed tool-button size for the image viewer toolbar.
+
+        Sized so a tool cell's natural height (icon + caption) exactly equals
+        the height of the two-row display controls (colormap/scale/levels)
+        placed beside it in the same toolbar row — leaving no slack for Qt to
+        redistribute, so both cells' top and bottom edges line up exactly.
+        """
+        display_controls_height = (2 * cls.toolbar_text_button_height()) + cls.LAYOUT['toolbar_spacing']
+        caption_height = cls.font_px('caption') + (cls.CSS_TOKENS['label_padding_v'] * 2)
+        size = max(
+            cls.toolbar_symbol_button_size().height(),
+            display_controls_height - caption_height - cls.LAYOUT['tool_label_spacing'],
+        )
+        return QSize(size, size)
+
+    @classmethod
+    def viewer_toolbar_icon_size(cls):
+        """Return the themed icon size for viewer toolbar buttons.
+
+        Snapped to the nearest size pre-rendered by load_icon() so icons are
+        never rescaled on the fly.
+        """
+        target = cls.viewer_toolbar_button_size().width() * cls.LAYOUT['viewer_toolbar_icon_ratio']
+        size = min((16, 18, 20, 22, 24, 28, 32), key=lambda bucket: abs(bucket - target))
+        return QSize(size, size)
+
+    @classmethod
     def mask_tool_button_size(cls):
         """Return larger button size for mask drawing tool icons."""
         width = max(cls.BUTTON_FORM['mask_tool_width'], cls.font_px('body') + 24)
@@ -796,6 +835,10 @@ class AppStyle:
         colors = cls.theme_colors()
         for size in (16, 18, 20, 22, 24, 28, 32):
             icon.addPixmap(cls._render_svg_pixmap(path, size, colors['icon']))
+            icon.addPixmap(
+                cls._render_svg_pixmap(path, size, colors['checked_fg']),
+                QIcon.Normal, QIcon.On,
+            )
             icon.addPixmap(cls._render_svg_pixmap(path, size, colors['muted']), QIcon.Disabled)
         return icon
 

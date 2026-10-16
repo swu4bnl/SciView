@@ -13,7 +13,7 @@ import datetime
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QFileDialog,
-    QTextEdit, QFormLayout, QScrollArea
+    QTextEdit, QFormLayout, QScrollArea, QSizePolicy
 )
 from PyQt5.QtCore import Qt
 
@@ -23,6 +23,7 @@ from sciview.interfaces.theme.app_style import (
     apply_info_style,
     apply_subtitle_style,
     apply_title_style,
+    apply_input_style,
 )
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_detector_config, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import DEFAULT_DISPLAY_SETTINGS, MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
@@ -411,34 +412,65 @@ class BaseImageTab(QWidget):
         self.image_viewer.overlay_visibility_changed.connect(self._on_overlay_visibility_changed)
         layout.addWidget(self.image_viewer)
 
-        # Image controls - now shared across all tabs
-        img_ctrl = QHBoxLayout()
-        img_ctrl.addWidget(QLabel("Color Map Minimum"))
-        self.vmin_input = QLineEdit(str(self.display_settings['vmin']))
-        self.vmin_input.editingFinished.connect(self._on_vmin_changed)
-        img_ctrl.addWidget(self.vmin_input)
+        display_controls = QWidget()
+        display_controls.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        display_layout = QGridLayout(display_controls)
+        display_layout.setContentsMargins(0, 0, 0, 0)
+        display_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
 
-        img_ctrl.addWidget(QLabel("Color Map Maximum"))
-        self.vmax_input = QLineEdit(str(self.display_settings['vmax']))
-        self.vmax_input.editingFinished.connect(self._on_vmax_changed)
-        img_ctrl.addWidget(self.vmax_input)
-
-        img_ctrl.addWidget(QLabel("Colormap"))
+        color_label = QLabel("Color")
+        color_label.setToolTip("Colormap")
+        display_layout.addWidget(color_label, 0, 0)
         self.cmap_selector = QComboBox()
+        self.cmap_selector.setMinimumWidth(AppStyle.wide_input_min_width())
+        self.cmap_selector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.cmap_selector.setAccessibleName("Colormap")
+        self.cmap_selector.setToolTip("Colormap")
         self.cmap_selector.addItems(list(SUPPORTED_IMAGE_COLORMAPS))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.cmap_selector.currentTextChanged.connect(self._on_cmap_changed)
-        img_ctrl.addWidget(self.cmap_selector)
+        display_layout.addWidget(self.cmap_selector, 0, 1)
 
-        img_ctrl.addWidget(QLabel("Scale"))
+        scale_label = QLabel("Scale")
+        scale_label.setToolTip("Intensity scale (linear or log)")
+        display_layout.addWidget(scale_label, 0, 2)
         self.img_scale_combo = QComboBox()
+        self.img_scale_combo.setMinimumWidth(AppStyle.compact_input_min_width())
+        self.img_scale_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.img_scale_combo.setAccessibleName("Intensity scale")
+        self.img_scale_combo.setToolTip("Intensity scale (linear or log)")
         self.img_scale_combo.addItems(list(SUPPORTED_IMAGE_SCALES))
         self.img_scale_combo.setCurrentText(self.display_settings['scale'])
         self.img_scale_combo.currentTextChanged.connect(self._on_scale_changed)
-        img_ctrl.addWidget(self.img_scale_combo)
+        display_layout.addWidget(self.img_scale_combo, 0, 3)
 
-        layout.addLayout(img_ctrl)
-        
+        vmin_label = QLabel("Min")
+        vmin_label.setToolTip("Color Map Minimum")
+        display_layout.addWidget(vmin_label, 1, 0)
+        self.vmin_input = QLineEdit(str(self.display_settings['vmin']))
+        self.vmin_input.setMinimumWidth(AppStyle.compact_input_min_width())
+        self.vmin_input.setAccessibleName("Color minimum")
+        self.vmin_input.setToolTip("Color Map Minimum")
+        self.vmin_input.editingFinished.connect(self._on_vmin_changed)
+        display_layout.addWidget(self.vmin_input, 1, 1)
+
+        vmax_label = QLabel("Max")
+        vmax_label.setToolTip("Color Map Maximum")
+        display_layout.addWidget(vmax_label, 1, 2)
+        self.vmax_input = QLineEdit(str(self.display_settings['vmax']))
+        self.vmax_input.setMinimumWidth(AppStyle.compact_input_min_width())
+        self.vmax_input.setAccessibleName("Color maximum")
+        self.vmax_input.setToolTip("Color Map Maximum")
+        self.vmax_input.editingFinished.connect(self._on_vmax_changed)
+        display_layout.addWidget(self.vmax_input, 1, 3)
+
+        for column in (1, 3):
+            display_layout.setColumnStretch(column, 1)
+        for control in (self.cmap_selector, self.img_scale_combo, self.vmin_input, self.vmax_input):
+            apply_input_style(control)
+            control.setFixedHeight(AppStyle.toolbar_text_button_height())
+        self.image_viewer.set_display_controls(display_controls)
+
         return panel
 
     def _overlay_calibration(self):

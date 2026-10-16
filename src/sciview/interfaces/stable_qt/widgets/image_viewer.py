@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PyQt5.QtCore import QEvent, QPointF, QSize, Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, QPointF, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QFileDialog, QGridLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 import pyqtgraph as pg
 import pyqtgraph.exporters
@@ -26,6 +26,7 @@ from sciview.settings.viewer_config import (
     VIEWER_COLORS,
     VIEWER_TOOL_ICON_FILES,
     VIEWER_TOOLBAR_ACTIONS,
+    VIEWER_TOOLBAR_GROUPS,
     resolve_matplotlib_colormap,
 )
 
@@ -113,16 +114,18 @@ class ImageViewer(QWidget):
         self._graphics.viewport().installEventFilter(self)
 
         toolbar_actions = {action.key: action for action in VIEWER_TOOLBAR_ACTIONS}
-        self._pan_button = self._make_tool_button(toolbar_actions["pan"], self._load_toolbar_icon("pan"))
-        self._zoom_button = self._make_tool_button(toolbar_actions["zoom"], self._load_toolbar_icon("zoom"))
-        self.beam_center_overlay_button = self._make_tool_button(
-            toolbar_actions["beam_center"], self._load_toolbar_icon("beam_center")
-        )
-        self.mask_overlay_button = self._make_tool_button(toolbar_actions["mask"], self._load_toolbar_icon("mask"))
-        self._home_button = self._make_tool_button(toolbar_actions["home"], self._load_toolbar_icon("home"))
-        self._auto_levels_button = self._make_tool_button(toolbar_actions["auto"], self._load_toolbar_icon("auto"))
-        self._copy_button = self._make_tool_button(toolbar_actions["copy"], self._load_toolbar_icon("copy"))
-        self._save_button = self._make_tool_button(toolbar_actions["save"], self._load_toolbar_icon("save"))
+        self._toolbar_buttons = {
+            action.key: self._make_tool_button(action, self._load_toolbar_icon(action.key))
+            for action in VIEWER_TOOLBAR_ACTIONS
+        }
+        self._pan_button = self._toolbar_buttons["pan"]
+        self._zoom_button = self._toolbar_buttons["zoom"]
+        self.beam_center_overlay_button = self._toolbar_buttons["beam_center"]
+        self.mask_overlay_button = self._toolbar_buttons["mask"]
+        self._home_button = self._toolbar_buttons["home"]
+        self._auto_levels_button = self._toolbar_buttons["auto"]
+        self._copy_button = self._toolbar_buttons["copy"]
+        self._save_button = self._toolbar_buttons["save"]
         self._palette_info_label = QLabel("")
         self._palette_info_label.setVisible(False)
         self._palette_info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -141,33 +144,47 @@ class ImageViewer(QWidget):
         self.beam_center_overlay_button.toggled.connect(self._emit_overlay_visibility_changed)
         self.mask_overlay_button.toggled.connect(self._emit_overlay_visibility_changed)
 
-        self._toolbar_layout = QHBoxLayout()
-        self._toolbar_layout.setContentsMargins(0, 0, 0, 0)
-        self._toolbar_layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
-        toolbar_buttons = {
-            "pan": self._pan_button,
-            "zoom": self._zoom_button,
-            "beam_center": self.beam_center_overlay_button,
-            "mask": self.mask_overlay_button,
-            "home": self._home_button,
-            "auto": self._auto_levels_button,
-            "copy": self._copy_button,
-            "save": self._save_button,
-        }
-        self._toolbar_cells = {}
-        for action in VIEWER_TOOLBAR_ACTIONS:
-            cell = self._make_labeled_tool_cell(action.label, toolbar_buttons[action.key])
-            self._toolbar_cells[action.key] = cell
-            self._toolbar_layout.addWidget(cell)
-        self._toolbar_cells["beam_center"].setVisible(False)
-        self._toolbar_cells["mask"].setVisible(False)
-        self._toolbar_layout.addWidget(self._palette_info_label)
+        self._toolbar = QWidget()
+        self._toolbar.setObjectName("imageViewerToolbar")
+        self._toolbar.setAttribute(Qt.WA_StyledBackground, True)
+        self._toolbar_layout = QGridLayout(self._toolbar)
+        self._toolbar_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
+        self._toolbar_layout.setHorizontalSpacing(AppStyle.LAYOUT['toolbar_spacing'])
+        self._overlay_tool_cells: list[QWidget] = []
+        column = 0
+        for specification in VIEWER_TOOLBAR_GROUPS:
+            if column:
+                self._toolbar_layout.setColumnMinimumWidth(column, AppStyle.LAYOUT['toolbar_group_spacing'])
+                self._toolbar_layout.setColumnStretch(column, 1)
+                column += 1
+            group_cells = []
+            for key in specification.actions:
+                action = toolbar_actions[key]
+                cell = self._make_labeled_tool_cell(action.label, self._toolbar_buttons[key])
+                self._toolbar_layout.addWidget(cell, 0, column, Qt.AlignHCenter)
+                group_cells.append(cell)
+                column += 1
+            if specification.key == "overlays":
+                self._overlay_tool_cells = group_cells
+                for cell in group_cells:
+                    cell.setVisible(False)
+            elif specification.key == "display":
+                column += 1
+                self._toolbar_layout.setColumnMinimumWidth(column, AppStyle.LAYOUT['toolbar_group_spacing'])
+                self._toolbar_layout.setColumnStretch(column, 1)
+                column += 1
+                self._display_controls_column = column
+        column += 1
+        self._toolbar_layout.setColumnMinimumWidth(column, AppStyle.LAYOUT['toolbar_group_spacing'])
+        self._toolbar_layout.setColumnStretch(column, 1)
+        column += 1
+        self._toolbar_layout.addWidget(self._palette_info_label, 0, column)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
         layout.addWidget(self._graphics)
-        layout.addLayout(self._toolbar_layout)
+        layout.addWidget(self._toolbar)
 
         self.refresh_theme()
         self.set_colormap(self._colormap_name)
@@ -339,8 +356,12 @@ class ImageViewer(QWidget):
 
     def enable_overlay_tools(self) -> None:
         """Show the beam-center and mask toolbar controls."""
-        self._toolbar_cells["beam_center"].setVisible(True)
-        self._toolbar_cells["mask"].setVisible(True)
+        for cell in self._overlay_tool_cells:
+            cell.setVisible(True)
+
+    def set_display_controls(self, controls: QWidget) -> None:
+        """Place tab-owned display controls beside the viewer tools, in the same toolbar row."""
+        self._toolbar_layout.addWidget(controls, 0, self._display_controls_column)
 
     def activate_navigation_mode(self, mode: str) -> None:
         """Unlock drawing input and select a supported viewer navigation mode."""
@@ -704,19 +725,11 @@ class ImageViewer(QWidget):
         self._plot_item.getAxis("bottom").setPen(text_color)
         self._plot_item.getAxis("bottom").setTextPen(text_color)
 
-        for key, button in {
-            "pan": self._pan_button,
-            "zoom": self._zoom_button,
-            "beam_center": self.beam_center_overlay_button,
-            "mask": self.mask_overlay_button,
-            "home": self._home_button,
-            "auto": self._auto_levels_button,
-            "copy": self._copy_button,
-            "save": self._save_button,
-        }.items():
+        AppStyle.apply_widget_style(self._toolbar, 'viewer_toolbar')
+        for key, button in self._toolbar_buttons.items():
             AppStyle.apply_widget_style(button, 'compact_button')
             button.setIcon(self._load_toolbar_icon(key))
-            button.setIconSize(AppStyle.tab_icon_size())
+            button.setIconSize(AppStyle.viewer_toolbar_icon_size())
 
         self._palette_info_label.setStyleSheet(f"color: {muted_color.name()};")
         self._graphics.update()
@@ -734,20 +747,20 @@ class ImageViewer(QWidget):
         button = QToolButton()
         button.setAccessibleName(action.label)
         button.setAutoRaise(False)
-        button.setFixedSize(AppStyle.toolbar_symbol_button_size())
+        button.setFixedSize(AppStyle.viewer_toolbar_button_size())
         AppStyle.apply_widget_style(button, 'compact_button')
         if icon.isNull():
             button.setText(action.label)
             button.setFont(AppStyle.make_font('h3', weight=600))
         else:
             button.setIcon(icon)
-            icon_size = max(16, min(button.width() - 10, button.height() - 10))
-            button.setIconSize(QSize(icon_size, icon_size))
+            button.setIconSize(AppStyle.viewer_toolbar_icon_size())
         button.setToolTip(action.tooltip)
         return button
 
     @staticmethod
     def _make_labeled_tool_cell(label_text: str, button: QToolButton) -> QWidget:
+        """Build a single icon-over-caption unit occupying one toolbar grid cell."""
         cell = QWidget()
         layout = QVBoxLayout(cell)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -756,7 +769,7 @@ class ImageViewer(QWidget):
         label = QLabel(label_text)
         label.setAlignment(Qt.AlignHCenter)
         AppStyle.set_font_role(label, 'toolbar_text')
-        layout.addWidget(label)
+        layout.addWidget(label, 0, Qt.AlignHCenter)
         return cell
 
     @staticmethod

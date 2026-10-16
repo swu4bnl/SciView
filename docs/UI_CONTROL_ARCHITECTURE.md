@@ -31,11 +31,13 @@ The UI stack is intentionally layered. Think of each layer as owning a different
 - Modules: src/sciview/settings/app_settings.py, src/sciview/settings/viewer_config.py
 - Responsibility: non-theme defaults such as window sizing, splitter ratios, image display defaults, viewer behavior defaults.
 - Key point: this layer provides app defaults, not per-widget styling rules.
+- Viewer tool actions and group order are declared by `VIEWER_TOOLBAR_ACTIONS` and `VIEWER_TOOLBAR_GROUPS` in `viewer_config.py`. New tools need an action, icon mapping, group membership, and behavior connection; layout placement is derived from the group configuration.
 
 3. Design-system and style engine layer
 - Module: src/sciview/interfaces/theme/app_style.py
 - Responsibility: token definitions, style templates, style helper APIs, runtime theme refresh.
 - Key point: this is the primary source of truth for styling decisions.
+- The viewer toolbar is one `QGridLayout`: tool icons in row 0, captions in row 1. The tab-owned display controls widget is inserted as a single item spanning both rows, so Qt's own row-height computation keeps it vertically aligned with the tool cells — no manual height matching or runtime widget measurement needed. Tool buttons keep the standard `toolbar_symbol_button_size`/`tab_icon_size` used everywhere else.
 
 4. Theme tooling layer (development-time)
 - Module: src/sciview/dev/style_inspector.py
