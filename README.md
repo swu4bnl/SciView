@@ -31,7 +31,7 @@ For most users, the easiest way to start is with the launcher script for your sy
 
 Double-click [Launch-SciView-win64.cmd](Launch-SciView-win64.cmd).
 
-If Windows asks whether to install Pixi, choose Y to continue. If the launcher asks you to close it after installation, double-click it again.
+If Windows asks to install required components, choose Y. If the launcher asks you to close it, double-click the launcher again.
 
 ### macOS and Linux
 
@@ -40,15 +40,9 @@ From the repository folder, use the launcher for your system:
 - macOS: `./Launch-SciView-macOS.command`
 - Linux: `./Launch-SciView-linux.sh`
 
-On the first launch, the launcher installs Pixi and the SciView environment. Pixi also supplies Git. You do not need to install Git separately.
-
-### Verify an installation
-
-Run `pixi run verify-installation` to check Python, Git, and the required Python packages.
-
 > **Note**
 >
-> The launcher may offer to update SciView. You can decline the update and continue to use the installed version. An update can include new features and bug fixes.
+> If the launcher offers an update, choose Y to update or N to continue without updating.
 
 ## A typical SciView workflow
 
@@ -92,6 +86,10 @@ SciView separates the user interface from the analysis logic. The tab files cont
 #### Setup and documentation
 
 - [scripts/](scripts): environment setup and platform launcher support
+
+### Verify an installation
+
+Run `pixi run verify-installation` to check Python, Git, and the required Python packages.
 
 ### Test installation
 

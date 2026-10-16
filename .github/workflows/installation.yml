@@ -36,7 +36,16 @@ jobs:
           if (Get-Command pixi -ErrorAction SilentlyContinue) {
               throw "The runner already has Pixi on PATH. The installer test requires a runner without Pixi."
           }
-          ./scripts/run_sciview_windows.ps1 -SetupOnly -NoAutoPull -AcceptPixiInstall
+          $env:SCIVIEW_FORCE_CMD_LAUNCHER = "1"
+          & cmd.exe /d /c Launch-SciView-win64.cmd -SetupOnly -NoAutoPull -AcceptPixiInstall
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          Remove-Item Env:SCIVIEW_FORCE_CMD_LAUNCHER
+          & cmd.exe /d /c Launch-SciView-win64.cmd -SetupOnly -NoAutoPull -AcceptPixiInstall
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
           $pixi = @(
               "$env:LOCALAPPDATA\pixi\bin\pixi.exe"
               "$env:USERPROFILE\.pixi\bin\pixi.exe"
