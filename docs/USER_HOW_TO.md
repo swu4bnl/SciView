@@ -16,7 +16,7 @@ Use the launcher for your platform:
 - macOS: open `Launch-SciView-macOS.command`.
 - Linux: run `./Launch-SciView-linux.sh`.
 
-On the first launch, allow the launcher to install Pixi if prompted. The launcher may also offer a SciView update. It safely skips updates that conflict with local work.
+On the first launch, approve the installation of required components if prompted.
 
 ## Main Window
 

@@ -73,10 +73,10 @@ find_pixi() {
 }
 
 install_pixi() {
-    echo "SciView needs Pixi to prepare the Python environment."
-    echo "Installing Pixi for this user account..."
-    if ! curl -fsSL https://pixi.sh/install.sh | bash; then
-        echo "ERROR: Pixi installation failed."
+    echo "SciView needs Pixi to prepare the Python environment." >&2
+    echo "Installing Pixi for this user account..." >&2
+    if ! curl -fsSL https://pixi.sh/install.sh | bash >&2; then
+        echo "ERROR: Pixi installation failed." >&2
         return 1
     fi
     export PATH="$HOME/.pixi/bin:$HOME/.local/bin:$PATH"
@@ -84,6 +84,8 @@ install_pixi() {
 }
 
 maybe_auto_pull() {
+    local pixi_bin="${1:-}"
+
     if [[ "$AUTO_PULL" != "1" ]]; then
         echo "Skipping SciView source update check (--no-auto-pull)."
         return 0
@@ -92,31 +94,33 @@ maybe_auto_pull() {
         echo "Skipping SciView source update check (not a git checkout)."
         return 0
     fi
-    if ! command -v git >/dev/null 2>&1 && [[ ! -x /usr/bin/git ]]; then
+
+    local git_cmd=()
+    if [[ -n "$pixi_bin" ]]; then
+        git_cmd=("$pixi_bin" run -- git)
+    elif command -v git >/dev/null 2>&1; then
+        git_cmd=("$(command -v git)")
+    elif [[ -x /usr/bin/git ]]; then
+        git_cmd=(/usr/bin/git)
+    else
         echo "Skipping SciView source update check (git not available)."
         return 0
     fi
 
-    local git_bin
-    git_bin="$(command -v git || true)"
-    if [[ -z "$git_bin" ]]; then
-        git_bin="/usr/bin/git"
-    fi
-
     echo_step "Checking for SciView source updates..."
-    if ! "$git_bin" -C "$PROJECT_ROOT" fetch --quiet; then
+    if ! "${git_cmd[@]}" -C "$PROJECT_ROOT" fetch --quiet; then
         echo "Skipping source auto-update (git fetch failed)."
         return 0
     fi
 
     local upstream
-    if ! upstream="$("$git_bin" -C "$PROJECT_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || [[ -z "$upstream" ]]; then
+    if ! upstream="$("${git_cmd[@]}" -C "$PROJECT_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || [[ -z "$upstream" ]]; then
         echo "Skipping SciView source update (current branch has no upstream)."
         return 0
     fi
 
     local behind
-    if ! behind="$("$git_bin" -C "$PROJECT_ROOT" rev-list --count "HEAD..$upstream")"; then
+    if ! behind="$("${git_cmd[@]}" -C "$PROJECT_ROOT" rev-list --count "HEAD..$upstream")"; then
         echo "Skipping source auto-update (unable to compare with $upstream)."
         return 0
     fi
@@ -136,8 +140,9 @@ maybe_auto_pull() {
             ;;
     esac
 
-    if "$git_bin" -C "$PROJECT_ROOT" merge --ff-only "$upstream"; then
+    if "${git_cmd[@]}" -C "$PROJECT_ROOT" merge --ff-only "$upstream"; then
         echo "SciView source updated."
+        SOURCE_UPDATED=1
     else
         echo "Skipping source auto-update (fast-forward merge failed)."
     fi
@@ -171,17 +176,30 @@ run_with_venv() {
     run_app_command "$PROJECT_ROOT/.venv/bin/python" main.py
 }
 
-maybe_auto_pull
-
 PIXI_BIN="$(find_pixi || true)"
 if [[ -z "$PIXI_BIN" ]]; then
     echo_step "Pixi not found. Installing..."
-    PIXI_BIN="$(install_pixi || true)"
+    if ! PIXI_BIN="$(install_pixi)"; then
+        PIXI_BIN=""
+    fi
 fi
 
 if [[ -n "$PIXI_BIN" ]]; then
     echo_step "Preparing SciView dependencies..."
-    "$PIXI_BIN" install
+    if ! "$PIXI_BIN" install; then
+        echo "ERROR: SciView could not prepare its dependencies. Review the error above, then run the launcher again."
+        exit 1
+    fi
+
+    SOURCE_UPDATED=0
+    maybe_auto_pull "$PIXI_BIN"
+    if [[ "$SOURCE_UPDATED" == "1" ]]; then
+        echo_step "Synchronizing updated SciView dependencies..."
+        if ! "$PIXI_BIN" install; then
+            echo "ERROR: SciView updated its source but could not update its dependencies. Review the error above, then run the launcher again."
+            exit 1
+        fi
+    fi
 
     if [[ "$SETUP_ONLY" == "1" ]]; then
         echo "SciView setup is ready (pixi mode)."
@@ -191,4 +209,6 @@ if [[ -n "$PIXI_BIN" ]]; then
     run_app_command "$PIXI_BIN" run launch-app
 fi
 
+SOURCE_UPDATED=0
+maybe_auto_pull ""
 run_with_venv
