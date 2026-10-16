@@ -105,7 +105,7 @@ pixi run test-experimental -m "experimental and integration" --use-real-tiled
 pixi run test
 ```
 
-The `Installation` GitHub Actions workflow starts without Pixi on Windows, Linux, and macOS. It runs the platform launcher, verifies the installed environment, and then runs the mocked test suite.
+The `Installation` GitHub Actions workflow starts without Pixi on Windows, macOS, and Red Hat UBI 8.10. It runs the platform launcher, verifies the installed environment, and then runs the mocked test suite.
 
 Developers who already have Pixi can run the installation simulation locally:
 

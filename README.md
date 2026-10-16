@@ -97,7 +97,7 @@ SciView separates the user interface from the analysis logic. The tab files cont
 
 Run `pixi run test-installation`. This command creates a temporary installation and removes it after the test. Add `--keep` to keep the temporary files.
 
-The `Installation` GitHub Actions workflow tests setup on Windows, Linux, and macOS.
+The `Installation` GitHub Actions workflow tests setup on Windows, macOS, and Red Hat UBI 8.10.
 
 ### Source updates
 

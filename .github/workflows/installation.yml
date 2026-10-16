@@ -22,7 +22,6 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-latest
           - windows-latest
           - macos-latest
 
@@ -60,6 +59,32 @@ jobs:
         run: |
           if command -v pixi >/dev/null 2>&1; then
               echo "The runner already has Pixi on PATH. The installer test requires a runner without Pixi."
+              exit 1
+          fi
+          ./scripts/run_sciview_unix.sh --setup-only --no-auto-pull
+          "$HOME/.pixi/bin/pixi" run verify-installation
+          "$HOME/.pixi/bin/pixi" run test
+
+  rhel-installation:
+    name: rhel-ubi8.10
+    runs-on: ubuntu-latest
+    container:
+      image: registry.access.redhat.com/ubi8/ubi:8.10
+
+    steps:
+      - name: Install launcher prerequisites
+        run: dnf install -y curl findutils gzip tar && dnf clean all
+
+      - name: Check out SciView
+        uses: actions/checkout@v4
+
+      - name: Install through Unix launcher
+        env:
+          HOME: /tmp/sciview-home
+        run: |
+          mkdir -p "$HOME"
+          if command -v pixi >/dev/null 2>&1; then
+              echo "The container already has Pixi on PATH. The installer test requires a container without Pixi."
               exit 1
           fi
           ./scripts/run_sciview_unix.sh --setup-only --no-auto-pull
