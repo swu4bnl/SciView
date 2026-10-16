@@ -5,6 +5,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest
+from PyQt5 import sip
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QLabel, QListWidgetItem, QWidget
 
@@ -20,10 +21,11 @@ from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
 from sciview.masking.layers import MaskLayer, compose_mask_layers
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def qapp():
+    # Headless Qt can segfault while destroying native objects after pytest exits.
+    sip.setdestroyonexit(False)
     app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
     return app
 
 
