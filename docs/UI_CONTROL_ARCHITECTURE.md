@@ -37,7 +37,7 @@ The UI stack is intentionally layered. Think of each layer as owning a different
 - Module: src/sciview/interfaces/theme/app_style.py
 - Responsibility: token definitions, style templates, style helper APIs, runtime theme refresh.
 - Key point: this is the primary source of truth for styling decisions.
-- The viewer toolbar is one `QGridLayout`: tool icons in row 0, captions in row 1. The tab-owned display controls widget is inserted as a single item spanning both rows, so Qt's own row-height computation keeps it vertically aligned with the tool cells — no manual height matching or runtime widget measurement needed. Tool buttons keep the standard `toolbar_symbol_button_size`/`tab_icon_size` used everywhere else.
+- The viewer toolbar uses one `QGridLayout` row containing icon-over-caption cells and the tab-owned, two-row display-controls widget. Stretchable gap columns separate tool groups while display controls stay compact. `AppStyle.viewer_toolbar_button_size()` derives tool dimensions from shared control and typography tokens; `viewer_toolbar_icon_size()` selects a pre-rendered icon size. Layout does not require runtime widget measurement or resize-event synchronization, and buttons reuse the shared `compact_button` style.
 
 4. Theme tooling layer (development-time)
 - Module: src/sciview/dev/style_inspector.py
