@@ -244,14 +244,14 @@ def resolve_matplotlib_colormap(name: str):
     return LinearSegmentedColormap.from_list(name, _ordered_palette_colors(palette.colors), N=256)
 
 VIEWER_TOOLBAR_ACTIONS = (
-    ViewerToolbarAction("pan", "Pan", "Pan image: drag with the left mouse button."),
-    ViewerToolbarAction("zoom", "Zoom", "Rectangular zoom: drag a box with the left mouse button."),
+    ViewerToolbarAction("pan", "Pan", "Drag with the left mouse button to move the image."),
+    ViewerToolbarAction("zoom", "Zoom", "Drag a box with the left mouse button to zoom into an area."),
     ViewerToolbarAction("beam_center", "Beam Center", "Show or hide the calibrated beam center."),
     ViewerToolbarAction("mask", "Mask", "Show or hide the active mask."),
-    ViewerToolbarAction("home", "Home", "Reset the image view to the full detector frame."),
+    ViewerToolbarAction("home", "Home", "Show the full image."),
     ViewerToolbarAction("auto", "Auto", "Set color limits from the current image."),
-    ViewerToolbarAction("copy", "Copy", "Copy the rendered image view to the clipboard."),
-    ViewerToolbarAction("save", "Save", "Save the rendered view with the current colormap and overlays."),
+    ViewerToolbarAction("copy", "Copy", "Copy the image view to the clipboard. Include the current colors and overlays."),
+    ViewerToolbarAction("save", "Save", "Save the image view as a PNG file. Include the current colors and overlays."),
 )
 
 VIEWER_TOOLBAR_GROUPS = (

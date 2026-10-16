@@ -594,7 +594,7 @@ class ImageBrowserApp(BaseImageTab):
         
         self.folder_up_button = QPushButton()
         self.folder_up_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowUp))
-        self.folder_up_button.setToolTip("Go to parent folder")
+        self.folder_up_button.setToolTip("Open the parent folder")
         apply_toolbar_symbol_button_style(self.folder_up_button)
         self.folder_up_button.clicked.connect(self._navigate_folder_up)
         self.folder_up_button.setEnabled(False)
@@ -650,7 +650,7 @@ class ImageBrowserApp(BaseImageTab):
         controls_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
 
         self.folder_play_button = QPushButton("▶")
-        self.folder_play_button.setToolTip("Play visible images")
+        self.folder_play_button.setToolTip("Play the images in this list")
         apply_toolbar_symbol_button_style(self.folder_play_button)
         self._apply_tool_icon(self.folder_play_button, 'tool_play.svg')
         self.folder_play_button.setCheckable(True)
@@ -661,18 +661,20 @@ class ImageBrowserApp(BaseImageTab):
         apply_toolbar_symbol_button_style(self.folder_playback_speed_button)
         self._update_folder_playback_speed_button()
         self.folder_playback_speed_button.clicked.connect(self._cycle_folder_playback_speed)
+        self.folder_playback_speed_button.hide()
         controls_layout.addWidget(self.folder_playback_speed_button)
 
         self.folder_loop_button = QPushButton("∞")
-        self.folder_loop_button.setToolTip("Loop playback")
+        self.folder_loop_button.setToolTip("Repeat playback")
         self.folder_loop_button.setCheckable(True)
         apply_toolbar_symbol_button_style(self.folder_loop_button)
         self._apply_tool_icon(self.folder_loop_button, 'tool_infinite.svg')
+        self.folder_loop_button.hide()
         controls_layout.addWidget(self.folder_loop_button)
         controls_layout.addStretch()
 
         self.add_all_folder_button = QPushButton()
-        self.add_all_folder_button.setToolTip("Add visible images to Batch")
+        self.add_all_folder_button.setToolTip("Add all images in this list to Batch")
         apply_toolbar_symbol_button_style(self.add_all_folder_button)
         self._apply_tool_icon(self.add_all_folder_button, 'tool_add_all.svg')
         self.add_all_folder_button.clicked.connect(self._load_from_folder)
@@ -684,7 +686,7 @@ class ImageBrowserApp(BaseImageTab):
         controls_layout.addWidget(self.collection_status_label)
 
         self.clear_collection_button = QPushButton()
-        self.clear_collection_button.setToolTip("Clear images kept in Batch")
+        self.clear_collection_button.setToolTip("Remove previously added images from Batch. Files stay on disk.")
         apply_toolbar_symbol_button_style(self.clear_collection_button)
         self._apply_tool_icon(self.clear_collection_button, 'tool_delete.svg')
         self.clear_collection_button.clicked.connect(self._clear_collected_folders)
@@ -1214,6 +1216,8 @@ class ImageBrowserApp(BaseImageTab):
         if self.folder_play_button.isChecked():
             if self.folder_files_list.currentRow() < self._folder_dir_count:
                 self._select_folder_browser_row(self._folder_dir_count)
+            self.folder_playback_speed_button.show()
+            self.folder_loop_button.show()
             self._apply_tool_icon(self.folder_play_button, 'tool_pause.svg')
             self.folder_play_button.setToolTip("Pause playback")
             self.folder_play_timer.start(self._folder_playback_interval_ms())
@@ -1239,7 +1243,7 @@ class ImageBrowserApp(BaseImageTab):
     def _update_folder_playback_speed_button(self) -> None:
         speed = ("Slow", "Medium", "Fast")[self._folder_playback_rate_index]
         self.folder_playback_speed_button.setAccessibleName(f"Playback speed: {speed}")
-        self.folder_playback_speed_button.setToolTip(f"{speed} playback; click to change speed")
+        self.folder_playback_speed_button.setToolTip(f"Playback speed: {speed.lower()}. Click to change.")
         self._apply_tool_icon(
             self.folder_playback_speed_button,
             f'tool_speed_{self._folder_playback_rate_index + 1}.svg',
@@ -1251,7 +1255,7 @@ class ImageBrowserApp(BaseImageTab):
             self.folder_play_timer.stop()
         if hasattr(self, 'folder_play_button'):
             self.folder_play_button.setChecked(False)
-            self.folder_play_button.setToolTip("Play visible images")
+            self.folder_play_button.setToolTip("Play the images in this list")
             self._apply_tool_icon(self.folder_play_button, 'tool_play.svg')
 
     def _load_browser_icon(self, filename: str):
