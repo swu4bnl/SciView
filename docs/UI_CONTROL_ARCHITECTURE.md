@@ -18,6 +18,12 @@ The main goal is a single-source, predictable UI system that stays maintainable 
 - Focus guidance on the main workflow and meaningful decisions, not self-explanatory secondary controls.
 - Preserve precision where it affects scientific interpretation, reproducibility, or results.
 
+The upper-right text-size buttons (Ctrl+- / Ctrl++) and separate high-contrast
+toggle use the existing `FONTS.scale_pct` and `AppStyle` palette and shared
+refresh path; settings apply to the current session. Contrast mode restores the
+preceding theme when disabled, and follows the light/dark toggle while enabled.
+Text scaling changes interface typography, not scientific export style settings.
+
 ## Layer Map
 
 The UI stack is intentionally layered. Think of each layer as owning a different class of decision.
@@ -48,6 +54,8 @@ translated.
 - Module: src/sciview/dev/style_inspector.py
 - Responsibility: live editing for CSS tokens, typography, and selected layout values.
 - Key point: this is an editor for the design system, not a separate style system.
+- The corner inspector button and Ctrl+Shift+I are available by default.
+  Automatic file hot-reload remains opt-in with `DEV_TOOLS=1`.
 
 1. Widget and tab consumption layer
 - Modules: tabs/*.py and src/sciview/interfaces/stable_qt/widgets/image_viewer.py

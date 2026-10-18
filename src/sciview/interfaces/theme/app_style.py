@@ -7,12 +7,16 @@ This module provides consistent styling across all tabs and components.
 
 from pathlib import Path
 from copy import deepcopy
+from typing import TYPE_CHECKING
 import xml.etree.ElementTree as ET
 
 from PyQt5.QtWidgets import QApplication, QPushButton, QToolButton
 from PyQt5.QtCore import Qt, QSize, QTimer
 from PyQt5.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap
 from PyQt5.QtSvg import QSvgRenderer
+
+if TYPE_CHECKING:
+    from pyqtgraph import PlotItem
 
 
 class AppStyle:
@@ -46,6 +50,23 @@ class AppStyle:
     CORNER_BUTTON_UI = {
         'spacing': 2,
     }
+    TEXT_SCALE_OPTIONS = (75, 100, 125, 150, 175, 200, 250)
+    HIGH_CONTRAST_COLORS = {
+        'dark': {
+            'window': '#000000', 'base': '#000000', 'text': '#ffffff',
+            'muted': '#bfbfbf', 'grid': '#bfbfbf', 'accent': '#ffff00',
+            'border': '#ffffff', 'control_bg': '#000000', 'control_hover': '#333333',
+            'checked_fg': '#000000', 'icon': '#ffffff',
+        },
+        'light': {
+            'window': '#ffffff', 'base': '#ffffff', 'text': '#000000',
+            'muted': '#595959', 'grid': '#595959', 'accent': '#000080',
+            'border': '#000000', 'control_bg': '#ffffff', 'control_hover': '#e0e0e0',
+            'checked_fg': '#ffffff', 'icon': '#000000',
+        },
+    }
+    _STANDARD_APPEARANCE_PROPERTY = 'sciview_standard_appearance'
+    _GLOBAL_STYLE_PROPERTY = 'sciview_global_style'
 
     FORM_UI = {
         'section_label_width': 58,
@@ -63,6 +84,7 @@ class AppStyle:
         'app_update': 'app_update.svg',
         'sci_update': 'sci_update.svg',
         'clear_session': 'tool_delete.svg',
+        'high_contrast': 'tool_contrast.svg',
     }
 
     TAB_ICON_FILES = {
@@ -278,7 +300,7 @@ class AppStyle:
         'primary_button': """
             QPushButton {{
                 background-color: {primary};
-                color: white;
+                color: {checked_fg};
                 font-weight: 500;
                 font-size: {body_font};
                 border: none;
@@ -475,7 +497,7 @@ class AppStyle:
             }}
             QPushButton:checked {{
                 background-color: {border_active};
-                color: white;
+                color: {checked_fg};
                 border-color: {border_active};
             }}
             QPushButton:disabled {{
@@ -504,7 +526,7 @@ class AppStyle:
             }}
             QPushButton:checked {{
                 background-color: {border_active};
-                color: white;
+                color: {checked_fg};
                 border-color: {border_active};
             }}
             QPushButton:disabled {{
@@ -573,13 +595,63 @@ class AppStyle:
     @classmethod
     def apply_global_style(cls, app, preserve_existing=False):
         """Apply SciView's global rules, optionally over an external theme."""
+        base = app.styleSheet() if preserve_existing else ""
+        previous_rules = app.property(cls._GLOBAL_STYLE_PROPERTY) or ""
+        if previous_rules and base.endswith(previous_rules):
+            base = base[:-len(previous_rules)].rstrip()
         base_styles = [
-            app.styleSheet() if preserve_existing else "",
+            f"QWidget {{ font-size: {cls.font_px('body')}px; }}",
             cls.tab_widget_stylesheet(),
             *(cls.format_style(style_key) for style_key in cls.GLOBAL_STYLE_KEYS),
         ]
-        app.setStyleSheet("\n".join(style for style in base_styles if style.strip()))
+        rules = "\n".join(style for style in base_styles if style.strip())
+        app.setProperty(cls._GLOBAL_STYLE_PROPERTY, rules)
+        app.setStyleSheet("\n".join(style for style in (base, rules) if style.strip()))
         cls.refresh_runtime_theme(app, clear_widget_styles=False)
+
+    @classmethod
+    def set_high_contrast(cls, enabled: bool, app: QApplication | None = None) -> None:
+        """Switch contrast mode without discarding the preceding theme."""
+        app = app or QApplication.instance()
+        if app is None or enabled == cls.high_contrast_enabled(app):
+            return
+        if not enabled:
+            previous = app.property(cls._STANDARD_APPEARANCE_PROPERTY)
+            app.setProperty(cls.THEME_KEY_PROPERTY, previous['theme'])
+            app.setPalette(previous['palette'])
+            app.setStyleSheet(previous['stylesheet'])
+            app.setProperty(cls._GLOBAL_STYLE_PROPERTY, previous['rules'])
+            app.setProperty(cls._STANDARD_APPEARANCE_PROPERTY, None)
+            cls.apply_global_style(app, preserve_existing=True)
+            return
+
+        app.setProperty(cls._STANDARD_APPEARANCE_PROPERTY, {
+            'theme': cls.current_theme_key(app),
+            'palette': app.palette(),
+            'stylesheet': app.styleSheet(),
+            'rules': app.property(cls._GLOBAL_STYLE_PROPERTY),
+        })
+        variant = 'dark' if cls.theme_is_dark(app) else 'light'
+        app.setProperty(cls.THEME_KEY_PROPERTY, f'high-contrast:{variant}')
+        colors = cls.theme_colors(app)
+        palette = QPalette(app.palette())
+        for role, key in (
+            (QPalette.Window, 'window'), (QPalette.WindowText, 'text'),
+            (QPalette.Base, 'base'), (QPalette.AlternateBase, 'control_hover'),
+            (QPalette.Text, 'text'), (QPalette.Button, 'control_bg'),
+            (QPalette.ButtonText, 'text'), (QPalette.Highlight, 'accent'),
+            (QPalette.HighlightedText, 'checked_fg'), (QPalette.ToolTipBase, 'base'),
+            (QPalette.ToolTipText, 'text'), (QPalette.Link, 'accent'),
+        ):
+            palette.setColor(role, colors[key])
+        for role in (QPalette.WindowText, QPalette.Text, QPalette.ButtonText):
+            palette.setColor(QPalette.Disabled, role, colors['muted'])
+        app.setPalette(palette)
+        cls.apply_global_style(app)
+
+    @classmethod
+    def high_contrast_enabled(cls, app: QApplication | None = None) -> bool:
+        return str(cls.current_theme_key(app) or '').startswith('high-contrast:')
 
     @classmethod
     def tab_widget_stylesheet(cls):
@@ -899,7 +971,7 @@ class AppStyle:
     def theme_is_dark(cls, app=None):
         """Return True when the current theme should be treated as dark."""
         theme_key = str(cls.current_theme_key(app) or '').lower()
-        if any(token in theme_key for token in ('qdarkstyle', 'qdarktheme:dark', 'dark_')):
+        if any(token in theme_key for token in ('qdarkstyle', 'qdarktheme:dark', 'high-contrast:dark', 'dark_')):
             return True
 
         app = app or QApplication.instance()
@@ -912,6 +984,12 @@ class AppStyle:
         """Return theme-derived colors for icons and plotting surfaces."""
         app = app or QApplication.instance()
         theme_key = str(cls.current_theme_key(app) or '')
+        if cls.high_contrast_enabled(app):
+            variant = 'dark' if cls.theme_is_dark(app) else 'light'
+            return {
+                role: QColor(value)
+                for role, value in cls.HIGH_CONTRAST_COLORS[variant].items()
+            }
         if app is None:
             return {
                 'window': QColor('#f5f5f5'),
@@ -1136,7 +1214,10 @@ class AppStyle:
         if family:
             font.setFamily(family.split(',')[0].strip().strip("'\""))
         font.setPixelSize(cls.font_px(token_name))
-        font.setWeight(weight)
+        font.setWeight({
+            400: QFont.Normal, 500: QFont.Medium,
+            600: QFont.DemiBold, 700: QFont.Bold,
+        }.get(weight, min(99, max(0, weight))))
         return font
 
     @classmethod
@@ -1232,6 +1313,24 @@ class AppStyle:
         return max(1.0, round(px_size * 0.75, 1))
 
     @classmethod
+    def apply_pyqtgraph_plot_theme(cls, plot: "PlotItem") -> None:
+        """Refresh plot annotations without changing data or display ranges."""
+        colors = cls.theme_colors()
+        for name in ('left', 'bottom', 'right', 'top'):
+            axis = plot.getAxis(name)
+            axis.setTickFont(cls.make_font('body'))
+            axis.setPen(colors['text'])
+            axis.setTextPen(colors['text'])
+            axis.setLabel(
+                axis.labelText, units=axis.labelUnits,
+                **{
+                    **axis.labelStyle,
+                    'color': colors['text'].name(),
+                    'font-size': f"{cls.font_px('body')}px",
+                },
+            )
+
+    @classmethod
     def apply_matplotlib_figure_theme(cls, figure):
         """Apply theme-derived colors to a Matplotlib figure and its axes."""
         colors = cls.theme_colors()
@@ -1280,6 +1379,7 @@ class AppStyle:
             cls.apply_font_role(widget)
             if isinstance(widget, QPushButton):
                 if widget.property("sciview_compact_button"):
+                    cls.apply_widget_style(widget, 'compact_button')
                     compact_size = cls.corner_button_size()
                     widget.setMinimumHeight(compact_size.height())
                     widget.setMinimumWidth(compact_size.width())

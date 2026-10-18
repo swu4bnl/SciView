@@ -1000,9 +1000,7 @@ class MaskApp(BaseImageTab):
         if hasattr(self, 'threshold_plot'):
             colors = AppStyle.theme_colors()
             self.threshold_plot.setBackground(colors['base'].name())
-            bottom_axis = self.threshold_plot.getAxis('bottom')
-            bottom_axis.setPen(colors['text'])
-            bottom_axis.setTextPen(colors['text'])
+            AppStyle.apply_pyqtgraph_plot_theme(self.threshold_plot.getPlotItem())
             had_preview = self._threshold_preview is not None
             self._refresh_threshold_histogram(reset_thresholds=False)
             if had_preview:

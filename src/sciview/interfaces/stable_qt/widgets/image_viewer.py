@@ -722,10 +722,10 @@ class ImageViewer(QWidget):
         self._graphics.setBackground(background)
         self._view_box.setBackgroundColor(background)
         self._message_item.setColor(muted_color)
-        self._plot_item.getAxis("left").setPen(text_color)
-        self._plot_item.getAxis("left").setTextPen(text_color)
-        self._plot_item.getAxis("bottom").setPen(text_color)
-        self._plot_item.getAxis("bottom").setTextPen(text_color)
+        AppStyle.apply_pyqtgraph_plot_theme(self._plot_item)
+        self._histogram.axis.setTickFont(AppStyle.make_font('body'))
+        self._histogram.axis.setTextPen(text_color)
+        self._histogram.axis.setPen(text_color)
 
         AppStyle.apply_widget_style(self._toolbar, 'viewer_toolbar')
         for key, button in self._toolbar_buttons.items():

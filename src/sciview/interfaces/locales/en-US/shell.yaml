@@ -11,7 +11,7 @@ shell.i:
   text: I
   context: Abbreviated button caption for opening the developer Style Inspector.
 shell.open_style_inspector_dev_ctrl_shift:
-  text: Open Style Inspector [dev] (Ctrl+Shift+I)
+  text: Open Style Inspector (Ctrl+Shift+I)
   context: Tooltip in the main application window.
 shell.clear_saved_session:
   text: Clear saved session
@@ -34,9 +34,6 @@ shell.settext_2:
 shell.switch_to_dark_mode_ctrl_d:
   text: Switch to dark mode (Ctrl+D)
   context: Tooltip in the main application window.
-shell.style_inspector_is_available_only_when:
-  text: Style Inspector is available only when DEV_TOOLS=1
-  context: Status message in the main application window.
 shell.dev_tools_active_hot_reload_on:
   text: 'Dev tools active: hot-reload ON  |  Ctrl+Shift+I or corner I button = Style Inspector'
   context: Status message in the main application window.
@@ -288,3 +285,15 @@ shell.scianalysis_gui_started_for_beamline_name_2:
   context: Status msg in the main application window.
   placeholders:
     beamline_name: Configured beamline name; do not translate the supplied name.
+shell.text_smaller:
+  text: Smaller text (Ctrl+-)
+  context: Button and keyboard action to decrease interface text size.
+shell.text_larger:
+  text: Larger text (Ctrl++)
+  context: Button and keyboard action to increase interface text size.
+shell.high_contrast:
+  text: High contrast
+  context: Toggle for a high-contrast interface palette using the current light or dark mode.
+shell.theme_unavailable:
+  text: Could not switch the theme.
+  context: Status when the requested interface theme cannot be applied.

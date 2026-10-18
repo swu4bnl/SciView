@@ -1,7 +1,8 @@
 """
-Dev-only style inspector and hot-reload watcher.
+Style inspector and optional development hot-reload watcher.
 
-Activated at startup only when DEV_TOOLS=1 is set, or via Ctrl+Shift+I.
+The inspector is available from the corner button or Ctrl+Shift+I.
+The file watcher starts only when DEV_TOOLS=1 is set.
 
 Hot-reload:   QFileSystemWatcher monitors app_style.py.  On every save the
               global stylesheet is re-applied instantly — no restart needed.

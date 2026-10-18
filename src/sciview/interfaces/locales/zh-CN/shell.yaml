@@ -11,7 +11,7 @@ shell.i:
   text: "I"
   context: Abbreviated button caption for opening the developer Style Inspector.
 shell.open_style_inspector_dev_ctrl_shift:
-  text: "打开样式检查器 [开发] (Ctrl+Shift+I)"
+  text: "打开样式检查器 (Ctrl+Shift+I)"
   context: Tooltip in the main application window.
 shell.clear_saved_session:
   text: "清除已保存的会话"
@@ -34,9 +34,6 @@ shell.settext_2:
 shell.switch_to_dark_mode_ctrl_d:
   text: "切换到深色模式 (Ctrl+D)"
   context: Tooltip in the main application window.
-shell.style_inspector_is_available_only_when:
-  text: "仅在 DEV_TOOLS=1 时可使用样式检查器"
-  context: Status message in the main application window.
 shell.dev_tools_active_hot_reload_on:
   text: "开发工具已启用：热重载开启 | 按 Ctrl+Shift+I 或单击角落的 I 按钮打开样式检查器"
   context: Status message in the main application window.
@@ -286,3 +283,15 @@ shell.scianalysis_gui_started_for_beamline_name_2:
   context: Status msg in the main application window.
   placeholders:
     beamline_name: Configured beamline name; do not translate the supplied name.
+shell.text_smaller:
+  text: 缩小文字 (Ctrl+-)
+  context: Button and keyboard action to decrease interface text size.
+shell.text_larger:
+  text: 放大文字 (Ctrl++)
+  context: Button and keyboard action to increase interface text size.
+shell.high_contrast:
+  text: 高对比度
+  context: Toggle for a high-contrast interface palette using the current light or dark mode.
+shell.theme_unavailable:
+  text: 无法切换主题。
+  context: Status when the requested interface theme cannot be applied.

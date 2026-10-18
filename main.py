@@ -47,7 +47,7 @@ sys.path.insert(0, os.path.join(app_dir, 'src'))
 
 from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QMainWindow, QMessageBox, QPushButton, QTabWidget, QLabel,
-    QWidget
+    QWidget, QAction
 )
 from PyQt5.QtCore import Qt, QTimer
 
@@ -136,7 +136,6 @@ class SciAnaApp(QMainWindow):
         self.style_inspector_button.setProperty("sciview_compact_button", True)
         self.style_inspector_button.setToolTip(tr('shell.open_style_inspector_dev_ctrl_shift'))
         self.style_inspector_button.setFixedSize(corner_button_size)
-        self.style_inspector_button.setEnabled(False)
         self.style_inspector_button.clicked.connect(self._show_style_inspector)
 
         self.theme_toggle_button = QPushButton()
@@ -144,6 +143,32 @@ class SciAnaApp(QMainWindow):
         self.theme_toggle_button.setFixedSize(corner_button_size)
         self.theme_toggle_button.clicked.connect(self._toggle_dark_light_theme)
         self._update_theme_toggle_icon()
+
+        self.text_smaller_button = QPushButton("A-")
+        self.text_larger_button = QPushButton("A+")
+        for button, message_id in (
+            (self.text_smaller_button, 'shell.text_smaller'),
+            (self.text_larger_button, 'shell.text_larger'),
+        ):
+            button.setProperty("sciview_compact_button", True)
+            button.setFixedSize(corner_button_size)
+            button.setAccessibleName(tr(message_id))
+            button.setToolTip(tr(message_id))
+        self.text_smaller_button.clicked.connect(lambda: self._step_text_scale(False))
+        self.text_larger_button.clicked.connect(lambda: self._step_text_scale(True))
+
+        self.high_contrast_button = QPushButton()
+        self.high_contrast_button.setProperty("sciview_compact_button", True)
+        self.high_contrast_button.setFixedSize(corner_button_size)
+        self.high_contrast_button.setAccessibleName(tr('shell.high_contrast'))
+        self.high_contrast_button.setToolTip(tr('shell.high_contrast'))
+        self.high_contrast_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['high_contrast'])
+        )
+        self.high_contrast_button.setIconSize(AppStyle.corner_button_icon_size())
+        self.high_contrast_button.setCheckable(True)
+        self.high_contrast_button.setChecked(AppStyle.high_contrast_enabled())
+        self.high_contrast_button.toggled.connect(AppStyle.set_high_contrast)
 
         self.clear_session_button = QPushButton()
         self.clear_session_button.setAccessibleName(tr('shell.clear_saved_session'))
@@ -162,6 +187,9 @@ class SciAnaApp(QMainWindow):
         corner_layout = QHBoxLayout(corner_widget)
         corner_layout.setContentsMargins(0, 0, 0, 0)
         corner_layout.setSpacing(AppStyle.CORNER_BUTTON_UI['spacing'])
+        corner_layout.addWidget(self.text_smaller_button)
+        corner_layout.addWidget(self.text_larger_button)
+        corner_layout.addWidget(self.high_contrast_button)
         corner_layout.addWidget(self.theme_toggle_button)
         corner_layout.addWidget(self.refresh_button)
         corner_layout.addWidget(self.clear_session_button)
@@ -195,19 +223,49 @@ class SciAnaApp(QMainWindow):
         self.refresh_shortcut.activated.connect(self._refresh_current_tab)
         self.theme_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
         self.theme_shortcut.activated.connect(self._toggle_dark_light_theme)
+        self.text_smaller_action = QAction(tr('shell.text_smaller'), self)
+        self.text_smaller_action.setShortcut(QKeySequence("Ctrl+-"))
+        self.text_smaller_action.triggered.connect(self.text_smaller_button.click)
+        self.addAction(self.text_smaller_action)
+        self.text_larger_action = QAction(tr('shell.text_larger'), self)
+        self.text_larger_action.setShortcuts([
+            QKeySequence("Ctrl++"), QKeySequence("Ctrl+="), QKeySequence("Ctrl+Shift++"),
+        ])
+        self.text_larger_action.triggered.connect(self.text_larger_button.click)
+        self.addAction(self.text_larger_action)
 
-        # Dev tools: hot-reload + style inspector (only when DEV_TOOLS=1)
+        # File hot-reload remains opt-in; the inspector is always available.
         self._style_hot_reloader = None
-        self._inspector_shortcut = None
+        self._style_inspector = None
+        self._inspector_shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
+        self._inspector_shortcut.setContext(Qt.ApplicationShortcut)
+        self._inspector_shortcut.activated.connect(self._show_style_inspector)
         if os.environ.get("DEV_TOOLS") == "1":
             self._start_dev_tools()
 
     def _toggle_dark_light_theme(self):
         """Switch between qdarktheme dark and light."""
-        if AppStyle.theme_is_dark():
-            AppStyle.apply_qdarktheme('light')
-        else:
-            AppStyle.apply_qdarktheme('dark')
+        variant = 'light' if AppStyle.theme_is_dark() else 'dark'
+        high_contrast = AppStyle.high_contrast_enabled()
+        if high_contrast:
+            AppStyle.set_high_contrast(False)
+        if not AppStyle.apply_qdarktheme(variant):
+            self.show_status(tr('shell.theme_unavailable'))
+        if high_contrast:
+            AppStyle.set_high_contrast(True)
+
+    def _set_text_scale(self, percent):
+        AppStyle.update_font_tokens({'scale_pct': percent})
+        AppStyle.apply_global_style(QApplication.instance(), preserve_existing=True)
+
+    def _step_text_scale(self, increase: bool) -> None:
+        current = int(AppStyle.FONTS['scale_pct'])
+        options = AppStyle.TEXT_SCALE_OPTIONS
+        candidates = [scale for scale in options if scale > current] if increase else [
+            scale for scale in options if scale < current
+        ]
+        if candidates:
+            self._set_text_scale(min(candidates) if increase else max(candidates))
 
     def _update_theme_toggle_icon(self):
         if AppStyle.theme_is_dark():
@@ -218,23 +276,22 @@ class SciAnaApp(QMainWindow):
             self.theme_toggle_button.setToolTip(tr('shell.switch_to_dark_mode_ctrl_d'))
 
     def _show_style_inspector(self):
-        """Open the dev style inspector when dev tools are enabled."""
-        if self._style_hot_reloader is None:
-            self.show_status(tr('shell.style_inspector_is_available_only_when'))
+        """Open the shared style inspector on demand."""
+        if self._style_hot_reloader is not None:
+            self._style_hot_reloader.show_inspector()
             return
-        self._style_hot_reloader.show_inspector()
+        if self._style_inspector is None:
+            from sciview.dev.style_inspector import StyleInspector
+            self._style_inspector = StyleInspector(self)
+        self._style_inspector.show()
+        self._style_inspector.raise_()
+        self._style_inspector.activateWindow()
 
     def _start_dev_tools(self):
-        """Start hot-reloader and register Ctrl+Shift+I for the style inspector."""
+        """Start optional file hot-reload."""
         try:
             from sciview.dev.style_inspector import StyleHotReloader
-            from PyQt5.QtWidgets import QShortcut
-            from PyQt5.QtGui import QKeySequence
             self._style_hot_reloader = StyleHotReloader()
-            self._inspector_shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
-            self._inspector_shortcut.setContext(Qt.ApplicationShortcut)
-            self._inspector_shortcut.activated.connect(self._show_style_inspector)
-            self.style_inspector_button.setEnabled(True)
             self.show_status(tr('shell.dev_tools_active_hot_reload_on'))
         except Exception as exc:
             print(f"[dev tools] failed to start: {exc}")
@@ -398,6 +455,17 @@ class SciAnaApp(QMainWindow):
 
         self.style_inspector_button.setFixedSize(corner_button_size)
         self.theme_toggle_button.setFixedSize(corner_button_size)
+        self.text_smaller_button.setFixedSize(corner_button_size)
+        self.text_larger_button.setFixedSize(corner_button_size)
+        scale = int(AppStyle.FONTS['scale_pct'])
+        self.text_smaller_button.setEnabled(scale > min(AppStyle.TEXT_SCALE_OPTIONS))
+        self.text_larger_button.setEnabled(scale < max(AppStyle.TEXT_SCALE_OPTIONS))
+        self.high_contrast_button.setFixedSize(corner_button_size)
+        self.high_contrast_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['high_contrast'])
+        )
+        self.high_contrast_button.setIconSize(corner_icon_size)
+        self.high_contrast_button.setChecked(AppStyle.high_contrast_enabled())
 
     def publish_shared_image(self, image_data, image_path=None, source_tab=None):
         """Publish active image into shared app state and propagate to tabs."""
