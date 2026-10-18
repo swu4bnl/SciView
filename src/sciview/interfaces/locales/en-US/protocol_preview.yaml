@@ -1,0 +1,416 @@
+protocol_preview.tab.raw_image:
+  text: "Raw Image"
+  context: "Visualization tab containing the unprocessed input image."
+protocol_preview.tab.configuration:
+  text: "Configuration"
+  context: "Controls tab for calibration, mask, and image display settings."
+protocol_preview.tab.protocols:
+  text: "Protocols"
+  context: "Controls tab for arranging and running a protocol stack."
+protocol_preview.tab.info:
+  text: "Info"
+  context: "Controls tab showing image, calibration, mask, and protocol details."
+protocol_preview.calibration_mask.title:
+  text: "Calibration & Mask"
+  context: "Section heading for loading shared calibration and mask files."
+protocol_preview.calibration.load:
+  text: "Load Calibration File"
+  context: "Button opening a file picker for the calibration configuration."
+protocol_preview.mask.load:
+  text: "Load Mask File"
+  context: "Button opening a file picker for an image mask."
+protocol_preview.image_display.title:
+  text: "Image Display"
+  context: "Section heading for the input image color mapping and limits."
+protocol_preview.colormap:
+  text: "Color Map:"
+  context: "Field label for selecting the color map used to display the image."
+protocol_preview.color_limits:
+  text: "Color Limits:"
+  context: "Field label grouping the lower and upper image color limits."
+protocol_preview.minimum:
+  text: "Min:"
+  context: "Field label for the lower image color limit."
+protocol_preview.maximum:
+  text: "Max:"
+  context: "Field label for the upper image color limit."
+protocol_preview.export_settings.title:
+  text: "Export Settings"
+  context: "Section heading for image-figure dimensions, resolution, and typography."
+protocol_preview.figure_size:
+  text: "Figure Size:"
+  context: "Field label for the output figure dimensions."
+protocol_preview.width_short:
+  text: "W:"
+  context: "Abbreviated width label for the figure-size control."
+protocol_preview.height_short:
+  text: "H:"
+  context: "Abbreviated height label for the figure-size control."
+protocol_preview.inches:
+  text: "in"
+  context: "Unit label indicating figure dimensions are in inches."
+protocol_preview.dpi:
+  text: "DPI:"
+  context: "Field label for dots-per-inch export resolution."
+protocol_preview.margins:
+  text: "Margins (L/R/T/B):"
+  context: "Field label for left, right, top, and bottom figure margins."
+protocol_preview.font_settings.title:
+  text: "Font Settings"
+  context: "Section heading for exported figure font family and size."
+protocol_preview.font:
+  text: "Font:"
+  context: "Field label for selecting the exported figure font family."
+protocol_preview.size:
+  text: "Size:"
+  context: "Field label for the exported figure font size."
+protocol_preview.points:
+  text: "pt"
+  context: "Unit label indicating the font size is measured in points."
+protocol_preview.image_rendering.title:
+  text: "Image Rendering"
+  context: "Section heading for selecting image shading behavior."
+protocol_preview.shading:
+  text: "Shading:"
+  context: "Field label for selecting the image rendering shading method."
+protocol_preview.loaded_configuration:
+  text: "Loaded Configuration"
+  context: "Heading above the current calibration, mask, and protocol summary."
+protocol_preview.refresh_info:
+  text: "Refresh Info"
+  context: "Button that rebuilds the displayed configuration summary."
+protocol_preview.info.status_heading:
+  text: "=== CONFIGURATION STATUS ==="
+  context: "Heading for the image, calibration, mask, and protocol status summary."
+protocol_preview.info.image_heading:
+  text: "IMAGE:"
+  context: "Section heading for input image availability and dimensions."
+protocol_preview.info.unknown:
+  text: "Unknown"
+  context: "Value shown when the input image dimensions are unavailable."
+protocol_preview.info.loaded:
+  text: "✓ Loaded"
+  context: "Status marker indicating that image, calibration, or mask data is loaded."
+protocol_preview.info.shape:
+  text: "Shape: {shape}"
+  context: "Image information line displaying the array dimensions."
+  placeholders:
+    shape: "Image array shape."
+protocol_preview.info.not_loaded:
+  text: "✗ Not loaded"
+  context: "Status marker indicating that no input image is loaded."
+protocol_preview.info.calibration_heading:
+  text: "CALIBRATION:"
+  context: "Section heading for the current calibration summary."
+protocol_preview.info.calibration.file:
+  text: "file"
+  context: "Name of the calibration configuration file shown in the summary."
+protocol_preview.info.calibration.wavelength:
+  text: "wavelength"
+  context: "Calibration summary field for the X-ray wavelength."
+protocol_preview.info.calibration.image_size:
+  text: "image_size"
+  context: "Calibration summary field for detector image dimensions."
+protocol_preview.info.calibration.pixel_size_um:
+  text: "pixel_size_um"
+  context: "Calibration summary field for detector pixel size in micrometers."
+protocol_preview.info.calibration.beam_position:
+  text: "beam_position"
+  context: "Calibration summary field for the beam-center position."
+protocol_preview.info.calibration.distance_m:
+  text: "distance_m"
+  context: "Calibration summary field for sample-to-detector distance in meters."
+protocol_preview.info.using_defaults:
+  text: "✗ Using defaults"
+  context: "Status marker indicating that calibration defaults are in use."
+protocol_preview.info.mask_heading:
+  text: "MASK:"
+  context: "Section heading for the current mask summary."
+protocol_preview.info.mask.file:
+  text: "file"
+  context: "Name of the mask file shown in the configuration summary."
+protocol_preview.info.mask.path:
+  text: "path"
+  context: "Filesystem path of the mask file shown in the configuration summary."
+protocol_preview.info.optional_not_loaded:
+  text: "⊘ Optional (not loaded)"
+  context: "Status marker explaining that no optional mask has been loaded."
+protocol_preview.info.protocol_count:
+  text: "PROTOCOLS: {count}"
+  context: "Section heading reporting the number of configured protocols."
+  placeholders:
+    count: "Number of protocols in the stack."
+protocol_preview.protocol_stack.title:
+  text: "Protocol Stack"
+  context: "Heading for the ordered list of protocol steps."
+protocol_preview.protocol_stack.instructions:
+  text: "Add and configure protocols to run in sequence"
+  context: "Guidance explaining how to build an ordered protocol stack."
+protocol_preview.add:
+  text: "Add"
+  context: "Button that opens the menu of available protocol steps."
+protocol_preview.remove:
+  text: "Remove"
+  context: "Button that removes the selected protocol step from the stack."
+protocol_preview.parameters.title:
+  text: "Protocol Parameters"
+  context: "Heading for controls that configure the selected protocol step."
+protocol_preview.parameters.select_to_edit:
+  text: "Select a protocol to edit parameters."
+  context: "Guidance shown before a protocol step is selected for editing."
+protocol_preview.plot_settings.title:
+  text: "Plot Settings"
+  context: "Heading for line width and axis-scale settings used in protocol plots."
+protocol_preview.line_width:
+  text: "Line Width:"
+  context: "Field label for the line width used by plotted protocol results."
+protocol_preview.x_log_scale:
+  text: "X Log Scale"
+  context: "Checkbox enabling a logarithmic x-axis for protocol plots."
+protocol_preview.y_log_scale:
+  text: "Y Log Scale"
+  context: "Checkbox enabling a logarithmic y-axis for protocol plots."
+protocol_preview.export.title:
+  text: "Export"
+  context: "Heading for exporting the configured protocol workflow."
+protocol_preview.format:
+  text: "Format:"
+  context: "Field label for choosing the workflow export file format."
+protocol_preview.export.format_python:
+  text: "Python Script"
+  context: "Export format option that generates an executable Python script."
+protocol_preview.export.preview:
+  text: "Preview Export"
+  context: "Button that opens a preview of the generated workflow file."
+protocol_preview.export.workflow:
+  text: "Export Workflow"
+  context: "Button that saves the configured protocol workflow to a file."
+protocol_preview.run_preview:
+  text: "Run Preview"
+  context: "Button that runs the configured protocol stack on the selected image."
+protocol_preview.dialog.load_calibration:
+  text: "Load Calibration File"
+  context: "File dialog title for opening a calibration YAML file."
+protocol_preview.filter.yaml_all:
+  text: "YAML Files (*.yaml *.yml);;All Files (*)"
+  context: "File dialog filter for YAML files or any file."
+protocol_preview.status.calibration_create_warning:
+  text: "Warning: Could not create SciAnalysis calibration: {error}"
+  context: "Status warning that the loaded calibration could not be converted for SciAnalysis."
+  placeholders:
+    error: "Raw calibration conversion exception."
+protocol_preview.status.calibration_loaded:
+  text: "✓ Loaded calibration: {filename} (shared with all tabs)"
+  context: "Status confirming that calibration was loaded and made available to other tabs."
+  placeholders:
+    filename: "Loaded calibration filename."
+protocol_preview.status.calibration_load_failed:
+  text: "Error loading calibration: {error}"
+  context: "Status explaining that the calibration file could not be loaded."
+  placeholders:
+    error: "Raw calibration-loading exception."
+protocol_preview.dialog.load_mask:
+  text: "Load Mask File"
+  context: "File dialog title for opening a mask file."
+protocol_preview.filter.mask_all:
+  text: "Mask Files (*.png *.tif *.tiff *.xcf *.yaml);;All Files (*)"
+  context: "File dialog filter for supported mask files or any file."
+protocol_preview.status.mask_create_warning:
+  text: "Warning: Could not create SciAnalysis mask: {error}"
+  context: "Status warning that the loaded mask could not be converted for SciAnalysis."
+  placeholders:
+    error: "Raw mask conversion exception."
+protocol_preview.status.mask_loaded:
+  text: "✓ Loaded mask: {filename} (shared with all tabs)"
+  context: "Status confirming that the mask was loaded and made available to other tabs."
+  placeholders:
+    filename: "Loaded mask filename."
+protocol_preview.status.mask_load_failed:
+  text: "Error loading mask: {error}"
+  context: "Status explaining that the mask file could not be loaded."
+  placeholders:
+    error: "Raw mask-loading exception."
+protocol_preview.menu.scianalysis_unavailable:
+  text: "SciAnalysis not available"
+  context: "Disabled menu item shown when SciAnalysis protocol support is unavailable."
+protocol_preview.status.protocol_added:
+  text: "Added protocol: {name}"
+  context: "Status confirming that a protocol step was added to the stack."
+  placeholders:
+    name: "Protocol identifier added to the stack."
+protocol_preview.status.no_protocol_selected:
+  text: "No protocol selected"
+  context: "Status shown when a remove action occurs without a selected protocol."
+protocol_preview.status.protocol_removed:
+  text: "Removed protocol: {name}"
+  context: "Status confirming that a protocol step was removed from the stack."
+  placeholders:
+    name: "Protocol identifier removed from the stack."
+protocol_preview.parameters.select_to_configure:
+  text: "Select a protocol to configure parameters"
+  context: "Guidance shown before a protocol step is selected for configuration."
+protocol_preview.q_min:
+  text: "Q min:"
+  context: "Field label for the lower q boundary in circular-average protocol settings."
+protocol_preview.q_max:
+  text: "Q max:"
+  context: "Field label for the upper q boundary in circular-average protocol settings."
+protocol_preview.q_space_transformation:
+  text: "Q-space image transformation"
+  context: "Description of the selected protocol's Q-space image transformation."
+protocol_preview.resize_factor:
+  text: "Resize Factor:"
+  context: "Field label for the thumbnail resize fraction."
+protocol_preview.status.scianalysis_unavailable:
+  text: "SciAnalysis not available"
+  context: "Status shown when preview execution requires unavailable SciAnalysis support."
+protocol_preview.status.empty_stack:
+  text: "No protocols in stack"
+  context: "Status shown when preview execution is requested with an empty protocol stack."
+protocol_preview.status.image_not_selected:
+  text: "No image file selected. Load image from Image Browser tab."
+  context: "Status prompting the user to select an image before running protocols."
+protocol_preview.status.image_not_found:
+  text: "Image file not found: {path}"
+  context: "Status explaining that the selected image path does not exist."
+  placeholders:
+    path: "Selected image filesystem path."
+protocol_preview.status.preparing_image:
+  text: "Preparing image data..."
+  context: "Status shown while input image data is being prepared for protocol execution."
+protocol_preview.status.invalid_image_data:
+  text: "Invalid image data"
+  context: "Fallback validation message for an unusable image array."
+protocol_preview.status.image_validation_failed:
+  text: "Error: {error}"
+  context: "Status reporting the image validation failure detail."
+  placeholders:
+    error: "Validation detail returned by the image preparation utility."
+protocol_preview.status.image_validated:
+  text: "✓ Image validated: shape={shape}"
+  context: "Status confirming validation and reporting the prepared image dimensions."
+  placeholders:
+    shape: "Validated two-dimensional image shape."
+protocol_preview.status.using_mask:
+  text: "Using loaded mask"
+  context: "Status confirming that a previously loaded mask will be used."
+protocol_preview.status.creating_data:
+  text: "Creating Data2DScattering..."
+  context: "Status shown while the SciAnalysis scattering-data object is created."
+protocol_preview.status.data_created:
+  text: "✓ Created Data2DScattering: shape={shape}"
+  context: "Status confirming object creation and reporting the image dimensions."
+  placeholders:
+    shape: "Scattering-data image shape."
+protocol_preview.status.running_protocol:
+  text: "Running protocol {index}/{count}: {name}..."
+  context: "Progress status identifying the current step in the protocol stack."
+  placeholders:
+    index: "One-based position of the running protocol."
+    count: "Number of enabled protocols."
+    name: "Protocol identifier being run."
+protocol_preview.status.protocol_completed:
+  text: "✓ Completed: {name}"
+  context: "Status confirming successful completion of a protocol step."
+  placeholders:
+    name: "Protocol identifier that completed."
+protocol_preview.status.protocol_failed:
+  text: "Error in {name}: {error}"
+  context: "Status reporting a failure while running a protocol step."
+  placeholders:
+    name: "Protocol identifier that failed."
+    error: "Raw exception raised by protocol execution."
+protocol_preview.status.execution_complete:
+  text: "✓ Protocol execution complete: {count} protocols"
+  context: "Status reporting completion of the enabled protocol stack."
+  placeholders:
+    count: "Number of enabled protocols run."
+protocol_preview.status.execution_failed:
+  text: "Error running protocols: {error}"
+  context: "Status reporting an exception during protocol-stack execution."
+  placeholders:
+    error: "Raw protocol execution exception."
+protocol_preview.status.no_results:
+  text: "No results to display"
+  context: "Status shown when protocol execution produced no displayable results."
+protocol_preview.results.summary:
+  text: "Protocol: {protocol}\n\nFiles saved:\n"
+  context: "Heading for the fallback summary of files produced by a protocol."
+  placeholders:
+    protocol: "Protocol identifier that produced the files."
+protocol_preview.results.saved_file:
+  text: "  • {filename}\n"
+  context: "Line in the fallback results summary naming a saved file."
+  placeholders:
+    filename: "Basename of a saved output file."
+protocol_preview.results.saved_item:
+  text: "  • {item}\n"
+  context: "Line in the fallback results summary for a non-file output item."
+  placeholders:
+    item: "Short description of a saved result item."
+protocol_preview.results.tab_title:
+  text: "Results: {protocol}"
+  context: "Visualization tab title for the output of a protocol run."
+  placeholders:
+    protocol: "Protocol identifier that produced the results."
+protocol_preview.status.results_displayed:
+  text: "✓ Results displayed in new tab: {protocol}"
+  context: "Status confirming that protocol output is shown in a new visualization tab."
+  placeholders:
+    protocol: "Protocol identifier that produced the results."
+protocol_preview.status.visualization_tabs_missing:
+  text: "Could not find visualization tabs"
+  context: "Status explaining that results cannot be displayed because the visualization tabs are unavailable."
+protocol_preview.status.results_display_failed:
+  text: "Could not display results: {error}"
+  context: "Status explaining why protocol output could not be displayed."
+  placeholders:
+    error: "Raw result display exception."
+protocol_preview.status.tab_closed:
+  text: "Closed {tab}"
+  context: "Status confirming that a visualization tab was closed."
+  placeholders:
+    tab: "Visible title of the closed tab."
+protocol_preview.status.no_protocols_to_export:
+  text: "No protocols to export"
+  context: "Status shown when workflow export is requested with an empty stack."
+protocol_preview.dialog.export_preview:
+  text: "Export Preview"
+  context: "Title of the dialog showing generated workflow content."
+protocol_preview.dialog.export_preview_text:
+  text: "Preview of {format}:"
+  context: "Dialog message identifying the format of the generated workflow preview."
+  placeholders:
+    format: "Visible name of the selected export format."
+protocol_preview.filter.python:
+  text: "Python Files (*.py)"
+  context: "File dialog filter for Python workflow scripts."
+protocol_preview.filter.json:
+  text: "JSON Files (*.json)"
+  context: "File dialog filter for JSON workflow files."
+protocol_preview.filter.yaml:
+  text: "YAML Files (*.yaml *.yml)"
+  context: "File dialog filter for YAML workflow files."
+protocol_preview.dialog.export_workflow:
+  text: "Export Workflow"
+  context: "File dialog title for saving the generated protocol workflow."
+protocol_preview.status.workflow_exported:
+  text: "Exported workflow to {path}"
+  context: "Status confirming the filesystem path used to export the workflow."
+  placeholders:
+    path: "Exported workflow file path."
+protocol_preview.generated.python_header:
+  text: "# Generated by SciAnaGui Protocol Preview"
+  context: "Comment identifying the application that generated an exported Python workflow."
+protocol_preview.generated.python_docstring:
+  text: "Run protocol stack"
+  context: "Docstring describing the exported Python function that executes protocols."
+protocol_preview.generated.python_data_guidance:
+  text: "Load your data here"
+  context: "Comment prompting the user to add input-data loading code to the exported script."
+protocol_preview.generated.yaml_header:
+  text: "# SciAnalysis Protocol Workflow"
+  context: "Comment identifying the contents of an exported YAML workflow."
+protocol_preview.generated.yaml_attribution:
+  text: "# Generated by SciAnaGui Protocol Preview"
+  context: "Comment identifying the application that generated an exported YAML workflow."

@@ -1,0 +1,290 @@
+shell.qapplication_applicationname_beamline_name:
+  text: '{qapplication_applicationname} - {beamline_name}'
+  context: Window title in the main application window.
+  placeholders:
+    qapplication_applicationname: SciView application display name.
+    beamline_name: Configured beamline name; do not translate the supplied name.
+shell.reload_current_tab_and_clear_cache:
+  text: Reload current tab and clear cache (Ctrl+R)
+  context: Tooltip in the main application window.
+shell.i:
+  text: I
+  context: Abbreviated button caption for opening the developer Style Inspector.
+shell.open_style_inspector_dev_ctrl_shift:
+  text: Open Style Inspector [dev] (Ctrl+Shift+I)
+  context: Tooltip in the main application window.
+shell.clear_saved_session:
+  text: Clear saved session
+  context: Accessible control name in the main application window.
+shell.clear_saved_session_cache_last_image:
+  text: Clear saved session cache (last image/calibration/mask/batch queue restore data)
+  context: Tooltip in the main application window.
+shell.update_failed:
+  text: Update failed
+  context: Failure summary for a software-update operation in the main window.
+shell.settext:
+  text: ☀
+  context: Sun symbol used as a fallback icon for switching to the light theme.
+shell.switch_to_light_mode_ctrl_d:
+  text: Switch to light mode (Ctrl+D)
+  context: Tooltip in the main application window.
+shell.settext_2:
+  text: 🌙
+  context: Moon symbol used as a fallback icon for switching to the dark theme.
+shell.switch_to_dark_mode_ctrl_d:
+  text: Switch to dark mode (Ctrl+D)
+  context: Tooltip in the main application window.
+shell.style_inspector_is_available_only_when:
+  text: Style Inspector is available only when DEV_TOOLS=1
+  context: Status message in the main application window.
+shell.dev_tools_active_hot_reload_on:
+  text: 'Dev tools active: hot-reload ON  |  Ctrl+Shift+I or corner I button = Style Inspector'
+  context: Status message in the main application window.
+shell.clear_session_cache:
+  text: Clear Session Cache
+  context: Dialog message or title in the main application window.
+shell.this_deletes_the_saved_last_session:
+  text: This deletes the saved last-session restore data (image path, calibration, mask layers, batch queue).
+    Continue?
+  context: Dialog message or title in the main application window.
+shell.session_cache_cleared:
+  text: Session cache cleared
+  context: Status message in the main application window.
+shell.could_not_load_the_image_scianalysis:
+  text: 'Could not load the image: SciAnalysis is not installed.'
+  context: Status message in the main application window.
+shell.open_image_file:
+  text: Open Image File
+  context: File chooser title or type filter in the main application window.
+shell.loaded_image_basename_path_w_x:
+  text: 'Loaded image: {basename_path} ({w}x{h} pixels)'
+  context: Status message in the main application window.
+  placeholders:
+    basename_path: Filename of the selected image, without its directory.
+    w: Image width in pixels.
+    h: Image height in pixels.
+shell.could_not_load_basename_path_error:
+  text: 'Could not load {basename_path}: {error}'
+  context: User-visible error in the main application window.
+  placeholders:
+    basename_path: Filename of the selected image, without its directory.
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.refreshing_tab_name:
+  text: Refreshing {tab_name}...
+  context: Status message in the main application window.
+  placeholders:
+    tab_name: Localized caption of the application tab being refreshed.
+shell.cleared_cache_info_get_cached_items:
+  text: Cleared {cache_info_get_cached_items_0} cached images
+  context: Status message in the main application window.
+  placeholders:
+    cache_info_get_cached_items_0: Number of cached image objects removed.
+shell.cannot_refresh_tab_name_unknown_tab:
+  text: Cannot refresh {tab_name} - unknown tab type
+  context: Status message in the main application window.
+  placeholders:
+    tab_name: Localized caption of the application tab being refreshed.
+shell.refreshed_tab_name_successfully:
+  text: ✓ Refreshed {tab_name} successfully
+  context: Status message in the main application window.
+  placeholders:
+    tab_name: Localized caption of the application tab being refreshed.
+shell.error_refreshing_tab_name_error:
+  text: 'Error refreshing {tab_name}: {error}'
+  context: Status message in the main application window.
+  placeholders:
+    tab_name: Localized caption of the application tab being refreshed.
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.another_update_is_already_running:
+  text: Another update is already running
+  context: Status message in the main application window.
+shell.title_canceled:
+  text: '{title} canceled'
+  context: Status message in the main application window.
+  placeholders:
+    title: Localized title of the software-update operation.
+shell.failed_to_start_update_error:
+  text: 'Failed to start update: {error}'
+  context: Status message in the main application window.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.update_sciview:
+  text: Update SciView
+  context: Update title in the main application window.
+shell.this_will_run_git_pull_ff:
+  text: This will run git pull --ff-only in the SciView repository. Continue?
+  context: Update confirm message in the main application window.
+shell.updating_sciview_source_checkout:
+  text: Updating SciView source checkout...
+  context: Update running message in the main application window.
+shell.sciview_source_updated_restart_sciview_to:
+  text: SciView source updated. Restart SciView to use the new version.
+  context: Update success message in the main application window.
+shell.sciview_update_failed:
+  text: SciView update failed
+  context: Update failure prefix in the main application window.
+shell.pixi_managed_scianalysis_package:
+  text: Pixi-managed SciAnalysis package
+  context: Action label in the main application window.
+shell.scianalysis_checkout:
+  text: SciAnalysis checkout
+  context: Action label in the main application window.
+shell.update_scianalysis:
+  text: Update SciAnalysis
+  context: Update title in the main application window.
+shell.this_will_update_the_active_action:
+  text: This will update the active {action_label}. Continue?
+  context: Update confirm message in the main application window.
+  placeholders:
+    action_label: Localized description of the active SciAnalysis installation.
+shell.updating_action_label:
+  text: Updating {action_label}...
+  context: Update running message in the main application window.
+  placeholders:
+    action_label: Localized description of the active SciAnalysis installation.
+shell.scianalysis_source_updated_restart_sciview_to:
+  text: SciAnalysis source updated. Restart SciView to use the new version.
+  context: Update success message in the main application window.
+shell.scianalysis_update_failed:
+  text: SciAnalysis update failed
+  context: Update failure prefix in the main application window.
+shell.git_executable_not_found_on_path:
+  text: Git executable not found on PATH
+  context: Status message in the main application window.
+shell.sciview_update:
+  text: SciView Update
+  context: Dialog message or title in the main application window.
+shell.git_was_not_found_on_path:
+  text: Git was not found on PATH, so SciView cannot update from a repository checkout.
+  context: Dialog message or title in the main application window.
+shell.sciview_source_is_not_a_git:
+  text: SciView source is not a git checkout
+  context: Status message in the main application window.
+shell.the_current_sciview_source_is_not:
+  text: The current SciView source is not a git checkout, so it cannot be updated with git pull.
+  context: Dialog message or title in the main application window.
+shell.pixi_executable_not_found_on_path:
+  text: Pixi executable not found on PATH
+  context: Status message in the main application window.
+shell.scianalysis_update:
+  text: SciAnalysis Update
+  context: Dialog message or title in the main application window.
+shell.pixi_was_not_found_on_path:
+  text: Pixi was not found on PATH, so the Pixi-managed SciAnalysis package cannot be updated.
+  context: Dialog message or title in the main application window.
+shell.pixi_toml_not_found_in_workspace:
+  text: pixi.toml not found in workspace
+  context: Status message in the main application window.
+shell.pixi_toml_was_not_found_in:
+  text: pixi.toml was not found in the SciView workspace, so Pixi cannot update SciAnalysis here.
+  context: Dialog message or title in the main application window.
+shell.git_was_not_found_on_path_2:
+  text: Git was not found on PATH, so SciAnalysis cannot be updated from a checkout.
+  context: Dialog message or title in the main application window.
+shell.scianalysis_checkout_not_configured:
+  text: SciAnalysis checkout not configured
+  context: Status message in the main application window.
+shell.no_scianalysis_checkout_is_configured_set:
+  text: No SciAnalysis checkout is configured. Set SCIVIEW_SCIANALYSIS_SOURCE and SCIVIEW_SCIANALYSIS_PATH,
+    or switch to pixi-managed SciAnalysis.
+  context: Dialog message or title in the main application window.
+shell.scianalysis_source_is_not_a_git:
+  text: SciAnalysis source is not a git checkout
+  context: Status message in the main application window.
+shell.the_selected_scianalysis_source_is_not:
+  text: The selected SciAnalysis source is not a git checkout, so it cannot be updated with git pull.
+  context: Dialog message or title in the main application window.
+shell.value_update_running_message_still_running:
+  text: '{value__update_running_message} still running'
+  context: Status message in the main application window.
+  placeholders:
+    value__update_running_message: Localized status of the ongoing software update.
+shell.value_update_failure_prefix_tail:
+  text: '{value__update_failure_prefix}: {tail}'
+  context: Status message in the main application window.
+  placeholders:
+    value__update_failure_prefix: Localized summary identifying which software update failed.
+    tail: Last lines of subprocess output; retain the supplied diagnostic text.
+shell.value_update_failure_prefix_with_exit:
+  text: '{value__update_failure_prefix} with exit code {return_code}'
+  context: Status message in the main application window.
+  placeholders:
+    value__update_failure_prefix: Localized summary identifying which software update failed.
+    return_code: Integer exit code from the software-update subprocess.
+shell.image_browser:
+  text: Image Browser
+  context: Tab for browsing local image files and selecting the shared image.
+shell.image_browser_tab_n_import_error:
+  text: 'Image Browser Tab\n(Import error: {error})'
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.tiled_browser:
+  text: Tiled Browser
+  context: Tab for finding and loading images from a Tiled data service.
+shell.tiled_browser_tab_n_import_error:
+  text: 'Tiled Browser Tab\n(Import error: {error})'
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.calibration:
+  text: Calibration
+  context: Tab for configuring detector geometry and X-ray calibration.
+shell.calibration_tab_n_scianalysis_not_available:
+  text: Calibration Tab\n(SciAnalysis not available)
+  context: Fallback panel shown when an application tab cannot be imported.
+shell.calibration_tab_n_import_error_error:
+  text: 'Calibration Tab\n(Import error: {error})'
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.mask_editing:
+  text: Mask Editing
+  context: Tab for editing the detector pixel-exclusion mask.
+shell.mask_tab_n_import_error_error:
+  text: 'Mask Tab\n(Import error: {error})'
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.reduction:
+  text: Reduction
+  context: Tab for reducing a two-dimensional detector image to scientific scattering curves.
+shell.reduction_tab_n_import_error_error:
+  text: 'Reduction Tab\n(Import error: {error})'
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.transform:
+  text: Transform
+  context: Tab for transforming detector images into scientific coordinate systems.
+shell.transform_tab_n_import_error_error:
+  text: 'Transform Tab\n(Import error: {error})'
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.batch:
+  text: Batch
+  context: Tab for applying a processing recipe to a collection of images.
+shell.batch_tab_n_import_error_error:
+  text: 'Batch Tab\n(Import error: {error})'
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.info:
+  text: Info
+  context: Tab showing file metadata, image statistics, and calibration information.
+shell.info_tab_n_import_error_error:
+  text: 'Info Tab\n(Import error: {error})'
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.scianalysis_gui_started_for_beamline_name:
+  text: SciAnalysis GUI started for {beamline_name} - SciAnalysis loaded successfully
+  context: Status msg in the main application window.
+  placeholders:
+    beamline_name: Configured beamline name; do not translate the supplied name.
+shell.scianalysis_gui_started_for_beamline_name_2:
+  text: SciAnalysis GUI started for {beamline_name} - SciAnalysis not available
+  context: Status msg in the main application window.
+  placeholders:
+    beamline_name: Configured beamline name; do not translate the supplied name.

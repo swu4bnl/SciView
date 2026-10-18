@@ -1,0 +1,325 @@
+image_browser.progress.reading_tile:
+  text: "Reading tile {completed}/{total}…"
+  context: "Progress text shown while downloading image tiles."
+  placeholders:
+    completed: "Number of tiles already read."
+    total: "Total number of tiles to read."
+image_browser.progress.reading_image:
+  text: "Reading image data…"
+  context: "Progress text shown while reading image data."
+image_browser.progress.matching_files:
+  text: "Found {count} matching files"
+  context: "Progress message reporting files matching a folder search."
+  placeholders:
+    count: "Number of matching files."
+image_browser.progress.added_file:
+  text: "Added {current}/{total}: {filename}"
+  context: "Progress message reporting a folder image reference being added."
+  placeholders:
+    current: "Position of the current file in the folder results."
+    total: "Number of files in the folder results."
+    filename: "Name of the file being added."
+image_browser.error.unknown_import:
+  text: "unknown import error"
+  context: "Fallback detail shown when the Tiled client import error is unavailable."
+image_browser.error.tiled_unavailable:
+  text: "Tiled client is not available: {error}"
+  context: "Error shown when a Tiled image cannot be loaded because its client is unavailable."
+  placeholders:
+    error: "Details returned for the Tiled client import failure."
+image_browser.progress.cancelled_range:
+  text: "Cancelled: Loaded {loaded}, skipped {skipped} of {processed} scans"
+  context: "Progress summary shown when a range load is cancelled."
+  placeholders:
+    loaded: "Number of scans loaded before cancellation."
+    skipped: "Number of scans skipped before cancellation."
+    processed: "Number of scans processed before cancellation."
+image_browser.progress.scan_range:
+  text: "Scan {scan_id}: loaded={loaded}, skipped={skipped}/{processed}"
+  context: "Progress update while loading scans from a range."
+  placeholders:
+    scan_id: "Identifier of the scan currently being processed."
+    loaded: "Number of scans loaded so far."
+    skipped: "Number of scans skipped so far."
+    processed: "Number of scans processed so far."
+image_browser.progress.complete_range:
+  text: "Complete: Loaded {loaded}, skipped {skipped} of {total} scans"
+  context: "Summary shown when a range load finishes."
+  placeholders:
+    loaded: "Number of scans loaded."
+    skipped: "Number of scans skipped."
+    total: "Number of scans in the requested range."
+image_browser.progress.connecting_tiled:
+  text: "Connecting to tiled server: {profile}"
+  context: "Progress message shown while connecting to a Tiled profile."
+  placeholders:
+    profile: "Name of the selected Tiled profile."
+image_browser.error.scan_not_found:
+  text: "Scan {scan_id} not found in catalog"
+  context: "Error shown when the requested scan is absent from the Tiled catalog."
+  placeholders:
+    scan_id: "Identifier of the requested scan."
+image_browser.progress.processing_image:
+  text: "Processing image data..."
+  context: "Progress message shown while preparing loaded image data for display."
+image_browser.progress.tiled_complete:
+  text: "Tiled loading complete - Scan {scan_id}"
+  context: "Progress message shown after a Tiled scan finishes loading."
+  placeholders:
+    scan_id: "Identifier of the loaded scan."
+image_browser.error.tiled_loading:
+  text: "Tiled loading error: {error}"
+  context: "Error shown when loading image data from Tiled fails."
+  placeholders:
+    error: "Exception detail from the Tiled image-loading operation."
+image_browser.progress.loading_file:
+  text: "Loading {filename}"
+  context: "Progress message shown while loading an image file."
+  placeholders:
+    filename: "Name of the image file being loaded."
+image_browser.progress.file_complete:
+  text: "File loading complete"
+  context: "Progress message shown when an image file finishes loading."
+image_browser.error.file_load_failed:
+  text: "Failed to load image from {path}"
+  context: "Error shown when a file loader returns no image data."
+  placeholders:
+    path: "Path of the image file that could not be loaded."
+image_browser.error.loading_file:
+  text: "Error loading file: {error}"
+  context: "Error shown when an exception occurs while loading an image file."
+  placeholders:
+    error: "Exception detail from the image file-loading operation."
+image_browser.title:
+  text: "Browse Images"
+  context: "Heading for the image browser tab."
+image_browser.status.ready:
+  text: "Ready to load images"
+  context: "Initial status shown in the image browser."
+image_browser.folder.path.tooltip:
+  text: "Type a folder path or choose a recent folder"
+  context: "Guidance for entering a folder path or selecting a recent folder."
+image_browser.folder.path.placeholder:
+  text: "Select folder..."
+  context: "Placeholder in the editable folder path control."
+image_browser.folder.parent.tooltip:
+  text: "Open the parent folder"
+  context: "Tooltip for navigating up to the current folder's parent."
+image_browser.folder.choose.tooltip:
+  text: "Choose a folder"
+  context: "Tooltip for opening the folder selection dialog."
+image_browser.folder.filter.label:
+  text: "Filter:"
+  context: "Label for the folder image-name filter."
+image_browser.folder.filter.placeholder:
+  text: "optional: saxs, *.tif, sample_*.h5"
+  context: "Example patterns that can be entered to filter the folder image list."
+image_browser.folder.sort.label:
+  text: "Sort:"
+  context: "Label for the folder image sort-order selector."
+image_browser.folder.sort.name_ascending:
+  text: "Name A-Z"
+  context: "Folder-list sort option that orders names alphabetically from A to Z."
+image_browser.folder.sort.name_descending:
+  text: "Name Z-A"
+  context: "Folder-list sort option that orders names alphabetically from Z to A."
+image_browser.folder.sort.newest_first:
+  text: "Newest first"
+  context: "Folder-list sort option that places recently modified files first."
+image_browser.folder.sort.oldest_first:
+  text: "Oldest first"
+  context: "Folder-list sort option that places least recently modified files first."
+image_browser.folder.contents.title:
+  text: "Folder contents"
+  context: "Heading for the list of files and subfolders."
+image_browser.folder.contents.empty:
+  text: "No images"
+  context: "Initial count label before folder contents are listed."
+image_browser.folder.auto_refresh.label:
+  text: "Auto refresh"
+  context: "Checkbox that enables periodic refresh of the folder listing."
+image_browser.folder.auto_refresh.tooltip:
+  text: "Refresh automatically when folder contents change"
+  context: "Tooltip explaining the automatic folder-list refresh option."
+image_browser.play.tooltip:
+  text: "Play the images in this list"
+  context: "Tooltip for starting sequential display of images in the folder list."
+image_browser.play.pause.tooltip:
+  text: "Pause playback"
+  context: "Tooltip shown while sequential folder-image playback is active."
+image_browser.play.repeat.tooltip:
+  text: "Repeat playback"
+  context: "Tooltip for repeating folder-image playback after reaching the end."
+image_browser.playback.speed.accessible:
+  text: "Playback speed: {speed}"
+  context: "Accessible name describing the selected folder-image playback speed."
+  placeholders:
+    speed: "Name of the selected playback speed."
+image_browser.playback.speed.slow:
+  text: "Slow"
+  context: "Accessible name for the slow folder-image playback rate."
+image_browser.playback.speed.medium:
+  text: "Medium"
+  context: "Accessible name for the medium folder-image playback rate."
+image_browser.playback.speed.fast:
+  text: "Fast"
+  context: "Accessible name for the fast folder-image playback rate."
+image_browser.playback.speed.tooltip.slow:
+  text: "Playback speed: slow. Click to change."
+  context: "Tooltip for the slow folder-image playback rate."
+image_browser.playback.speed.tooltip.medium:
+  text: "Playback speed: medium. Click to change."
+  context: "Tooltip for the medium folder-image playback rate."
+image_browser.playback.speed.tooltip.fast:
+  text: "Playback speed: fast. Click to change."
+  context: "Tooltip for the fast folder-image playback rate."
+image_browser.batch.add_all.tooltip:
+  text: "Add all images in this list to Batch"
+  context: "Tooltip for adding the visible folder images to the shared Batch list."
+image_browser.batch.clear.tooltip:
+  text: "Remove previously added images from Batch. Files stay on disk."
+  context: "Tooltip for clearing folder images kept in the shared Batch list."
+image_browser.error.no_files.title:
+  text: "No Files Found"
+  context: "Title of the warning shown when the current folder has no supported images."
+image_browser.error.no_files.body:
+  text: "No supported image files found in this folder"
+  context: "Warning message shown when the current folder has no supported images."
+image_browser.batch.kept_images:
+  text: "Kept {count} images in Batch"
+  context: "Status message after adding the current folder images to Batch."
+  placeholders:
+    count: "Number of images kept in Batch."
+image_browser.batch.cleared_folders:
+  text: "Cleared folders kept in Batch"
+  context: "Status message after removing previously kept folder images from Batch."
+image_browser.batch.count:
+  text: "{count} in Batch"
+  context: "Count of images currently kept in the shared Batch list."
+  placeholders:
+    count: "Number of images kept in Batch."
+image_browser.image.empty:
+  text: "No image loaded"
+  context: "Placeholder displayed when the image browser has no current image."
+image_browser.image.empty.viewer:
+  text: "No Image Loaded"
+  context: "Image-viewer placeholder displayed when no image is loaded."
+image_browser.image.loading:
+  text: "Loading: {filename}"
+  context: "Placeholder displayed while the selected image is loading."
+  placeholders:
+    filename: "Name of the image being loaded."
+image_browser.image.filename_source:
+  text: "{filename}  │  {source}"
+  context: "Caption showing the current image name and its source."
+  placeholders:
+    filename: "Name of the current image."
+    source: "Source associated with the current image."
+image_browser.status.synced_image:
+  text: "Synced image: {filename}"
+  context: "Status message after publishing the current image to other tabs."
+  placeholders:
+    filename: "Name of the synchronized image."
+image_browser.status.restored_image:
+  text: "Restored last session image: {filename}"
+  context: "Status message after restoring the image selected in the previous session."
+  placeholders:
+    filename: "Name of the restored image."
+image_browser.dialog.select_folder.title:
+  text: "Select Folder"
+  context: "Title of the folder selection dialog."
+image_browser.folder.status.found_images:
+  text: "Found {count} images"
+  context: "Status message showing how many images are in the current folder."
+  placeholders:
+    count: "Number of images found."
+image_browser.folder.count.one_image:
+  text: "{count} image"
+  context: "Folder contents count when exactly one image is present."
+  placeholders:
+    count: "Number of images, which is one."
+image_browser.folder.count.images:
+  text: "{count} images"
+  context: "Folder contents count when zero or multiple images are present."
+  placeholders:
+    count: "Number of images in the folder."
+image_browser.folder.count.one_folder:
+  text: "{count} folder"
+  context: "Folder contents count when exactly one subfolder is present."
+  placeholders:
+    count: "Number of subfolders, which is one."
+image_browser.folder.count.folders:
+  text: "{count} folders"
+  context: "Folder contents count when multiple subfolders are present."
+  placeholders:
+    count: "Number of subfolders."
+image_browser.folder.status.selected_file:
+  text: "Selected {filename}"
+  context: "Status message shown after selecting an image from the folder list."
+  placeholders:
+    filename: "Name of the selected image file."
+image_browser.export.empty.title:
+  text: "No Data"
+  context: "Title of the information dialog shown when there is no session list to export."
+image_browser.export.empty.body:
+  text: "No images in session to export"
+  context: "Information message shown when there is no session list to export."
+image_browser.export.session_list.title:
+  text: "Export Session List"
+  context: "Title of the save dialog for exporting the current session list."
+image_browser.export.session_list.filter:
+  text: "Text Files (*.txt)"
+  context: "File type filter for saving a session list as a text file."
+image_browser.export.session_list.complete:
+  text: "Session list exported to {path}"
+  context: "Status message after exporting the session list."
+  placeholders:
+    path: "Path to the exported session list."
+image_browser.export.data.title:
+  text: "Export Data"
+  context: "Title of the information dialog for image data export."
+image_browser.export.data.unavailable:
+  text: "Data export functionality to be implemented"
+  context: "Information message explaining that image data export is not available yet."
+image_browser.debug.section_title:
+  text: "=== IMAGE BROWSER STATUS ==="
+  context: "Section heading in the image browser's diagnostic status report."
+image_browser.debug.session_images:
+  text: "Session images: {count}"
+  context: "Diagnostic status entry reporting the number of session images."
+  placeholders:
+    count: "Number of images in the session."
+image_browser.debug.cache_summary:
+  text: "Cached in memory: {cached}/{total} (limit: {limit})"
+  context: "Diagnostic status entry reporting image cache use."
+  placeholders:
+    cached: "Number of images currently cached in memory."
+    total: "Number of images in the session."
+    limit: "Maximum number of images the cache can hold."
+image_browser.debug.current_image:
+  text: "Current: {filename}"
+  context: "Diagnostic status entry naming the current image."
+  placeholders:
+    filename: "Name of the current image."
+image_browser.debug.source:
+  text: "Source: {source}"
+  context: "Diagnostic status entry naming the current image source."
+  placeholders:
+    source: "Source associated with the current image."
+image_browser.debug.loading_mode.deferred:
+  text: "Deferred (on-demand)"
+  context: "Diagnostic label for an image loaded only when first needed."
+image_browser.debug.loading_mode.immediate:
+  text: "Immediate (preloaded)"
+  context: "Diagnostic label for an image loaded before it is needed."
+image_browser.debug.loading_mode.label:
+  text: "Loading mode: {mode}"
+  context: "Diagnostic status entry identifying how the current image is loaded."
+  placeholders:
+    mode: "Description of the current image loading mode."
+image_browser.debug.dimensions:
+  text: "Dimensions: {width} x {height}"
+  context: "Diagnostic status entry reporting the current image dimensions."
+  placeholders:
+    width: "Image width in pixels."
+    height: "Image height in pixels."

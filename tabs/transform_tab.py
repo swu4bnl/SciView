@@ -31,6 +31,7 @@ from PyQt5.QtWidgets import (
 )
 
 from sciview.session.session_cache import choose_path
+from sciview.interfaces.text import tr
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
 from sciview.interfaces.theme.app_style import (
     AppStyle,
@@ -112,13 +113,13 @@ class TransformTab(BaseImageTab):
         layout.addLayout(self._create_protocol_selector())
 
         title_row = QHBoxLayout()
-        title = QLabel("Transform Preview")
+        title = QLabel(tr("transform.preview.title"))
         apply_subtitle_style(title)
         title_row.addWidget(title)
         title_row.addStretch()
         layout.addLayout(title_row)
 
-        self.result_summary = QLabel("No preview yet")
+        self.result_summary = QLabel(tr("transform.preview.empty"))
         apply_info_style(self.result_summary)
         layout.addWidget(self.result_summary)
 
@@ -136,7 +137,7 @@ class TransformTab(BaseImageTab):
         return panel
 
     def _create_plot_style_group(self):
-        style_group = QGroupBox("Plot Style")
+        style_group = QGroupBox(tr("transform.plot_style.title"))
         style_layout = QGridLayout(style_group)
         plot_style = resolve_plot_style(self.parent_app)
 
@@ -144,9 +145,9 @@ class TransformTab(BaseImageTab):
         self.plot_label_size_spin = QDoubleSpinBox()
         self.plot_tick_size_spin = QDoubleSpinBox()
         for index, (label, spin, value) in enumerate((
-            ("Plot title size", self.plot_title_size_spin, plot_style.title_size),
-            ("Axis label size", self.plot_label_size_spin, plot_style.label_size),
-            ("Tick label size", self.plot_tick_size_spin, plot_style.tick_size),
+            (tr("transform.plot_style.title_size"), self.plot_title_size_spin, plot_style.title_size),
+            (tr("transform.plot_style.axis_label_size"), self.plot_label_size_spin, plot_style.label_size),
+            (tr("transform.plot_style.tick_label_size"), self.plot_tick_size_spin, plot_style.tick_size),
         )):
             spin.setRange(6.0, 72.0)
             spin.setValue(value)
@@ -163,7 +164,7 @@ class TransformTab(BaseImageTab):
         self.plot_scale_combo = QComboBox()
         self.plot_scale_combo.addItems(SUPPORTED_IMAGE_SCALES)
         self.plot_scale_combo.setCurrentText(display_values["scale"])
-        self.color_auto_check = QCheckBox("Auto intensity range")
+        self.color_auto_check = QCheckBox(tr("transform.plot_style.auto_intensity"))
         self.color_auto_check.setChecked(True)
         self.plot_vmin_spin = QDoubleSpinBox()
         self.plot_vmax_spin = QDoubleSpinBox()
@@ -175,26 +176,26 @@ class TransformTab(BaseImageTab):
             spin.setDecimals(4)
             spin.setValue(0.0 if value is None else value)
             spin.setEnabled(False)
-        self._add_grid_field(style_layout, 0, 3, "Export resolution (DPI)", self.plot_dpi_spin)
-        self._add_grid_field(style_layout, 1, 0, "Colormap", self.plot_cmap_combo)
-        self._add_grid_field(style_layout, 1, 1, "Intensity scale", self.plot_scale_combo)
-        self._add_grid_field(style_layout, 1, 2, "Intensity min", self.plot_vmin_spin)
-        self._add_grid_field(style_layout, 1, 3, "Intensity max", self.plot_vmax_spin)
+        self._add_grid_field(style_layout, 0, 3, tr("transform.plot_style.export_resolution"), self.plot_dpi_spin)
+        self._add_grid_field(style_layout, 1, 0, tr("transform.plot_style.colormap"), self.plot_cmap_combo)
+        self._add_grid_field(style_layout, 1, 1, tr("transform.plot_style.intensity_scale"), self.plot_scale_combo)
+        self._add_grid_field(style_layout, 1, 2, tr("transform.plot_style.intensity_min"), self.plot_vmin_spin)
+        self._add_grid_field(style_layout, 1, 3, tr("transform.plot_style.intensity_max"), self.plot_vmax_spin)
         style_layout.addWidget(self.color_auto_check, 2, 0, 1, 2)
         return style_group
 
     def _create_protocol_selector(self):
         protocol_layout = QGridLayout()
-        protocol_label = QLabel("Protocol")
+        protocol_label = QLabel(tr("transform.protocol.label"))
         apply_subtitle_style(protocol_label)
         protocol_layout.addWidget(protocol_label, 0, 0, 1, 3)
         self.protocol_button_group = QButtonGroup(self)
         self.protocol_button_group.setExclusive(True)
         self._operation_buttons = {}
         for index, (operation, label) in enumerate((
-            ("q_image", "Q Image"),
-            ("q_phi_image", "Q-Phi Image"),
-            ("qr_qz_image", "Qr-Qz Image"),
+            ("q_image", tr("transform.operation.q_image")),
+            ("q_phi_image", tr("transform.operation.q_phi_image")),
+            ("qr_qz_image", tr("transform.operation.qr_qz_image")),
         )):
             button = QPushButton(label)
             apply_protocol_selector_button_style(button)
@@ -207,7 +208,7 @@ class TransformTab(BaseImageTab):
         return protocol_layout
 
     def _create_payload_group(self):
-        group = QGroupBox("Recipe")
+        group = QGroupBox(tr("transform.recipe.title"))
         layout = QVBoxLayout(group)
         self.payload_view = QTextEdit()
         self.payload_view.setFontFamily("monospace")
@@ -225,101 +226,101 @@ class TransformTab(BaseImageTab):
         source_layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
 
         self.calibration_source_combo = QComboBox()
-        self.calibration_source_combo.addItem("Shared", "From calibration tab")
-        self.calibration_source_combo.addItem("Custom", "Custom profile")
-        source_layout.addWidget(QLabel("Calibration"))
+        self.calibration_source_combo.addItem(tr("transform.source.shared"), "From calibration tab")
+        self.calibration_source_combo.addItem(tr("transform.source.custom"), "Custom profile")
+        source_layout.addWidget(QLabel(tr("transform.calibration.label")))
         source_layout.addWidget(self.calibration_source_combo, 1)
-        self.load_calibration_button = QPushButton("Browse")
+        self.load_calibration_button = QPushButton(tr("transform.browse"))
         self.load_calibration_button.clicked.connect(self._load_custom_calibration)
         apply_toolbar_text_button_style(self.load_calibration_button)
         source_layout.addWidget(self.load_calibration_button)
 
         self.mask_source_combo = QComboBox()
-        self.mask_source_combo.addItem("Shared", "From mask tab")
-        self.mask_source_combo.addItem("Custom", "Custom mask")
-        self.mask_source_combo.addItem("None", "No mask")
-        source_layout.addWidget(QLabel("Mask"))
+        self.mask_source_combo.addItem(tr("transform.source.shared"), "From mask tab")
+        self.mask_source_combo.addItem(tr("transform.source.custom"), "Custom mask")
+        self.mask_source_combo.addItem(tr("transform.source.none"), "No mask")
+        source_layout.addWidget(QLabel(tr("transform.mask.label")))
         source_layout.addWidget(self.mask_source_combo, 1)
-        self.load_mask_button = QPushButton("Browse")
+        self.load_mask_button = QPushButton(tr("transform.browse"))
         self.load_mask_button.clicked.connect(self._load_custom_mask)
         apply_toolbar_text_button_style(self.load_mask_button)
         source_layout.addWidget(self.load_mask_button)
         layout.addLayout(source_layout)
 
-        self.auto_update_check = QCheckBox("Live preview")
+        self.auto_update_check = QCheckBox(tr("transform.preview.live"))
         self.auto_update_check.setChecked(True)
         layout.addWidget(self.auto_update_check)
 
-        self.q_image_group = QGroupBox("Parameters")
+        self.q_image_group = QGroupBox(tr("transform.parameters.title"))
         q_image_layout = QGridLayout(self.q_image_group)
         self.q_bins_relative_spin = _spin("bins_relative")
-        self._add_grid_field(q_image_layout, 0, 0, "Bins (relative)", self.q_bins_relative_spin)
-        self.q_auto_crop_check = QCheckBox("Auto crop to calibration")
+        self._add_grid_field(q_image_layout, 0, 0, tr("transform.bins_relative"), self.q_bins_relative_spin)
+        self.q_auto_crop_check = QCheckBox(tr("transform.crop.auto"))
         self.q_auto_crop_check.setChecked(True)
         q_image_layout.addWidget(self.q_auto_crop_check, 0, 2, 1, 2)
         self.q_x_min_spin = _spin("crop_min")
-        self._add_grid_field(q_image_layout, 1, 0, "q<sub>x</sub> min (Å⁻¹)", self.q_x_min_spin)
+        self._add_grid_field(q_image_layout, 1, 0, tr("transform.qx_min"), self.q_x_min_spin)
         self.q_x_max_spin = _spin("crop_max")
-        self._add_grid_field(q_image_layout, 1, 1, "q<sub>x</sub> max (Å⁻¹)", self.q_x_max_spin)
+        self._add_grid_field(q_image_layout, 1, 1, tr("transform.qx_max"), self.q_x_max_spin)
         self.q_y_min_spin = _spin("crop_min")
-        self._add_grid_field(q_image_layout, 2, 0, "q<sub>z</sub> min (Å⁻¹)", self.q_y_min_spin)
+        self._add_grid_field(q_image_layout, 2, 0, tr("transform.qz_min"), self.q_y_min_spin)
         self.q_y_max_spin = _spin("crop_max")
-        self._add_grid_field(q_image_layout, 2, 1, "q<sub>z</sub> max (Å⁻¹)", self.q_y_max_spin)
+        self._add_grid_field(q_image_layout, 2, 1, tr("transform.qz_max"), self.q_y_max_spin)
         self.q_incident_angle_spin = _spin("incident_angle_deg")
         self.q_incident_angle_spin.setToolTip(
-            "Grazing-incidence angle (GISAXS/GIWAXS); 0 for transmission/normal-incidence data"
+            tr("transform.incident_angle.tooltip")
         )
-        self._add_grid_field(q_image_layout, 3, 0, "Incident angle (°)", self.q_incident_angle_spin)
+        self._add_grid_field(q_image_layout, 3, 0, tr("transform.incident_angle"), self.q_incident_angle_spin)
         self.q_sample_normal_spin = _spin("sample_normal_deg")
-        self.q_sample_normal_spin.setToolTip("Azimuthal (phi) reference offset for sample-stage misalignment")
-        self._add_grid_field(q_image_layout, 3, 1, "Sample normal (°)", self.q_sample_normal_spin)
+        self.q_sample_normal_spin.setToolTip(tr("transform.sample_normal.tooltip"))
+        self._add_grid_field(q_image_layout, 3, 1, tr("transform.sample_normal"), self.q_sample_normal_spin)
         layout.addWidget(self.q_image_group)
 
-        self.q_phi_group = QGroupBox("Parameters")
+        self.q_phi_group = QGroupBox(tr("transform.parameters.title"))
         q_phi_layout = QGridLayout(self.q_phi_group)
         self.qphi_bins_relative_spin = _spin("bins_relative")
-        self._add_grid_field(q_phi_layout, 0, 0, "Bins (relative)", self.qphi_bins_relative_spin)
+        self._add_grid_field(q_phi_layout, 0, 0, tr("transform.bins_relative"), self.qphi_bins_relative_spin)
         self.qphi_bins_phi_spin = _spin("bins_phi")
-        self._add_grid_field(q_phi_layout, 0, 1, "Phi bins", self.qphi_bins_phi_spin)
-        self.qphi_auto_crop_check = QCheckBox("Auto crop to calibration")
+        self._add_grid_field(q_phi_layout, 0, 1, tr("transform.phi_bins"), self.qphi_bins_phi_spin)
+        self.qphi_auto_crop_check = QCheckBox(tr("transform.crop.auto"))
         self.qphi_auto_crop_check.setChecked(True)
         q_phi_layout.addWidget(self.qphi_auto_crop_check, 1, 0, 1, 4)
         self.qphi_x_min_spin = _spin("q_min")
-        self._add_grid_field(q_phi_layout, 2, 0, "q min (Å⁻¹)", self.qphi_x_min_spin)
+        self._add_grid_field(q_phi_layout, 2, 0, tr("transform.q_min"), self.qphi_x_min_spin)
         self.qphi_x_max_spin = _spin("q_max")
-        self._add_grid_field(q_phi_layout, 2, 1, "q max (Å⁻¹)", self.qphi_x_max_spin)
+        self._add_grid_field(q_phi_layout, 2, 1, tr("transform.q_max"), self.qphi_x_max_spin)
         self.qphi_y_min_spin = _spin("phi_min")
-        self._add_grid_field(q_phi_layout, 3, 0, "Phi min (°)", self.qphi_y_min_spin)
+        self._add_grid_field(q_phi_layout, 3, 0, tr("transform.phi_min"), self.qphi_y_min_spin)
         self.qphi_y_max_spin = _spin("phi_max")
-        self._add_grid_field(q_phi_layout, 3, 1, "Phi max (°)", self.qphi_y_max_spin)
+        self._add_grid_field(q_phi_layout, 3, 1, tr("transform.phi_max"), self.qphi_y_max_spin)
         self.qphi_sample_normal_spin = _spin("sample_normal_deg")
-        self.qphi_sample_normal_spin.setToolTip("Azimuthal (phi) reference offset for sample-stage misalignment")
-        self._add_grid_field(q_phi_layout, 4, 0, "Sample normal (°)", self.qphi_sample_normal_spin)
+        self.qphi_sample_normal_spin.setToolTip(tr("transform.sample_normal.tooltip"))
+        self._add_grid_field(q_phi_layout, 4, 0, tr("transform.sample_normal"), self.qphi_sample_normal_spin)
         layout.addWidget(self.q_phi_group)
 
-        self.qr_qz_group = QGroupBox("Parameters")
+        self.qr_qz_group = QGroupBox(tr("transform.parameters.title"))
         qr_qz_layout = QGridLayout(self.qr_qz_group)
         self.qrqz_bins_relative_spin = _spin("bins_relative")
-        self._add_grid_field(qr_qz_layout, 0, 0, "Bins (relative)", self.qrqz_bins_relative_spin)
-        self.qrqz_auto_crop_check = QCheckBox("Auto crop to calibration")
+        self._add_grid_field(qr_qz_layout, 0, 0, tr("transform.bins_relative"), self.qrqz_bins_relative_spin)
+        self.qrqz_auto_crop_check = QCheckBox(tr("transform.crop.auto"))
         self.qrqz_auto_crop_check.setChecked(True)
         qr_qz_layout.addWidget(self.qrqz_auto_crop_check, 0, 2, 1, 2)
         self.qrqz_x_min_spin = _spin("crop_min")
-        self._add_grid_field(qr_qz_layout, 1, 0, "q<sub>r</sub> min (Å⁻¹)", self.qrqz_x_min_spin)
+        self._add_grid_field(qr_qz_layout, 1, 0, tr("transform.qr_min"), self.qrqz_x_min_spin)
         self.qrqz_x_max_spin = _spin("crop_max")
-        self._add_grid_field(qr_qz_layout, 1, 1, "q<sub>r</sub> max (Å⁻¹)", self.qrqz_x_max_spin)
+        self._add_grid_field(qr_qz_layout, 1, 1, tr("transform.qr_max"), self.qrqz_x_max_spin)
         self.qrqz_y_min_spin = _spin("crop_min")
-        self._add_grid_field(qr_qz_layout, 2, 0, "q<sub>z</sub> min (Å⁻¹)", self.qrqz_y_min_spin)
+        self._add_grid_field(qr_qz_layout, 2, 0, tr("transform.qz_min"), self.qrqz_y_min_spin)
         self.qrqz_y_max_spin = _spin("crop_max")
-        self._add_grid_field(qr_qz_layout, 2, 1, "q<sub>z</sub> max (Å⁻¹)", self.qrqz_y_max_spin)
+        self._add_grid_field(qr_qz_layout, 2, 1, tr("transform.qz_max"), self.qrqz_y_max_spin)
         self.qrqz_incident_angle_spin = _spin("incident_angle_deg")
         self.qrqz_incident_angle_spin.setToolTip(
-            "Grazing-incidence angle (GISAXS/GIWAXS); 0 for transmission/normal-incidence data"
+            tr("transform.incident_angle.tooltip")
         )
-        self._add_grid_field(qr_qz_layout, 3, 0, "Incident angle (°)", self.qrqz_incident_angle_spin)
+        self._add_grid_field(qr_qz_layout, 3, 0, tr("transform.incident_angle"), self.qrqz_incident_angle_spin)
         self.qrqz_sample_normal_spin = _spin("sample_normal_deg")
-        self.qrqz_sample_normal_spin.setToolTip("Azimuthal (phi) reference offset for sample-stage misalignment")
-        self._add_grid_field(qr_qz_layout, 3, 1, "Sample normal (°)", self.qrqz_sample_normal_spin)
+        self.qrqz_sample_normal_spin.setToolTip(tr("transform.sample_normal.tooltip"))
+        self._add_grid_field(qr_qz_layout, 3, 1, tr("transform.sample_normal"), self.qrqz_sample_normal_spin)
         layout.addWidget(self.qr_qz_group)
 
         self._operation_groups = {
@@ -328,9 +329,9 @@ class TransformTab(BaseImageTab):
             "qr_qz_image": self.qr_qz_group,
         }
         self._operation_labels = {
-            "q_image": "Q Image",
-            "q_phi_image": "Q-Phi Image",
-            "qr_qz_image": "Qr-Qz Image",
+            "q_image": tr("transform.operation.q_image"),
+            "q_phi_image": tr("transform.operation.q_phi_image"),
+            "qr_qz_image": tr("transform.operation.qr_qz_image"),
         }
         self._operation_param_widgets = {
             "q_image": {
@@ -369,16 +370,16 @@ class TransformTab(BaseImageTab):
         layout.addWidget(self._create_payload_group(), 1)
 
         button_row = QHBoxLayout()
-        self.payload_apply_button = QPushButton("Apply YAML")
-        self.payload_apply_button.setToolTip("Parse the edited Recipe YAML above and apply it to the controls")
+        self.payload_apply_button = QPushButton(tr("transform.recipe.apply"))
+        self.payload_apply_button.setToolTip(tr("transform.recipe.apply.tooltip"))
         self.payload_apply_button.clicked.connect(self._apply_payload_edits)
-        self.preview_button = QPushButton("Refresh Preview")
+        self.preview_button = QPushButton(tr("transform.preview.refresh"))
         self.preview_button.clicked.connect(self.refresh_preview)
-        self.export_button = QPushButton("Export Data")
+        self.export_button = QPushButton(tr("transform.export_data"))
         self.export_button.clicked.connect(self.export_result)
         self.export_button.setEnabled(self._current_result is not None)
-        self.send_to_batch_button = QPushButton("Send to Batch")
-        self.send_to_batch_button.setToolTip("Push current settings as a protocol to the Batch tab")
+        self.send_to_batch_button = QPushButton(tr("transform.send_to_batch"))
+        self.send_to_batch_button.setToolTip(tr("transform.send_to_batch.tooltip"))
         self.send_to_batch_button.clicked.connect(self._send_to_batch)
         apply_emphasis_button_style(self.send_to_batch_button)
         button_row.addWidget(self.payload_apply_button)
@@ -430,7 +431,7 @@ class TransformTab(BaseImageTab):
                 dpi=self.plot_dpi_spin.value(),
             )
         except ValueError as exc:
-            self.parent_app.show_status(f"Invalid plot style: {exc}")
+            self.parent_app.show_status(tr("transform.status.invalid_plot_style", error=exc))
             return
         self.parent_app.publish_shared_plot_style(style, source_tab=self)
         self._update_transform_plot(self._current_result)
@@ -553,8 +554,8 @@ class TransformTab(BaseImageTab):
     def _load_custom_calibration(self):
         file_path, _ = choose_path(
             self,
-            "Load Calibration YAML",
-            file_filter="YAML files (*.yaml *.yml);;All files (*)",
+            tr("transform.dialog.load_calibration"),
+            file_filter=tr("transform.filter.yaml_all"),
             key="transform_calibration_open",
         )
         if not file_path:
@@ -579,16 +580,20 @@ class TransformTab(BaseImageTab):
             self._custom_calibration_label = os.path.basename(file_path)
             self.calibration_source_combo.setCurrentIndex(self.calibration_source_combo.findData("Custom profile"))
             self._refresh_source_status()
-            self.parent_app.show_status(f"Loaded custom calibration: {self._custom_calibration_label}")
+            self.parent_app.show_status(
+                tr("transform.status.calibration_loaded", name=self._custom_calibration_label)
+            )
             self._on_parameters_changed()
         except Exception as exc:
-            self.parent_app.show_status(f"Could not load the custom calibration file: {exc}")
+            self.parent_app.show_status(
+                tr("transform.status.calibration_load_failed", error=exc)
+            )
 
     def _load_custom_mask(self):
         file_path, _ = choose_path(
             self,
-            "Load Mask",
-            file_filter="Mask files (*.png *.tif *.tiff *.npy);;All files (*)",
+            tr("transform.dialog.load_mask"),
+            file_filter=tr("transform.filter.mask_all"),
             key="transform_mask_open",
         )
         if not file_path:
@@ -599,10 +604,12 @@ class TransformTab(BaseImageTab):
             self._custom_mask_label = os.path.basename(file_path)
             self.mask_source_combo.setCurrentIndex(self.mask_source_combo.findData("Custom mask"))
             self._refresh_source_status()
-            self.parent_app.show_status(f"Loaded custom mask: {self._custom_mask_label}")
+            self.parent_app.show_status(
+                tr("transform.status.mask_loaded", name=self._custom_mask_label)
+            )
             self._on_parameters_changed()
         except Exception as exc:
-            self.parent_app.show_status(f"Could not load the custom mask file: {exc}")
+            self.parent_app.show_status(tr("transform.status.mask_load_failed", error=exc))
 
     def _refresh_source_status(self):
         if hasattr(self.parent_app, "get_shared_calibration"):
@@ -613,18 +620,20 @@ class TransformTab(BaseImageTab):
         mask = self._selected_mask()
 
         if self.calibration_source_combo.currentData() == "Custom profile":
-            cal_text = f"Calibration: custom ({self._custom_calibration_label})"
+            cal_text = tr("transform.tooltip.calibration.custom", name=self._custom_calibration_label)
         elif shared_cal is None:
-            cal_text = "Calibration: from calibration tab (not loaded)"
+            cal_text = tr("transform.tooltip.calibration.unloaded")
         else:
-            cal_text = "Calibration: from calibration tab"
+            cal_text = tr("transform.tooltip.calibration.shared")
 
         if self.mask_source_combo.currentData() == "No mask":
-            mask_text = "Mask: disabled"
+            mask_text = tr("transform.tooltip.mask.disabled")
         elif self.mask_source_combo.currentData() == "Custom mask":
-            mask_text = f"Mask: custom ({self._custom_mask_label})"
+            mask_text = tr("transform.tooltip.mask.custom", name=self._custom_mask_label)
         else:
-            mask_text = "Mask: from mask tab" if mask is not None else "Mask: from mask tab (not loaded)"
+            mask_text = tr(
+                "transform.tooltip.mask.shared" if mask is not None else "transform.tooltip.mask.unloaded"
+            )
 
         self.calibration_source_combo.setToolTip(cal_text)
         self.mask_source_combo.setToolTip(mask_text)
@@ -632,7 +641,7 @@ class TransformTab(BaseImageTab):
         self.load_mask_button.setVisible(self.mask_source_combo.currentData() == "Custom mask")
 
         if cal is None:
-            self.result_summary.setText("Calibration required")
+            self.result_summary.setText(tr("transform.preview.calibration_required"))
 
     def _get_image_array(self):
         display_data = self.image_data if self.image_data is not None else getattr(self.parent_app, "image_data", None)
@@ -641,12 +650,16 @@ class TransformTab(BaseImageTab):
 
         img_array, is_valid, error_msg = validate_and_prepare_image_array(display_data, use_converter=True)
         if not is_valid:
-            self.parent_app.show_status(error_msg or "Unable to prepare image array for transform")
+            self.parent_app.show_status(
+                error_msg or tr("transform.status.image_prepare_failed")
+            )
             return None
 
         array = np.asarray(img_array)
         if array.ndim != 2:
-            self.parent_app.show_status(f"Transform requires 2D image data (got {array.ndim}D)")
+            self.parent_app.show_status(
+                tr("transform.status.image_requires_2d", dimensions=array.ndim)
+            )
             return None
         return array
 
@@ -655,7 +668,7 @@ class TransformTab(BaseImageTab):
         raw = self._selected_mask()
         result = coerce_mask_to_bool(raw, shape)
         if result is None and raw is not None:
-            self.parent_app.show_status("Mask shape does not match the active image; ignoring mask for preview")
+            self.parent_app.show_status(tr("transform.status.mask_shape_mismatch"))
         return result
 
     def _overlay_calibration(self):
@@ -703,7 +716,7 @@ class TransformTab(BaseImageTab):
 
         calibration = self._resolved_calibration()
         if calibration is None:
-            self.parent_app.show_status("Load calibration before running transform")
+            self.parent_app.show_status(tr("transform.status.calibration_required"))
             return None
 
         request = TransformRequest(
@@ -732,17 +745,18 @@ class TransformTab(BaseImageTab):
         request = self._build_request()
         if request is None:
             self._set_current_result(None)
-            self.result_summary.setText("No image/calibration available")
-            self._update_transform_plot(None, message="Load an image and calibration first")
+            self.result_summary.setText(tr("transform.preview.image_calibration_unavailable"))
+            self._update_transform_plot(None, message=tr("transform.plot.load_image_calibration"))
             return
 
         try:
             result = self.backend.run(request)
         except Exception as exc:
             self._set_current_result(None)
-            self._update_transform_plot(None, message=f"Preview failed: {exc}")
-            self.result_summary.setText(f"Preview failed: {exc}")
-            self.parent_app.show_status(f"Transform failed: {exc}")
+            failure_message = tr("transform.status.preview_failed", error=exc)
+            self._update_transform_plot(None, message=failure_message)
+            self.result_summary.setText(failure_message)
+            self.parent_app.show_status(tr("transform.status.failed", error=exc))
             return
 
         self._set_current_result(result)
@@ -750,13 +764,18 @@ class TransformTab(BaseImageTab):
             self._update_transform_plot(result)
         except Exception as exc:
             # Don't leave the status stuck on "Preview pending..." if rendering itself fails.
-            self.result_summary.setText(f"Preview failed: {exc}")
-            self.parent_app.show_status(f"Transform failed: {exc}")
+            failure_message = tr("transform.status.preview_failed", error=exc)
+            self.result_summary.setText(failure_message)
+            self.parent_app.show_status(tr("transform.status.failed", error=exc))
             return
         result_size = f"{result.image.shape[1]}x{result.image.shape[0]}"
-        operation_name = result.operation.replace('_', ' ').title()
-        self.result_summary.setText(f"{operation_name}: {result_size}")
-        self.parent_app.show_status(f"{operation_name} complete: {result_size}")
+        operation_name = tr(f"transform.operation.status.{result.operation}")
+        self.result_summary.setText(
+            tr("transform.preview.result", operation=operation_name, size=result_size)
+        )
+        self.parent_app.show_status(
+            tr("transform.status.complete", operation=operation_name, size=result_size)
+        )
 
     def _update_transform_plot(self, result, message: str | None = None):
         self.ax_transform, self._transform_colorbar_axis = create_transform_axes(self.fig_transform)
@@ -772,7 +791,7 @@ class TransformTab(BaseImageTab):
             self.ax_transform.text(
                 0.5,
                 0.5,
-                message or "No transform preview\n\nLoad an image and run preview.",
+                message or tr("transform.plot.no_preview"),
                 transform=self.ax_transform.transAxes,
                 ha="center",
                 va="center",
@@ -827,7 +846,7 @@ class TransformTab(BaseImageTab):
 
     def export_result(self):
         if self._current_result is None:
-            self.parent_app.show_status("Run preview before export")
+            self.parent_app.show_status(tr("transform.status.preview_before_export"))
             return
 
         default_name = "transform_output.npz"
@@ -837,16 +856,16 @@ class TransformTab(BaseImageTab):
 
         file_path, _ = choose_path(
             self,
-            "Export transformed image",
+            tr("transform.dialog.export_image"),
             mode="save", default_name=default_name,
-            file_filter="NumPy zipped (*.npz);;NumPy array (*.npy);;All files (*)",
+            file_filter=tr("transform.filter.numpy_all"),
             key="transform_export",
         )
         if not file_path:
             return
 
         written_path = save_transform_result(self._current_result, file_path)
-        self.parent_app.show_status(f"Transformed image exported to {written_path}")
+        self.parent_app.show_status(tr("transform.status.image_exported", path=written_path))
 
     def _xy_plot_bounds(self):
         """x/y (or x/phi) bounds to send: None (native SciAnalysis autoscale)
@@ -972,7 +991,7 @@ class TransformTab(BaseImageTab):
     def _refresh_payload_view(self) -> None:
         if not hasattr(self, "payload_view") or self.payload_view.hasFocus():
             return
-        text = "# Recipe sent to Batch tab\n" + yaml.safe_dump(
+        text = tr("transform.recipe.batch_header") + yaml.safe_dump(
             self._build_payload_preview(), sort_keys=False, default_flow_style=False
         )
         self.payload_view.setPlainText(text)
@@ -981,10 +1000,12 @@ class TransformTab(BaseImageTab):
         try:
             data = yaml.safe_load(self.payload_view.toPlainText()) or {}
         except yaml.YAMLError as exc:
-            self.parent_app.show_status(f"Could not apply the recipe: invalid YAML — {exc}")
+            self.parent_app.show_status(
+                tr("transform.status.recipe_yaml_failed", error=exc)
+            )
             return
         if not isinstance(data, dict):
-            self.parent_app.show_status("Invalid recipe: expected a YAML mapping")
+            self.parent_app.show_status(tr("transform.status.recipe_mapping_invalid"))
             return
 
         operation = data.get("operation")
@@ -1044,17 +1065,17 @@ class TransformTab(BaseImageTab):
             self.plot_scale_combo.setCurrentText(str(scale))
 
         self._on_parameters_changed()
-        self.parent_app.show_status("Recipe applied from YAML")
+        self.parent_app.show_status(tr("transform.status.recipe_applied"))
 
     def _send_to_batch(self):
         payload = self._build_batch_payload()
         if hasattr(self.parent_app, "push_recipe_to_batch"):
             self.parent_app.push_recipe_to_batch(payload, source="transform_tab")
         else:
-            self.parent_app.show_status("Batch tab not available")
+            self.parent_app.show_status(tr("transform.status.batch_unavailable"))
 
     def _schedule_preview(self):
-        self.result_summary.setText("Preview pending...")
+        self.result_summary.setText(tr("transform.preview.pending"))
         self._preview_timer.start(self._preview_delay_ms)
 
     def update_plot(self, image_data=None, schedule_preview: bool = False):
@@ -1070,11 +1091,15 @@ class TransformTab(BaseImageTab):
         self.image_data = display_data
         image_array, is_valid, error_msg = validate_and_prepare_image_array(display_data, use_converter=True)
         if not is_valid:
-            self.result_summary.setText(error_msg or "Unable to update transform display")
-            self.parent_app.show_status(error_msg or "Unable to update transform display")
+            message = error_msg or tr("transform.status.display_update_failed")
+            self.result_summary.setText(message)
+            self.parent_app.show_status(message)
             return
 
-        self.result_summary.setText(f"Image loaded: {image_array.shape[1]}x{image_array.shape[0]}")
+        self.result_summary.setText(
+            tr("transform.preview.image_loaded",
+               width=image_array.shape[1], height=image_array.shape[0])
+        )
 
         self._compute_q_bounds(image_array.shape)
         self._refresh_auto_q_range()
@@ -1097,32 +1122,55 @@ class TransformTab(BaseImageTab):
 
     def _add_tab_specific_status(self, info_lines):
         info_lines.append("")
-        info_lines.append("=== TRANSFORM STATUS ===")
-        info_lines.append(f"Operation: {self._operation_labels[self._selected_operation()]}")
-        info_lines.append(f"Mask enabled: {'Yes' if self._use_mask_enabled() else 'No'}")
+        info_lines.append(tr("transform.info.status_heading"))
+        info_lines.append(
+            tr("transform.info.operation", operation=self._operation_labels[self._selected_operation()])
+        )
+        info_lines.append(
+            tr("transform.info.mask_enabled",
+               state=tr("transform.info.yes") if self._use_mask_enabled() else tr("transform.info.no"))
+        )
         bins_relative = self._op_float("bins_relative")
         if bins_relative is not None:
-            info_lines.append(f"Bins (relative): {bins_relative:.2f}")
+            info_lines.append(tr("transform.info.bins_relative", value=bins_relative))
         x_min = self._op_float("x_min")
         x_max = self._op_float("x_max")
         if x_min is not None and x_max is not None:
-            info_lines.append(f"x crop: {x_min:.4f} to {x_max:.4f}")
+            info_lines.append(tr("transform.info.x_crop", minimum=x_min, maximum=x_max))
         y_min = self._op_float("y_min")
         y_max = self._op_float("y_max")
         if y_min is not None and y_max is not None:
-            info_lines.append(f"y crop: {y_min:.4f} to {y_max:.4f}")
+            info_lines.append(tr("transform.info.y_crop", minimum=y_min, maximum=y_max))
         incident_angle = self._op_float("incident_angle_deg")
         if incident_angle is not None:
-            info_lines.append(f"Incident angle: {incident_angle:.3f} deg")
+            info_lines.append(tr("transform.info.incident_angle", value=incident_angle))
         sample_normal = self._op_float("sample_normal_deg")
         if sample_normal is not None:
-            info_lines.append(f"Sample normal: {sample_normal:.3f} deg")
-        info_lines.append(f"Calibration source: {self.calibration_source_combo.currentData()}")
-        info_lines.append(f"Mask source: {self.mask_source_combo.currentData()}")
+            info_lines.append(tr("transform.info.sample_normal", value=sample_normal))
+        calibration_source = {
+            "From calibration tab": tr("transform.info.source.calibration_shared"),
+            "Custom profile": tr("transform.info.source.calibration_custom"),
+        }.get(self.calibration_source_combo.currentData(), self.calibration_source_combo.currentData())
+        mask_source = {
+            "From mask tab": tr("transform.info.source.mask_shared"),
+            "Custom mask": tr("transform.info.source.mask_custom"),
+            "No mask": tr("transform.info.source.mask_none"),
+        }.get(self.mask_source_combo.currentData(), self.mask_source_combo.currentData())
+        info_lines.append(
+            tr("transform.info.calibration_source", source=calibration_source)
+        )
+        info_lines.append(
+            tr("transform.info.mask_source", source=mask_source)
+        )
         if self._current_result is not None:
-            info_lines.append(f"Last preview: {self._current_result.operation}")
             info_lines.append(
-                f"Preview shape: {self._current_result.image.shape[1]}x{self._current_result.image.shape[0]}"
+                tr("transform.info.last_preview",
+                   operation=self._current_result.operation)
+            )
+            info_lines.append(
+                tr("transform.info.preview_shape",
+                   width=self._current_result.image.shape[1],
+                   height=self._current_result.image.shape[0])
             )
         else:
-            info_lines.append("Last preview: None")
+            info_lines.append(tr("transform.info.last_preview_none"))

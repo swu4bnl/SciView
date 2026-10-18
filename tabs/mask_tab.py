@@ -57,6 +57,7 @@ from sciview.interfaces.theme.app_style import (
     apply_info_style,
     setup_splitter_layout,
 )
+from sciview.interfaces.text import tr
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, DETECTOR_CONFIGS, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import MASK_BASE_DIR, PHYSICAL_CONSTANTS
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, ImageShapeConverter
@@ -103,7 +104,7 @@ class _LayerAddCommand(QUndoCommand):
     """Add or remove one layer through the shared undo stack."""
 
     def __init__(self, layers: list[MaskLayer], layer: MaskLayer, index: int, refresh):
-        super().__init__(f"Add {layer.name}")
+        super().__init__(tr("mask.undo.add_layer", layer_name=layer.name))
         self._layers = layers
         self._layer = layer
         self._index = index
@@ -124,7 +125,7 @@ class _LayerClearCommand(QUndoCommand):
     """Clear and restore a layer stack as one edit."""
 
     def __init__(self, layers: list[MaskLayer], refresh):
-        super().__init__("Clear mask layers")
+        super().__init__(tr("mask.undo.clear_layers"))
         self._layers = layers
         self._removed = list(layers)
         self._refresh = refresh
@@ -144,6 +145,20 @@ class _LayerClearCommand(QUndoCommand):
 
 class MaskApp(BaseImageTab):
     """Comprehensive mask editing application with layered approach"""
+
+    _TOOL_LABEL_IDS = {
+        "Brush": "mask.tool.brush",
+        "Eraser": "mask.tool.eraser",
+        "Line": "mask.tool.line",
+        "Rectangle": "mask.tool.rectangle",
+        "Circle": "mask.tool.circle",
+        "Polygon": "mask.tool.polygon",
+        "Smart Fill": "mask.tool.smart_fill",
+    }
+
+    def _tool_label(self, tool_name: str) -> str:
+        """Return the localized label for a stable drawing-tool identifier."""
+        return tr(self._TOOL_LABEL_IDS[tool_name])
 
     @staticmethod
     def _use_compact_spinbox_width(spinbox):
@@ -166,7 +181,7 @@ class MaskApp(BaseImageTab):
             self.mask_layers[layer_index],
             before,
             after,
-            f"{self.drawing_tool.name} edit",
+            tr("mask.undo.drawing_edit", tool=self._tool_label(self.drawing_tool.name)),
             self._update_layer_list,
         )
         self.undo_stack.push(command)
@@ -271,8 +286,14 @@ class MaskApp(BaseImageTab):
                 if self._alt_inversion_active
                 else button.property("baseStyleSheet") or ""
             )
-        effect = "mask pixels" if draw_value else "restore pixels"
-        self.active_tool_label.setText(f"{self.drawing_tool.name}: {effect}. Hold Alt to invert the effect.")
+        effect_id = "mask.effect.mask" if draw_value else "mask.effect.restore"
+        self.active_tool_label.setText(
+            tr(
+                "mask.tool.active_effect",
+                tool=self._tool_label(self.drawing_tool.name),
+                effect=tr(effect_id),
+            )
+        )
 
     def _build_ui(self):
         """Build the main user interface"""
@@ -301,20 +322,20 @@ class MaskApp(BaseImageTab):
 
     def _create_tools_panel(self) -> QWidget:
         """Create the ordered mask-editing controls for the sidebar."""
-        panel = QGroupBox("Tools")
+        panel = QGroupBox(tr("mask.panel.tools"))
         layout = QVBoxLayout(panel)
-        self.edit_target_label = QLabel("Editing: no active layer")
+        self.edit_target_label = QLabel(tr("mask.edit_target.none"))
         apply_info_style(self.edit_target_label)
         layout.addWidget(self.edit_target_label)
 
         self.navigation_buttons = {}
         navigation_tools = []
-        for mode, label, tooltip in (
-            ("pan", "Pan", "Pan across the image"),
-            ("zoom", "Zoom", "Drag a rectangle to zoom"),
+        for mode, label_id, tooltip_id in (
+            ("pan", "mask.navigation.pan", "mask.navigation.pan_tooltip"),
+            ("zoom", "mask.navigation.zoom", "mask.navigation.zoom_tooltip"),
         ):
             button = self._make_square_tool_button(
-                tooltip=tooltip,
+                tooltip=tr(tooltip_id),
                 icon=self.image_viewer.toolbar_icon(mode),
                 checkable=True,
             )
@@ -322,55 +343,55 @@ class MaskApp(BaseImageTab):
                 lambda _checked=False, selected_mode=mode: self.image_viewer.activate_navigation_mode(selected_mode)
             )
             self.navigation_buttons[mode] = button
-            navigation_tools.append((label, button))
+            navigation_tools.append((tr(label_id), button))
         self.fit_view_button = self._make_square_tool_button(
-            tooltip="Reset to the full image view",
+            tooltip=tr("mask.navigation.home_tooltip"),
             icon=self.image_viewer.toolbar_icon("home"),
         )
         self.fit_view_button.clicked.connect(self.image_viewer.reset_view)
-        navigation_tools.append(("Home", self.fit_view_button))
+        navigation_tools.append((tr("mask.navigation.home"), self.fit_view_button))
         self.navigation_buttons["pan"].setChecked(True)
 
         self.tool_buttons = {}
         tool_specs = (
-            ("Brush", "Brush", "Brush: mask pixels. Hold Alt to restore pixels."),
-            ("Eraser", "Eraser", "Eraser: restore pixels. Hold Alt to mask pixels."),
-            ("Line", "Line", "Draw a straight mask line. Hold Alt to erase."),
-            ("Rectangle", "Rect", "Draw a filled rectangle. Hold Alt to erase."),
-            ("Circle", "Circle", "Draw a filled circle. Hold Alt to erase."),
-            ("Polygon", "Polygon", "Click vertices; Enter or double-click finishes."),
-            ("Smart Fill", "Fill", "Fill from an image seed. Hold Alt to erase."),
+            ("Brush", "mask.tool.brush", "mask.tool.brush_tooltip"),
+            ("Eraser", "mask.tool.eraser", "mask.tool.eraser_tooltip"),
+            ("Line", "mask.tool.line", "mask.tool.line_tooltip"),
+            ("Rectangle", "mask.tool.rectangle_short", "mask.tool.rectangle_tooltip"),
+            ("Circle", "mask.tool.circle", "mask.tool.circle_tooltip"),
+            ("Polygon", "mask.tool.polygon", "mask.tool.polygon_tooltip"),
+            ("Smart Fill", "mask.tool.smart_fill_short", "mask.tool.smart_fill_tooltip"),
         )
         drawing_tools = []
-        for tool_name, label, tooltip in tool_specs:
+        for tool_name, label_id, tooltip_id in tool_specs:
             icon = self._load_tool_icon(tool_name)
             button = self._make_square_tool_button(
-                tooltip=tooltip,
+                tooltip=tr(tooltip_id),
                 icon=icon,
                 checkable=True,
             )
             button.clicked.connect(lambda checked, name=tool_name: self._activate_drawing_tool(name, checked))
             button.setProperty("baseStyleSheet", button.styleSheet())
             self.tool_buttons[tool_name] = button
-            drawing_tools.append((label, button))
+            drawing_tools.append((tr(label_id), button))
 
         shrink_button = self._make_square_tool_button(
-            tooltip="Shrink active layer by 1 px",
+            tooltip=tr("mask.tool.shrink_tooltip"),
             icon=self._load_asset_icon("tool_shrink.svg"),
         )
         self._register_asset_icon(shrink_button, "tool_shrink.svg")
         shrink_button.clicked.connect(lambda: self._refine_active_layer("shrink"))
         grow_button = self._make_square_tool_button(
-            tooltip="Grow active layer by 1 px",
+            tooltip=tr("mask.tool.grow_tooltip"),
             icon=self._load_asset_icon("tool_grow.svg"),
         )
         self._register_asset_icon(grow_button, "tool_grow.svg")
         grow_button.clicked.connect(lambda: self._refine_active_layer("grow"))
         self.refine_buttons = [shrink_button, grow_button]
-        refine_tools = [("Shrink", shrink_button), ("Grow", grow_button)]
+        refine_tools = [(tr("mask.refine.shrink"), shrink_button), (tr("mask.refine.grow"), grow_button)]
 
         self.undo_button = self._make_square_tool_button(
-            tooltip="Undo last mask edit (Ctrl+Z)",
+            tooltip=tr("mask.action.undo_tooltip"),
             icon=self._load_asset_icon("tool_undo.svg"),
         )
         self._register_asset_icon(self.undo_button, "tool_undo.svg")
@@ -378,22 +399,25 @@ class MaskApp(BaseImageTab):
         self.undo_button.clicked.connect(self.undo_stack.undo)
 
         self.redo_button = self._make_square_tool_button(
-            tooltip="Redo mask edit (Ctrl+Shift+Z)",
+            tooltip=tr("mask.action.redo_tooltip"),
             icon=self._load_asset_icon("tool_redo.svg"),
         )
         self._register_asset_icon(self.redo_button, "tool_redo.svg")
         self.redo_button.setEnabled(False)
         self.redo_button.clicked.connect(self.undo_stack.redo)
-        history_tools = [("Undo", self.undo_button), ("Redo", self.redo_button)]
+        history_tools = [
+            (tr("mask.action.undo"), self.undo_button),
+            (tr("mask.action.redo"), self.redo_button),
+        ]
 
         utility_widget = QWidget()
         utility_row = QHBoxLayout(utility_widget)
         utility_row.setContentsMargins(0, 0, 0, 0)
         utility_row.setSpacing(AppStyle.LAYOUT['section_spacing'])
         for index, (title, tools) in enumerate((
-            ("View", navigation_tools),
-            ("Refine", refine_tools),
-            ("History", history_tools),
+            (tr("mask.panel.view"), navigation_tools),
+            (tr("mask.panel.refine"), refine_tools),
+            (tr("mask.panel.history"), history_tools),
         )):
             if index:
                 separator = QFrame()
@@ -407,7 +431,7 @@ class MaskApp(BaseImageTab):
         utility_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         layout.addWidget(utility_widget)
 
-        self._add_tool_group(layout, "Draw", drawing_tools, columns=len(drawing_tools))
+        self._add_tool_group(layout, tr("mask.panel.draw"), drawing_tools, columns=len(drawing_tools))
         self.undo_stack.canUndoChanged.connect(self.undo_button.setEnabled)
         self.undo_stack.canRedoChanged.connect(self.redo_button.setEnabled)
         layout.addWidget(self._create_tool_options_panel())
@@ -494,11 +518,11 @@ class MaskApp(BaseImageTab):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(8, 4, 8, 4)
-        self.active_tool_label = QLabel("Pan and inspect the image")
+        self.active_tool_label = QLabel(tr("mask.tool.pan_inspect"))
         self.active_tool_label.setWordWrap(True)
         layout.addWidget(self.active_tool_label)
         size_row = QHBoxLayout()
-        self.tool_size_label = QLabel("Size")
+        self.tool_size_label = QLabel(tr("mask.tool.size"))
         self.brush_size_spin = QSpinBox()
         self.brush_size_spin.setRange(1, 50)
         self.brush_size_spin.setValue(self.brush_size)
@@ -516,9 +540,9 @@ class MaskApp(BaseImageTab):
         size_row.addWidget(self.brush_size_slider)
         layout.addLayout(size_row)
         polygon_row = QHBoxLayout()
-        self.finish_polygon_button = QPushButton("Finish Polygon")
+        self.finish_polygon_button = QPushButton(tr("mask.tool.finish_polygon"))
         self.finish_polygon_button.clicked.connect(self._finish_polygon)
-        self.cancel_tool_button = QPushButton("Cancel")
+        self.cancel_tool_button = QPushButton(tr("mask.action.cancel"))
         self.cancel_tool_button.clicked.connect(self._cancel_current_edit)
         polygon_row.addWidget(self.finish_polygon_button)
         polygon_row.addWidget(self.cancel_tool_button)
@@ -542,7 +566,7 @@ class MaskApp(BaseImageTab):
 
     def _create_layer_panel(self):
         """Create layer selection, visibility, appearance, and composition controls."""
-        panel = QGroupBox("Layers")
+        panel = QGroupBox(tr("mask.panel.layers"))
         panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         layout = QVBoxLayout(panel)
 
@@ -555,23 +579,23 @@ class MaskApp(BaseImageTab):
         layout.addWidget(self.layer_list, 1)
 
         button_row = QHBoxLayout()
-        self.add_layer_button = QPushButton("Add")
-        self.add_layer_button.setToolTip("Add an empty, imported, instrument, or threshold layer")
+        self.add_layer_button = QPushButton(tr("mask.action.add"))
+        self.add_layer_button.setToolTip(tr("mask.action.add_tooltip"))
         self.add_layer_button.clicked.connect(self._add_layer_menu)
         apply_emphasis_button_style(self.add_layer_button)
         button_row.addWidget(self.add_layer_button, 1)
 
-        self.remove_layer_button = QPushButton("Remove")
+        self.remove_layer_button = QPushButton(tr("mask.action.remove"))
         self.remove_layer_button.clicked.connect(self._remove_selected_layer)
         self.remove_layer_button.setEnabled(False)
         button_row.addWidget(self.remove_layer_button)
 
-        self.clear_layers_button = QPushButton("Clear Layers")
+        self.clear_layers_button = QPushButton(tr("mask.action.clear_layers"))
         self.clear_layers_button.clicked.connect(self._clear_all_layers)
         button_row.addWidget(self.clear_layers_button)
         layout.addLayout(button_row)
 
-        self.layer_empty_hint = QLabel("Create a mask from the threshold above, or add an empty layer for manual drawing.")
+        self.layer_empty_hint = QLabel(tr("mask.layers.empty_hint"))
         self.layer_empty_hint.setWordWrap(True)
         apply_info_style(self.layer_empty_hint)
         layout.addWidget(self.layer_empty_hint)
@@ -580,7 +604,7 @@ class MaskApp(BaseImageTab):
         appearance = QVBoxLayout(self.layer_appearance_panel)
         appearance.setContentsMargins(0, 0, 0, 0)
         appearance_header = QHBoxLayout()
-        self.active_layer_label = QLabel("Combined overlay")
+        self.active_layer_label = QLabel(tr("mask.layers.combined_overlay"))
         apply_info_style(self.active_layer_label)
         appearance_header.addWidget(self.active_layer_label)
         appearance_header.addStretch()
@@ -588,15 +612,15 @@ class MaskApp(BaseImageTab):
         self.show_mask_check.toggled.connect(self._refresh_mask_overlay)
         appearance.addLayout(appearance_header)
         appearance_row = QHBoxLayout()
-        appearance_row.addWidget(QLabel("Color"))
+        appearance_row.addWidget(QLabel(tr("mask.appearance.color")))
         self.layer_color_button = QPushButton()
         self._update_overlay_color_button()
         self.layer_color_button.setFixedWidth(42)
-        self.layer_color_button.setToolTip("Choose the combined mask overlay color")
+        self.layer_color_button.setToolTip(tr("mask.appearance.choose_color"))
         self.layer_color_button.clicked.connect(self._choose_overlay_color)
         appearance_row.addWidget(self.layer_color_button)
         appearance_row.addSpacing(12)
-        appearance_row.addWidget(QLabel("Opacity"))
+        appearance_row.addWidget(QLabel(tr("mask.appearance.opacity")))
         self.alpha_spin = QSpinBox()
         self.alpha_spin.setRange(0, 100)
         self.alpha_spin.setSuffix("%")
@@ -608,12 +632,12 @@ class MaskApp(BaseImageTab):
         self.mask_coverage_bar = QProgressBar()
         self.mask_coverage_bar.setRange(0, 1000)
         self.mask_coverage_bar.setValue(0)
-        self.mask_coverage_bar.setFormat("Masked 0.0%")
+        self.mask_coverage_bar.setFormat(tr("mask.coverage.format", percentage=0.0))
         self.mask_coverage_bar.setTextVisible(True)
-        self.mask_coverage_bar.setToolTip("Fraction of visible image pixels included in the combined mask")
+        self.mask_coverage_bar.setToolTip(tr("mask.coverage.tooltip"))
         appearance.addWidget(self.mask_coverage_bar)
-        self.export_combined_button = QPushButton("Export Combined Mask")
-        self.export_combined_button.setToolTip("Export the combined mask from all visible layers")
+        self.export_combined_button = QPushButton(tr("mask.action.export_combined"))
+        self.export_combined_button.setToolTip(tr("mask.action.export_combined_tooltip"))
         self.export_combined_button.clicked.connect(self._export_combined_mask)
         self.export_combined_button.setEnabled(self.combined_mask is not None)
         apply_emphasis_button_style(self.export_combined_button)
@@ -623,45 +647,54 @@ class MaskApp(BaseImageTab):
         return panel
 
     def _create_threshold_panel(self) -> QWidget:
-        panel = QGroupBox("Threshold Mask")
+        panel = QGroupBox(tr("mask.panel.threshold"))
         layout = QVBoxLayout(panel)
         mode_row = QHBoxLayout()
         self.threshold_mode_combo = QComboBox(panel)
-        self.threshold_mode_combo.addItems(["Below", "Range", "Above"])
+        threshold_modes = (
+            ("below", "mask.threshold.below"),
+            ("range", "mask.threshold.range"),
+            ("above", "mask.threshold.above"),
+        )
+        for mode, message_id in threshold_modes:
+            self.threshold_mode_combo.addItem(tr(message_id), userData=mode)
         self.threshold_mode_combo.hide()
         self.threshold_mode_combo.currentTextChanged.connect(self._on_threshold_controls_changed)
         self.threshold_mode_buttons = QButtonGroup(self)
         self.threshold_mode_buttons.setExclusive(True)
-        for label, mode, icon_filename in (
-            ("Below", "Below", "tool_threshold_below.svg"),
-            ("Between", "Range", "tool_threshold_between.svg"),
-            ("Above", "Above", "tool_threshold_above.svg"),
+        for label_id, mode, icon_filename in (
+            ("mask.threshold.below", "below", "tool_threshold_below.svg"),
+            ("mask.threshold.between", "range", "tool_threshold_between.svg"),
+            ("mask.threshold.above", "above", "tool_threshold_above.svg"),
         ):
             button = QToolButton()
-            button.setText(label)
+            button.setText(tr(label_id))
             button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
             self._register_asset_icon(button, icon_filename)
             button.setCheckable(True)
-            button.setChecked(mode == "Below")
+            button.setChecked(mode == "below")
             button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             button.setFixedHeight(AppStyle.toolbar_symbol_button_size().height())
             AppStyle.apply_widget_style(button, 'compact_button')
             AppStyle.set_font_role(button, 'toolbar_text')
             button.clicked.connect(
-                lambda checked, selected_mode=mode: checked and self.threshold_mode_combo.setCurrentText(selected_mode)
+                lambda checked, selected_mode=mode: checked
+                and self.threshold_mode_combo.setCurrentIndex(
+                    self.threshold_mode_combo.findData(selected_mode)
+                )
             )
             self.threshold_mode_buttons.addButton(button)
             mode_row.addWidget(button, 1)
         layout.addLayout(mode_row)
 
         histogram_controls = QHBoxLayout()
-        self.threshold_log_x_check = QCheckBox("Log X")
-        self.threshold_log_x_check.setToolTip("Use logarithmic spacing for the intensity axis")
+        self.threshold_log_x_check = QCheckBox(tr("mask.threshold.log_x"))
+        self.threshold_log_x_check.setToolTip(tr("mask.threshold.log_x_tooltip"))
         self.threshold_log_x_check.toggled.connect(self._on_threshold_scale_changed)
         histogram_controls.addWidget(self.threshold_log_x_check)
         histogram_controls.addStretch()
-        fit_x_button = QPushButton("Fit X")
-        fit_x_button.setToolTip("Fit the full histogram intensity range")
+        fit_x_button = QPushButton(tr("mask.threshold.fit_x"))
+        fit_x_button.setToolTip(tr("mask.threshold.fit_x_tooltip"))
         fit_x_button.clicked.connect(self._fit_threshold_x)
         histogram_controls.addWidget(fit_x_button)
         layout.addLayout(histogram_controls)
@@ -671,7 +704,7 @@ class MaskApp(BaseImageTab):
         self.threshold_plot.setMinimumHeight(110)
         self.threshold_plot.setMouseEnabled(x=True, y=False)
         self.threshold_plot.hideAxis('left')
-        self.threshold_plot.setLabel('bottom', 'Intensity')
+        self.threshold_plot.setLabel('bottom', tr("mask.threshold.intensity_axis"))
         self.threshold_region = pg.LinearRegionItem(values=(0.25, 0.75))
         self.threshold_region.sigRegionChanged.connect(self._on_threshold_region_changed)
         self.threshold_plot.addItem(self.threshold_region)
@@ -681,7 +714,7 @@ class MaskApp(BaseImageTab):
         self.threshold_low_control = QWidget()
         low_layout = QHBoxLayout(self.threshold_low_control)
         low_layout.setContentsMargins(0, 0, 0, 0)
-        self.threshold_low_label = QLabel("Lower")
+        self.threshold_low_label = QLabel(tr("mask.threshold.lower"))
         low_layout.addWidget(self.threshold_low_label)
         self.threshold_low_spin = QDoubleSpinBox()
         self.threshold_low_spin.setDecimals(4)
@@ -693,7 +726,7 @@ class MaskApp(BaseImageTab):
         self.threshold_high_control = QWidget()
         high_layout = QHBoxLayout(self.threshold_high_control)
         high_layout.setContentsMargins(0, 0, 0, 0)
-        self.threshold_high_label = QLabel("Upper")
+        self.threshold_high_label = QLabel(tr("mask.threshold.upper"))
         high_layout.addWidget(self.threshold_high_label)
         self.threshold_high_spin = QDoubleSpinBox()
         self.threshold_high_spin.setDecimals(4)
@@ -706,11 +739,11 @@ class MaskApp(BaseImageTab):
         layout.addLayout(values)
         self._on_threshold_controls_changed()
         action_row = QHBoxLayout()
-        cancel_button = QPushButton("Cancel")
-        cancel_button.setToolTip("Hide the current threshold preview")
+        cancel_button = QPushButton(tr("mask.action.cancel"))
+        cancel_button.setToolTip(tr("mask.threshold.cancel_tooltip"))
         cancel_button.clicked.connect(self._cancel_threshold_preview)
         action_row.addWidget(cancel_button, 1)
-        self.create_threshold_button = QPushButton("Create Layer")
+        self.create_threshold_button = QPushButton(tr("mask.threshold.create_layer"))
         self.create_threshold_button.clicked.connect(self._generate_threshold_mask)
         apply_emphasis_button_style(self.create_threshold_button)
         action_row.addWidget(self.create_threshold_button, 1)
@@ -736,7 +769,7 @@ class MaskApp(BaseImageTab):
             self.threshold_log_x_check.blockSignals(False)
             log_x = False
             histogram_values = finite
-            self.parent_app.show_status("Log X requires positive intensity values; using Linear X")
+            self.parent_app.show_status(tr("mask.threshold.log_requires_positive"))
 
         plot_values = np.log10(histogram_values) if log_x else histogram_values
         counts, edges = np.histogram(
@@ -861,11 +894,15 @@ class MaskApp(BaseImageTab):
         self._on_threshold_spins_changed()
 
     def _on_threshold_controls_changed(self) -> None:
-        mode = self.threshold_mode_combo.currentText()
-        self.threshold_low_control.setVisible(mode != "Below")
-        self.threshold_high_control.setVisible(mode != "Above")
-        self.threshold_low_label.setText("Threshold" if mode == "Above" else "Lower")
-        self.threshold_high_label.setText("Threshold" if mode == "Below" else "Upper")
+        mode = self.threshold_mode_combo.currentData()
+        self.threshold_low_control.setVisible(mode != "below")
+        self.threshold_high_control.setVisible(mode != "above")
+        self.threshold_low_label.setText(
+            tr("mask.threshold.threshold" if mode == "above" else "mask.threshold.lower")
+        )
+        self.threshold_high_label.setText(
+            tr("mask.threshold.threshold" if mode == "below" else "mask.threshold.upper")
+        )
         self._update_threshold_preview()
 
     def _make_threshold_mask(self) -> np.ndarray | None:
@@ -876,11 +913,11 @@ class MaskApp(BaseImageTab):
         high = self.threshold_high_spin.value()
         if high < low:
             low, high = high, low
-        mode = self.threshold_mode_combo.currentText()
+        mode = self.threshold_mode_combo.currentData()
         finite = np.isfinite(image_2d)
-        if mode == "Below":
+        if mode == "below":
             return finite & (image_2d <= high)
-        if mode == "Above":
+        if mode == "above":
             return finite & (image_2d >= low)
         return finite & (image_2d >= low) & (image_2d <= high)
 
@@ -978,27 +1015,45 @@ class MaskApp(BaseImageTab):
         info_lines.append("")  # Blank line separator
         
         # === MASK STATUS ===
-        info_lines.append("=== MASK LAYERS ===")
-        info_lines.append(f"Number of layers: {len(self.mask_layers)}")
+        info_lines.append(tr("mask.layers.status_heading"))
+        info_lines.append(tr("mask.layers.count", count=len(self.mask_layers)))
         
         for i, layer in enumerate(self.mask_layers):
-            visibility = "visible" if layer.visible else "hidden"
-            operation = "base" if i == 0 else ("add" if layer.combine_mode == "OR" else "overlap")
+            visibility = tr("mask.layers.visible" if layer.visible else "mask.layers.hidden")
+            operation_id = (
+                "mask.layers.operation_base"
+                if i == 0
+                else (
+                    "mask.layers.operation_add"
+                    if layer.combine_mode == "OR"
+                    else "mask.layers.operation_overlap"
+                )
+            )
+            operation = tr(operation_id)
             masked_pixels = np.sum(layer.data)
             total_pixels = layer.data.size
             mask_percentage = (masked_pixels / total_pixels) * 100
             info_lines.append(
-                f"  Layer {i+1}: {layer.name} ({visibility}, {operation}) - "
-                f"{masked_pixels:,} pixels ({mask_percentage:.1f}%)"
+                tr(
+                    "mask.layers.status_row",
+                    index=i + 1,
+                    name=layer.name,
+                    visibility=visibility,
+                    operation=operation,
+                    pixels=masked_pixels,
+                    coverage=mask_percentage,
+                )
             )
         
         if self.combined_mask is not None:
             info_lines.append("")
-            info_lines.append("=== COMBINED MASK ===")
+            info_lines.append(tr("mask.layers.combined_heading"))
             masked_pixels = np.sum(self.combined_mask)
             total_pixels = self.combined_mask.size
             mask_percentage = (masked_pixels / total_pixels) * 100
-            info_lines.append(f"Masked pixels: {masked_pixels:,} ({mask_percentage:.1f}%)")
+            info_lines.append(
+                tr("mask.coverage.status", masked=masked_pixels, percentage=mask_percentage)
+            )
 
     # ===== Layer Management Methods =====
     
@@ -1024,10 +1079,10 @@ class MaskApp(BaseImageTab):
                 connector.setFixedWidth(48)
                 connector.setFixedHeight(AppStyle.toolbar_text_button_height())
                 connector.setText(layer.combine_mode)
-                operation_help = (
-                    "∪ Union · either mask"
+                operation_help = tr(
+                    "mask.operation.union"
                     if layer.combine_mode == "OR"
-                    else "∩ Intersection · both masks"
+                    else "mask.operation.intersection"
                 )
                 connector.setToolTip(operation_help)
                 connector.clicked.connect(
@@ -1076,7 +1131,7 @@ class MaskApp(BaseImageTab):
         visible.setFixedSize(AppStyle.corner_button_size())
         visible.setIconSize(AppStyle.corner_button_icon_size())
         visible.setIcon(self._load_asset_icon("status_visible.svg" if layer.visible else "status_hidden.svg"))
-        visible.setToolTip("Visible" if layer.visible else "Hidden")
+        visible.setToolTip(tr("mask.layers.visible" if layer.visible else "mask.layers.hidden"))
         visible.toggled.connect(
             lambda checked, index=layer_index: self._set_layer_visibility(index, checked)
         )
@@ -1086,7 +1141,7 @@ class MaskApp(BaseImageTab):
         name = QLabel(layer.name)
         name.setToolTip(layer.name)
         labels.addWidget(name)
-        details = QLabel(f"{coverage:.1f}% masked")
+        details = QLabel(tr("mask.coverage.row", percentage=coverage))
         apply_info_style(details)
         labels.addWidget(details)
         layout.addLayout(labels, 1)
@@ -1095,7 +1150,9 @@ class MaskApp(BaseImageTab):
             editing_status.setPixmap(
                 self._load_asset_icon("status_editing.svg").pixmap(AppStyle.corner_button_icon_size())
             )
-            editing_status.setToolTip("Active editing layer" if layer.visible else "Active layer is hidden")
+            editing_status.setToolTip(
+                tr("mask.layers.active_editing" if layer.visible else "mask.layers.active_hidden")
+            )
             layout.addWidget(editing_status)
         return row
 
@@ -1112,21 +1169,21 @@ class MaskApp(BaseImageTab):
         self.layer_list.setCurrentItem(item)
         layer = self.mask_layers[layer_index]
         menu = QMenu(self.layer_list)
-        menu.addAction("Rename...", self._rename_selected_layer)
-        menu.addAction("Duplicate", self._duplicate_selected_layer)
-        menu.addAction("Export...", self._export_selected_layer)
+        menu.addAction(tr("mask.menu.rename"), self._rename_selected_layer)
+        menu.addAction(tr("mask.menu.duplicate"), self._duplicate_selected_layer)
+        menu.addAction(tr("mask.menu.export"), self._export_selected_layer)
         menu.addSeparator()
-        move_up = menu.addAction("Move Up", self._move_layer_up)
+        move_up = menu.addAction(tr("mask.menu.move_up"), self._move_layer_up)
         move_up.setEnabled(layer_index > 0)
-        move_down = menu.addAction("Move Down", self._move_layer_down)
+        move_down = menu.addAction(tr("mask.menu.move_down"), self._move_layer_down)
         move_down.setEnabled(layer_index < len(self.mask_layers) - 1)
         menu.addSeparator()
-        visibility = menu.addAction("Hide" if layer.visible else "Show")
+        visibility = menu.addAction(tr("mask.menu.hide" if layer.visible else "mask.menu.show"))
         visibility.triggered.connect(
             lambda: self._set_layer_visibility(layer_index, not layer.visible)
         )
         menu.addSeparator()
-        menu.addAction("Remove", self._remove_selected_layer)
+        menu.addAction(tr("mask.action.remove"), self._remove_selected_layer)
         menu.exec_(self.layer_list.viewport().mapToGlobal(position))
     
     def _on_layer_selected(self, row):
@@ -1139,10 +1196,12 @@ class MaskApp(BaseImageTab):
             self._refresh_edit_target()
             return
         layer = self.mask_layers[layer_index]
-        state = "Editing" if layer.visible else "Hidden - show this layer before editing"
+        state = tr("mask.status.editing" if layer.visible else "mask.status.hidden_before_edit")
         self._refresh_layer_row_states(layer_index)
         self._refresh_edit_target()
-        self.parent_app.show_status(f"Active mask layer: {layer.name} ({state})")
+        self.parent_app.show_status(
+            tr("mask.status.active_layer", name=layer.name, state=state)
+        )
 
     def _refresh_layer_row_states(self, active_index: int | None) -> None:
         for layer_index, layer in enumerate(self.mask_layers):
@@ -1161,11 +1220,11 @@ class MaskApp(BaseImageTab):
         layer = self.mask_layers[layer_index] if layer_index is not None else None
         editable = layer is not None and layer.visible
         if layer is None:
-            self.edit_target_label.setText("Editing: create or add a layer first")
+            self.edit_target_label.setText(tr("mask.edit_target.create"))
         elif layer.visible:
-            self.edit_target_label.setText(f"Editing: {layer.name}")
+            self.edit_target_label.setText(tr("mask.edit_target.layer", name=layer.name))
         else:
-            self.edit_target_label.setText(f"Editing: {layer.name} (hidden)")
+            self.edit_target_label.setText(tr("mask.edit_target.hidden", name=layer.name))
         for button in self.tool_buttons.values():
             button.setEnabled(editable)
         for button in self.refine_buttons:
@@ -1209,7 +1268,9 @@ class MaskApp(BaseImageTab):
         self._refresh_mask_overlay()
 
     def _choose_overlay_color(self) -> None:
-        color = QColorDialog.getColor(QColor(self.overlay_color), self, "Choose combined mask color")
+        color = QColorDialog.getColor(
+            QColor(self.overlay_color), self, tr("mask.appearance.choose_color")
+        )
         if color.isValid():
             self._set_overlay_color(color.name())
 
@@ -1225,11 +1286,11 @@ class MaskApp(BaseImageTab):
         from PyQt5.QtWidgets import QMenu
         menu = QMenu(self)
         
-        menu.addAction("Empty Layer", self._add_empty_layer)
-        menu.addAction("From File", self._load_custom_mask)
+        menu.addAction(tr("mask.menu.empty_layer"), self._add_empty_layer)
+        menu.addAction(tr("mask.menu.from_file"), self._load_custom_mask)
         
         # Add submenu for instrument default masks by detector
-        instrument_submenu = menu.addMenu("From Instrument Default")
+        instrument_submenu = menu.addMenu(tr("mask.menu.instrument_default"))
         for detector_key, detector_config in DETECTOR_CONFIGS.items():
             detector_name = detector_config.get('name', detector_key)
             
@@ -1249,7 +1310,7 @@ class MaskApp(BaseImageTab):
                 action = instrument_submenu.addAction(detector_name)
                 action.triggered.connect(lambda checked=False, dk=detector_key: self._load_instrument_mask(dk))
         
-        menu.addAction("From Current Image (Threshold)", self._generate_threshold_mask)
+        menu.addAction(tr("mask.menu.threshold_layer"), self._generate_threshold_mask)
         
         menu.exec_(self.sender().mapToGlobal(self.sender().rect().bottomLeft()))
     
@@ -1259,23 +1320,30 @@ class MaskApp(BaseImageTab):
         image_2d, is_valid, error_msg = validate_and_prepare_image_array(self.image_data)
         
         if not is_valid:
-            self.parent_app.show_status(error_msg or "Load an image first. Use 'Sync to Other Tabs' in Image Browser.")
+            self.parent_app.show_status(
+                tr("mask.image_validation_error", error=error_msg)
+                if error_msg
+                else tr("mask.image_sync_required")
+            )
             return
         
         try:
             # Create empty mask matching image dimensions
             empty_mask = np.zeros(image_2d.shape, dtype=bool)
             
-            layer = MaskLayer(empty_mask, f"Empty Layer {len(self.mask_layers)+1}")
+            layer = MaskLayer(
+                empty_mask,
+                tr("mask.layer.empty_name", number=len(self.mask_layers) + 1),
+            )
             layer.source = "custom"
             self.mask_layers.append(layer)
             
             self._update_layer_list()
             self.layer_list.setCurrentRow(self._list_row_for_layer(len(self.mask_layers) - 1))
-            self.parent_app.show_status("Added empty layer")
+            self.parent_app.show_status(tr("mask.status.added_empty"))
             
         except Exception as e:
-            self.parent_app.show_status(f"Could not create the empty mask layer: {str(e)}")
+            self.parent_app.show_status(tr("mask.error.create_empty", error=str(e)))
             print(f"DEBUG: _add_empty_layer error: {e}")
             print(f"DEBUG: image_data type: {type(self.image_data)}")
     
@@ -1283,12 +1351,14 @@ class MaskApp(BaseImageTab):
         """Remove the selected layer"""
         current_row = self._get_active_layer_index()
         if current_row is None:
-            self.parent_app.show_status("No layer selected")
+            self.parent_app.show_status(tr("mask.status.no_layer_selected"))
             return
         
         removed_layer = self.mask_layers.pop(current_row)
         self._update_layer_list()
-        self.parent_app.show_status(f"Removed layer: {removed_layer.name}")
+        self.parent_app.show_status(
+            tr("mask.status.removed_layer", name=removed_layer.name)
+        )
 
     def _clear_all_layers(self) -> None:
         """Remove every mask layer through the undo stack."""
@@ -1297,13 +1367,18 @@ class MaskApp(BaseImageTab):
         if self.drawing_mode:
             self._set_drawing_enabled_from_session(False)
         self.undo_stack.push(_LayerClearCommand(self.mask_layers, self._update_layer_list))
-        self.parent_app.show_status("Cleared all mask layers")
+        self.parent_app.show_status(tr("mask.status.cleared_layers"))
 
     def _rename_selected_layer(self) -> None:
         layer = self._get_active_layer()
         if layer is None:
             return
-        name, accepted = QInputDialog.getText(self, "Rename Layer", "Layer name", text=layer.name)
+        name, accepted = QInputDialog.getText(
+            self,
+            tr("mask.dialog.rename_title"),
+            tr("mask.dialog.rename_prompt"),
+            text=layer.name,
+        )
         if accepted and name.strip():
             layer.name = name.strip()
             self._update_layer_list()
@@ -1315,7 +1390,7 @@ class MaskApp(BaseImageTab):
         original = self.mask_layers[layer_index]
         duplicate = MaskLayer(
             original.data.copy(),
-            f"{original.name} Copy",
+            tr("mask.layer.duplicate_name", name=original.name),
             original.visible,
             combine_mode=original.combine_mode,
         )
@@ -1397,7 +1472,7 @@ class MaskApp(BaseImageTab):
         self.alpha_spin.setValue(self.overlay_opacity)
         self.alpha_spin.blockSignals(False)
         self._update_layer_list()
-        self.parent_app.show_status(f"Restored {len(restored)} mask layer(s) from last session")
+        self.parent_app.show_status(tr("mask.status.restored", count=len(restored)))
 
     
     def _update_combined_mask(self):
@@ -1409,8 +1484,8 @@ class MaskApp(BaseImageTab):
             if hasattr(self.parent_app, 'publish_shared_mask'):
                 self.parent_app.publish_shared_mask(None, source_tab=self)
             self.mask_coverage_bar.setValue(0)
-            self.mask_coverage_bar.setFormat("Masked 0.0%")
-            self.mask_coverage_bar.setToolTip("No visible mask layers")
+            self.mask_coverage_bar.setFormat(tr("mask.coverage.format", percentage=0.0))
+            self.mask_coverage_bar.setToolTip(tr("mask.coverage.no_layers"))
             self._refresh_mask_overlay()
             return
 
@@ -1423,8 +1498,12 @@ class MaskApp(BaseImageTab):
         mask_percentage = (masked_pixels / total_pixels) * 100
         
         self.mask_coverage_bar.setValue(round(mask_percentage * 10))
-        self.mask_coverage_bar.setFormat(f"Masked {mask_percentage:.1f}%")
-        self.mask_coverage_bar.setToolTip(f"{masked_pixels:,} of {total_pixels:,} pixels masked")
+        self.mask_coverage_bar.setFormat(
+            tr("mask.coverage.format", percentage=mask_percentage)
+        )
+        self.mask_coverage_bar.setToolTip(
+            tr("mask.coverage.pixel_count", masked=masked_pixels, total=total_pixels)
+        )
         self._refresh_mask_overlay()
 
     def _set_combined_mask_preview(self, mask: np.ndarray) -> None:
@@ -1469,18 +1548,18 @@ class MaskApp(BaseImageTab):
         """Commit the current non-destructive threshold preview as a new layer."""
         mask = self._make_threshold_mask()
         if mask is None:
-            self.parent_app.show_status("Load an image before creating a threshold mask")
+            self.parent_app.show_status(tr("mask.threshold.load_image"))
             return
-        mode = self.threshold_mode_combo.currentText()
+        mode = self.threshold_mode_combo.currentData()
         low = self.threshold_low_spin.value()
         high = self.threshold_high_spin.value()
-        if mode == "Below":
-            description = f"Below {high:.4g}"
-        elif mode == "Above":
-            description = f"Above {low:.4g}"
+        if mode == "below":
+            description = tr("mask.threshold.description_below", threshold=high)
+        elif mode == "above":
+            description = tr("mask.threshold.description_above", threshold=low)
         else:
-            description = f"Range {low:.4g} to {high:.4g}"
-        layer = MaskLayer(mask, f"Threshold: {description}")
+            description = tr("mask.threshold.description_range", low=low, high=high)
+        layer = MaskLayer(mask, tr("mask.layer.threshold_name", description=description))
         layer.source = "generated"
         self._threshold_preview = None
         self.image_viewer.remove_overlay('threshold-preview')
@@ -1488,7 +1567,7 @@ class MaskApp(BaseImageTab):
             _LayerAddCommand(self.mask_layers, layer, len(self.mask_layers), self._update_layer_list)
         )
         self.layer_list.setCurrentRow(self._list_row_for_layer(len(self.mask_layers) - 1))
-        self.parent_app.show_status(f"Created mask layer from intensity: {description}")
+        self.parent_app.show_status(tr("mask.threshold.created", description=description))
     
     def _activate_drawing_tool(self, tool_name: str, checked: bool):
         """Activate a drawing tool button and lock the image canvas while it is checked."""
@@ -1496,11 +1575,11 @@ class MaskApp(BaseImageTab):
             active_layer = self._get_active_layer()
             if active_layer is None:
                 self.tool_buttons[tool_name].setChecked(False)
-                self.parent_app.show_status("Create or select a mask layer before drawing")
+                self.parent_app.show_status(tr("mask.drawing.create_layer_first"))
                 return
             if not active_layer.visible:
                 self.tool_buttons[tool_name].setChecked(False)
-                self.parent_app.show_status("Show the active layer before editing it")
+                self.parent_app.show_status(tr("mask.drawing.show_layer_first"))
                 return
             if self.drawing_mode and self.drawing_tool.name != tool_name:
                 self.drawing_session.cancel_current_edit()
@@ -1512,7 +1591,9 @@ class MaskApp(BaseImageTab):
                     button.setStyleSheet(button.property("baseStyleSheet") or "")
             self._set_drawing_tool(tool_name)
             self._set_drawing_enabled_from_session(True)
-            self.parent_app.show_status(f"{tool_name} active")
+            self.parent_app.show_status(
+                tr("mask.status.tool_active", tool=self._tool_label(tool_name))
+            )
             return
 
         if self.drawing_tool and self.drawing_tool.name == tool_name:
@@ -1532,11 +1613,20 @@ class MaskApp(BaseImageTab):
             is_polygon = tool_name == "Polygon"
             self.finish_polygon_button.setVisible(is_polygon)
             self.cancel_tool_button.setVisible(is_polygon)
-            effect = "restore pixels" if tool_name == "Eraser" else "mask pixels"
-            hint = "Click vertices, then Enter or double-click to finish." if is_polygon else "Hold Alt to invert the effect."
-            self.active_tool_label.setText(f"{tool_name}: {effect}. {hint}")
+            effect_id = "mask.effect.restore" if tool_name == "Eraser" else "mask.effect.mask"
+            hint_id = "mask.drawing.polygon_hint" if is_polygon else "mask.drawing.alt_hint"
+            self.active_tool_label.setText(
+                tr(
+                    "mask.tool.active_hint",
+                    tool=self._tool_label(tool_name),
+                    effect=tr(effect_id),
+                    hint=tr(hint_id),
+                )
+            )
             self.drawing_tool.draw_value = self._effective_draw_value()
-            self.parent_app.show_status(f"Drawing tool changed to: {tool_name}")
+            self.parent_app.show_status(
+                tr("mask.status.tool_changed", tool=self._tool_label(tool_name))
+            )
     
     def _update_tool_brush_size(self, size: int):
         """Update shared size controls for brush-like drawing tools."""
@@ -1562,12 +1652,12 @@ class MaskApp(BaseImageTab):
     def _finish_polygon(self) -> None:
         if self.drawing_session.finish_polygon():
             self._clear_polygon_feedback()
-            self.parent_app.show_status("Polygon applied to the active layer")
+            self.parent_app.show_status(tr("mask.status.polygon_applied"))
 
     def _cancel_current_edit(self) -> None:
         self.drawing_session.cancel_current_edit()
         self._clear_polygon_feedback()
-        self.parent_app.show_status("Current drawing cancelled")
+        self.parent_app.show_status(tr("mask.status.drawing_cancelled"))
 
     def _refresh_polygon_feedback(self, event=None) -> None:
         tool = self.drawing_tool
@@ -1615,15 +1705,24 @@ class MaskApp(BaseImageTab):
     def _refine_active_layer(self, operation: str) -> None:
         layer = self._get_active_layer()
         if layer is None:
-            self.parent_app.show_status("Select a mask layer to refine")
+            self.parent_app.show_status(tr("mask.refine.select_layer"))
             return
         if not layer.visible:
-            self.parent_app.show_status("Show the active layer before refining it")
+            self.parent_app.show_status(tr("mask.refine.show_layer"))
             return
         before = layer.data.copy()
         after = erode_mask(before, radius=1) if operation == "shrink" else dilate_mask(before, radius=1)
         layer.data = after
-        self.undo_stack.push(_MaskArrayCommand(layer, before, after, f"{operation.title()} mask 1 px", self._update_layer_list))
+        operation_id = "mask.refine.shrink" if operation == "shrink" else "mask.refine.grow"
+        self.undo_stack.push(
+            _MaskArrayCommand(
+                layer,
+                before,
+                after,
+                tr("mask.undo.refine", operation=tr(operation_id)),
+                self._update_layer_list,
+            )
+        )
         self._update_layer_list()
     
     
@@ -1643,7 +1742,9 @@ class MaskApp(BaseImageTab):
                 detector_key = 'waxs'
             
             if detector_key not in DETECTOR_CONFIGS:
-                self.parent_app.show_status(f"Unknown detector: {detector_key}")
+                self.parent_app.show_status(
+                    tr("mask.error.unknown_detector", detector=detector_key)
+                )
                 return
             
             detector_config = DETECTOR_CONFIGS[detector_key]
@@ -1724,7 +1825,9 @@ class MaskApp(BaseImageTab):
                         # New profile format stores the relative file path directly.
                         mask_path = default_mask_name
                     else:
-                        self.parent_app.show_status(f"No mask configured for {detector_name}")
+                        self.parent_app.show_status(
+                            tr("mask.error.no_mask_configured", detector=detector_name)
+                        )
                         return
 
             resolved_mask_path, checked_paths = _resolve_mask_path(mask_path)
@@ -1735,30 +1838,41 @@ class MaskApp(BaseImageTab):
                 if mask_data is not None:
                     # Extract mask name from path
                     mask_name = resolved_mask_path.name
-                    layer = MaskLayer(mask_data, f"Instrument: {mask_name}")
+                    layer = MaskLayer(
+                        mask_data,
+                        tr("mask.layer.instrument_name", name=mask_name),
+                    )
                     layer.source = "default"
                     self.mask_layers.append(layer)
                     
                     self._update_layer_list()
-                    self.parent_app.show_status(f"Loaded instrument mask: {mask_name}")
+                    self.parent_app.show_status(
+                        tr("mask.status.loaded_instrument", name=mask_name)
+                    )
                     return
             else:
                 checked_preview = '; '.join(str(path) for path in checked_paths[:3])
                 if len(checked_paths) > 3:
                     checked_preview += '; ...'
                 self.parent_app.show_status(
-                    f"Mask file not found: {mask_path}. Checked: {checked_preview}"
+                    tr(
+                        "mask.error.mask_not_found",
+                        path=mask_path,
+                        checked=checked_preview,
+                    )
                 )
                 
         except Exception as e:
-            self.parent_app.show_status(f"Could not load the instrument mask: {str(e)}")
+            self.parent_app.show_status(
+                tr("mask.error.load_instrument", error=str(e))
+            )
     
     def _load_custom_mask(self):
         """Load a custom mask file"""
         file_path, _ = choose_path(
             self,
-            "Load Mask File",
-            file_filter="Mask Files (*.npy *.tif *.tiff *.png *.xcf);;All Files (*)",
+            tr("mask.dialog.load_mask_title"),
+            file_filter=tr("mask.dialog.mask_filter"),
             key="mask_open",
         )
         
@@ -1771,14 +1885,16 @@ class MaskApp(BaseImageTab):
                 self.mask_layers.append(layer)
                 
                 self._update_layer_list()
-                self.parent_app.show_status(f"Loaded custom mask: {os.path.basename(file_path)}")
+                self.parent_app.show_status(
+                    tr("mask.status.loaded_custom", name=os.path.basename(file_path))
+                )
     
     def _load_mask_file(self, file_path: str) -> Optional[np.ndarray]:
         """Load mask data from various file formats"""
         try:
             return backend_load_mask_file(file_path)
         except Exception as e:
-            self.parent_app.show_status(f"Could not load the mask file: {str(e)}")
+            self.parent_app.show_status(tr("mask.error.load_file", error=str(e)))
             return None
     
     # ===== Export Methods =====
@@ -1786,7 +1902,7 @@ class MaskApp(BaseImageTab):
     def _export_combined_mask(self):
         """Export the combined mask"""
         if self.combined_mask is None:
-            self.parent_app.show_status("No mask to export")
+            self.parent_app.show_status(tr("mask.error.no_mask_to_export"))
             return
         
         self._export_mask_data(self.combined_mask, "combined_mask")
@@ -1795,7 +1911,7 @@ class MaskApp(BaseImageTab):
         """Export the currently selected layer"""
         current_row = self._get_active_layer_index()
         if current_row is None:
-            self.parent_app.show_status("No layer selected")
+            self.parent_app.show_status(tr("mask.status.no_layer_selected"))
             return
         
         layer = self.mask_layers[current_row]
@@ -1810,9 +1926,9 @@ class MaskApp(BaseImageTab):
         """
         file_path, filter_text = choose_path(
             self,
-            "Export Mask",
+            tr("mask.dialog.export_title"),
             mode="save", default_name=default_name,
-            file_filter="PNG Files (*.png);;NumPy Files (*.npy);;TIFF Files (*.tif);;All Files (*)",
+            file_filter=tr("mask.dialog.export_filter"),
             key="mask_save",
         )
         
@@ -1823,22 +1939,32 @@ class MaskApp(BaseImageTab):
             # Ensure filename has proper extension based on filter selected
             if not any(file_path.lower().endswith(ext) for ext in ['.npy', '.png', '.tif', '.tiff']):
                 # Add extension based on filter if not present
-                if 'NumPy' in filter_text:
+                if "*.npy" in filter_text:
                     file_path += '.npy'
-                elif 'PNG' in filter_text:
+                elif "*.png" in filter_text:
                     file_path += '.png'
-                elif 'TIFF' in filter_text:
+                elif "*.tif" in filter_text:
                     file_path += '.tif'
             
             written_path = backend_export_mask_file(mask_data, file_path)
             if str(written_path).lower().endswith('.npy'):
-                self.parent_app.show_status(f"✓ Mask exported (numpy): {os.path.basename(str(written_path))}")
+                self.parent_app.show_status(
+                    tr(
+                        "mask.status.exported_numpy",
+                        name=os.path.basename(str(written_path)),
+                    )
+                )
             else:
-                self.parent_app.show_status(f"✓ Mask exported (image): {os.path.basename(str(written_path))}")
+                self.parent_app.show_status(
+                    tr(
+                        "mask.status.exported_image",
+                        name=os.path.basename(str(written_path)),
+                    )
+                )
             
         except Exception as e:
             import traceback
-            self.parent_app.show_status(f"Could not export the mask: {str(e)}")
+            self.parent_app.show_status(tr("mask.error.export", error=str(e)))
             print(f"Export error details:\n{traceback.format_exc()}")
     
     # ===== Display Methods =====

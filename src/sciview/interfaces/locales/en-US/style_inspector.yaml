@@ -1,0 +1,160 @@
+style_inspector.style_inspector_dev:
+  text: Style Inspector  [dev]
+  context: Window title in the developer style inspector.
+style_inspector.qt_style:
+  text: Qt Style
+  context: Settings group heading in the developer style inspector.
+style_inspector.theme:
+  text: Theme
+  context: Form field label in the developer style inspector.
+style_inspector.built_in_qt_styles_and_optional:
+  text: Built-in Qt styles and optional external themes apply immediately.
+  context: Label or note in the developer style inspector.
+style_inspector.live_stylesheet_re_applies_instantly:
+  text: Live  (stylesheet re-applies instantly)
+  context: Settings group heading in the developer style inspector.
+style_inspector.live_typography_applies_instantly:
+  text: Live Typography  (applies instantly)
+  context: Settings group heading in the developer style inspector.
+style_inspector.optional_global_font_family_stack:
+  text: Optional global font-family stack
+  context: Input hint in the developer style inspector.
+style_inspector.font_family:
+  text: Font family
+  context: Form field label in the developer style inspector.
+style_inspector.construction_time_ctrl_r_to_apply:
+  text: Construction-time  (Ctrl+R to apply)
+  context: Settings group heading in the developer style inspector.
+style_inspector.write_to_file_persists_values_into:
+  text: '''Write to file'' persists values into app_style.py'
+  context: Label or note in the developer style inspector.
+style_inspector.write_to_file:
+  text: Write to file
+  context: Button label in the developer style inspector.
+style_inspector.persist_current_spinbox_values_into_app:
+  text: Persist current spinbox values into app_style.py
+  context: Tooltip in the developer style inspector.
+style_inspector.reload_from_file:
+  text: Reload from file
+  context: Button label in the developer style inspector.
+style_inspector.re_read_values_from_app_style:
+  text: Re-read values from app_style.py on disk
+  context: Tooltip in the developer style inspector.
+style_inspector.style_inspector_dev_theme_label:
+  text: Style Inspector  [dev]  • {theme_label}
+  context: Window title in the developer style inspector.
+  placeholders:
+    theme_label: Current theme label value; preserve the format specification.
+style_inspector.style_inspector_dev_2:
+  text: Style Inspector  [dev]  •
+  context: Window title in the developer style inspector.
+style_inspector.style_inspector_dev_3:
+  text: Style Inspector  [dev]  •
+  context: Window title in the developer style inspector.
+style_inspector.style_inspector_dev_saved:
+  text: Style Inspector  [dev]  ✓ saved
+  context: Window title in the developer style inspector.
+style_inspector.app_style_py_hot_reloaded:
+  text: app_style.py hot-reloaded
+  context: Status message in the developer style inspector.
+style_inspector.layout.panel_margin:
+  text: Panel margin (px)
+  context: Developer style setting. Margin around a UI panel in pixels.
+style_inspector.layout.panel_spacing:
+  text: Panel spacing (px)
+  context: Developer style setting. Spacing between controls in a UI panel, in pixels.
+style_inspector.layout.toolbar_spacing:
+  text: Toolbar spacing (px)
+  context: Developer style setting. Spacing between adjacent toolbar controls in pixels.
+style_inspector.layout.splitter_handle_width:
+  text: Splitter handle (px)
+  context: Developer style setting. Width of the draggable divider between panels, in pixels.
+style_inspector.layout.control_panel_min_height:
+  text: Control min height (px)
+  context: Developer style setting. Minimum height of a controls panel in pixels.
+style_inspector.font.scale_pct:
+  text: Global scale (%)
+  context: Developer style setting. Application-wide typography scale as a percentage.
+style_inspector.font.h1:
+  text: H1 heading (px)
+  context: Developer style setting. Largest heading font size in pixels.
+style_inspector.font.h2:
+  text: H2 heading (px)
+  context: Developer style setting. Second-level heading font size in pixels.
+style_inspector.font.h3:
+  text: H3 heading (px)
+  context: Developer style setting. Third-level heading font size in pixels.
+style_inspector.font.body:
+  text: Body font (px)
+  context: Developer style setting. Body-text font size in pixels.
+style_inspector.font.caption:
+  text: Caption font (px)
+  context: Developer style setting. Caption-text font size in pixels.
+style_inspector.font.small:
+  text: Small font (px)
+  context: Developer style setting. Small-text font size in pixels.
+style_inspector.theme.qt:
+  text: 'Qt: {style}'
+  context: Theme selection label in the developer style inspector; library and theme identifiers remain unchanged.
+  placeholders:
+    style: Installed native Qt style name; do not translate the supplied name.
+style_inspector.theme.material_light:
+  text: 'qt-material: light_blue'
+  context: Theme selection label in the developer style inspector; library and theme identifiers remain unchanged.
+style_inspector.theme.material_dark:
+  text: 'qt-material: dark_teal'
+  context: Theme selection label in the developer style inspector; library and theme identifiers remain unchanged.
+style_inspector.theme.dark:
+  text: 'qdarktheme: dark'
+  context: Theme selection label in the developer style inspector; library and theme identifiers remain unchanged.
+style_inspector.theme.light:
+  text: 'qdarktheme: light'
+  context: Theme selection label in the developer style inspector; library and theme identifiers remain unchanged.
+style_inspector.css.label_padding_v:
+  text: Label padding v
+  context: Developer stylesheet setting for label padding v. The setting key itself is not translated.
+style_inspector.css.label_padding_h:
+  text: Label padding h
+  context: Developer stylesheet setting for label padding h. The setting key itself is not translated.
+style_inspector.css.btn_padding_v:
+  text: Btn padding v
+  context: Developer stylesheet setting for btn padding v. The setting key itself is not translated.
+style_inspector.css.btn_padding_h:
+  text: Btn padding h
+  context: Developer stylesheet setting for btn padding h. The setting key itself is not translated.
+style_inspector.css.input_padding_v:
+  text: Input padding v
+  context: Developer stylesheet setting for input padding v. The setting key itself is not translated.
+style_inspector.css.input_padding_h:
+  text: Input padding h
+  context: Developer stylesheet setting for input padding h. The setting key itself is not translated.
+style_inspector.css.group_margin_top:
+  text: Group margin top
+  context: Developer stylesheet setting for group margin top. The setting key itself is not translated.
+style_inspector.css.group_padding_top:
+  text: Group padding top
+  context: Developer stylesheet setting for group padding top. The setting key itself is not translated.
+style_inspector.css.group_title_left:
+  text: Group title left
+  context: Developer stylesheet setting for group title left. The setting key itself is not translated.
+style_inspector.css.group_title_padding:
+  text: Group title padding
+  context: Developer stylesheet setting for group title padding. The setting key itself is not translated.
+style_inspector.css.border_radius:
+  text: Border radius
+  context: Developer stylesheet setting for border radius. The setting key itself is not translated.
+style_inspector.css.button_height:
+  text: Button height
+  context: Developer stylesheet setting for button height. The setting key itself is not translated.
+style_inspector.css.input_height:
+  text: Input height
+  context: Developer stylesheet setting for input height. The setting key itself is not translated.
+style_inspector.css.tab_padding_h:
+  text: Tab padding h
+  context: Developer stylesheet setting for tab padding h. The setting key itself is not translated.
+style_inspector.css.toolbar_font_weight:
+  text: Toolbar font weight
+  context: Developer stylesheet setting for toolbar font weight. The setting key itself is not translated.
+style_inspector.css.toolbar_padding_horizontal:
+  text: Toolbar padding horizontal
+  context: Developer stylesheet setting for toolbar padding horizontal. The setting key itself is not translated.

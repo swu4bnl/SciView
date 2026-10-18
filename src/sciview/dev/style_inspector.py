@@ -22,6 +22,8 @@ Inspector:    A floating panel with two sections:
 
 from __future__ import annotations
 
+from sciview.interfaces.text import tr
+
 import importlib
 from pathlib import Path
 
@@ -49,21 +51,21 @@ _APP_STYLE_PATH = (
 # Construction-time LAYOUT keys worth exposing in the inspector.
 # Format: key -> (label, min, max)
 _LAYOUT_TOKENS: dict[str, tuple[str, int, int]] = {
-    "panel_margin":           ("Panel margin (px)",        0, 20),
-    "panel_spacing":          ("Panel spacing (px)",       0, 20),
-    "toolbar_spacing":        ("Toolbar spacing (px)",     0, 20),
-    "splitter_handle_width":  ("Splitter handle (px)",     2, 12),
-    "control_panel_min_height": ("Control min height (px)", 40, 200),
+    "panel_margin":           ("style_inspector.layout.panel_margin",        0, 20),
+    "panel_spacing":          ("style_inspector.layout.panel_spacing",       0, 20),
+    "toolbar_spacing":        ("style_inspector.layout.toolbar_spacing",     0, 20),
+    "splitter_handle_width":  ("style_inspector.layout.splitter_handle_width",     2, 12),
+    "control_panel_min_height": ("style_inspector.layout.control_panel_min_height", 40, 200),
 }
 
 _FONT_SIZE_TOKENS: dict[str, tuple[str, int, int]] = {
-    "scale_pct": ("Global scale (%)", 50, 250),
-    "h1": ("H1 heading (px)", 8, 40),
-    "h2": ("H2 heading (px)", 8, 36),
-    "h3": ("H3 heading (px)", 8, 32),
-    "body": ("Body font (px)", 8, 30),
-    "caption": ("Caption font (px)", 7, 24),
-    "small": ("Small font (px)", 6, 20),
+    "scale_pct": ("style_inspector.font.scale_pct", 50, 250),
+    "h1": ("style_inspector.font.h1", 8, 40),
+    "h2": ("style_inspector.font.h2", 8, 36),
+    "h3": ("style_inspector.font.h3", 8, 32),
+    "body": ("style_inspector.font.body", 8, 30),
+    "caption": ("style_inspector.font.caption", 7, 24),
+    "small": ("style_inspector.font.small", 6, 20),
 }
 
 _ACTIVE_THEME_KEY: str | None = None
@@ -91,18 +93,18 @@ def _theme_option_items() -> list[tuple[str, str]]:
     options: list[tuple[str, str]] = []
 
     for style_name in _available_qt_styles():
-        options.append((f"qt:{style_name}", f"Qt: {style_name}"))
+        options.append((f"qt:{style_name}", tr("style_inspector.theme.qt", style=style_name)))
 
     if importlib.util.find_spec("qdarkstyle") is not None:
         options.append(("qdarkstyle", "QDarkStyle"))
 
     if importlib.util.find_spec("qt_material") is not None:
-        options.append(("qt-material:light_blue.xml", "qt-material: light_blue"))
-        options.append(("qt-material:dark_teal.xml", "qt-material: dark_teal"))
+        options.append(("qt-material:light_blue.xml", tr("style_inspector.theme.material_light")))
+        options.append(("qt-material:dark_teal.xml", tr("style_inspector.theme.material_dark")))
 
     if importlib.util.find_spec("qdarktheme") is not None:
-        options.append(("qdarktheme:dark", "qdarktheme: dark"))
-        options.append(("qdarktheme:light", "qdarktheme: light"))
+        options.append(("qdarktheme:dark", tr("style_inspector.theme.dark")))
+        options.append(("qdarktheme:light", tr("style_inspector.theme.light")))
 
     return options
 
@@ -244,7 +246,7 @@ class StyleInspector(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent, Qt.Window | Qt.WindowStaysOnTopHint)
-        self.setWindowTitle("Style Inspector  [dev]")
+        self.setWindowTitle(tr('style_inspector.style_inspector_dev'))
         self.resize(340, 600)
         self._style_combo: QComboBox | None = None
         self._css_spins: dict[str, QSpinBox] = {}
@@ -262,7 +264,7 @@ class StyleInspector(QWidget):
         root.setSpacing(6)
 
         # ── Qt style section ────────────────────────────────────────────────
-        style_group = QGroupBox("Qt Style")
+        style_group = QGroupBox(tr('style_inspector.qt_style'))
         style_form = QFormLayout(style_group)
         style_form.setContentsMargins(6, 10, 6, 6)
         style_form.setSpacing(3)
@@ -281,13 +283,13 @@ class StyleInspector(QWidget):
         if current_index >= 0:
             self._style_combo.setCurrentIndex(current_index)
         self._style_combo.currentIndexChanged.connect(self._on_qt_style_changed)
-        style_form.addRow("Theme", self._style_combo)
+        style_form.addRow(tr('style_inspector.theme'), self._style_combo)
 
-        style_note = QLabel("Built-in Qt styles and optional external themes apply immediately.")
+        style_note = QLabel(tr('style_inspector.built_in_qt_styles_and_optional'))
         style_form.addRow("", style_note)
 
         # ── Live CSS section ──────────────────────────────────────────────────
-        css_group = QGroupBox("Live  (stylesheet re-applies instantly)")
+        css_group = QGroupBox(tr('style_inspector.live_stylesheet_re_applies_instantly'))
         css_heading_color = AppStyle.COLORS.get("primary", "#0078D4")
         css_group.setStyleSheet(
             f"QGroupBox {{ font-weight: 600; color: {css_heading_color}; margin-top: 8px; "
@@ -301,14 +303,14 @@ class StyleInspector(QWidget):
         css_tokens = AppStyle.CSS_TOKENS
         # Build a human label from the key name
         for key, value in sorted(css_tokens.items()):
-            label = key.replace("_", " ").capitalize()
+            label = tr(f"style_inspector.css.{key}")
             spin = _make_spin(0, 60, int(value))
             spin.valueChanged.connect(self._on_css_changed)
             self._css_spins[key] = spin
             css_form.addRow(label, spin)
 
         # ── Live typography section ──────────────────────────────────────────
-        font_group = QGroupBox("Live Typography  (applies instantly)")
+        font_group = QGroupBox(tr('style_inspector.live_typography_applies_instantly'))
         font_heading_color = AppStyle.COLORS.get("success", "#0E8A16")
         font_group.setStyleSheet(
             f"QGroupBox {{ font-weight: 600; color: {font_heading_color}; margin-top: 8px; "
@@ -332,16 +334,16 @@ class StyleInspector(QWidget):
             spin = _make_spin(mn, mx, spin_value)
             spin.valueChanged.connect(self._on_fonts_changed)
             self._font_spins[key] = spin
-            font_form.addRow(label, spin)
+            font_form.addRow(tr(label), spin)
 
         family = str(fonts.get("family", "")).strip()
         self._font_family_input = QLineEdit(family)
-        self._font_family_input.setPlaceholderText("Optional global font-family stack")
+        self._font_family_input.setPlaceholderText(tr('style_inspector.optional_global_font_family_stack'))
         self._font_family_input.editingFinished.connect(self._on_fonts_changed)
-        font_form.addRow("Font family", self._font_family_input)
+        font_form.addRow(tr('style_inspector.font_family'), self._font_family_input)
 
         # ── Construction-time LAYOUT section ─────────────────────────────────
-        layout_group = QGroupBox("Construction-time  (Ctrl+R to apply)")
+        layout_group = QGroupBox(tr('style_inspector.construction_time_ctrl_r_to_apply'))
         layout_heading_color = AppStyle.COLORS.get("text_secondary", "#6C757D")
         layout_group.setStyleSheet(
             f"QGroupBox {{ font-weight: 600; color: {layout_heading_color}; margin-top: 8px; "
@@ -357,7 +359,7 @@ class StyleInspector(QWidget):
             spin = _make_spin(mn, mx, int(value))
             # No live signal — changes only persist via "Write to file"
             self._layout_spins[key] = spin
-            layout_form.addRow(label, spin)
+            layout_form.addRow(tr(label), spin)
 
         # ── Scroll area wrapping both groups ──────────────────────────────────
         content = QWidget()
@@ -377,17 +379,17 @@ class StyleInspector(QWidget):
         root.addWidget(scroll, 1)
 
         # ── Bottom buttons ────────────────────────────────────────────────────
-        note = QLabel("'Write to file' persists values into app_style.py")
+        note = QLabel(tr('style_inspector.write_to_file_persists_values_into'))
         note.setStyleSheet(f"color: {AppStyle.COLORS.get('text_secondary', '#6C757D')};")
         AppStyle.set_font_role(note, 'status')
         root.addWidget(note)
 
         btn_row = QHBoxLayout()
-        write_btn = QPushButton("Write to file")
-        write_btn.setToolTip("Persist current spinbox values into app_style.py")
+        write_btn = QPushButton(tr('style_inspector.write_to_file'))
+        write_btn.setToolTip(tr('style_inspector.persist_current_spinbox_values_into_app'))
         write_btn.clicked.connect(self._write_to_file)
-        reload_btn = QPushButton("Reload from file")
-        reload_btn.setToolTip("Re-read values from app_style.py on disk")
+        reload_btn = QPushButton(tr('style_inspector.reload_from_file'))
+        reload_btn.setToolTip(tr('style_inspector.re_read_values_from_app_style'))
         reload_btn.clicked.connect(self.reload_from_file)
         btn_row.addWidget(write_btn)
         btn_row.addWidget(reload_btn)
@@ -404,7 +406,7 @@ class StyleInspector(QWidget):
         theme_key = self._style_combo.currentData()
         theme_label = self._style_combo.currentText()
         if isinstance(theme_key, str) and _apply_theme(theme_key):
-            self.setWindowTitle(f"Style Inspector  [dev]  • {theme_label}")
+            self.setWindowTitle(tr('style_inspector.style_inspector_dev_theme_label', theme_label=theme_label))
 
     def _on_css_changed(self) -> None:
         """CSS spinbox changed → update CSS_TOKENS live and re-apply stylesheet."""
@@ -413,7 +415,7 @@ class StyleInspector(QWidget):
         AppStyle = _reload_app_style()
         AppStyle.update_css_tokens({key: spin.value() for key, spin in self._css_spins.items()})
         _apply_stylesheet(AppStyle)
-        self.setWindowTitle("Style Inspector  [dev]  •")
+        self.setWindowTitle(tr('style_inspector.style_inspector_dev_2'))
 
     def _on_fonts_changed(self) -> None:
         """Typography changed -> update FONTS live and re-apply stylesheet."""
@@ -424,7 +426,7 @@ class StyleInspector(QWidget):
         if self._font_family_input is not None:
             AppStyle.update_font_tokens({"family": self._font_family_input.text().strip()})
         _apply_stylesheet(AppStyle)
-        self.setWindowTitle("Style Inspector  [dev]  •")
+        self.setWindowTitle(tr('style_inspector.style_inspector_dev_3'))
 
     def _write_to_file(self) -> None:
         """Persist all current spinbox values to app_style.py."""
@@ -443,7 +445,7 @@ class StyleInspector(QWidget):
             _patch_dict_value_in_file("LAYOUT", key, str(int(spin.value())))
         AppStyle = _reload_app_style()
         _apply_stylesheet(AppStyle)
-        self.setWindowTitle("Style Inspector  [dev]  ✓ saved")
+        self.setWindowTitle(tr('style_inspector.style_inspector_dev_saved'))
 
     def reload_from_file(self) -> None:
         """Reload spinbox values from app_style.py without triggering signals."""
@@ -468,7 +470,7 @@ class StyleInspector(QWidget):
             self._font_family_input.setText(str(AppStyle.FONTS.get("family", "")).strip())
         self._suppress = False
         _apply_stylesheet(AppStyle)
-        self.setWindowTitle("Style Inspector  [dev]")
+        self.setWindowTitle(tr('style_inspector.style_inspector_dev'))
 
 
 # ── Hot-reloader ──────────────────────────────────────────────────────────────
@@ -499,7 +501,7 @@ class StyleHotReloader:
             if qapp:
                 for widget in qapp.topLevelWidgets():
                     if hasattr(widget, "show_status"):
-                        widget.show_status("app_style.py hot-reloaded")
+                        widget.show_status(tr('style_inspector.app_style_py_hot_reloaded'))
                         break
         except Exception as exc:  # noqa: BLE001
             print(f"[StyleHotReloader] reload failed: {exc}")

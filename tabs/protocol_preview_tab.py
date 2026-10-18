@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
+from sciview.interfaces.text import tr
 from sciview.interfaces.theme.app_style import (
     AppStyle,
     apply_info_style,
@@ -123,11 +124,12 @@ class ProtocolPreviewApp(BaseImageTab):
 
         # Tab 1: raw image display
         image_panel = self._create_image_panel()
+        self._raw_image_panel = image_panel
 
         # Tab 2: processed image display (placeholder)
         # processed_panel = self._create_processed_panel()
 
-        self.viz_tabs.addTab(image_panel, "Raw Image")
+        self.viz_tabs.addTab(image_panel, tr("protocol_preview.tab.raw_image"))
         # self.viz_tabs.addTab(processed_panel, "Processed Image")
         main_splitter.addWidget(self.viz_tabs)
 
@@ -136,15 +138,15 @@ class ProtocolPreviewApp(BaseImageTab):
         
         # Tab 1: Configuration (Calibration, Mask, Parameters)
         config_panel = self._create_configuration_panel()
-        self.controls_tabs.addTab(config_panel, "Configuration")
+        self.controls_tabs.addTab(config_panel, tr("protocol_preview.tab.configuration"))
 
         # Tab 2: Protocol Stack
         stack_panel = self._create_protocol_stack_panel()
-        self.controls_tabs.addTab(stack_panel, "Protocols")
+        self.controls_tabs.addTab(stack_panel, tr("protocol_preview.tab.protocols"))
         
         # Tab 3: Info (Display loaded calibration, masks, exports)
         info_panel = self._create_info_panel()
-        self.controls_tabs.addTab(info_panel, "Info")
+        self.controls_tabs.addTab(info_panel, tr("protocol_preview.tab.info"))
         
         main_splitter.addWidget(self.controls_tabs)
         
@@ -169,18 +171,18 @@ class ProtocolPreviewApp(BaseImageTab):
         scroll_layout.setSpacing(AppStyle.LAYOUT['panel_margin'])
 
         # ===== CALIBRATION & MASK SECTION =====
-        cal_title = QLabel("Calibration & Mask")
+        cal_title = QLabel(tr("protocol_preview.calibration_mask.title"))
         apply_title_style(cal_title)
         scroll_layout.addWidget(cal_title)
 
         # Load calibration button
-        btn_load_cal = QPushButton("Load Calibration File")
+        btn_load_cal = QPushButton(tr("protocol_preview.calibration.load"))
         btn_load_cal.clicked.connect(self._load_calibration_file)
         apply_secondary_button_style(btn_load_cal)
         scroll_layout.addWidget(btn_load_cal)
 
         # Load mask button
-        btn_load_mask = QPushButton("Load Mask File")
+        btn_load_mask = QPushButton(tr("protocol_preview.mask.load"))
         btn_load_mask.clicked.connect(self._load_mask_file)
         apply_secondary_button_style(btn_load_mask)
         scroll_layout.addWidget(btn_load_mask)
@@ -188,13 +190,13 @@ class ProtocolPreviewApp(BaseImageTab):
         scroll_layout.addSpacing(10)
 
         # ===== IMAGE DISPLAY SETTINGS SECTION =====
-        display_title = QLabel("Image Display")
+        display_title = QLabel(tr("protocol_preview.image_display.title"))
         apply_title_style(display_title)
         scroll_layout.addWidget(display_title)
 
         # Color map selection
         cmap_layout = QHBoxLayout()
-        cmap_layout.addWidget(QLabel("Color Map:"))
+        cmap_layout.addWidget(QLabel(tr("protocol_preview.colormap")))
         self.cmap_combo = QComboBox()
         self.cmap_combo.addItems(sorted(plt.colormaps()))
         self.cmap_combo.setCurrentText("viridis")
@@ -204,16 +206,16 @@ class ProtocolPreviewApp(BaseImageTab):
 
         # Color map limits
         clim_layout = QHBoxLayout()
-        clim_layout.addWidget(QLabel("Color Limits:"))
+        clim_layout.addWidget(QLabel(tr("protocol_preview.color_limits")))
         self.clim_min_edit = QDoubleSpinBox()
         self.clim_min_edit.setValue(0.01)
         self.clim_min_edit.setMaximumWidth(80)
-        clim_layout.addWidget(QLabel("Min:"))
+        clim_layout.addWidget(QLabel(tr("protocol_preview.minimum")))
         clim_layout.addWidget(self.clim_min_edit)
         self.clim_max_edit = QDoubleSpinBox()
         self.clim_max_edit.setValue(0.99)
         self.clim_max_edit.setMaximumWidth(80)
-        clim_layout.addWidget(QLabel("Max:"))
+        clim_layout.addWidget(QLabel(tr("protocol_preview.maximum")))
         clim_layout.addWidget(self.clim_max_edit)
         clim_layout.addStretch()
         scroll_layout.addLayout(clim_layout)
@@ -221,34 +223,34 @@ class ProtocolPreviewApp(BaseImageTab):
         scroll_layout.addSpacing(10)
 
         # ===== PLOT EXPORT SETTINGS SECTION =====
-        export_title = QLabel("Export Settings")
+        export_title = QLabel(tr("protocol_preview.export_settings.title"))
         apply_title_style(export_title)
         scroll_layout.addWidget(export_title)
 
         # Figure size
         figsize_layout = QHBoxLayout()
-        figsize_layout.addWidget(QLabel("Figure Size:"))
-        figsize_layout.addWidget(QLabel("W:"))
+        figsize_layout.addWidget(QLabel(tr("protocol_preview.figure_size")))
+        figsize_layout.addWidget(QLabel(tr("protocol_preview.width_short")))
         self.figwidth_spin = QDoubleSpinBox()
         self.figwidth_spin.setRange(2.0, 20.0)
         self.figwidth_spin.setValue(8.0)
         self.figwidth_spin.setSingleStep(0.5)
         self.figwidth_spin.setMaximumWidth(70)
         figsize_layout.addWidget(self.figwidth_spin)
-        figsize_layout.addWidget(QLabel("H:"))
+        figsize_layout.addWidget(QLabel(tr("protocol_preview.height_short")))
         self.figheight_spin = QDoubleSpinBox()
         self.figheight_spin.setRange(2.0, 20.0)
         self.figheight_spin.setValue(6.0)
         self.figheight_spin.setSingleStep(0.5)
         self.figheight_spin.setMaximumWidth(70)
         figsize_layout.addWidget(self.figheight_spin)
-        figsize_layout.addWidget(QLabel("in"))
+        figsize_layout.addWidget(QLabel(tr("protocol_preview.inches")))
         figsize_layout.addStretch()
         scroll_layout.addLayout(figsize_layout)
 
         # DPI setting
         dpi_layout = QHBoxLayout()
-        dpi_layout.addWidget(QLabel("DPI:"))
+        dpi_layout.addWidget(QLabel(tr("protocol_preview.dpi")))
         self.dpi_spin = QSpinBox()
         self.dpi_spin.setRange(50, 600)
         self.dpi_spin.setValue(300)
@@ -257,7 +259,7 @@ class ProtocolPreviewApp(BaseImageTab):
         scroll_layout.addLayout(dpi_layout)
 
         # Margin size
-        margin_label = QLabel("Margins (L/R/T/B):")
+        margin_label = QLabel(tr("protocol_preview.margins"))
         scroll_layout.addWidget(margin_label)
 
         margin_spin_layout = QHBoxLayout()
@@ -295,13 +297,13 @@ class ProtocolPreviewApp(BaseImageTab):
         scroll_layout.addSpacing(10)
 
         # ===== FONT SETTINGS SECTION =====
-        font_title = QLabel("Font Settings")
+        font_title = QLabel(tr("protocol_preview.font_settings.title"))
         apply_title_style(font_title)
         scroll_layout.addWidget(font_title)
 
         # Font family
         fontfamily_layout = QHBoxLayout()
-        fontfamily_layout.addWidget(QLabel("Font:"))
+        fontfamily_layout.addWidget(QLabel(tr("protocol_preview.font")))
         self.fontfamily_combo = QComboBox()
         self.fontfamily_combo.addItems(["Arial", "Times New Roman", "Courier New", "Helvetica", "Verdana"])
         fontfamily_layout.addWidget(self.fontfamily_combo)
@@ -310,25 +312,25 @@ class ProtocolPreviewApp(BaseImageTab):
 
         # Font size
         fontsize_layout = QHBoxLayout()
-        fontsize_layout.addWidget(QLabel("Size:"))
+        fontsize_layout.addWidget(QLabel(tr("protocol_preview.size")))
         self.fontsize_spin = QSpinBox()
         self.fontsize_spin.setRange(6, 24)
         self.fontsize_spin.setValue(10)
         fontsize_layout.addWidget(self.fontsize_spin)
-        fontsize_layout.addWidget(QLabel("pt"))
+        fontsize_layout.addWidget(QLabel(tr("protocol_preview.points")))
         fontsize_layout.addStretch()
         scroll_layout.addLayout(fontsize_layout)
 
         scroll_layout.addSpacing(10)
 
         # ===== IMAGE RENDERING SECTION =====
-        render_title = QLabel("Image Rendering")
+        render_title = QLabel(tr("protocol_preview.image_rendering.title"))
         apply_title_style(render_title)
         scroll_layout.addWidget(render_title)
 
         # Shading options
         shading_layout = QHBoxLayout()
-        shading_layout.addWidget(QLabel("Shading:"))
+        shading_layout.addWidget(QLabel(tr("protocol_preview.shading")))
         self.shading_combo = QComboBox()
         self.shading_combo.addItems(["auto", "flat", "gouraud"])
         shading_layout.addWidget(self.shading_combo)
@@ -359,7 +361,7 @@ class ProtocolPreviewApp(BaseImageTab):
         layout.addWidget(self.image_info_text)
         
         # Title
-        title = QLabel("Loaded Configuration")
+        title = QLabel(tr("protocol_preview.loaded_configuration"))
         apply_title_style(title)
         layout.addWidget(title)
         
@@ -374,7 +376,7 @@ class ProtocolPreviewApp(BaseImageTab):
         layout.addWidget(self.info_text)
         
         # Refresh button
-        btn_refresh = QPushButton("Refresh Info")
+        btn_refresh = QPushButton(tr("protocol_preview.refresh_info"))
         btn_refresh.clicked.connect(self._update_info_display)
         layout.addWidget(btn_refresh)
         
@@ -382,38 +384,40 @@ class ProtocolPreviewApp(BaseImageTab):
     
     def _update_info_display(self):
         """Update the info display with current calibration and mask info"""
-        text = "=== CONFIGURATION STATUS ===\n\n"
+        text = tr("protocol_preview.info.status_heading") + "\n\n"
         
         # Image status
-        text += "IMAGE:\n"
+        text += tr("protocol_preview.info.image_heading") + "\n"
         if self.image_data is not None:
-            shape = getattr(self.image_data, 'shape', 'Unknown')
-            text += f"  ✓ Loaded\n  Shape: {shape}\n\n"
+            shape = getattr(self.image_data, 'shape', tr("protocol_preview.info.unknown"))
+            text += f"  {tr('protocol_preview.info.loaded')}\n  {tr('protocol_preview.info.shape', shape=shape)}\n\n"
         else:
-            text += "  ✗ Not loaded\n\n"
+            text += f"  {tr('protocol_preview.info.not_loaded')}\n\n"
         
         # Calibration status
-        text += "CALIBRATION:\n"
+        text += tr("protocol_preview.info.calibration_heading") + "\n"
         if self.calibration_loaded and self.loaded_calibration_info:
-            text += "  ✓ Loaded\n"
+            text += f"  {tr('protocol_preview.info.loaded')}\n"
             for key, value in self.loaded_calibration_info.items():
-                text += f"    {key}: {value}\n"
+                label = tr(f"protocol_preview.info.calibration.{key}")
+                text += f"    {label}: {value}\n"
             text += "\n"
         else:
-            text += "  ✗ Using defaults\n\n"
+            text += f"  {tr('protocol_preview.info.using_defaults')}\n\n"
         
         # Mask status
-        text += "MASK:\n"
+        text += tr("protocol_preview.info.mask_heading") + "\n"
         if self.mask_loaded and self.loaded_mask_info:
-            text += "  ✓ Loaded\n"
+            text += f"  {tr('protocol_preview.info.loaded')}\n"
             for key, value in self.loaded_mask_info.items():
-                text += f"    {key}: {value}\n"
+                label = tr(f"protocol_preview.info.mask.{key}")
+                text += f"    {label}: {value}\n"
             text += "\n"
         else:
-            text += "  ⊘ Optional (not loaded)\n\n"
+            text += f"  {tr('protocol_preview.info.optional_not_loaded')}\n\n"
         
         # Protocols status
-        text += f"PROTOCOLS: {len(self.protocol_stack)}\n"
+        text += tr("protocol_preview.info.protocol_count", count=len(self.protocol_stack)) + "\n"
         for i, p in enumerate(self.protocol_stack, 1):
             status = "✓" if p.enabled else "✗"
             text += f"  {i}. {status} {p.name}\n"
@@ -428,12 +432,12 @@ class ProtocolPreviewApp(BaseImageTab):
         layout.setSpacing(AppStyle.LAYOUT['panel_margin'])
         
         # Title
-        title = QLabel("Protocol Stack")
+        title = QLabel(tr("protocol_preview.protocol_stack.title"))
         apply_title_style(title)
         layout.addWidget(title)
         
         # Info
-        info = QLabel("Add and configure protocols to run in sequence")
+        info = QLabel(tr("protocol_preview.protocol_stack.instructions"))
         info.setWordWrap(True)
         apply_info_style(info)
         layout.addWidget(info)
@@ -449,11 +453,11 @@ class ProtocolPreviewApp(BaseImageTab):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         
-        btn_add = QPushButton("Add")
+        btn_add = QPushButton(tr("protocol_preview.add"))
         btn_add.clicked.connect(self._show_add_protocol_menu)
         btn_layout.addWidget(btn_add)
         
-        btn_remove = QPushButton("Remove")
+        btn_remove = QPushButton(tr("protocol_preview.remove"))
         btn_remove.clicked.connect(self._remove_selected_protocol)
         btn_layout.addWidget(btn_remove)
         
@@ -474,7 +478,7 @@ class ProtocolPreviewApp(BaseImageTab):
 
 
         # Protocol Parameters Section
-        param_title = QLabel("Protocol Parameters")
+        param_title = QLabel(tr("protocol_preview.parameters.title"))
         apply_title_style(param_title)
         layout.addWidget(param_title)
         
@@ -489,7 +493,7 @@ class ProtocolPreviewApp(BaseImageTab):
         self.param_layout.setSpacing(AppStyle.LAYOUT['panel_margin'])
         
         # Placeholder
-        placeholder = QLabel("Select a protocol to edit parameters.")
+        placeholder = QLabel(tr("protocol_preview.parameters.select_to_edit"))
         placeholder.setWordWrap(True)
         apply_info_style(placeholder)
         self.param_layout.addWidget(placeholder)
@@ -499,13 +503,13 @@ class ProtocolPreviewApp(BaseImageTab):
         layout.addWidget(scroll)
         
         # Plot Settings Section
-        settings_title = QLabel("Plot Settings")
+        settings_title = QLabel(tr("protocol_preview.plot_settings.title"))
         apply_title_style(settings_title)
         layout.addWidget(settings_title)
         
         # Line width
         lw_layout = QHBoxLayout()
-        lw_layout.addWidget(QLabel("Line Width:"))
+        lw_layout.addWidget(QLabel(tr("protocol_preview.line_width")))
         self.linewidth_spin = QDoubleSpinBox()
         self.linewidth_spin.setRange(0.5, 5.0)
         self.linewidth_spin.setValue(1.5)
@@ -515,8 +519,8 @@ class ProtocolPreviewApp(BaseImageTab):
         layout.addLayout(lw_layout)
         
         # X/Y log scale options
-        self.xlog_check = QCheckBox("X Log Scale")
-        self.ylog_check = QCheckBox("Y Log Scale")
+        self.xlog_check = QCheckBox(tr("protocol_preview.x_log_scale"))
+        self.ylog_check = QCheckBox(tr("protocol_preview.y_log_scale"))
         layout.addWidget(self.xlog_check)
         layout.addWidget(self.ylog_check)
         
@@ -524,24 +528,26 @@ class ProtocolPreviewApp(BaseImageTab):
         
         
         # Export section
-        export_title = QLabel("Export")
+        export_title = QLabel(tr("protocol_preview.export.title"))
         apply_title_style(export_title)
         layout.addWidget(export_title)
         
         # Export format
         format_layout = QHBoxLayout()
-        format_layout.addWidget(QLabel("Format:"))
+        format_layout.addWidget(QLabel(tr("protocol_preview.format")))
         self.export_format_combo = QComboBox()
-        self.export_format_combo.addItems(["Python Script", "JSON", "YAML"])
+        self.export_format_combo.addItem(tr("protocol_preview.export.format_python"), "python")
+        self.export_format_combo.addItem("JSON", "json")
+        self.export_format_combo.addItem("YAML", "yaml")
         format_layout.addWidget(self.export_format_combo)
         layout.addLayout(format_layout)
         
         # Export buttons
-        btn_preview = QPushButton("Preview Export")
+        btn_preview = QPushButton(tr("protocol_preview.export.preview"))
         btn_preview.clicked.connect(self._preview_export)
         layout.addWidget(btn_preview)
         
-        btn_export = QPushButton("Export Workflow")
+        btn_export = QPushButton(tr("protocol_preview.export.workflow"))
         btn_export.clicked.connect(self._export_workflow)
         apply_secondary_button_style(btn_export)
         layout.addWidget(btn_export)
@@ -549,7 +555,7 @@ class ProtocolPreviewApp(BaseImageTab):
         layout.addSpacing(8)
         
         # Run button (at bottom)
-        btn_run = QPushButton("Run Preview")
+        btn_run = QPushButton(tr("protocol_preview.run_preview"))
         btn_run.clicked.connect(self._run_preview)
         apply_secondary_button_style(btn_run)
         layout.addWidget(btn_run)
@@ -560,8 +566,8 @@ class ProtocolPreviewApp(BaseImageTab):
         """Load calibration file and store in parent_app for shared access"""
         file_path, _ = choose_path(
             self,
-            "Load Calibration File",
-            file_filter="YAML Files (*.yaml *.yml);;All Files (*)",
+            tr("protocol_preview.dialog.load_calibration"),
+            file_filter=tr("protocol_preview.filter.yaml_all"),
             key="calibration_open",
         )
         
@@ -600,7 +606,9 @@ class ProtocolPreviewApp(BaseImageTab):
                         self.parent_app.calibration = calibration
                         
                     except Exception as e:
-                        self.parent_app.show_status(f"Warning: Could not create SciAnalysis calibration: {e}")
+                        self.parent_app.show_status(
+                            tr("protocol_preview.status.calibration_create_warning", error=e)
+                        )
                 
                 # Store calibration info for display
                 self.loaded_calibration_info = {
@@ -613,10 +621,15 @@ class ProtocolPreviewApp(BaseImageTab):
                 }
                 self.calibration_loaded = True
                 self._update_info_display()
-                self.parent_app.show_status(f"✓ Loaded calibration: {os.path.basename(file_path)} (shared with all tabs)")
+                self.parent_app.show_status(
+                    tr("protocol_preview.status.calibration_loaded",
+                       filename=os.path.basename(file_path))
+                )
                 
             except Exception as e:
-                self.parent_app.show_status(f"Error loading calibration: {e}")
+                self.parent_app.show_status(
+                    tr("protocol_preview.status.calibration_load_failed", error=e)
+                )
                 import traceback
                 traceback.print_exc()
     
@@ -624,8 +637,8 @@ class ProtocolPreviewApp(BaseImageTab):
         """Load mask file and store in parent_app for shared access"""
         file_path, _ = choose_path(
             self,
-            "Load Mask File",
-            file_filter="Mask Files (*.png *.tif *.tiff *.xcf *.yaml);;All Files (*)",
+            tr("protocol_preview.dialog.load_mask"),
+            file_filter=tr("protocol_preview.filter.mask_all"),
             key="mask_open",
         )
         
@@ -657,7 +670,9 @@ class ProtocolPreviewApp(BaseImageTab):
                         print(f"DEBUG: Exception creating SciAnalysis mask: {e}")
                         import traceback
                         traceback.print_exc()
-                        self.parent_app.show_status(f"Warning: Could not create SciAnalysis mask: {e}")
+                        self.parent_app.show_status(
+                            tr("protocol_preview.status.mask_create_warning", error=e)
+                        )
                 
                 # Store mask info for display
                 self.loaded_mask_info = {
@@ -666,13 +681,18 @@ class ProtocolPreviewApp(BaseImageTab):
                 }
                 self.mask_loaded = True
                 self._update_info_display()
-                self.parent_app.show_status(f"✓ Loaded mask: {os.path.basename(file_path)} (shared with all tabs)")
+                self.parent_app.show_status(
+                    tr("protocol_preview.status.mask_loaded",
+                       filename=os.path.basename(file_path))
+                )
                 
             except Exception as e:
                 print(f"DEBUG: Exception in _load_mask_file: {e}")
                 import traceback
                 traceback.print_exc()
-                self.parent_app.show_status(f"Error loading mask: {e}")
+                self.parent_app.show_status(
+                    tr("protocol_preview.status.mask_load_failed", error=e)
+                )
     
     
 
@@ -685,7 +705,7 @@ class ProtocolPreviewApp(BaseImageTab):
         menu = QMenu(self)
         
         if not SCIANALYSIS_AVAILABLE:
-            menu.addAction("SciAnalysis not available")
+            menu.addAction(tr("protocol_preview.menu.scianalysis_unavailable"))
         else:
             for protocol_name, protocol_func in self.available_protocols.items():
                 action = menu.addAction(protocol_name)
@@ -701,18 +721,22 @@ class ProtocolPreviewApp(BaseImageTab):
         protocol = ProtocolInstance(protocol_name, protocol_func)
         self.protocol_stack.append(protocol)
         self._update_protocol_list()
-        self.parent_app.show_status(f"Added protocol: {protocol_name}")
+        self.parent_app.show_status(
+            tr("protocol_preview.status.protocol_added", name=protocol_name)
+        )
     
     def _remove_selected_protocol(self):
         """Remove selected protocol from stack"""
         current_row = self.protocol_list.currentRow()
         if current_row < 0:
-            self.parent_app.show_status("No protocol selected")
+            self.parent_app.show_status(tr("protocol_preview.status.no_protocol_selected"))
             return
         
         removed = self.protocol_stack.pop(current_row)
         self._update_protocol_list()
-        self.parent_app.show_status(f"Removed protocol: {removed.name}")
+        self.parent_app.show_status(
+            tr("protocol_preview.status.protocol_removed", name=removed.name)
+        )
     
     def _move_protocol_up(self):
         """Move selected protocol up"""
@@ -768,7 +792,7 @@ class ProtocolPreviewApp(BaseImageTab):
                 child.widget().deleteLater()
         
         if not self.selected_protocol:
-            placeholder = QLabel("Select a protocol to configure parameters")
+            placeholder = QLabel(tr("protocol_preview.parameters.select_to_configure"))
             placeholder.setWordWrap(True)
             apply_info_style(placeholder)
             self.param_layout.addWidget(placeholder)
@@ -792,7 +816,7 @@ class ProtocolPreviewApp(BaseImageTab):
         """Add parameters for circular_average protocol"""
         # Q range
         qmin_layout = QHBoxLayout()
-        qmin_layout.addWidget(QLabel("Q min:"))
+        qmin_layout.addWidget(QLabel(tr("protocol_preview.q_min")))
         qmin_spin = QDoubleSpinBox()
         qmin_spin.setRange(0.0, 10.0)
         qmin_spin.setValue(0.01)
@@ -803,7 +827,7 @@ class ProtocolPreviewApp(BaseImageTab):
         self.param_layout.addLayout(qmin_layout)
         
         qmax_layout = QHBoxLayout()
-        qmax_layout.addWidget(QLabel("Q max:"))
+        qmax_layout.addWidget(QLabel(tr("protocol_preview.q_max")))
         qmax_spin = QDoubleSpinBox()
         qmax_spin.setRange(0.0, 10.0)
         qmax_spin.setValue(5.0)
@@ -819,7 +843,7 @@ class ProtocolPreviewApp(BaseImageTab):
     
     def _add_q_image_params(self):
         """Add parameters for q_image protocol"""
-        info = QLabel("Q-space image transformation")
+        info = QLabel(tr("protocol_preview.q_space_transformation"))
         apply_info_style(info)
         self.param_layout.addWidget(info)
     
@@ -827,7 +851,7 @@ class ProtocolPreviewApp(BaseImageTab):
         """Add parameters for thumbnails protocol"""
         # Resize factor
         resize_layout = QHBoxLayout()
-        resize_layout.addWidget(QLabel("Resize Factor:"))
+        resize_layout.addWidget(QLabel(tr("protocol_preview.resize_factor")))
         resize_spin = QDoubleSpinBox()
         resize_spin.setRange(0.1, 1.0)
         resize_spin.setValue(0.5)
@@ -846,41 +870,47 @@ class ProtocolPreviewApp(BaseImageTab):
         
         if not SCIANALYSIS_AVAILABLE:
             print("DEBUG: SciAnalysis not available")
-            self.parent_app.show_status("SciAnalysis not available")
+            self.parent_app.show_status(tr("protocol_preview.status.scianalysis_unavailable"))
             return
         
         if not self.protocol_stack:
             print("DEBUG: protocol_stack is empty")
-            self.parent_app.show_status("No protocols in stack")
+            self.parent_app.show_status(tr("protocol_preview.status.empty_stack"))
             return
         
         # Get image file path from parent_app (set by Image Browser)
         if not hasattr(self.parent_app, 'image_path') or not self.parent_app.image_path:
             print("DEBUG: No image_path in parent_app")
-            self.parent_app.show_status("No image file selected. Load image from Image Browser tab.")
+            self.parent_app.show_status(tr("protocol_preview.status.image_not_selected"))
             return
         
         image_path = self.parent_app.image_path
         print(f"DEBUG: image_path = {image_path}")
         if not os.path.isfile(image_path):
             print(f"DEBUG: File not found: {image_path}")
-            self.parent_app.show_status(f"Image file not found: {image_path}")
+            self.parent_app.show_status(
+                tr("protocol_preview.status.image_not_found", path=image_path)
+            )
             return
         
         try:
-            self.parent_app.show_status(f"Preparing image data...")
+            self.parent_app.show_status(tr("protocol_preview.status.preparing_image"))
             print(f"DEBUG: parent_app.image_data type = {type(self.parent_app.image_data)}")
             
             # Validate and prepare image data using existing utility
             image_2d, is_valid, error_msg = validate_and_prepare_image_array(self.parent_app.image_data)
             if not is_valid:
-                error_msg = error_msg or "Invalid image data"
+                error_msg = error_msg or tr("protocol_preview.status.invalid_image_data")
                 print(f"DEBUG: Image validation failed: {error_msg}")
-                self.parent_app.show_status(f"Error: {error_msg}")
+                self.parent_app.show_status(
+                    tr("protocol_preview.status.image_validation_failed", error=error_msg)
+                )
                 return
             
             print(f"DEBUG: Image validation passed, shape={image_2d.shape}")
-            self.parent_app.show_status(f"✓ Image validated: shape={image_2d.shape}")
+            self.parent_app.show_status(
+                tr("protocol_preview.status.image_validated", shape=image_2d.shape)
+            )
             
             # Get calibration from parent_app or use defaults
             if hasattr(self.parent_app, 'calibration') and self.parent_app.calibration:
@@ -910,7 +940,7 @@ class ProtocolPreviewApp(BaseImageTab):
                     print(f"DEBUG:   True pixels: {np.sum(mask.data)}")
                 else:
                     print("DEBUG:   WARNING: mask.data is None")
-                self.parent_app.show_status("Using loaded mask")
+                self.parent_app.show_status(tr("protocol_preview.status.using_mask"))
             else:
                 print("DEBUG: No mask loaded")
             
@@ -920,7 +950,7 @@ class ProtocolPreviewApp(BaseImageTab):
             self.last_output_dir = output_dir  # Store for tracking
             print(f"DEBUG: output_dir = {output_dir}")
             
-            self.parent_app.show_status(f"Creating Data2DScattering...")
+            self.parent_app.show_status(tr("protocol_preview.status.creating_data"))
             print(f"DEBUG: Creating Data2DScattering with validated image")
             
             # Create Data2DScattering object with validated image data
@@ -937,7 +967,9 @@ class ProtocolPreviewApp(BaseImageTab):
                 print(f"DEBUG: No mask to set on data_2d")
             
             print(f"DEBUG: Data2DScattering created with shape = {data_2d.data.shape}")
-            self.parent_app.show_status(f"✓ Created Data2DScattering: shape={data_2d.data.shape}")
+            self.parent_app.show_status(
+                tr("protocol_preview.status.data_created", shape=data_2d.data.shape)
+            )
             
             # Run each protocol in the stack
             all_results = {}
@@ -950,7 +982,10 @@ class ProtocolPreviewApp(BaseImageTab):
                 print(f"DEBUG: Running protocol {i}: {protocol_name}")
                 
                 try:
-                    self.parent_app.show_status(f"Running protocol {i}/{len(enabled_protocols)}: {protocol_name}...")
+                    self.parent_app.show_status(
+                        tr("protocol_preview.status.running_protocol",
+                           index=i, count=len(enabled_protocols), name=protocol_name)
+                    )
                     
                     # Prepare run_args from protocol instance
                     run_args = {
@@ -990,10 +1025,16 @@ class ProtocolPreviewApp(BaseImageTab):
                     protocol_instance.result = result
                     all_results[protocol_name] = result
                     
-                    self.parent_app.show_status(f"✓ Completed: {protocol_name}")
+                    self.parent_app.show_status(
+                        tr("protocol_preview.status.protocol_completed", name=protocol_name)
+                    )
                     
                 except Exception as protocol_error:
-                    error_msg = f"Error in {protocol_name}: {str(protocol_error)}"
+                    error_msg = tr(
+                        "protocol_preview.status.protocol_failed",
+                        name=protocol_name,
+                        error=protocol_error,
+                    )
                     print(f"DEBUG: Protocol error: {error_msg}")
                     self.parent_app.show_status(error_msg)
                     import traceback
@@ -1001,7 +1042,9 @@ class ProtocolPreviewApp(BaseImageTab):
             
             print(f"DEBUG: All protocols complete. Results count = {len(all_results)}")
             self.last_results = all_results  # Store for tracking
-            self.parent_app.show_status(f"✓ Protocol execution complete: {len(enabled_protocols)} protocols")
+            self.parent_app.show_status(
+                tr("protocol_preview.status.execution_complete", count=len(enabled_protocols))
+            )
             
             # Display results in new visualization tab
             print(f"DEBUG: Calling _display_protocol_results with {len(all_results)} results")
@@ -1009,7 +1052,9 @@ class ProtocolPreviewApp(BaseImageTab):
             print("DEBUG: _display_protocol_results completed")
             
         except Exception as e:
-            self.parent_app.show_status(f"Error running protocols: {str(e)}")
+            self.parent_app.show_status(
+                tr("protocol_preview.status.execution_failed", error=e)
+            )
             import traceback
             traceback.print_exc()
     
@@ -1017,7 +1062,7 @@ class ProtocolPreviewApp(BaseImageTab):
         """Display protocol execution results in a new closeable tab"""
         try:
             if not results:
-                self.parent_app.show_status("No results to display")
+                self.parent_app.show_status(tr("protocol_preview.status.no_results"))
                 return
             
             print(f"DEBUG: _display_protocol_results called with {len(results)} results")
@@ -1089,12 +1134,21 @@ class ProtocolPreviewApp(BaseImageTab):
             if not image_displayed and saved_files:
                 # If no image was displayed but files were saved, show text summary
                 print(f"DEBUG: No image displayed, creating summary panel")
-                summary_text = f"Protocol: {first_protocol}\n\nFiles saved:\n"
+                summary_text = tr(
+                    "protocol_preview.results.summary",
+                    protocol=first_protocol,
+                )
                 for file_info in saved_files[:3]:
                     if isinstance(file_info, dict):
-                        summary_text += f"  • {os.path.basename(file_info.get('filename', 'unknown'))}\n"
+                        summary_text += tr(
+                            "protocol_preview.results.saved_file",
+                            filename=os.path.basename(file_info.get("filename", "unknown")),
+                        )
                     else:
-                        summary_text += f"  • {str(file_info)[:50]}\n"
+                        summary_text += tr(
+                            "protocol_preview.results.saved_item",
+                            item=str(file_info)[:50],
+                        )
                 
                 summary_label = QLabel(summary_text)
                 summary_label.setWordWrap(True)
@@ -1104,13 +1158,17 @@ class ProtocolPreviewApp(BaseImageTab):
             if hasattr(self, 'viz_tabs'):
                 # Remove old Results tab if exists
                 for i in range(self.viz_tabs.count()):
-                    if self.viz_tabs.tabText(i) == "Results":
+                    if self.viz_tabs.widget(i).property("sciview_results_tab"):
                         print(f"DEBUG: Removing old Results tab at index {i}")
                         self.viz_tabs.removeTab(i)
                         break
                 
                 # Add new Results tab with close button enabled
-                tab_index = self.viz_tabs.addTab(results_widget, f"Results: {first_protocol}")
+                results_widget.setProperty("sciview_results_tab", True)
+                tab_index = self.viz_tabs.addTab(
+                    results_widget,
+                    tr("protocol_preview.results.tab_title", protocol=first_protocol),
+                )
                 print(f"DEBUG: Added Results tab at index {tab_index}")
                 
                 # Enable close button for this tab
@@ -1120,13 +1178,17 @@ class ProtocolPreviewApp(BaseImageTab):
                 self.viz_tabs.setCurrentIndex(tab_index)
                 print(f"DEBUG: Switched to Results tab")
                 
-                self.parent_app.show_status(f"✓ Results displayed in new tab: {first_protocol}")
+                self.parent_app.show_status(
+                    tr("protocol_preview.status.results_displayed", protocol=first_protocol)
+                )
             else:
                 print(f"DEBUG: WARNING - viz_tabs not found")
-                self.parent_app.show_status(f"Could not find visualization tabs")
+                self.parent_app.show_status(tr("protocol_preview.status.visualization_tabs_missing"))
             
         except Exception as e:
-            self.parent_app.show_status(f"Could not display results: {e}")
+            self.parent_app.show_status(
+                tr("protocol_preview.status.results_display_failed", error=e)
+            )
             import traceback
             traceback.print_exc()
     
@@ -1136,9 +1198,11 @@ class ProtocolPreviewApp(BaseImageTab):
         print(f"DEBUG: Tab close requested for tab {index}: {tab_name}")
         
         # Only allow closing non-Raw Image tabs (keep Raw Image tab permanent)
-        if tab_name != "Raw Image":
+        if self.viz_tabs.widget(index) is not self._raw_image_panel:
             self.viz_tabs.removeTab(index)
-            self.parent_app.show_status(f"Closed {tab_name}")
+            self.parent_app.show_status(
+                tr("protocol_preview.status.tab_closed", tab=tab_name)
+            )
         else:
             # Try to close another tab or show message
             print(f"DEBUG: Cannot close Raw Image tab")
@@ -1147,41 +1211,42 @@ class ProtocolPreviewApp(BaseImageTab):
     def _preview_export(self):
         """Preview the export file"""
         if not self.protocol_stack:
-            self.parent_app.show_status("No protocols to export")
+            self.parent_app.show_status(tr("protocol_preview.status.no_protocols_to_export"))
             return
         
-        export_format = self.export_format_combo.currentText()
+        export_format = self.export_format_combo.currentData()
+        format_label = self.export_format_combo.currentText()
         content = self._generate_export_content(export_format)
         
         # Show in dialog
         dialog = QMessageBox(self)
-        dialog.setWindowTitle("Export Preview")
-        dialog.setText(f"Preview of {export_format}:")
+        dialog.setWindowTitle(tr("protocol_preview.dialog.export_preview"))
+        dialog.setText(tr("protocol_preview.dialog.export_preview_text", format=format_label))
         dialog.setDetailedText(content)
         dialog.exec_()
     
     def _export_workflow(self):
         """Export protocol workflow to file"""
         if not self.protocol_stack:
-            self.parent_app.show_status("No protocols to export")
+            self.parent_app.show_status(tr("protocol_preview.status.no_protocols_to_export"))
             return
         
-        export_format = self.export_format_combo.currentText()
+        export_format = self.export_format_combo.currentData()
         
         # Determine file extension
-        if "Python" in export_format:
+        if export_format == "python":
             ext = "py"
-            filter_str = "Python Files (*.py)"
-        elif "JSON" in export_format:
+            filter_str = tr("protocol_preview.filter.python")
+        elif export_format == "json":
             ext = "json"
-            filter_str = "JSON Files (*.json)"
+            filter_str = tr("protocol_preview.filter.json")
         else:  # YAML
             ext = "yaml"
-            filter_str = "YAML Files (*.yaml *.yml)"
+            filter_str = tr("protocol_preview.filter.yaml")
         
         file_path, _ = choose_path(
             self,
-            "Export Workflow",
+            tr("protocol_preview.dialog.export_workflow"),
             mode="save", default_name=f"workflow.{ext}",
             file_filter=filter_str,
             key="workflow_export",
@@ -1193,13 +1258,15 @@ class ProtocolPreviewApp(BaseImageTab):
             with open(file_path, 'w') as f:
                 f.write(content)
             
-            self.parent_app.show_status(f"Exported workflow to {file_path}")
+            self.parent_app.show_status(
+                tr("protocol_preview.status.workflow_exported", path=file_path)
+            )
     
     def _generate_export_content(self, export_format: str) -> str:
         """Generate export content based on format"""
-        if "Python" in export_format:
+        if export_format == "python":
             return self._generate_python_script()
-        elif "JSON" in export_format:
+        elif export_format == "json":
             return self._generate_json()
         else:  # YAML
             return self._generate_yaml()
@@ -1208,7 +1275,7 @@ class ProtocolPreviewApp(BaseImageTab):
         """Generate Python script"""
         lines = [
             "#!/usr/bin/env python",
-            "# Generated by SciAnaGui Protocol Preview",
+            tr("protocol_preview.generated.python_header"),
             "",
             "from SciAnalysis.XSAnalysis.Data import Data2D",
             "from SciAnalysis.XSAnalysis.Protocols import (",
@@ -1239,7 +1306,7 @@ class ProtocolPreviewApp(BaseImageTab):
         
         # Add protocol execution
         lines.append("def run_protocols(data):")
-        lines.append("    \"\"\"Run protocol stack\"\"\"")
+        lines.append(f"    \"\"\"{tr('protocol_preview.generated.python_docstring')}\"\"\"")
         
         for protocol in self.protocol_stack:
             if protocol.enabled:
@@ -1248,7 +1315,7 @@ class ProtocolPreviewApp(BaseImageTab):
         
         lines.append("")
         lines.append("if __name__ == '__main__':")
-        lines.append("    # Load your data here")
+        lines.append(f"    # {tr('protocol_preview.generated.python_data_guidance')}")
         lines.append("    # data = Data2D()")
         lines.append("    # run_protocols(data)")
         lines.append("    pass")
@@ -1276,8 +1343,8 @@ class ProtocolPreviewApp(BaseImageTab):
     def _generate_yaml(self) -> str:
         """Generate YAML config"""
         lines = [
-            "# SciAnalysis Protocol Workflow",
-            "# Generated by SciAnaGui Protocol Preview",
+            tr("protocol_preview.generated.yaml_header"),
+            tr("protocol_preview.generated.yaml_attribution"),
             "",
             "protocols:",
         ]

@@ -1,0 +1,325 @@
+image_browser.progress.reading_tile:
+  text: "正在读取图块 {completed}/{total}…"
+  context: "Progress text shown while downloading image tiles."
+  placeholders:
+    completed: "Number of tiles already read."
+    total: "Total number of tiles to read."
+image_browser.progress.reading_image:
+  text: "正在读取图像数据…"
+  context: "Progress text shown while reading image data."
+image_browser.progress.matching_files:
+  text: "找到 {count} 个匹配文件"
+  context: "Progress message reporting files matching a folder search."
+  placeholders:
+    count: "Number of matching files."
+image_browser.progress.added_file:
+  text: "已添加 {current}/{total}：{filename}"
+  context: "Progress message reporting a folder image reference being added."
+  placeholders:
+    current: "Position of the current file in the folder results."
+    total: "Number of files in the folder results."
+    filename: "Name of the file being added."
+image_browser.error.unknown_import:
+  text: "未知导入错误"
+  context: "Fallback detail shown when the Tiled client import error is unavailable."
+image_browser.error.tiled_unavailable:
+  text: "Tiled 客户端不可用：{error}"
+  context: "Error shown when a Tiled image cannot be loaded because its client is unavailable."
+  placeholders:
+    error: "Details returned for the Tiled client import failure."
+image_browser.progress.cancelled_range:
+  text: "已取消：已加载 {loaded} 个，跳过 {skipped}/{processed} 个扫描"
+  context: "Progress summary shown when a range load is cancelled."
+  placeholders:
+    loaded: "Number of scans loaded before cancellation."
+    skipped: "Number of scans skipped before cancellation."
+    processed: "Number of scans processed before cancellation."
+image_browser.progress.scan_range:
+  text: "扫描 {scan_id}：已加载 {loaded} 个，已跳过 {skipped}/{processed} 个"
+  context: "Progress update while loading scans from a range."
+  placeholders:
+    scan_id: "Identifier of the scan currently being processed."
+    loaded: "Number of scans loaded so far."
+    skipped: "Number of scans skipped so far."
+    processed: "Number of scans processed so far."
+image_browser.progress.complete_range:
+  text: "完成：已加载 {loaded} 个，跳过 {skipped}/{total} 个扫描"
+  context: "Summary shown when a range load finishes."
+  placeholders:
+    loaded: "Number of scans loaded."
+    skipped: "Number of scans skipped."
+    total: "Number of scans in the requested range."
+image_browser.progress.connecting_tiled:
+  text: "正在连接 Tiled 服务器：{profile}"
+  context: "Progress message shown while connecting to a Tiled profile."
+  placeholders:
+    profile: "Name of the selected Tiled profile."
+image_browser.error.scan_not_found:
+  text: "目录中未找到扫描 {scan_id}"
+  context: "Error shown when the requested scan is absent from the Tiled catalog."
+  placeholders:
+    scan_id: "Identifier of the requested scan."
+image_browser.progress.processing_image:
+  text: "正在处理图像数据..."
+  context: "Progress message shown while preparing loaded image data for display."
+image_browser.progress.tiled_complete:
+  text: "Tiled 加载完成 - 扫描 {scan_id}"
+  context: "Progress message shown after a Tiled scan finishes loading."
+  placeholders:
+    scan_id: "Identifier of the loaded scan."
+image_browser.error.tiled_loading:
+  text: "Tiled 加载错误：{error}"
+  context: "Error shown when loading image data from Tiled fails."
+  placeholders:
+    error: "Exception detail from the Tiled image-loading operation."
+image_browser.progress.loading_file:
+  text: "正在加载 {filename}"
+  context: "Progress message shown while loading an image file."
+  placeholders:
+    filename: "Name of the image file being loaded."
+image_browser.progress.file_complete:
+  text: "文件加载完成"
+  context: "Progress message shown when an image file finishes loading."
+image_browser.error.file_load_failed:
+  text: "无法从 {path} 加载图像"
+  context: "Error shown when a file loader returns no image data."
+  placeholders:
+    path: "Path of the image file that could not be loaded."
+image_browser.error.loading_file:
+  text: "加载文件时出错：{error}"
+  context: "Error shown when an exception occurs while loading an image file."
+  placeholders:
+    error: "Exception detail from the image file-loading operation."
+image_browser.title:
+  text: "浏览图像"
+  context: "Heading for the image browser tab."
+image_browser.status.ready:
+  text: "准备加载图像"
+  context: "Initial status shown in the image browser."
+image_browser.folder.path.tooltip:
+  text: "输入文件夹路径或选择最近使用的文件夹"
+  context: "Guidance for entering a folder path or selecting a recent folder."
+image_browser.folder.path.placeholder:
+  text: "选择文件夹..."
+  context: "Placeholder in the editable folder path control."
+image_browser.folder.parent.tooltip:
+  text: "打开上级文件夹"
+  context: "Tooltip for navigating up to the current folder's parent."
+image_browser.folder.choose.tooltip:
+  text: "选择文件夹"
+  context: "Tooltip for opening the folder selection dialog."
+image_browser.folder.filter.label:
+  text: "筛选："
+  context: "Label for the folder image-name filter."
+image_browser.folder.filter.placeholder:
+  text: "可选：saxs、*.tif、sample_*.h5"
+  context: "Example patterns that can be entered to filter the folder image list."
+image_browser.folder.sort.label:
+  text: "排序："
+  context: "Label for the folder image sort-order selector."
+image_browser.folder.sort.name_ascending:
+  text: "名称 A-Z"
+  context: "Folder-list sort option that orders names alphabetically from A to Z."
+image_browser.folder.sort.name_descending:
+  text: "名称 Z-A"
+  context: "Folder-list sort option that orders names alphabetically from Z to A."
+image_browser.folder.sort.newest_first:
+  text: "最新优先"
+  context: "Folder-list sort option that places recently modified files first."
+image_browser.folder.sort.oldest_first:
+  text: "最早优先"
+  context: "Folder-list sort option that places least recently modified files first."
+image_browser.folder.contents.title:
+  text: "文件夹内容"
+  context: "Heading for the list of files and subfolders."
+image_browser.folder.contents.empty:
+  text: "没有图像"
+  context: "Initial count label before folder contents are listed."
+image_browser.folder.auto_refresh.label:
+  text: "自动刷新"
+  context: "Checkbox that enables periodic refresh of the folder listing."
+image_browser.folder.auto_refresh.tooltip:
+  text: "文件夹内容更改时自动刷新"
+  context: "Tooltip explaining the automatic folder-list refresh option."
+image_browser.play.tooltip:
+  text: "播放此列表中的图像"
+  context: "Tooltip for starting sequential display of images in the folder list."
+image_browser.play.pause.tooltip:
+  text: "暂停播放"
+  context: "Tooltip shown while sequential folder-image playback is active."
+image_browser.play.repeat.tooltip:
+  text: "重复播放"
+  context: "Tooltip for repeating folder-image playback after reaching the end."
+image_browser.playback.speed.accessible:
+  text: "播放速度：{speed}"
+  context: "Accessible name describing the selected folder-image playback speed."
+  placeholders:
+    speed: "Name of the selected playback speed."
+image_browser.playback.speed.slow:
+  text: "慢"
+  context: "Accessible name for the slow folder-image playback rate."
+image_browser.playback.speed.medium:
+  text: "中"
+  context: "Accessible name for the medium folder-image playback rate."
+image_browser.playback.speed.fast:
+  text: "快"
+  context: "Accessible name for the fast folder-image playback rate."
+image_browser.playback.speed.tooltip.slow:
+  text: "播放速度：慢。点击更改。"
+  context: "Tooltip for the slow folder-image playback rate."
+image_browser.playback.speed.tooltip.medium:
+  text: "播放速度：中。点击更改。"
+  context: "Tooltip for the medium folder-image playback rate."
+image_browser.playback.speed.tooltip.fast:
+  text: "播放速度：快。点击更改。"
+  context: "Tooltip for the fast folder-image playback rate."
+image_browser.batch.add_all.tooltip:
+  text: "将此列表中的所有图像添加到批处理"
+  context: "Tooltip for adding the visible folder images to the shared Batch list."
+image_browser.batch.clear.tooltip:
+  text: "从批处理中移除之前添加的图像。文件仍保留在磁盘上。"
+  context: "Tooltip for clearing folder images kept in the shared Batch list."
+image_browser.error.no_files.title:
+  text: "未找到文件"
+  context: "Title of the warning shown when the current folder has no supported images."
+image_browser.error.no_files.body:
+  text: "此文件夹中未找到受支持的图像文件"
+  context: "Warning message shown when the current folder has no supported images."
+image_browser.batch.kept_images:
+  text: "已在批处理中保留 {count} 张图像"
+  context: "Status message after adding the current folder images to Batch."
+  placeholders:
+    count: "Number of images kept in Batch."
+image_browser.batch.cleared_folders:
+  text: "已清除批处理中保留的文件夹"
+  context: "Status message after removing previously kept folder images from Batch."
+image_browser.batch.count:
+  text: "批处理中有 {count} 项"
+  context: "Count of images currently kept in the shared Batch list."
+  placeholders:
+    count: "Number of images kept in Batch."
+image_browser.image.empty:
+  text: "未加载图像"
+  context: "Placeholder displayed when the image browser has no current image."
+image_browser.image.empty.viewer:
+  text: "未加载图像"
+  context: "Image-viewer placeholder displayed when no image is loaded."
+image_browser.image.loading:
+  text: "正在加载：{filename}"
+  context: "Placeholder displayed while the selected image is loading."
+  placeholders:
+    filename: "Name of the image being loaded."
+image_browser.image.filename_source:
+  text: "{filename}  │  {source}"
+  context: "Caption showing the current image name and its source."
+  placeholders:
+    filename: "Name of the current image."
+    source: "Source associated with the current image."
+image_browser.status.synced_image:
+  text: "已同步图像：{filename}"
+  context: "Status message after publishing the current image to other tabs."
+  placeholders:
+    filename: "Name of the synchronized image."
+image_browser.status.restored_image:
+  text: "已恢复上次会话中的图像：{filename}"
+  context: "Status message after restoring the image selected in the previous session."
+  placeholders:
+    filename: "Name of the restored image."
+image_browser.dialog.select_folder.title:
+  text: "选择文件夹"
+  context: "Title of the folder selection dialog."
+image_browser.folder.status.found_images:
+  text: "找到 {count} 张图像"
+  context: "Status message showing how many images are in the current folder."
+  placeholders:
+    count: "Number of images found."
+image_browser.folder.count.one_image:
+  text: "{count} 张图像"
+  context: "Folder contents count when exactly one image is present."
+  placeholders:
+    count: "Number of images, which is one."
+image_browser.folder.count.images:
+  text: "{count} 张图像"
+  context: "Folder contents count when zero or multiple images are present."
+  placeholders:
+    count: "Number of images in the folder."
+image_browser.folder.count.one_folder:
+  text: "{count} 个文件夹"
+  context: "Folder contents count when exactly one subfolder is present."
+  placeholders:
+    count: "Number of subfolders, which is one."
+image_browser.folder.count.folders:
+  text: "{count} 个文件夹"
+  context: "Folder contents count when multiple subfolders are present."
+  placeholders:
+    count: "Number of subfolders."
+image_browser.folder.status.selected_file:
+  text: "已选择 {filename}"
+  context: "Status message shown after selecting an image from the folder list."
+  placeholders:
+    filename: "Name of the selected image file."
+image_browser.export.empty.title:
+  text: "无数据"
+  context: "Title of the information dialog shown when there is no session list to export."
+image_browser.export.empty.body:
+  text: "会话中没有可导出的图像"
+  context: "Information message shown when there is no session list to export."
+image_browser.export.session_list.title:
+  text: "导出会话列表"
+  context: "Title of the save dialog for exporting the current session list."
+image_browser.export.session_list.filter:
+  text: "文本文件 (*.txt)"
+  context: "File type filter for saving a session list as a text file."
+image_browser.export.session_list.complete:
+  text: "会话列表已导出到 {path}"
+  context: "Status message after exporting the session list."
+  placeholders:
+    path: "Path to the exported session list."
+image_browser.export.data.title:
+  text: "导出数据"
+  context: "Title of the information dialog for image data export."
+image_browser.export.data.unavailable:
+  text: "数据导出功能尚未实现"
+  context: "Information message explaining that image data export is not available yet."
+image_browser.debug.section_title:
+  text: "=== 图像浏览器状态 ==="
+  context: "Section heading in the image browser's diagnostic status report."
+image_browser.debug.session_images:
+  text: "会话图像：{count}"
+  context: "Diagnostic status entry reporting the number of session images."
+  placeholders:
+    count: "Number of images in the session."
+image_browser.debug.cache_summary:
+  text: "内存缓存：{cached}/{total}（上限：{limit}）"
+  context: "Diagnostic status entry reporting image cache use."
+  placeholders:
+    cached: "Number of images currently cached in memory."
+    total: "Number of images in the session."
+    limit: "Maximum number of images the cache can hold."
+image_browser.debug.current_image:
+  text: "当前：{filename}"
+  context: "Diagnostic status entry naming the current image."
+  placeholders:
+    filename: "Name of the current image."
+image_browser.debug.source:
+  text: "来源：{source}"
+  context: "Diagnostic status entry naming the current image source."
+  placeholders:
+    source: "Source associated with the current image."
+image_browser.debug.loading_mode.deferred:
+  text: "延迟加载（按需）"
+  context: "Diagnostic label for an image loaded only when first needed."
+image_browser.debug.loading_mode.immediate:
+  text: "立即加载（预加载）"
+  context: "Diagnostic label for an image loaded before it is needed."
+image_browser.debug.loading_mode.label:
+  text: "加载模式：{mode}"
+  context: "Diagnostic status entry identifying how the current image is loaded."
+  placeholders:
+    mode: "Description of the current image loading mode."
+image_browser.debug.dimensions:
+  text: "尺寸：{width} x {height}"
+  context: "Diagnostic status entry reporting the current image dimensions."
+  placeholders:
+    width: "Image width in pixels."
+    height: "Image height in pixels."

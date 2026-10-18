@@ -1,0 +1,306 @@
+reduction.preview.title:
+  text: "积分预览"
+  context: "Heading above the one-dimensional reduction plot."
+reduction.preview.empty:
+  text: "暂无预览"
+  context: "Initial preview summary before reduction has been run."
+reduction.plot_style.title:
+  text: "绘图样式"
+  context: "Group heading for plot appearance controls."
+reduction.plot_style.title_size:
+  text: "图表标题字号"
+  context: "Label for the plot title font-size control."
+reduction.plot_style.axis_label_size:
+  text: "坐标轴标签字号"
+  context: "Label for the plot axis-label font-size control."
+reduction.plot_style.tick_label_size:
+  text: "刻度标签字号"
+  context: "Label for the plot tick-label font-size control."
+reduction.plot_style.export_resolution:
+  text: "导出分辨率 (DPI)"
+  context: "Label for the exported plot resolution control."
+reduction.plot_style.line_color:
+  text: "线条颜色"
+  context: "Label for the reduction plot line color control."
+reduction.plot_style.line_width:
+  text: "线宽"
+  context: "Label for the reduction plot line width control."
+reduction.plot_style.axis_scale:
+  text: "坐标轴刻度"
+  context: "Label for the axis-scale selection controls."
+reduction.scale.linear:
+  text: "线性"
+  context: "Axis-scale choice using linear axes."
+reduction.scale.log_x:
+  text: "X 轴对数"
+  context: "Axis-scale choice using a logarithmic x-axis."
+reduction.scale.log_y:
+  text: "Y 轴对数"
+  context: "Axis-scale choice using a logarithmic y-axis."
+reduction.scale.log_log:
+  text: "双对数"
+  context: "Axis-scale choice using logarithmic x- and y-axes."
+reduction.protocol.label:
+  text: "处理方案"
+  context: "Label identifying the reduction operation selector."
+reduction.operation.circular_average:
+  text: "圆周平均"
+  context: "Button label selecting circular-average reduction."
+reduction.operation.sector_average:
+  text: "扇区平均"
+  context: "Button label selecting sector-average reduction."
+reduction.operation.linecut_q:
+  text: "χ 处的 I(q)"
+  context: "Button label selecting an intensity-versus-q line cut at fixed azimuth."
+reduction.operation.linecut_angle:
+  text: "q 处的 I(χ)"
+  context: "Button label selecting an intensity-versus-azimuth line cut at fixed q."
+reduction.recipe.title:
+  text: "配方"
+  context: "Group heading for the editable reduction recipe preview."
+reduction.source.shared:
+  text: "共享"
+  context: "Calibration or mask source option using shared application state."
+reduction.source.custom:
+  text: "自定义"
+  context: "Calibration or mask source option using a file loaded in this tab."
+reduction.source.none:
+  text: "无"
+  context: "Mask source option that disables masking."
+reduction.calibration.label:
+  text: "校准"
+  context: "Label for choosing the calibration source."
+reduction.mask.label:
+  text: "掩膜"
+  context: "Label for choosing the mask source."
+reduction.browse:
+  text: "浏览"
+  context: "Button opening a file picker for a custom calibration or mask."
+reduction.preview.live:
+  text: "实时预览"
+  context: "Checkbox enabling preview updates when reduction controls change."
+reduction.parameters.title:
+  text: "参数"
+  context: "Group heading for operation-specific reduction controls."
+reduction.bins_relative:
+  text: "分箱数（相对值）"
+  context: "Label for the relative number of bins used during reduction."
+reduction.crop.auto:
+  text: "根据校准自动裁剪"
+  context: "Checkbox using the q-range derived from the active calibration."
+reduction.q_min:
+  text: "q 最小值 (Å⁻¹)"
+  context: "Label for the minimum q range in inverse angstroms."
+reduction.q_max:
+  text: "q 最大值 (Å⁻¹)"
+  context: "Label for the maximum q range in inverse angstroms."
+reduction.angle_start:
+  text: "起始角度 (°)"
+  context: "Label for the starting azimuthal angle of the selected sector."
+reduction.angle_end:
+  text: "结束角度 (°)"
+  context: "Label for the ending azimuthal angle of the selected sector."
+reduction.chi_center:
+  text: "χ 中心 (°)"
+  context: "Label for the center azimuthal angle of the q line cut."
+reduction.q_half_width:
+  text: "半宽 Δq (Å⁻¹)"
+  context: "Label for the q half-width around the selected reduction line."
+reduction.chi_orientation:
+  text: "χ 方向：0° 向右，+90° 向上"
+  context: "Note describing the screen orientation convention for azimuth χ."
+reduction.q_center:
+  text: "q 中心 (Å⁻¹)"
+  context: "Label for the q center of the azimuthal line cut."
+reduction.recipe.operation.circular_average:
+  text: "圆周平均"
+  context: "Human-readable recipe name for circular-average reduction."
+reduction.recipe.operation.sector_average:
+  text: "扇区平均"
+  context: "Human-readable recipe name for sector-average reduction."
+reduction.recipe.operation.linecut_q:
+  text: "χ 处的 I(q) 线切"
+  context: "Human-readable recipe name for an intensity-versus-q line cut."
+reduction.recipe.operation.linecut_angle:
+  text: "Q 处的 I(χ) 线切"
+  context: "Human-readable recipe name for an intensity-versus-azimuth line cut."
+reduction.recipe.apply:
+  text: "应用 YAML"
+  context: "Button that applies the recipe text edited in the YAML view."
+reduction.recipe.apply.tooltip:
+  text: "解析上方编辑的配方 YAML 并将其应用到控件"
+  context: "Tooltip explaining that edited recipe YAML is parsed into the controls."
+reduction.preview.refresh:
+  text: "刷新预览"
+  context: "Button that reruns the current reduction preview."
+reduction.export_data:
+  text: "导出数据"
+  context: "Button that saves the current one-dimensional reduction result."
+reduction.send_to_batch:
+  text: "发送到批处理"
+  context: "Button that sends the current reduction settings to the Batch tab."
+reduction.send_to_batch.tooltip:
+  text: "将当前设置作为处理方案发送到批处理选项卡"
+  context: "Tooltip explaining that current reduction settings are sent to Batch."
+reduction.dialog.load_calibration:
+  text: "加载校准 YAML"
+  context: "File dialog title for opening a calibration YAML file."
+reduction.dialog.select_line_color:
+  text: "选择线条颜色"
+  context: "Color picker dialog title for choosing the reduction plot line color."
+reduction.filter.yaml_all:
+  text: "YAML 文件 (*.yaml *.yml);;所有文件 (*)"
+  context: "File dialog filter for YAML files or any file."
+reduction.status.calibration_loaded:
+  text: "已加载自定义校准：{name}"
+  context: "Status confirming that a custom calibration file was loaded."
+  placeholders:
+    name: "Loaded calibration filename."
+reduction.status.calibration_load_failed:
+  text: "无法加载自定义校准文件：{error}"
+  context: "Status explaining why the custom calibration file could not be loaded."
+  placeholders:
+    error: "Raw calibration-loading exception."
+reduction.dialog.load_mask:
+  text: "加载掩膜"
+  context: "File dialog title for opening a custom mask."
+reduction.filter.mask_all:
+  text: "掩膜文件 (*.png *.tif *.tiff *.npy);;所有文件 (*)"
+  context: "File dialog filter for supported mask files or any file."
+reduction.status.mask_loaded:
+  text: "已加载自定义掩膜：{name}"
+  context: "Status confirming that a custom mask file was loaded."
+  placeholders:
+    name: "Loaded mask filename."
+reduction.status.mask_load_failed:
+  text: "无法加载自定义掩膜文件：{error}"
+  context: "Status explaining why the custom mask file could not be loaded."
+  placeholders:
+    error: "Raw mask-loading exception."
+reduction.tooltip.calibration.custom:
+  text: "校准：自定义（{name}）"
+  context: "Tooltip identifying the selected custom calibration filename."
+  placeholders:
+    name: "Custom calibration filename."
+reduction.tooltip.calibration.unloaded:
+  text: "校准：来自校准选项卡（尚未加载）"
+  context: "Tooltip indicating that shared calibration has not been loaded."
+reduction.tooltip.calibration.shared:
+  text: "校准：来自校准选项卡"
+  context: "Tooltip identifying calibration from the shared calibration tab."
+reduction.tooltip.mask.disabled:
+  text: "掩膜：已禁用"
+  context: "Tooltip indicating that mask application is disabled."
+reduction.tooltip.mask.custom:
+  text: "掩膜：自定义（{name}）"
+  context: "Tooltip identifying the selected custom mask filename."
+  placeholders:
+    name: "Custom mask filename."
+reduction.tooltip.mask.shared:
+  text: "掩膜：来自掩膜选项卡"
+  context: "Tooltip identifying a mask loaded from the shared mask tab."
+reduction.tooltip.mask.unloaded:
+  text: "掩膜：来自掩膜选项卡（尚未加载）"
+  context: "Tooltip indicating that no shared mask has been loaded."
+reduction.status.image_prepare_failed:
+  text: "无法准备积分所需的图像数组"
+  context: "Status shown when the image cannot be prepared for reduction."
+reduction.status.image_requires_2d:
+  text: "积分需要二维图像数据（当前为 {dimensions}D）"
+  context: "Status explaining that reduction needs a two-dimensional image."
+  placeholders:
+    dimensions: "Number of image dimensions received."
+reduction.status.mask_shape_mismatch:
+  text: "掩膜形状与当前图像不匹配；预览时将忽略掩膜"
+  context: "Status explaining that an incompatible mask is omitted from the preview."
+reduction.preview.no_image:
+  text: "未加载图像"
+  context: "Preview summary shown when no image is available."
+reduction.status.preview_failed:
+  text: "预览失败：{error}"
+  context: "Preview summary explaining that reduction preview processing failed."
+  placeholders:
+    error: "Raw reduction exception."
+reduction.status.failed:
+  text: "积分失败：{error}"
+  context: "Application status explaining that reduction processing failed."
+  placeholders:
+    error: "Raw reduction exception."
+reduction.operation.status.circular_average:
+  text: "圆周平均"
+  context: "Operation name shown in the reduction result summary."
+reduction.operation.status.sector_average:
+  text: "扇区平均"
+  context: "Operation name shown in the reduction result summary."
+reduction.operation.status.linecut_q:
+  text: "Q 线切"
+  context: "Operation name shown in the q line-cut result summary."
+reduction.operation.status.linecut_angle:
+  text: "角度线切"
+  context: "Operation name shown in the azimuthal line-cut result summary."
+reduction.preview.result:
+  text: "{operation}：{count} 个点"
+  context: "Reduction preview summary reporting the operation and output point count."
+  placeholders:
+    operation: "Localized reduction operation name."
+    count: "Number of output points."
+reduction.status.complete:
+  text: "{operation}完成：{count} 个点"
+  context: "Status confirming reduction completion and reporting output point count."
+  placeholders:
+    operation: "Localized reduction operation name."
+    count: "Number of output points."
+reduction.plot.no_preview:
+  text: "暂无预览\n\n请加载图像并选择操作。"
+  context: "Plot-area guidance shown before a reduction preview is available."
+reduction.status.preview_before_export:
+  text: "请先运行预览再导出"
+  context: "Status prompting the user to generate a result before exporting."
+reduction.dialog.export_data:
+  text: "导出一维数据"
+  context: "File dialog title for saving one-dimensional reduction data."
+reduction.filter.data_all:
+  text: "CSV 文件 (*.csv);;数据文件 (*.dat);;文本文件 (*.txt);;所有文件 (*)"
+  context: "File dialog filter for CSV, DAT, text, or any data file."
+reduction.status.data_exported:
+  text: "一维积分数据已导出到 {path}"
+  context: "Status confirming the output path for exported reduction data."
+  placeholders:
+    path: "Path returned by the reduction data writer."
+reduction.recipe.batch_header:
+  text: "# 已发送到批处理选项卡的配方\n"
+  context: "Comment heading in the YAML recipe preview sent to Batch."
+reduction.status.recipe_yaml_failed:
+  text: "无法应用配方：YAML 无效 — {error}"
+  context: "Status explaining that recipe text could not be parsed as YAML."
+  placeholders:
+    error: "Raw YAML parsing exception."
+reduction.status.recipe_mapping_invalid:
+  text: "配方无效：应为 YAML 映射"
+  context: "Status shown when a parsed recipe is not a mapping."
+reduction.status.recipe_applied:
+  text: "已应用 YAML 配方"
+  context: "Status confirming that recipe edits were applied."
+reduction.dialog.export_recipe:
+  text: "导出积分配方"
+  context: "File dialog title for exporting a reduction recipe."
+reduction.filter.yaml_json_all:
+  text: "YAML 文件 (*.yaml *.yml);;JSON 文件 (*.json);;所有文件 (*)"
+  context: "File dialog filter for YAML, JSON, or any file."
+reduction.status.recipe_exported:
+  text: "积分配方已导出到 {path}"
+  context: "Status confirming the path used to export the reduction recipe."
+  placeholders:
+    path: "Exported recipe path."
+reduction.status.batch_unavailable:
+  text: "批处理选项卡不可用"
+  context: "Status shown when the Batch tab cannot receive the recipe."
+reduction.status.display_update_failed:
+  text: "无法更新积分显示"
+  context: "Fallback status shown when the reduction display cannot be updated."
+reduction.preview.image_loaded:
+  text: "已加载图像：{width}x{height}"
+  context: "Preview summary reporting the dimensions of the loaded image."
+  placeholders:
+    width: "Image width in pixels."
+    height: "Image height in pixels."

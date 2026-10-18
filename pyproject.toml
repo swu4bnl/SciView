@@ -35,7 +35,7 @@ display_name = "SciView"
 where = ["src"]
 
 [tool.setuptools.package-data]
-sciview = ["profiles/data/*.yaml", "profiles/data/*.json"]
+sciview = ["profiles/data/*.yaml", "profiles/data/*.json", "interfaces/locales/*/*.yaml"]
 
 [project.optional-dependencies]
 dev = [

@@ -1,0 +1,59 @@
+image_utils.coordinates_must_be_finite_numbers:
+  text: 坐标必须是有限数值
+  context: Validation result in the image display input validation.
+image_utils.invalid_coordinate_format:
+  text: 坐标格式无效
+  context: Validation result in the image display input validation.
+image_utils.no_image_data_provided:
+  text: 未提供图像数据
+  context: Validation result in the image display input validation.
+image_utils.scianalysis_object_has_no_data:
+  text: SciAnalysis 对象不包含数据
+  context: Validation result in the image display input validation.
+image_utils.invalid_data_type_not_array_like:
+  text: '数据类型无效（不是类数组类型）：{type_extracted_data___name}'
+  context: Validation result in the image display input validation.
+  placeholders:
+    type_extracted_data___name: Python type name of the supplied image object.
+image_utils.empty_array_with_shape_extracted_data:
+  text: '数组为空，形状为 {extracted_data_shape}'
+  context: Validation result in the image display input validation.
+  placeholders:
+    extracted_data_shape: Dimensions of the input array, in NumPy shape notation.
+image_utils.cannot_determine_array_size_from_shape:
+  text: '无法根据形状 {extracted_data_shape} 确定数组大小'
+  context: Validation result in the image display input validation.
+  placeholders:
+    extracted_data_shape: Dimensions of the input array, in NumPy shape notation.
+image_utils.failed_to_convert_d_data_to:
+  text: '无法将二维数据转换为 ndarray：{error}'
+  context: Validation result in the image display input validation.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+image_utils.converted_extracted_data_ndim_d_array:
+  text: '已将 {extracted_data_ndim} 维数组转换为二维数组（形状={converted_shape}）'
+  context: Validation result in the image display input validation.
+  placeholders:
+    extracted_data_ndim: Number of dimensions in the input image array.
+    converted_shape: Dimensions of the converted two-dimensional image array.
+image_utils.conversion_failed_for_extracted_data_ndim:
+  text: '{extracted_data_ndim} 维数组转换失败'
+  context: Validation result in the image display input validation.
+  placeholders:
+    extracted_data_ndim: Number of dimensions in the input image array.
+image_utils.error_converting_array_error:
+  text: '转换数组时出错：{error}'
+  context: Validation result in the image display input validation.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+image_utils.array_is_extracted_data_ndim_d:
+  text: '数组为 {extracted_data_ndim} 维，需要二维（use_converter=False）'
+  context: Validation result in the image display input validation.
+  placeholders:
+    extracted_data_ndim: Number of dimensions in the input image array.
+image_utils.array_is_extracted_data_ndim_d_2:
+  text: '数组为 {extracted_data_ndim} 维，需要至少二维（形状={extracted_data_shape}）'
+  context: Validation result in the image display input validation.
+  placeholders:
+    extracted_data_ndim: Number of dimensions in the input image array.
+    extracted_data_shape: Dimensions of the input array, in NumPy shape notation.

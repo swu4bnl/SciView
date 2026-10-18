@@ -1,0 +1,557 @@
+mask.undo.add_layer:
+  text: "Add {layer_name}"
+  context: "Undo-history action for adding a mask layer."
+  placeholders:
+    layer_name: "Name of the added mask layer."
+mask.undo.clear_layers:
+  text: "Clear mask layers"
+  context: "Undo-history action for clearing all mask layers."
+mask.undo.drawing_edit:
+  text: "{tool} edit"
+  context: "Undo-history action describing a completed drawing-tool edit."
+  placeholders:
+    tool: "Localized name of the drawing tool."
+mask.undo.refine:
+  text: "{operation} mask 1 px"
+  context: "Undo-history action for shrinking or growing a mask."
+  placeholders:
+    operation: "Localized name of the mask refinement action."
+mask.effect.mask:
+  text: "mask pixels"
+  context: "Effect label for adding pixels to the active mask."
+mask.effect.restore:
+  text: "restore pixels"
+  context: "Effect label for removing pixels from the active mask."
+mask.tool.active_effect:
+  text: "{tool}: {effect}. Hold Alt to invert the effect."
+  context: "Guidance describing the active drawing tool and its effect."
+  placeholders:
+    tool: "Localized name of the active drawing tool."
+    effect: "Localized description of the mask effect."
+mask.tool.active_hint:
+  text: "{tool}: {effect}. {hint}"
+  context: "Guidance shown while a drawing tool is active."
+  placeholders:
+    tool: "Localized name of the active drawing tool."
+    effect: "Localized description of the mask effect."
+    hint: "Localized instruction for the active drawing tool."
+mask.panel.tools:
+  text: "Tools"
+  context: "Group heading for image navigation and mask-drawing tools."
+mask.edit_target.none:
+  text: "Editing: no active layer"
+  context: "Status label when no mask layer is available for editing."
+mask.navigation.pan:
+  text: "Pan"
+  context: "Label for the image panning tool."
+mask.navigation.pan_tooltip:
+  text: "Pan across the image"
+  context: "Tooltip describing image panning."
+mask.navigation.zoom:
+  text: "Zoom"
+  context: "Label for the image zoom tool."
+mask.navigation.zoom_tooltip:
+  text: "Drag a rectangle to zoom"
+  context: "Tooltip describing rectangular image zooming."
+mask.navigation.home:
+  text: "Home"
+  context: "Label for the control that restores the full image view."
+mask.navigation.home_tooltip:
+  text: "Reset to the full image view"
+  context: "Tooltip describing the full-image view reset."
+mask.tool.brush:
+  text: "Brush"
+  context: "Visible label for the brush drawing tool."
+mask.tool.brush_tooltip:
+  text: "Brush: mask pixels. Hold Alt to restore pixels."
+  context: "Tooltip describing brush drawing and its Alt-key effect."
+mask.tool.eraser:
+  text: "Eraser"
+  context: "Visible label for the eraser drawing tool."
+mask.tool.eraser_tooltip:
+  text: "Eraser: restore pixels. Hold Alt to mask pixels."
+  context: "Tooltip describing erasing and its Alt-key effect."
+mask.tool.line:
+  text: "Line"
+  context: "Visible label for the line drawing tool."
+mask.tool.line_tooltip:
+  text: "Draw a straight mask line. Hold Alt to erase."
+  context: "Tooltip describing line drawing and its Alt-key effect."
+mask.tool.rectangle:
+  text: "Rectangle"
+  context: "Visible label for the rectangle drawing tool."
+mask.tool.rectangle_tooltip:
+  text: "Draw a filled rectangle. Hold Alt to erase."
+  context: "Tooltip describing filled-rectangle drawing and its Alt-key effect."
+mask.tool.circle:
+  text: "Circle"
+  context: "Visible label for the circle drawing tool."
+mask.tool.circle_tooltip:
+  text: "Draw a filled circle. Hold Alt to erase."
+  context: "Tooltip describing filled-circle drawing and its Alt-key effect."
+mask.tool.polygon:
+  text: "Polygon"
+  context: "Visible label for the polygon drawing tool."
+mask.tool.polygon_tooltip:
+  text: "Click vertices; Enter or double-click finishes."
+  context: "Tooltip describing polygon vertex selection and completion."
+mask.tool.smart_fill:
+  text: "Smart Fill"
+  context: "Visible label for the smart-fill drawing tool."
+mask.tool.smart_fill_tooltip:
+  text: "Fill from an image seed. Hold Alt to erase."
+  context: "Tooltip describing image-seeded fill and its Alt-key effect."
+mask.tool.shrink_tooltip:
+  text: "Shrink active layer by 1 px"
+  context: "Tooltip for shrinking the active mask layer."
+mask.tool.grow_tooltip:
+  text: "Grow active layer by 1 px"
+  context: "Tooltip for growing the active mask layer."
+mask.panel.view:
+  text: "View"
+  context: "Heading for image navigation controls."
+mask.panel.refine:
+  text: "Refine"
+  context: "Heading for mask refinement controls."
+mask.panel.history:
+  text: "History"
+  context: "Heading for mask undo and redo controls."
+mask.panel.draw:
+  text: "Draw"
+  context: "Heading for mask drawing controls."
+mask.action.undo:
+  text: "Undo"
+  context: "Label for undoing the last mask edit."
+mask.action.undo_tooltip:
+  text: "Undo last mask edit (Ctrl+Z)"
+  context: "Tooltip describing the undo action and its shortcut."
+mask.action.redo:
+  text: "Redo"
+  context: "Label for redoing a mask edit."
+mask.action.redo_tooltip:
+  text: "Redo mask edit (Ctrl+Shift+Z)"
+  context: "Tooltip describing the redo action and its shortcut."
+mask.tool.size:
+  text: "Size"
+  context: "Label for the drawing-tool brush size control."
+mask.tool.pan_inspect:
+  text: "Pan and inspect the image"
+  context: "Initial guidance shown when no drawing tool is active."
+mask.tool.rectangle_short:
+  text: "Rect"
+  context: "Compact visible label for the rectangle drawing tool."
+mask.tool.smart_fill_short:
+  text: "Fill"
+  context: "Compact visible label for the smart-fill drawing tool."
+mask.tool.finish_polygon:
+  text: "Finish Polygon"
+  context: "Button that completes the current polygon."
+mask.action.cancel:
+  text: "Cancel"
+  context: "Button that cancels the current edit or preview."
+mask.panel.layers:
+  text: "Layers"
+  context: "Heading for mask-layer management controls."
+mask.action.add:
+  text: "Add"
+  context: "Button that opens options for adding a mask layer."
+mask.action.add_tooltip:
+  text: "Add an empty, imported, instrument, or threshold layer."
+  context: "Tooltip describing the available mask-layer sources."
+mask.action.remove:
+  text: "Remove"
+  context: "Button or menu action that removes the selected mask layer."
+mask.action.clear_layers:
+  text: "Clear Layers"
+  context: "Button that removes all mask layers."
+mask.layers.empty_hint:
+  text: "Create a mask from the threshold above, or add an empty layer for manual drawing."
+  context: "Guidance shown when the layer list is empty."
+mask.layers.combined_overlay:
+  text: "Combined overlay"
+  context: "Label for the composed overlay of visible mask layers."
+mask.appearance.color:
+  text: "Color"
+  context: "Label for choosing the mask overlay color."
+mask.appearance.choose_color:
+  text: "Choose combined mask color"
+  context: "Color-dialog title for selecting the combined mask overlay color."
+mask.appearance.opacity:
+  text: "Opacity"
+  context: "Label for the combined mask overlay opacity control."
+mask.coverage.format:
+  text: "Masked {percentage:.1f}%"
+  context: "Progress-bar text showing the percentage of image pixels masked."
+  placeholders:
+    percentage: "Percentage of image pixels masked."
+mask.coverage.row:
+  text: "{percentage:.1f}% masked"
+  context: "Layer-row detail showing the fraction of pixels included in that layer."
+  placeholders:
+    percentage: "Percentage of image pixels masked in the layer."
+mask.coverage.tooltip:
+  text: "Fraction of visible image pixels included in the combined mask"
+  context: "Tooltip explaining the combined mask coverage value."
+mask.coverage.no_layers:
+  text: "No visible mask layers"
+  context: "Tooltip shown when no visible layers contribute to the combined mask."
+mask.coverage.pixel_count:
+  text: "{masked:,} of {total:,} pixels masked"
+  context: "Tooltip showing the number of masked pixels and total image pixels."
+  placeholders:
+    masked: "Number of pixels included in the mask."
+    total: "Total number of image pixels."
+mask.action.export_combined:
+  text: "Export Combined Mask"
+  context: "Button that exports the composition of visible mask layers."
+mask.action.export_combined_tooltip:
+  text: "Export the combined mask from all visible layers"
+  context: "Tooltip describing the combined-mask export."
+mask.panel.threshold:
+  text: "Threshold Mask"
+  context: "Heading for threshold-based mask creation."
+mask.threshold.below:
+  text: "Below"
+  context: "Threshold mode selecting image intensities below a limit."
+mask.threshold.range:
+  text: "Range"
+  context: "Threshold mode selecting image intensities within a range."
+mask.threshold.between:
+  text: "Between"
+  context: "Button label for selecting image intensities within a range."
+mask.threshold.above:
+  text: "Above"
+  context: "Threshold mode selecting image intensities above a limit."
+mask.threshold.log_x:
+  text: "Log X"
+  context: "Option to use a logarithmic intensity axis for the histogram."
+mask.threshold.log_x_tooltip:
+  text: "Use logarithmic spacing for the intensity axis"
+  context: "Tooltip explaining logarithmic histogram spacing."
+mask.threshold.fit_x:
+  text: "Fit X"
+  context: "Button that fits the histogram intensity range."
+mask.threshold.fit_x_tooltip:
+  text: "Fit the full histogram intensity range"
+  context: "Tooltip describing the histogram range-fit action."
+mask.threshold.intensity_axis:
+  text: "Intensity"
+  context: "Horizontal axis label for the threshold histogram."
+mask.threshold.lower:
+  text: "Lower"
+  context: "Label for the lower threshold value."
+mask.threshold.upper:
+  text: "Upper"
+  context: "Label for the upper threshold value."
+mask.threshold.threshold:
+  text: "Threshold"
+  context: "Label for a single upper or lower threshold value."
+mask.threshold.cancel_tooltip:
+  text: "Hide the current threshold preview"
+  context: "Tooltip for hiding the uncommitted threshold preview."
+mask.threshold.create_layer:
+  text: "Create Layer"
+  context: "Button that creates a mask layer from the current threshold."
+mask.threshold.log_requires_positive:
+  text: "Log X requires positive intensity values; using Linear X"
+  context: "Status shown when logarithmic spacing cannot be used for the data."
+mask.layers.status_heading:
+  text: "=== MASK LAYERS ==="
+  context: "Section heading in mask status information."
+mask.layers.count:
+  text: "Number of layers: {count}"
+  context: "Layer count in mask status information."
+  placeholders:
+    count: "Number of mask layers."
+mask.layers.status_row:
+  text: "  Layer {index}: {name} ({visibility}, {operation}) - {pixels:,} pixels ({coverage:.1f}%)"
+  context: "Mask status row showing layer visibility, composition, and coverage."
+  placeholders:
+    index: "One-based layer number."
+    name: "Name of the mask layer."
+    visibility: "Localized visibility state."
+    operation: "Localized composition role."
+    pixels: "Number of masked pixels in the layer."
+    coverage: "Percentage of pixels masked in the layer."
+mask.layers.visible:
+  text: "visible"
+  context: "Visibility state for a mask layer that is shown."
+mask.layers.hidden:
+  text: "hidden"
+  context: "Visibility state for a mask layer that is not shown."
+mask.layers.operation_base:
+  text: "base"
+  context: "Composition role of the first mask layer."
+mask.layers.operation_add:
+  text: "add"
+  context: "Composition role of a mask layer combined by union."
+mask.layers.operation_overlap:
+  text: "overlap"
+  context: "Composition role of a mask layer combined by intersection."
+mask.layers.combined_heading:
+  text: "=== COMBINED MASK ==="
+  context: "Section heading for combined-mask status information."
+mask.coverage.status:
+  text: "Masked pixels: {masked:,} ({percentage:.1f}%)"
+  context: "Combined mask coverage in status information."
+  placeholders:
+    masked: "Number of masked pixels."
+    percentage: "Percentage of image pixels masked."
+mask.layers.active_editing:
+  text: "Active editing layer"
+  context: "Tooltip identifying the currently edited visible mask layer."
+mask.layers.active_hidden:
+  text: "Active layer is hidden"
+  context: "Tooltip indicating that the active mask layer is hidden."
+mask.operation.union:
+  text: "∪ Union · either mask"
+  context: "Tooltip describing the union composition of adjacent mask layers."
+mask.operation.intersection:
+  text: "∩ Intersection · both masks"
+  context: "Tooltip describing the intersection composition of adjacent mask layers."
+mask.menu.rename:
+  text: "Rename..."
+  context: "Context-menu action for renaming the selected layer."
+mask.menu.duplicate:
+  text: "Duplicate"
+  context: "Context-menu action for duplicating the selected layer."
+mask.menu.export:
+  text: "Export..."
+  context: "Context-menu action for exporting the selected layer."
+mask.menu.move_up:
+  text: "Move Up"
+  context: "Context-menu action for moving the selected layer earlier in the stack."
+mask.menu.move_down:
+  text: "Move Down"
+  context: "Context-menu action for moving the selected layer later in the stack."
+mask.menu.hide:
+  text: "Hide"
+  context: "Context-menu action for hiding the selected mask layer."
+mask.menu.show:
+  text: "Show"
+  context: "Context-menu action for showing the selected mask layer."
+mask.status.active_layer:
+  text: "Active mask layer: {name} ({state})"
+  context: "Status showing the active mask layer and its editability."
+  placeholders:
+    name: "Name of the active mask layer."
+    state: "Localized description of the layer state."
+mask.status.editing:
+  text: "Editing"
+  context: "State indicating that the active mask layer can be edited."
+mask.status.hidden_before_edit:
+  text: "Hidden - show this layer before editing"
+  context: "State explaining that a hidden layer must be shown before editing."
+mask.edit_target.create:
+  text: "Editing: create or add a layer first"
+  context: "Guidance shown when a mask layer must be created before editing."
+mask.edit_target.layer:
+  text: "Editing: {name}"
+  context: "Label showing the name of the current mask editing target."
+  placeholders:
+    name: "Name of the active mask layer."
+mask.edit_target.hidden:
+  text: "Editing: {name} (hidden)"
+  context: "Label showing that the current mask editing target is hidden."
+  placeholders:
+    name: "Name of the active mask layer."
+mask.menu.empty_layer:
+  text: "Empty Layer"
+  context: "Menu action for adding an empty mask layer."
+mask.menu.from_file:
+  text: "From File"
+  context: "Menu action for loading a mask from a file."
+mask.menu.instrument_default:
+  text: "From Instrument Default"
+  context: "Submenu for loading a detector's configured default mask."
+mask.menu.threshold_layer:
+  text: "From Current Image (Threshold)"
+  context: "Menu action for generating a mask from the current image threshold."
+mask.image_sync_required:
+  text: "Load an image first. Use 'Sync to Other Tabs' in Image Browser."
+  context: "Guidance shown when no image is available for mask creation."
+mask.image_validation_error:
+  text: "{error}"
+  context: "Displays the image-validation detail returned by the image utility."
+  placeholders:
+    error: "Raw image-validation message."
+mask.status.added_empty:
+  text: "Added empty layer"
+  context: "Status confirming an empty mask layer was added."
+mask.layer.empty_name:
+  text: "Empty Layer {number}"
+  context: "Generated name for a newly created empty mask layer."
+  placeholders:
+    number: "One-based layer number."
+mask.error.create_empty:
+  text: "Could not create the empty mask layer: {error}"
+  context: "Status shown when creating an empty mask layer fails."
+  placeholders:
+    error: "Raw error detail from the mask creation operation."
+mask.status.no_layer_selected:
+  text: "No layer selected"
+  context: "Status shown when an action requires a selected mask layer."
+mask.status.removed_layer:
+  text: "Removed layer: {name}"
+  context: "Status confirming which mask layer was removed."
+  placeholders:
+    name: "Name of the removed mask layer."
+mask.status.cleared_layers:
+  text: "Cleared all mask layers"
+  context: "Status confirming that all mask layers were cleared."
+mask.dialog.rename_title:
+  text: "Rename Layer"
+  context: "Dialog title for renaming a mask layer."
+mask.dialog.rename_prompt:
+  text: "Layer name"
+  context: "Prompt for the new mask-layer name."
+mask.layer.duplicate_name:
+  text: "{name} Copy"
+  context: "Generated name for a duplicated mask layer."
+  placeholders:
+    name: "Name of the original mask layer."
+mask.layer.instrument_name:
+  text: "Instrument: {name}"
+  context: "Generated layer name for a mask loaded from an instrument profile."
+  placeholders:
+    name: "Instrument mask filename."
+mask.status.restored:
+  text: "Restored {count} mask layer(s) from last session"
+  context: "Status confirming how many saved mask layers were restored."
+  placeholders:
+    count: "Number of restored mask layers."
+mask.threshold.load_image:
+  text: "Load an image before creating a threshold mask"
+  context: "Status shown when threshold mask creation requires an image."
+mask.threshold.description_below:
+  text: "Below {threshold:.4g}"
+  context: "Generated description for a below-threshold mask."
+  placeholders:
+    threshold: "Upper intensity limit for the mask."
+mask.threshold.description_above:
+  text: "Above {threshold:.4g}"
+  context: "Generated description for an above-threshold mask."
+  placeholders:
+    threshold: "Lower intensity limit for the mask."
+mask.threshold.description_range:
+  text: "Range {low:.4g} to {high:.4g}"
+  context: "Generated description for a mask spanning an intensity range."
+  placeholders:
+    low: "Lower intensity limit for the mask."
+    high: "Upper intensity limit for the mask."
+mask.layer.threshold_name:
+  text: "Threshold: {description}"
+  context: "Generated layer name for a threshold-created mask."
+  placeholders:
+    description: "Localized description of the selected intensity threshold."
+mask.threshold.created:
+  text: "Created mask layer from intensity: {description}"
+  context: "Status confirming that a threshold mask layer was created."
+  placeholders:
+    description: "Localized description of the selected intensity threshold."
+mask.drawing.create_layer_first:
+  text: "Create or select a mask layer before drawing"
+  context: "Status explaining that drawing requires an active mask layer."
+mask.drawing.show_layer_first:
+  text: "Show the active layer before editing it"
+  context: "Status explaining that a hidden layer must be shown before editing."
+mask.status.tool_active:
+  text: "{tool} active"
+  context: "Status confirming that a drawing tool is active."
+  placeholders:
+    tool: "Localized name of the drawing tool."
+mask.status.tool_changed:
+  text: "Drawing tool changed to: {tool}"
+  context: "Status confirming a change to the active drawing tool."
+  placeholders:
+    tool: "Localized name of the drawing tool."
+mask.drawing.polygon_hint:
+  text: "Click vertices, then Enter or double-click to finish."
+  context: "Guidance for completing a polygon mask."
+mask.drawing.alt_hint:
+  text: "Hold Alt to invert the effect."
+  context: "Guidance for temporarily inverting a drawing tool's effect."
+mask.status.polygon_applied:
+  text: "Polygon applied to the active layer"
+  context: "Status confirming that a polygon edit was applied."
+mask.status.drawing_cancelled:
+  text: "Current drawing cancelled"
+  context: "Status confirming that the current drawing was cancelled."
+mask.refine.select_layer:
+  text: "Select a mask layer to refine"
+  context: "Status explaining that refinement requires a selected mask layer."
+mask.refine.show_layer:
+  text: "Show the active layer before refining it"
+  context: "Status explaining that a hidden layer must be shown before refinement."
+mask.refine.shrink:
+  text: "Shrink"
+  context: "Name of the action that contracts a mask layer."
+mask.refine.grow:
+  text: "Grow"
+  context: "Name of the action that expands a mask layer."
+mask.error.unknown_detector:
+  text: "Unknown detector: {detector}"
+  context: "Status shown when a detector identifier is not recognized."
+  placeholders:
+    detector: "Detector key from the instrument configuration."
+mask.error.no_mask_configured:
+  text: "No mask configured for {detector}"
+  context: "Status shown when the selected detector has no configured mask."
+  placeholders:
+    detector: "Configured detector display name."
+mask.status.loaded_instrument:
+  text: "Loaded instrument mask: {name}"
+  context: "Status confirming which instrument mask file was loaded."
+  placeholders:
+    name: "Instrument mask filename."
+mask.error.mask_not_found:
+  text: "Mask file not found: {path}. Checked: {checked}"
+  context: "Status listing the configured mask path and locations that were checked."
+  placeholders:
+    path: "Configured mask path."
+    checked: "List of filesystem locations checked for the mask."
+mask.error.load_instrument:
+  text: "Could not load the instrument mask: {error}"
+  context: "Status shown when loading an instrument mask fails."
+  placeholders:
+    error: "Raw error detail from the mask-loading operation."
+mask.dialog.load_mask_title:
+  text: "Load Mask File"
+  context: "File chooser title for loading a custom mask."
+mask.dialog.mask_filter:
+  text: "Mask Files (*.npy *.tif *.tiff *.png *.xcf);;All Files (*)"
+  context: "File type choices for loading mask files."
+mask.dialog.export_title:
+  text: "Export Mask"
+  context: "File chooser title for exporting a mask."
+mask.status.loaded_custom:
+  text: "Loaded custom mask: {name}"
+  context: "Status confirming which custom mask file was loaded."
+  placeholders:
+    name: "Name of the loaded mask file."
+mask.error.load_file:
+  text: "Could not load the mask file: {error}"
+  context: "Status shown when a mask file cannot be loaded."
+  placeholders:
+    error: "Raw error detail from the file-loading operation."
+mask.error.no_mask_to_export:
+  text: "No mask to export"
+  context: "Status shown when no mask data is available for export."
+mask.dialog.export_filter:
+  text: "PNG Files (*.png);;NumPy Files (*.npy);;TIFF Files (*.tif);;All Files (*)"
+  context: "File type choices for exporting a mask."
+mask.status.exported_numpy:
+  text: "✓ Mask exported (numpy): {name}"
+  context: "Status confirming that a NumPy mask file was exported."
+  placeholders:
+    name: "Name of the exported mask file."
+mask.status.exported_image:
+  text: "✓ Mask exported (image): {name}"
+  context: "Status confirming that an image-format mask file was exported."
+  placeholders:
+    name: "Name of the exported mask file."
+mask.error.export:
+  text: "Could not export the mask: {error}"
+  context: "Status shown when mask export fails."
+  placeholders:
+    error: "Raw error detail from the export operation."

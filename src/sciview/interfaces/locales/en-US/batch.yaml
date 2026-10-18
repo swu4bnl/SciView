@@ -1,0 +1,243 @@
+batch.files.tiled_skipped:
+  text: " ({count} Tiled file(s) skipped — not yet supported)"
+  context: "Suffix reporting unsupported Tiled files excluded from the input list."
+  placeholders:
+    count: "Number of skipped Tiled files."
+batch.files.loaded:
+  text: "{count} file(s) loaded{suffix}"
+  context: "Input-file count displayed after the batch file list is populated."
+  placeholders:
+    count: "Number of loaded files."
+    suffix: "Optional notice about skipped unsupported files."
+batch.files.empty:
+  text: "0 file(s) loaded{suffix} — load images in Image Browser first"
+  context: "Input-file count and next step shown when no batch files are loaded."
+  placeholders:
+    suffix: "Optional notice about skipped unsupported files."
+batch.input_files.title:
+  text: "Input Files"
+  context: "Heading for the batch input-file panel."
+batch.file_list.title:
+  text: "File List"
+  context: "Group heading for batch input files."
+batch.file_list.refresh:
+  text: "Refresh File List"
+  context: "Button that reloads the shared image list into the batch tab."
+batch.output_log.title:
+  text: "Output Log"
+  context: "Heading for the batch progress and result log."
+batch.clear:
+  text: "Clear"
+  context: "Button that clears the displayed batch output log."
+batch.status.ready:
+  text: "Ready"
+  context: "Initial batch status before processing starts."
+batch.table.file:
+  text: "File"
+  context: "Column heading for an input filename in the batch results table."
+batch.table.protocol:
+  text: "Protocol"
+  context: "Column heading for the protocol used for a batch result."
+batch.table.status:
+  text: "Status"
+  context: "Column heading for the outcome of a batch result."
+batch.table.time:
+  text: "Time (s)"
+  context: "Column heading for elapsed batch processing time in seconds."
+batch.table.message:
+  text: "Message"
+  context: "Column heading for a batch result message or output location."
+batch.controls.title:
+  text: "Batch Controls"
+  context: "Heading for batch processing controls."
+batch.output.title:
+  text: "Output"
+  context: "Group heading for batch output choices."
+batch.output.mode.scianalysis:
+  text: "SciAnalysis-Style plots"
+  context: "Output mode that uses SciAnalysis plot generation."
+batch.output.mode.preview:
+  text: "WYSIWYG previews"
+  context: "Output mode that saves plots matching the SciView preview appearance."
+batch.output.mode.preview.tooltip:
+  text: "Match previews saves PNG plots with the same style, scale, crop, and theme shown in SciView"
+  context: "Tooltip explaining the appearance preserved by WYSIWYG batch previews."
+batch.output.plot_output:
+  text: "Plot output"
+  context: "Form label for the batch plot output mode selector."
+batch.protocol_queue.title:
+  text: "Protocol Queue"
+  context: "Group heading for protocols queued for batch processing."
+batch.protocol_queue.add:
+  text: "+ Add"
+  context: "Button that adds the selected operation to the protocol queue."
+batch.remove:
+  text: "Remove"
+  context: "Button that removes the selected protocol."
+batch.protocol_queue.clear:
+  text: "Clear Queue"
+  context: "Button that removes all protocols from the batch queue."
+batch.recipe.edit_title:
+  text: "Edit Selected Protocol Recipe"
+  context: "Group heading for editing the selected batch protocol recipe."
+batch.protocol.none_selected:
+  text: "No protocol selected"
+  context: "Placeholder shown when the batch protocol queue has no selection."
+batch.recipe.placeholder:
+  text: "YAML recipe (operation, name, params...)"
+  context: "Placeholder identifying the expected batch recipe document format."
+batch.recipe.apply_params:
+  text: "Apply Params"
+  context: "Button that applies edited parameters to the selected protocol."
+batch.recipe.reset:
+  text: "Reset to Defaults"
+  context: "Button that restores registered defaults for the selected protocol."
+batch.recipe.load:
+  text: "Load Recipe"
+  context: "Button that loads a batch recipe from a file."
+batch.recipe.save:
+  text: "Save Recipe"
+  context: "Button that saves the current batch recipe to a file."
+batch.run:
+  text: "Run Batch"
+  context: "Button that starts processing the queued files and protocols."
+batch.stop:
+  text: "Stop"
+  context: "Button that requests the running batch job to stop."
+batch.operation.circular_average:
+  text: "circular_average"
+  context: "Operation identifier shown as the circular-average choice in the batch operation selector."
+batch.operation.sector_average:
+  text: "sector_average"
+  context: "Operation identifier shown as the sector-average choice in the batch operation selector."
+batch.operation.linecut_q:
+  text: "linecut_q"
+  context: "Operation identifier shown as the q line-cut choice in the batch operation selector."
+batch.operation.linecut_angle:
+  text: "linecut_angle"
+  context: "Operation identifier shown as the azimuthal line-cut choice in the batch operation selector."
+batch.operation.q_image:
+  text: "q_image"
+  context: "Operation identifier shown as the Q-space image transformation choice in the batch operation selector."
+batch.operation.q_phi_image:
+  text: "q_phi_image"
+  context: "Operation identifier shown as the Q-phi image transformation choice in the batch operation selector."
+batch.operation.qr_qz_image:
+  text: "qr_qz_image"
+  context: "Operation identifier shown as the radial-Q and Qz transformation choice in the batch operation selector."
+batch.operation.thumbnails:
+  text: "thumbnails"
+  context: "Operation identifier shown as the thumbnail-generation choice in the batch operation selector."
+batch.protocol.selected:
+  text: "{name}  ({operation})"
+  context: "Selected protocol name and operation shown above its recipe editor."
+  placeholders:
+    name: "Protocol display name from the recipe."
+    operation: "Machine operation identifier from the recipe."
+batch.protocol_queue.clear.title:
+  text: "Clear Protocol Queue"
+  context: "Confirmation dialog title before clearing the batch queue."
+batch.protocol_queue.clear.confirm:
+  text: "Clear all protocols from the queue? This cannot be undone."
+  context: "Confirmation prompt for removing every queued batch protocol."
+batch.error.yaml_mapping:
+  text: "must be a YAML mapping"
+  context: "Validation detail used when edited recipe YAML is not a mapping."
+batch.status.protocol_updated:
+  text: "Batch: updated '{name}'"
+  context: "Status confirming that an existing queued protocol was updated."
+  placeholders:
+    name: "Name of the updated protocol."
+batch.status.protocol_added:
+  text: "Batch: added '{name}'"
+  context: "Status confirming that a protocol was added to the batch queue."
+  placeholders:
+    name: "Name of the added protocol."
+batch.status.queue_cleared:
+  text: "Batch: cleared protocol queue"
+  context: "Status confirming that the batch protocol queue was cleared."
+batch.status.recipe_updated:
+  text: "Batch: recipe updated"
+  context: "Status confirming that edited protocol recipe parameters were applied."
+batch.status.recipe_apply_failed:
+  text: "Batch: could not apply the recipe — invalid YAML: {error}"
+  context: "Status explaining why edited recipe YAML could not be applied."
+  placeholders:
+    error: "Raw YAML parsing or validation error."
+batch.status.defaults_missing:
+  text: "Batch: no defaults registered for '{operation}'"
+  context: "Status shown when no default parameters are registered for an operation."
+  placeholders:
+    operation: "Machine operation identifier with no registered defaults."
+batch.status.params_reset:
+  text: "Batch: reset '{name}' params to defaults"
+  context: "Status confirming that a protocol's parameters were reset."
+  placeholders:
+    name: "Name of the protocol whose parameters were reset."
+batch.dialog.save_recipe:
+  text: "Save Batch Recipe"
+  context: "File dialog title for saving a batch recipe."
+batch.dialog.load_recipe:
+  text: "Load Batch Recipe"
+  context: "File dialog title for opening a batch recipe."
+batch.filter.yaml_json_all:
+  text: "YAML/JSON files (*.yaml *.yml *.json);;All files (*)"
+  context: "File dialog filter for YAML, JSON, or any file."
+batch.filter.yaml_and_json_all:
+  text: "YAML files (*.yaml *.yml);;JSON files (*.json);;All files (*)"
+  context: "File dialog filter separating YAML and JSON batch recipe choices."
+batch.status.recipe_saved:
+  text: "Recipe saved to {filename}"
+  context: "Status confirming the filename used to save the batch recipe."
+  placeholders:
+    filename: "Saved recipe filename."
+batch.status.recipe_loaded:
+  text: "Recipe loaded: {count} protocols"
+  context: "Status reporting the number of protocols loaded from a recipe."
+  placeholders:
+    count: "Number of loaded protocols."
+batch.status.recipe_load_failed:
+  text: "Batch: could not load the recipe — {error}"
+  context: "Status explaining why a batch recipe could not be loaded."
+  placeholders:
+    error: "Raw file, parsing, or recipe-loading exception."
+batch.status.session_restored:
+  text: "Batch: restored {count} protocol(s) from last session"
+  context: "Status reporting how many protocols were restored from the session."
+  placeholders:
+    count: "Number of restored protocols."
+batch.status.no_files:
+  text: "Batch: no files — load images in Image Browser first"
+  context: "Status prompting the user to load images before starting a batch."
+batch.status.no_enabled_protocols:
+  text: "Batch: no enabled protocols"
+  context: "Status shown when every queued protocol is disabled."
+batch.status.thumbnails_preview_unavailable:
+  text: "Batch: thumbnails have no WYSIWYG preview — disable them or switch Plot output to 'SciAnalysis-Style plots'"
+  context: "Status explaining that thumbnails cannot use the WYSIWYG batch output mode."
+batch.dialog.output_folder:
+  text: "Select Batch Output Folder"
+  context: "Directory dialog title for selecting the batch output folder."
+batch.status.output_folder_required:
+  text: "Batch: select an output folder to run"
+  context: "Status prompting the user to choose an output folder."
+batch.status.running:
+  text: "Running..."
+  context: "Batch status shown after processing begins."
+batch.status.finished:
+  text: "Batch done — {succeeded} succeeded, {failed} failed"
+  context: "Final batch status reporting successful and failed result counts."
+  placeholders:
+    succeeded: "Number of successful protocol runs."
+    failed: "Number of failed protocol runs."
+batch.status.cookbook_saved:
+  text: "Batch done — {count} OK  | cookbook saved to {filename}"
+  context: "Status confirming completion and the saved provenance cookbook."
+  placeholders:
+    count: "Number of successful file-protocol results."
+    filename: "Saved cookbook filename."
+batch.status.cookbook_save_failed:
+  text: "Batch done — cookbook save failed: {error}"
+  context: "Status explaining why the batch provenance cookbook could not be saved."
+  placeholders:
+    error: "Raw file-writing exception."

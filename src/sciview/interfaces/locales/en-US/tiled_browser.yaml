@@ -1,0 +1,421 @@
+tiled_browser.auth.dialog.title:
+  text: "Sign in to Tiled"
+  context: "Window title for the Tiled device authorization dialog."
+tiled_browser.auth.dialog.heading:
+  text: "Authorize SciView"
+  context: "Heading in the Tiled device authorization dialog."
+tiled_browser.auth.dialog.instruction:
+  text: "Use this one-time code to complete sign-in in your browser."
+  context: "Instructions for completing Tiled device authorization."
+tiled_browser.auth.dialog.code_label:
+  text: "Device code"
+  context: "Label for the read-only device authorization code."
+tiled_browser.auth.dialog.code.tooltip:
+  text: "Tiled device authorization code"
+  context: "Tooltip for the field showing the Tiled device authorization code."
+tiled_browser.auth.dialog.copy:
+  text: "Copy code"
+  context: "Button label for copying the device authorization code."
+tiled_browser.auth.dialog.copy.tooltip:
+  text: "Copy the device code to the clipboard"
+  context: "Tooltip for copying the device authorization code."
+tiled_browser.auth.dialog.waiting:
+  text: "Waiting for authorization"
+  context: "Status shown while waiting for browser-based device authorization."
+tiled_browser.action.cancel:
+  text: "Cancel"
+  context: "Button label for cancelling an active dialog or operation."
+tiled_browser.auth.dialog.open_page:
+  text: "Open sign-in page"
+  context: "Button label for opening the Tiled sign-in page in a browser."
+tiled_browser.auth.dialog.copied:
+  text: "Copied"
+  context: "Temporary button label confirming that the device code was copied."
+tiled_browser.action.cancel.tooltip:
+  text: "Cancel current Tiled action"
+  context: "Tooltip for cancelling the active Tiled operation."
+tiled_browser.error.operation_failed.title:
+  text: "Tiled operation failed"
+  context: "Title shown when a Tiled operation reports an error."
+tiled_browser.status.cancelled:
+  text: "Cancelled current Tiled action"
+  context: "Status shown after cancelling the active Tiled operation."
+tiled_browser.title:
+  text: "Tiled Browser"
+  context: "Heading for the Tiled browser tab."
+tiled_browser.preview.title:
+  text: "Preview"
+  context: "Heading above the selected scan image preview."
+tiled_browser.preview.no_scan_selected:
+  text: "No scan selected"
+  context: "Placeholder shown before a scan is selected."
+tiled_browser.connection.group:
+  text: "1) Connection"
+  context: "Heading for the catalog connection and authentication controls."
+tiled_browser.connection.catalog.label:
+  text: "catalog"
+  context: "Label for selecting a configured Tiled catalog."
+tiled_browser.auth.login:
+  text: "Login"
+  context: "Button label for starting Tiled authentication."
+tiled_browser.auth.login.tooltip:
+  text: "Log in or refresh Tiled authentication"
+  context: "Tooltip for starting or renewing Tiled authentication."
+tiled_browser.connection.refresh.tooltip:
+  text: "Refresh connection status"
+  context: "Tooltip for refreshing the displayed Tiled connection status."
+tiled_browser.auth.status.unknown:
+  text: "Status: unknown"
+  context: "Initial authentication status before the connection is checked."
+tiled_browser.search.group:
+  text: "2) Search"
+  context: "Heading for scan ID and proposal metadata search controls."
+tiled_browser.search.scan_id.label:
+  text: "Scan ID"
+  context: "Label for the scan identifier search fields."
+tiled_browser.search.start.label:
+  text: "Start"
+  context: "Label for the first scan identifier in a range."
+tiled_browser.search.end.label:
+  text: "End"
+  context: "Label for the last scan identifier in a range."
+tiled_browser.search.scan_id.tooltip:
+  text: "Find scans by scan ID or scan ID range"
+  context: "Tooltip for searching the catalog by scan identifier."
+tiled_browser.search.cycle.label:
+  text: "Cycle"
+  context: "Label for the facility cycle search field."
+tiled_browser.search.proposal.label:
+  text: "Proposal"
+  context: "Label for the proposal identifier search field."
+tiled_browser.search.alias_directory.label:
+  text: "alias directory:"
+  context: "Label for the experiment alias directory metadata filter."
+tiled_browser.search.proposal.tooltip:
+  text: "Find scans by cycle and proposal metadata"
+  context: "Tooltip for searching scans by cycle and proposal."
+tiled_browser.search.filters.show:
+  text: "Filters"
+  context: "Button label for showing the additional metadata filters."
+tiled_browser.search.filters.hide:
+  text: "Hide Filters"
+  context: "Button label for hiding the additional metadata filters."
+tiled_browser.search.prompt:
+  text: "Search by scan ID or proposal."
+  context: "Initial guidance shown below the Tiled search controls."
+tiled_browser.results.group:
+  text: "4) Results"
+  context: "Heading for the table of scans returned by a search."
+tiled_browser.results.column.scan_id:
+  text: "scan_id"
+  context: "Table heading for the scan identifier column."
+tiled_browser.results.column.detector:
+  text: "detector"
+  context: "Table heading for the selected detector column."
+tiled_browser.results.column.filename:
+  text: "filename"
+  context: "Table heading for the scan filename column."
+tiled_browser.results.column.measure_type:
+  text: "measure_type"
+  context: "Table heading for the measurement type column."
+tiled_browser.results.column.proposal:
+  text: "proposal"
+  context: "Table heading for the proposal column."
+tiled_browser.results.column.alias:
+  text: "alias"
+  context: "Table heading for the experiment alias column."
+tiled_browser.results.column.steps:
+  text: "steps"
+  context: "Table heading for the number of steps column."
+tiled_browser.results.column.time:
+  text: "time"
+  context: "Table heading for the scan time column."
+tiled_browser.results.load:
+  text: "Load"
+  context: "Button label for loading the selected scan."
+tiled_browser.live.group:
+  text: "3) Live"
+  context: "Heading for controls that monitor new Tiled runs."
+tiled_browser.live.listen:
+  text: "Listen"
+  context: "Button label for starting the live Tiled run monitor."
+tiled_browser.live.listen.tooltip:
+  text: "Listen for newly created runs in the selected Tiled catalog"
+  context: "Tooltip explaining live monitoring of the selected catalog."
+tiled_browser.live.stop:
+  text: "Stop"
+  context: "Button label for stopping the live Tiled run monitor."
+tiled_browser.live.stop.tooltip:
+  text: "Stop listening for live Tiled updates"
+  context: "Tooltip for stopping the live Tiled run monitor."
+tiled_browser.live.idle:
+  text: "Live stream idle"
+  context: "Status shown when the live Tiled monitor is not running."
+tiled_browser.series.group:
+  text: "5) Series"
+  context: "Heading for playback controls that navigate search results."
+tiled_browser.series.previous.tooltip:
+  text: "Previous scan"
+  context: "Tooltip for selecting the previous scan in the result series."
+tiled_browser.series.play.tooltip:
+  text: "Play scan series"
+  context: "Tooltip for starting sequential display of scans in the result series."
+tiled_browser.series.stop.tooltip:
+  text: "Stop playback"
+  context: "Tooltip for stopping scan-series playback."
+tiled_browser.series.next.tooltip:
+  text: "Next scan"
+  context: "Tooltip for selecting the next scan in the result series."
+tiled_browser.series.loop.tooltip:
+  text: "Loop playback"
+  context: "Tooltip for repeating scan-series playback after the final result."
+tiled_browser.frames.group:
+  text: "Stacked Frames"
+  context: "Heading for navigation through frames in a loaded image stack."
+tiled_browser.frames.label:
+  text: "Frame"
+  context: "Label for the slider that selects an image-stack frame."
+tiled_browser.auth.status.unavailable:
+  text: "Status: unavailable ({error})"
+  context: "Authentication status shown when the Tiled client cannot be used."
+  placeholders:
+    error: "Detail explaining why the Tiled client is unavailable."
+tiled_browser.status.disabled:
+  text: "Tiled browser disabled: {error}"
+  context: "Application status shown when Tiled browser controls are unavailable."
+  placeholders:
+    error: "Detail explaining why the Tiled browser is disabled."
+tiled_browser.auth.status.not_connected:
+  text: "Status: not connected"
+  context: "Authentication status shown when no catalog connection is active."
+tiled_browser.auth.status.cached_session:
+  text: "cached session"
+  context: "Fallback username shown when authentication is available from a cached session."
+tiled_browser.auth.status.logged_in:
+  text: "Status: logged in ({username})"
+  context: "Authentication status shown for a signed-in Tiled user."
+  placeholders:
+    username: "Username or cached-session description."
+tiled_browser.auth.reauthenticate:
+  text: "Reauth"
+  context: "Button label for refreshing an existing Tiled authentication."
+tiled_browser.auth.status.not_logged_in:
+  text: "Status: not logged in{suffix}"
+  context: "Authentication status shown when there is no signed-in Tiled user."
+  placeholders:
+    suffix: "Optional colon and authentication detail, or an empty string."
+tiled_browser.status.operation_in_progress:
+  text: "Another operation is already in progress"
+  context: "Status shown when a new login cannot start during another operation."
+tiled_browser.status.preparing_login:
+  text: "Preparing Tiled login..."
+  context: "Status shown while preparing a Tiled authentication request."
+tiled_browser.error.login_failed.title:
+  text: "Login failed"
+  context: "Title shown when Tiled authentication does not succeed."
+tiled_browser.error.login_failed.body:
+  text: "Could not authenticate"
+  context: "Fallback explanation shown when authentication fails without a detail."
+tiled_browser.status.logged_in_profile:
+  text: "Logged in to Tiled profile {profile}"
+  context: "Status shown after signing in to a Tiled profile."
+  placeholders:
+    profile: "Name of the authenticated Tiled profile."
+tiled_browser.status.login_cancelled:
+  text: "Tiled login cancelled"
+  context: "Status shown when the user cancels Tiled authentication."
+tiled_browser.status.connecting_profile:
+  text: "Connecting to Tiled profile {profile}..."
+  context: "Status shown while connecting to the selected Tiled profile."
+  placeholders:
+    profile: "Name of the selected Tiled profile."
+tiled_browser.live.dialog.title:
+  text: "Tiled live stream"
+  context: "Title of the information dialog for the live Tiled monitor."
+tiled_browser.live.already_running:
+  text: "Live stream is already running"
+  context: "Information shown when the live monitor is already active."
+tiled_browser.live.listening_profile:
+  text: "Listening for new runs in {profile}"
+  context: "Live status shown while monitoring a Tiled profile for new runs."
+  placeholders:
+    profile: "Name of the monitored Tiled profile."
+tiled_browser.status.listening_profile:
+  text: "Listening for Tiled live updates from {profile}"
+  context: "Application status shown while monitoring a Tiled profile."
+  placeholders:
+    profile: "Name of the monitored Tiled profile."
+tiled_browser.status.starting_live_stream:
+  text: "Starting live Tiled stream for {profile}..."
+  context: "Status shown while starting a live monitor for a Tiled profile."
+  placeholders:
+    profile: "Name of the Tiled profile being monitored."
+tiled_browser.error.stop_live_stream:
+  text: "Could not stop Tiled live stream: {error}"
+  context: "Status shown when stopping the live Tiled monitor fails."
+  placeholders:
+    error: "Exception detail from the live monitor stop operation."
+tiled_browser.live.error:
+  text: "Live stream error: {error}"
+  context: "Live status shown when the monitored Tiled stream reports an error."
+  placeholders:
+    error: "Error detail reported by the live Tiled stream."
+tiled_browser.error.unknown_live_stream:
+  text: "Unknown live stream error"
+  context: "Fallback detail shown when a live stream error has no message."
+tiled_browser.status.live_stream_error:
+  text: "Tiled live stream error: {error}"
+  context: "Application status shown when the monitored Tiled stream reports an error."
+  placeholders:
+    error: "Error detail reported by the live Tiled stream."
+tiled_browser.live.new_run:
+  text: "New run: scan_id={scan_id}"
+  context: "Live status identifying a newly detected run."
+  placeholders:
+    scan_id: "Scan identifier or abbreviated run identifier."
+tiled_browser.status.new_run:
+  text: "New Tiled run detected: scan_id={scan_id}"
+  context: "Application status identifying a newly detected Tiled run."
+  placeholders:
+    scan_id: "Scan identifier or abbreviated run identifier."
+tiled_browser.live.scan_not_ready:
+  text: "Live scan not ready after {attempts} attempts{suffix}"
+  context: "Live status shown when a new scan is still unavailable after retries."
+  placeholders:
+    attempts: "Number of attempts made to load the scan."
+    suffix: "Optional colon and error detail, or an empty string."
+tiled_browser.status.live_scan_load_failed:
+  text: "Could not auto-load live scan {scan_id} after {attempts} attempts{suffix}"
+  context: "Application status shown when automatic loading of a live scan fails."
+  placeholders:
+    scan_id: "Identifier of the scan that could not be loaded."
+    attempts: "Number of automatic load attempts made."
+    suffix: "Optional colon and error detail, or an empty string."
+tiled_browser.live.waiting_for_scan:
+  text: "Waiting for scan {scan_id} data, retry {retry}/{max_attempts}"
+  context: "Live status shown while waiting to retry loading a newly detected scan."
+  placeholders:
+    scan_id: "Identifier of the scan being retried."
+    retry: "Number of the next retry attempt."
+    max_attempts: "Maximum number of automatic retry attempts."
+tiled_browser.frames.position:
+  text: "{current} / {total}"
+  context: "Position indicator showing the selected frame and total frame count."
+  placeholders:
+    current: "One-based position of the selected frame."
+    total: "Number of frames in the image stack."
+tiled_browser.error.missing_query.title:
+  text: "Missing query"
+  context: "Title of the warning shown when required search fields are blank."
+tiled_browser.error.missing_query.body:
+  text: "Enter both cycle and proposal ID"
+  context: "Warning shown when a search requires both a cycle and proposal ID."
+tiled_browser.status.searching_cycle_proposal:
+  text: "Searching Tiled for cycle {cycle}, proposal {proposal}..."
+  context: "Status shown while searching Tiled by cycle and proposal."
+  placeholders:
+    cycle: "Facility cycle value entered for the search."
+    proposal: "Proposal identifier entered for the search."
+tiled_browser.error.invalid_range.title:
+  text: "Invalid Range"
+  context: "Title of the warning shown for an invalid scan identifier range."
+tiled_browser.error.invalid_range.body:
+  text: "Start scan ID must be <= end scan ID"
+  context: "Warning shown when the start scan identifier exceeds the end identifier."
+tiled_browser.status.searching_scan:
+  text: "Searching Tiled for scan_id {scan_id}..."
+  context: "Status shown while searching Tiled for one scan identifier."
+  placeholders:
+    scan_id: "Scan identifier being searched."
+tiled_browser.status.searching_scan_range:
+  text: "Searching Tiled for scan_id {start}-{end}..."
+  context: "Status shown while searching Tiled for a range of scan identifiers."
+  placeholders:
+    start: "First scan identifier in the search range."
+    end: "Last scan identifier in the search range."
+tiled_browser.search.range_unavailable:
+  text: "n/a"
+  context: "Display value used when the result range is unavailable."
+tiled_browser.search.range:
+  text: "{start} - {end}"
+  context: "Display of the first and last available scan identifiers."
+  placeholders:
+    start: "Smallest scan identifier in the results."
+    end: "Largest scan identifier in the results."
+tiled_browser.search.results_status:
+  text: "Available scans: {available} of {scanned}; scan_id range: {scan_range}"
+  context: "Search status summarizing the available scans and identifier range."
+  placeholders:
+    available: "Number of scans returned by the search."
+    scanned: "Number of scan identifiers examined."
+    scan_range: "Formatted range of available scan identifiers."
+tiled_browser.error.missing_scan_id.title:
+  text: "Missing scan ID"
+  context: "Title of the warning shown when a selected result has no scan identifier."
+tiled_browser.error.missing_scan_id.body:
+  text: "Selected row does not have a scan_id"
+  context: "Warning shown when the selected result row has no scan identifier."
+tiled_browser.error.missing_detector.title:
+  text: "Missing detector"
+  context: "Title of the warning shown when a selected scan has no detector."
+tiled_browser.error.missing_detector.body:
+  text: "No detector is available for this scan"
+  context: "Warning shown when a scan cannot be loaded because it has no detector."
+tiled_browser.status.loading_scan:
+  text: "Loading scan {scan_id} detector {detector}..."
+  context: "Status shown while loading a scan from the selected detector."
+  placeholders:
+    scan_id: "Identifier of the scan being loaded."
+    detector: "Name of the detector selected for loading."
+tiled_browser.status.retrying_load:
+  text: "⟳ (attempt {attempt}) {message}"
+  context: "Transient label shown when a Tiled request is being retried."
+  placeholders:
+    attempt: "Retry attempt number."
+    message: "Retry detail reported by the Tiled client."
+tiled_browser.preview.scan_details:
+  text: "scan_id={scan_id} detector={detector} sample={sample}"
+  context: "Preview label showing the selected scan identifier, detector, and sample."
+  placeholders:
+    scan_id: "Identifier of the selected scan."
+    detector: "Name of the selected detector."
+    sample: "Sample name or saved-name value for the selected scan."
+tiled_browser.status.loaded_scan:
+  text: "Loaded Tiled scan {scan_id}"
+  context: "Application status shown after a Tiled scan is loaded."
+  placeholders:
+    scan_id: "Identifier of the loaded scan."
+tiled_browser.preview.display_name:
+  text: "Scan {scan_id} - {detector}"
+  context: "Image display name combining the scan identifier and detector."
+  placeholders:
+    scan_id: "Identifier of the selected scan."
+    detector: "Name of the selected detector."
+tiled_browser.status.synced_scan:
+  text: "Synced scan {scan_id} to other tabs"
+  context: "Application status shown after publishing the selected scan to other tabs."
+  placeholders:
+    scan_id: "Identifier of the synchronized scan."
+tiled_browser.debug.section_title:
+  text: "=== TILED ==="
+  context: "Section heading in the Tiled browser diagnostic status report."
+tiled_browser.debug.scan_id:
+  text: "Scan ID: {scan_id}"
+  context: "Diagnostic status entry reporting the current scan identifier."
+  placeholders:
+    scan_id: "Identifier of the current scan."
+tiled_browser.debug.uid:
+  text: "UID: {uid}"
+  context: "Diagnostic status entry reporting the current run UID."
+  placeholders:
+    uid: "Unique identifier of the current Tiled run."
+tiled_browser.debug.detector:
+  text: "Detector: {detector}"
+  context: "Diagnostic status entry reporting the current detector."
+  placeholders:
+    detector: "Name of the current detector."
+tiled_browser.debug.detectors:
+  text: "Detectors: {detectors}"
+  context: "Diagnostic status entry listing detectors available for the current scan."
+  placeholders:
+    detectors: "Comma-separated detector names available for the current scan."

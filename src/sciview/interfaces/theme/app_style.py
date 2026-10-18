@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 
 from PyQt5.QtWidgets import QApplication, QPushButton, QToolButton
 from PyQt5.QtCore import Qt, QSize, QTimer
-from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPalette, QPixmap
+from PyQt5.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap
 from PyQt5.QtSvg import QSvgRenderer
 
 
@@ -107,6 +107,22 @@ class AppStyle:
         'caption': '10px',
         'small': '9px'
     }
+    LOCALE_FONT_FAMILIES = {
+        'zh-CN': {
+            'win32': ('Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans CJK SC'),
+            'darwin': ('PingFang SC', 'Heiti SC', 'Noto Sans CJK SC'),
+            'default': (
+                'Noto Sans CJK SC',
+                'Source Han Sans SC',
+                'WenQuanYi Micro Hei',
+                'Microsoft YaHei',
+                'PingFang SC',
+                'Heiti SC',
+            ),
+        },
+    }
+    _locale_font_family = None
+    _base_matplotlib_fonts = None
 
     FONT_ROLE_PROPERTY = "sciview_font_role"
     THEME_KEY_PROPERTY = "sciview_theme_key"
@@ -1126,10 +1142,88 @@ class AppStyle:
     @classmethod
     def effective_font_family(cls, app=None):
         """Return the active font family with theme-specific overrides."""
+        if cls._locale_font_family:
+            return cls._locale_font_family
         theme_key = str(cls.current_theme_key(app) or '')
         if theme_key.startswith('qt-material:'):
             return 'Consolas'
         return str(cls.FONTS.get('family', '')).strip()
+
+    @classmethod
+    def apply_locale_font(cls, locale, app=None):
+        """Apply the first installed locale-specific sans-serif font, if configured."""
+        cls._locale_font_family = None
+        families_by_platform = cls.LOCALE_FONT_FAMILIES.get(locale)
+        app = app or QApplication.instance()
+        if not families_by_platform:
+            if cls._base_matplotlib_fonts is not None:
+                from matplotlib import rcParams
+
+                rcParams['font.family'] = cls._base_matplotlib_fonts[0]
+                rcParams['font.sans-serif'] = cls._base_matplotlib_fonts[1]
+            if app is not None:
+                app.setFont(cls.make_font('body'))
+            return None
+        if app is None:
+            return None
+
+        from sys import platform
+
+        candidates = families_by_platform.get(platform, families_by_platform['default'])
+        installed = {
+            family.casefold(): family for family in QFontDatabase().families()
+        }
+        from matplotlib import font_manager, rcParams
+
+        matplotlib_installed = {
+            font.name.casefold(): font.name for font in font_manager.fontManager.ttflist
+        }
+        family = next(
+            (
+                installed[candidate.casefold()]
+                for candidate in candidates
+                if candidate.casefold() in installed
+            ),
+            None,
+        )
+        if family is None:
+            family = next(
+                (
+                    matplotlib_installed[candidate.casefold()]
+                    for candidate in candidates
+                    if candidate.casefold() in matplotlib_installed
+                ),
+                candidates[0],
+            )
+
+        if cls._base_matplotlib_fonts is None:
+            cls._base_matplotlib_fonts = (
+                list(rcParams['font.family']),
+                list(rcParams['font.sans-serif']),
+            )
+        matplotlib_families = {
+            font.name.casefold(): font.name
+            for font in font_manager.fontManager.ttflist
+        }
+        fallback_families = [
+            matplotlib_families[fallback.casefold()]
+            for fallback in cls._base_matplotlib_fonts[1]
+            if fallback.casefold() in matplotlib_families
+            and fallback.casefold() != family.casefold()
+        ]
+        dejavu = matplotlib_families.get('dejavu sans')
+        if dejavu and all(name.casefold() != dejavu.casefold() for name in fallback_families):
+            fallback_families.append(dejavu)
+        rcParams['font.family'] = [
+            family,
+            *fallback_families,
+        ]
+
+        cls._locale_font_family = family
+        font = QFont(family)
+        font.setStyleHint(QFont.SansSerif)
+        app.setFont(font)
+        return family
 
     @classmethod
     def matplotlib_font_size(cls, token_name, fallback=None):

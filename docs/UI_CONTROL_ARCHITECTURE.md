@@ -22,29 +22,34 @@ The main goal is a single-source, predictable UI system that stays maintainable 
 
 The UI stack is intentionally layered. Think of each layer as owning a different class of decision.
 
+Owned interface wording is maintained separately in the context-rich
+[message catalog](LOCALIZATION.md). Widgets resolve message IDs at the
+presentation boundary; stable settings and scientific identifiers are not
+translated.
+
 1. Product-level defaults and app startup
 - Module: main.py
 - Responsibility: create application, apply global style system, create top-level window, wire tabs.
 - Key point: all tabs and widgets should rely on the same style system initialized at app startup.
 
-2. Runtime settings layer
+1. Runtime settings layer
 - Modules: src/sciview/settings/app_settings.py, src/sciview/settings/viewer_config.py
 - Responsibility: non-theme defaults such as window sizing, splitter ratios, image display defaults, viewer behavior defaults.
 - Key point: this layer provides app defaults, not per-widget styling rules.
 - Viewer tool actions and group order are declared by `VIEWER_TOOLBAR_ACTIONS` and `VIEWER_TOOLBAR_GROUPS` in `viewer_config.py`. New tools need an action, icon mapping, group membership, and behavior connection; layout placement is derived from the group configuration.
 
-3. Design-system and style engine layer
+1. Design-system and style engine layer
 - Module: src/sciview/interfaces/theme/app_style.py
 - Responsibility: token definitions, style templates, style helper APIs, runtime theme refresh.
 - Key point: this is the primary source of truth for styling decisions.
 - The viewer toolbar uses one `QGridLayout` row containing icon-over-caption cells and the tab-owned, two-row display-controls widget. Stretchable gap columns separate tool groups while display controls stay compact. `AppStyle.viewer_toolbar_button_size()` derives tool dimensions from shared control and typography tokens; `viewer_toolbar_icon_size()` selects a pre-rendered icon size. Layout does not require runtime widget measurement or resize-event synchronization, and buttons reuse the shared `compact_button` style.
 
-4. Theme tooling layer (development-time)
+1. Theme tooling layer (development-time)
 - Module: src/sciview/dev/style_inspector.py
 - Responsibility: live editing for CSS tokens, typography, and selected layout values.
 - Key point: this is an editor for the design system, not a separate style system.
 
-5. Widget and tab consumption layer
+1. Widget and tab consumption layer
 - Modules: tabs/*.py and src/sciview/interfaces/stable_qt/widgets/image_viewer.py
 - Responsibility: build UI, call style helpers, use layout tokens, implement domain-specific interaction.
 - Key point: these modules consume style APIs; they should not invent parallel style rules.

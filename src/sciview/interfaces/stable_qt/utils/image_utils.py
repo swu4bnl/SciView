@@ -5,6 +5,8 @@ This module provides common utilities for image loading, processing,
 and data management.
 """
 
+from sciview.interfaces.text import tr
+
 import os
 import numpy as np
 from typing import Optional, Tuple, Union
@@ -117,12 +119,12 @@ def validate_coordinate_input(x_text: str, y_text: str) -> Tuple[bool, Optional[
         y = float(y_text.strip())
         
         if not (np.isfinite(x) and np.isfinite(y)):
-            return False, None, "Coordinates must be finite numbers"
+            return False, None, tr('image_utils.coordinates_must_be_finite_numbers')
         
         return True, (x, y), ""
         
     except ValueError:
-        return False, None, "Invalid coordinate format"
+        return False, None, tr('image_utils.invalid_coordinate_format')
 
 
 def create_backup_filename(original_path: str, suffix: str = "_backup") -> str:
@@ -181,7 +183,7 @@ def validate_and_prepare_image_array(image_data, use_converter=True):
             - error_message: String explaining any issues
     """
     if image_data is None:
-        return None, False, "No image data provided"
+        return None, False, tr('image_utils.no_image_data_provided')
     
     # Step 1: Extract data from wrapper objects (SciAnalysis, etc.)
     extracted_data = image_data
@@ -191,18 +193,18 @@ def validate_and_prepare_image_array(image_data, use_converter=True):
     if not isinstance(image_data, np.ndarray) and hasattr(image_data, 'data'):
         extracted_data = image_data.data
         if extracted_data is None:
-            return None, False, "SciAnalysis object has no data"
+            return None, False, tr('image_utils.scianalysis_object_has_no_data')
     
     # Step 2: Validate extracted data has array-like interface
     if not (hasattr(extracted_data, 'shape') and hasattr(extracted_data, 'ndim')):
-        return None, False, f"Invalid data type (not array-like): {type(extracted_data).__name__}"
+        return None, False, tr('image_utils.invalid_data_type_not_array_like', type_extracted_data___name=type(extracted_data).__name__)
     
     # Step 3: Check for empty arrays (use shape to avoid .size issues with memoryview)
     try:
         if np.prod(extracted_data.shape) == 0:
-            return None, False, f"Empty array with shape {extracted_data.shape}"
+            return None, False, tr('image_utils.empty_array_with_shape_extracted_data', extracted_data_shape=extracted_data.shape)
     except Exception:
-        return None, False, f"Cannot determine array size from shape {extracted_data.shape}"
+        return None, False, tr('image_utils.cannot_determine_array_size_from_shape', extracted_data_shape=extracted_data.shape)
     
     # Step 4: Handle dimensionality
     if extracted_data.ndim == 2:
@@ -210,7 +212,7 @@ def validate_and_prepare_image_array(image_data, use_converter=True):
         try:
             normalized = np.asarray(extracted_data)
         except Exception as e:
-            return None, False, f"Failed to convert 2D data to ndarray: {e}"
+            return None, False, tr('image_utils.failed_to_convert_d_data_to', error=e)
         return normalized, True, ""
     
     elif extracted_data.ndim > 2:
@@ -219,16 +221,16 @@ def validate_and_prepare_image_array(image_data, use_converter=True):
             try:
                 converted = ImageShapeConverter.convert_to_2d(extracted_data)
                 if converted is not None and converted.ndim == 2:
-                    return converted, True, f"Converted {extracted_data.ndim}D array to 2D (shape={converted.shape})"
+                    return converted, True, tr('image_utils.converted_extracted_data_ndim_d_array', extracted_data_ndim=extracted_data.ndim, converted_shape=converted.shape)
                 else:
-                    return None, False, f"Conversion failed for {extracted_data.ndim}D array"
+                    return None, False, tr('image_utils.conversion_failed_for_extracted_data_ndim', extracted_data_ndim=extracted_data.ndim)
             except Exception as e:
-                return None, False, f"Error converting array: {str(e)}"
+                return None, False, tr('image_utils.error_converting_array_error', error=str(e))
         else:
-            return None, False, f"Array is {extracted_data.ndim}D, need 2D (use_converter=False)"
+            return None, False, tr('image_utils.array_is_extracted_data_ndim_d', extracted_data_ndim=extracted_data.ndim)
     
     else:  # ndim < 2
-        return None, False, f"Array is {extracted_data.ndim}D, need at least 2D (shape={extracted_data.shape})"
+        return None, False, tr('image_utils.array_is_extracted_data_ndim_d_2', extracted_data_ndim=extracted_data.ndim, extracted_data_shape=extracted_data.shape)
 
 
 class ImageShapeConverter:

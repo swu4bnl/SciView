@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciview.interfaces.text import tr
+
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -160,7 +162,7 @@ class ImageViewer(QWidget):
             group_cells = []
             for key in specification.actions:
                 action = toolbar_actions[key]
-                cell = self._make_labeled_tool_cell(action.label, self._toolbar_buttons[key])
+                cell = self._make_labeled_tool_cell(tr(action.label_id), self._toolbar_buttons[key])
                 self._toolbar_layout.addWidget(cell, 0, column, Qt.AlignHCenter)
                 group_cells.append(cell)
                 column += 1
@@ -222,7 +224,7 @@ class ImageViewer(QWidget):
     def set_color_image(self, image: Any, *, preserve_view: bool = True) -> None:
         array = np.asarray(image)
         if array.ndim != 3 or array.shape[2] not in (3, 4):
-            self.clear_image("Color image must be RGB or RGBA")
+            self.clear_image(tr('viewer.color_image_must_be_rgb_or'))
             return
 
         old_shape = self._source_array.shape if self._source_array is not None else None
@@ -403,7 +405,7 @@ class ImageViewer(QWidget):
 
         text = f"{palette.artist} - {palette.artwork}"
         self._palette_info_label.setText(text)
-        self._palette_info_label.setToolTip(f"{palette.source}: {text}")
+        self._palette_info_label.setToolTip(tr('viewer.palette_source_text', palette_source=palette.source, text=text))
         self._palette_info_label.setVisible(True)
 
     def reset_view(self) -> None:
@@ -703,9 +705,9 @@ class ImageViewer(QWidget):
     def _choose_export_path(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save displayed image",
+            tr('viewer.save_displayed_image'),
             "",
-            "PNG Images (*.png);;All Files (*)",
+            tr('viewer.png_images_png_all_files'),
         )
         if path:
             self.export_rendered_view(path)
@@ -745,17 +747,17 @@ class ImageViewer(QWidget):
     @staticmethod
     def _make_tool_button(action: Any, icon: QIcon) -> QToolButton:
         button = QToolButton()
-        button.setAccessibleName(action.label)
+        button.setAccessibleName(tr(action.label_id))
         button.setAutoRaise(False)
         button.setFixedSize(AppStyle.viewer_toolbar_button_size())
         AppStyle.apply_widget_style(button, 'compact_button')
         if icon.isNull():
-            button.setText(action.label)
+            button.setText(tr(action.label_id))
             button.setFont(AppStyle.make_font('h3', weight=600))
         else:
             button.setIcon(icon)
             button.setIconSize(AppStyle.viewer_toolbar_icon_size())
-        button.setToolTip(action.tooltip)
+        button.setToolTip(tr(action.tooltip_id))
         return button
 
     @staticmethod

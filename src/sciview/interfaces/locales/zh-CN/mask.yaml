@@ -1,0 +1,557 @@
+mask.undo.add_layer:
+  text: "添加 {layer_name}"
+  context: "Undo-history action for adding a mask layer."
+  placeholders:
+    layer_name: "Name of the added mask layer."
+mask.undo.clear_layers:
+  text: "清除所有掩膜图层"
+  context: "Undo-history action for clearing all mask layers."
+mask.undo.drawing_edit:
+  text: "{tool}编辑"
+  context: "Undo-history action describing a completed drawing-tool edit."
+  placeholders:
+    tool: "Localized name of the drawing tool."
+mask.undo.refine:
+  text: "{operation}掩膜 1 px"
+  context: "Undo-history action for shrinking or growing a mask."
+  placeholders:
+    operation: "Localized name of the mask refinement action."
+mask.effect.mask:
+  text: "标记为掩膜"
+  context: "Effect label for adding pixels to the active mask."
+mask.effect.restore:
+  text: "恢复像素"
+  context: "Effect label for removing pixels from the active mask."
+mask.tool.active_effect:
+  text: "{tool}：{effect}。按住 Alt 可反转效果。"
+  context: "Guidance describing the active drawing tool and its effect."
+  placeholders:
+    tool: "Localized name of the active drawing tool."
+    effect: "Localized description of the mask effect."
+mask.tool.active_hint:
+  text: "{tool}：{effect}。{hint}"
+  context: "Guidance shown while a drawing tool is active."
+  placeholders:
+    tool: "Localized name of the active drawing tool."
+    effect: "Localized description of the mask effect."
+    hint: "Localized instruction for the active drawing tool."
+mask.panel.tools:
+  text: "工具"
+  context: "Group heading for image navigation and mask-drawing tools."
+mask.edit_target.none:
+  text: "正在编辑：无活动图层"
+  context: "Status label when no mask layer is available for editing."
+mask.navigation.pan:
+  text: "平移"
+  context: "Label for the image panning tool."
+mask.navigation.pan_tooltip:
+  text: "平移查看图像"
+  context: "Tooltip describing image panning."
+mask.navigation.zoom:
+  text: "缩放"
+  context: "Label for the image zoom tool."
+mask.navigation.zoom_tooltip:
+  text: "拖动矩形框以缩放"
+  context: "Tooltip describing rectangular image zooming."
+mask.navigation.home:
+  text: "复位"
+  context: "Label for the control that restores the full image view."
+mask.navigation.home_tooltip:
+  text: "重置为完整图像视图"
+  context: "Tooltip describing the full-image view reset."
+mask.tool.brush:
+  text: "画笔"
+  context: "Visible label for the brush drawing tool."
+mask.tool.brush_tooltip:
+  text: "画笔：标记为掩膜。按住 Alt 可恢复像素。"
+  context: "Tooltip describing brush drawing and its Alt-key effect."
+mask.tool.eraser:
+  text: "橡皮擦"
+  context: "Visible label for the eraser drawing tool."
+mask.tool.eraser_tooltip:
+  text: "橡皮擦：恢复像素。按住 Alt 可标记为掩膜。"
+  context: "Tooltip describing erasing and its Alt-key effect."
+mask.tool.line:
+  text: "直线"
+  context: "Visible label for the line drawing tool."
+mask.tool.line_tooltip:
+  text: "绘制直线掩膜。按住 Alt 可擦除。"
+  context: "Tooltip describing line drawing and its Alt-key effect."
+mask.tool.rectangle:
+  text: "矩形"
+  context: "Visible label for the rectangle drawing tool."
+mask.tool.rectangle_tooltip:
+  text: "绘制填充矩形。按住 Alt 可擦除。"
+  context: "Tooltip describing filled-rectangle drawing and its Alt-key effect."
+mask.tool.circle:
+  text: "圆形"
+  context: "Visible label for the circle drawing tool."
+mask.tool.circle_tooltip:
+  text: "绘制填充圆形。按住 Alt 可擦除。"
+  context: "Tooltip describing filled-circle drawing and its Alt-key effect."
+mask.tool.polygon:
+  text: "多边形"
+  context: "Visible label for the polygon drawing tool."
+mask.tool.polygon_tooltip:
+  text: "单击添加顶点；按 Enter 或双击完成。"
+  context: "Tooltip describing polygon vertex selection and completion."
+mask.tool.smart_fill:
+  text: "智能填充"
+  context: "Visible label for the smart-fill drawing tool."
+mask.tool.smart_fill_tooltip:
+  text: "从图像种子点开始填充。按住 Alt 可擦除。"
+  context: "Tooltip describing image-seeded fill and its Alt-key effect."
+mask.tool.shrink_tooltip:
+  text: "将活动图层收缩 1 px"
+  context: "Tooltip for shrinking the active mask layer."
+mask.tool.grow_tooltip:
+  text: "将活动图层扩张 1 px"
+  context: "Tooltip for growing the active mask layer."
+mask.panel.view:
+  text: "视图"
+  context: "Heading for image navigation controls."
+mask.panel.refine:
+  text: "微调"
+  context: "Heading for mask refinement controls."
+mask.panel.history:
+  text: "历史记录"
+  context: "Heading for mask undo and redo controls."
+mask.panel.draw:
+  text: "绘制"
+  context: "Heading for mask drawing controls."
+mask.action.undo:
+  text: "撤销"
+  context: "Label for undoing the last mask edit."
+mask.action.undo_tooltip:
+  text: "撤销上次掩膜编辑 (Ctrl+Z)"
+  context: "Tooltip describing the undo action and its shortcut."
+mask.action.redo:
+  text: "重做"
+  context: "Label for redoing a mask edit."
+mask.action.redo_tooltip:
+  text: "重做掩膜编辑 (Ctrl+Shift+Z)"
+  context: "Tooltip describing the redo action and its shortcut."
+mask.tool.size:
+  text: "大小"
+  context: "Label for the drawing-tool brush size control."
+mask.tool.pan_inspect:
+  text: "平移并检查图像"
+  context: "Initial guidance shown when no drawing tool is active."
+mask.tool.rectangle_short:
+  text: "矩形"
+  context: "Compact visible label for the rectangle drawing tool."
+mask.tool.smart_fill_short:
+  text: "填充"
+  context: "Compact visible label for the smart-fill drawing tool."
+mask.tool.finish_polygon:
+  text: "完成多边形"
+  context: "Button that completes the current polygon."
+mask.action.cancel:
+  text: "取消"
+  context: "Button that cancels the current edit or preview."
+mask.panel.layers:
+  text: "图层"
+  context: "Heading for mask-layer management controls."
+mask.action.add:
+  text: "添加"
+  context: "Button that opens options for adding a mask layer."
+mask.action.add_tooltip:
+  text: "添加空白、导入、仪器或阈值图层。"
+  context: "Tooltip describing the available mask-layer sources."
+mask.action.remove:
+  text: "移除"
+  context: "Button or menu action that removes the selected mask layer."
+mask.action.clear_layers:
+  text: "清除图层"
+  context: "Button that removes all mask layers."
+mask.layers.empty_hint:
+  text: "从上方的阈值创建掩膜，或添加空白图层以手动绘制。"
+  context: "Guidance shown when the layer list is empty."
+mask.layers.combined_overlay:
+  text: "合并叠加层"
+  context: "Label for the composed overlay of visible mask layers."
+mask.appearance.color:
+  text: "颜色"
+  context: "Label for choosing the mask overlay color."
+mask.appearance.choose_color:
+  text: "选择合并掩膜颜色"
+  context: "Color-dialog title for selecting the combined mask overlay color."
+mask.appearance.opacity:
+  text: "不透明度"
+  context: "Label for the combined mask overlay opacity control."
+mask.coverage.format:
+  text: "已屏蔽 {percentage:.1f}%"
+  context: "Progress-bar text showing the percentage of image pixels masked."
+  placeholders:
+    percentage: "Percentage of image pixels masked."
+mask.coverage.row:
+  text: "已屏蔽 {percentage:.1f}%"
+  context: "Layer-row detail showing the fraction of pixels included in that layer."
+  placeholders:
+    percentage: "Percentage of image pixels masked in the layer."
+mask.coverage.tooltip:
+  text: "合并掩膜中包含的可见图像像素比例"
+  context: "Tooltip explaining the combined mask coverage value."
+mask.coverage.no_layers:
+  text: "没有可见的掩膜图层"
+  context: "Tooltip shown when no visible layers contribute to the combined mask."
+mask.coverage.pixel_count:
+  text: "已屏蔽 {masked:,} / {total:,} 个像素"
+  context: "Tooltip showing the number of masked pixels and total image pixels."
+  placeholders:
+    masked: "Number of pixels included in the mask."
+    total: "Total number of image pixels."
+mask.action.export_combined:
+  text: "导出合并掩膜"
+  context: "Button that exports the composition of visible mask layers."
+mask.action.export_combined_tooltip:
+  text: "导出所有可见图层合并后的掩膜"
+  context: "Tooltip describing the combined-mask export."
+mask.panel.threshold:
+  text: "阈值掩膜"
+  context: "Heading for threshold-based mask creation."
+mask.threshold.below:
+  text: "低于"
+  context: "Threshold mode selecting image intensities below a limit."
+mask.threshold.range:
+  text: "范围"
+  context: "Threshold mode selecting image intensities within a range."
+mask.threshold.between:
+  text: "介于"
+  context: "Button label for selecting image intensities within a range."
+mask.threshold.above:
+  text: "高于"
+  context: "Threshold mode selecting image intensities above a limit."
+mask.threshold.log_x:
+  text: "X 轴对数刻度"
+  context: "Option to use a logarithmic intensity axis for the histogram."
+mask.threshold.log_x_tooltip:
+  text: "强度轴使用对数间隔"
+  context: "Tooltip explaining logarithmic histogram spacing."
+mask.threshold.fit_x:
+  text: "适配 X 轴"
+  context: "Button that fits the histogram intensity range."
+mask.threshold.fit_x_tooltip:
+  text: "适配完整的直方图强度范围"
+  context: "Tooltip describing the histogram range-fit action."
+mask.threshold.intensity_axis:
+  text: "强度"
+  context: "Horizontal axis label for the threshold histogram."
+mask.threshold.lower:
+  text: "下限"
+  context: "Label for the lower threshold value."
+mask.threshold.upper:
+  text: "上限"
+  context: "Label for the upper threshold value."
+mask.threshold.threshold:
+  text: "阈值"
+  context: "Label for a single upper or lower threshold value."
+mask.threshold.cancel_tooltip:
+  text: "隐藏当前阈值预览"
+  context: "Tooltip for hiding the uncommitted threshold preview."
+mask.threshold.create_layer:
+  text: "创建图层"
+  context: "Button that creates a mask layer from the current threshold."
+mask.threshold.log_requires_positive:
+  text: "X 轴对数刻度要求强度值为正；已改用线性 X 轴"
+  context: "Status shown when logarithmic spacing cannot be used for the data."
+mask.layers.status_heading:
+  text: "=== 掩膜图层 ==="
+  context: "Section heading in mask status information."
+mask.layers.count:
+  text: "图层数：{count}"
+  context: "Layer count in mask status information."
+  placeholders:
+    count: "Number of mask layers."
+mask.layers.status_row:
+  text: "  图层 {index}：{name}（{visibility}，{operation}）- {pixels:,} 个像素（{coverage:.1f}%）"
+  context: "Mask status row showing layer visibility, composition, and coverage."
+  placeholders:
+    index: "One-based layer number."
+    name: "Name of the mask layer."
+    visibility: "Localized visibility state."
+    operation: "Localized composition role."
+    pixels: "Number of masked pixels in the layer."
+    coverage: "Percentage of pixels masked in the layer."
+mask.layers.visible:
+  text: "可见"
+  context: "Visibility state for a mask layer that is shown."
+mask.layers.hidden:
+  text: "隐藏"
+  context: "Visibility state for a mask layer that is not shown."
+mask.layers.operation_base:
+  text: "基底"
+  context: "Composition role of the first mask layer."
+mask.layers.operation_add:
+  text: "并集"
+  context: "Composition role of a mask layer combined by union."
+mask.layers.operation_overlap:
+  text: "交集"
+  context: "Composition role of a mask layer combined by intersection."
+mask.layers.combined_heading:
+  text: "=== 合并掩膜 ==="
+  context: "Section heading for combined-mask status information."
+mask.coverage.status:
+  text: "已屏蔽像素：{masked:,}（{percentage:.1f}%）"
+  context: "Combined mask coverage in status information."
+  placeholders:
+    masked: "Number of masked pixels."
+    percentage: "Percentage of image pixels masked."
+mask.layers.active_editing:
+  text: "活动编辑图层"
+  context: "Tooltip identifying the currently edited visible mask layer."
+mask.layers.active_hidden:
+  text: "活动图层已隐藏"
+  context: "Tooltip indicating that the active mask layer is hidden."
+mask.operation.union:
+  text: "∪ 并集 · 任一掩膜"
+  context: "Tooltip describing the union composition of adjacent mask layers."
+mask.operation.intersection:
+  text: "∩ 交集 · 两个掩膜"
+  context: "Tooltip describing the intersection composition of adjacent mask layers."
+mask.menu.rename:
+  text: "重命名..."
+  context: "Context-menu action for renaming the selected layer."
+mask.menu.duplicate:
+  text: "复制"
+  context: "Context-menu action for duplicating the selected layer."
+mask.menu.export:
+  text: "导出..."
+  context: "Context-menu action for exporting the selected layer."
+mask.menu.move_up:
+  text: "上移"
+  context: "Context-menu action for moving the selected layer earlier in the stack."
+mask.menu.move_down:
+  text: "下移"
+  context: "Context-menu action for moving the selected layer later in the stack."
+mask.menu.hide:
+  text: "隐藏"
+  context: "Context-menu action for hiding the selected mask layer."
+mask.menu.show:
+  text: "显示"
+  context: "Context-menu action for showing the selected mask layer."
+mask.status.active_layer:
+  text: "活动掩膜图层：{name}（{state}）"
+  context: "Status showing the active mask layer and its editability."
+  placeholders:
+    name: "Name of the active mask layer."
+    state: "Localized description of the layer state."
+mask.status.editing:
+  text: "正在编辑"
+  context: "State indicating that the active mask layer can be edited."
+mask.status.hidden_before_edit:
+  text: "已隐藏 - 编辑前请先显示此图层"
+  context: "State explaining that a hidden layer must be shown before editing."
+mask.edit_target.create:
+  text: "正在编辑：请先创建或添加图层"
+  context: "Guidance shown when a mask layer must be created before editing."
+mask.edit_target.layer:
+  text: "正在编辑：{name}"
+  context: "Label showing the name of the current mask editing target."
+  placeholders:
+    name: "Name of the active mask layer."
+mask.edit_target.hidden:
+  text: "正在编辑：{name}（已隐藏）"
+  context: "Label showing that the current mask editing target is hidden."
+  placeholders:
+    name: "Name of the active mask layer."
+mask.menu.empty_layer:
+  text: "空白图层"
+  context: "Menu action for adding an empty mask layer."
+mask.menu.from_file:
+  text: "从文件加载"
+  context: "Menu action for loading a mask from a file."
+mask.menu.instrument_default:
+  text: "从仪器默认设置加载"
+  context: "Submenu for loading a detector's configured default mask."
+mask.menu.threshold_layer:
+  text: "从当前图像创建（阈值）"
+  context: "Menu action for generating a mask from the current image threshold."
+mask.image_sync_required:
+  text: "请先加载图像。使用 Image Browser 中的“同步到其他选项卡”。"
+  context: "Guidance shown when no image is available for mask creation."
+mask.image_validation_error:
+  text: "{error}"
+  context: "Displays the image-validation detail returned by the image utility."
+  placeholders:
+    error: "Raw image-validation message."
+mask.status.added_empty:
+  text: "已添加空白图层"
+  context: "Status confirming an empty mask layer was added."
+mask.layer.empty_name:
+  text: "空白图层 {number}"
+  context: "Generated name for a newly created empty mask layer."
+  placeholders:
+    number: "One-based layer number."
+mask.error.create_empty:
+  text: "无法创建空白掩膜图层：{error}"
+  context: "Status shown when creating an empty mask layer fails."
+  placeholders:
+    error: "Raw error detail from the mask creation operation."
+mask.status.no_layer_selected:
+  text: "未选择图层"
+  context: "Status shown when an action requires a selected mask layer."
+mask.status.removed_layer:
+  text: "已移除图层：{name}"
+  context: "Status confirming which mask layer was removed."
+  placeholders:
+    name: "Name of the removed mask layer."
+mask.status.cleared_layers:
+  text: "已清除所有掩膜图层"
+  context: "Status confirming that all mask layers were cleared."
+mask.dialog.rename_title:
+  text: "重命名图层"
+  context: "Dialog title for renaming a mask layer."
+mask.dialog.rename_prompt:
+  text: "图层名称"
+  context: "Prompt for the new mask-layer name."
+mask.layer.duplicate_name:
+  text: "{name} 副本"
+  context: "Generated name for a duplicated mask layer."
+  placeholders:
+    name: "Name of the original mask layer."
+mask.layer.instrument_name:
+  text: "仪器：{name}"
+  context: "Generated layer name for a mask loaded from an instrument profile."
+  placeholders:
+    name: "Instrument mask filename."
+mask.status.restored:
+  text: "已从上次会话恢复 {count} 个掩膜图层"
+  context: "Status confirming how many saved mask layers were restored."
+  placeholders:
+    count: "Number of restored mask layers."
+mask.threshold.load_image:
+  text: "创建阈值掩膜前请先加载图像"
+  context: "Status shown when threshold mask creation requires an image."
+mask.threshold.description_below:
+  text: "低于 {threshold:.4g}"
+  context: "Generated description for a below-threshold mask."
+  placeholders:
+    threshold: "Upper intensity limit for the mask."
+mask.threshold.description_above:
+  text: "高于 {threshold:.4g}"
+  context: "Generated description for an above-threshold mask."
+  placeholders:
+    threshold: "Lower intensity limit for the mask."
+mask.threshold.description_range:
+  text: "范围 {low:.4g} 至 {high:.4g}"
+  context: "Generated description for a mask spanning an intensity range."
+  placeholders:
+    low: "Lower intensity limit for the mask."
+    high: "Upper intensity limit for the mask."
+mask.layer.threshold_name:
+  text: "阈值：{description}"
+  context: "Generated layer name for a threshold-created mask."
+  placeholders:
+    description: "Localized description of the selected intensity threshold."
+mask.threshold.created:
+  text: "已根据强度创建掩膜图层：{description}"
+  context: "Status confirming that a threshold mask layer was created."
+  placeholders:
+    description: "Localized description of the selected intensity threshold."
+mask.drawing.create_layer_first:
+  text: "绘制前请先创建或选择掩膜图层"
+  context: "Status explaining that drawing requires an active mask layer."
+mask.drawing.show_layer_first:
+  text: "编辑前请先显示活动图层"
+  context: "Status explaining that a hidden layer must be shown before editing."
+mask.status.tool_active:
+  text: "{tool}已启用"
+  context: "Status confirming that a drawing tool is active."
+  placeholders:
+    tool: "Localized name of the drawing tool."
+mask.status.tool_changed:
+  text: "绘图工具已切换为：{tool}"
+  context: "Status confirming a change to the active drawing tool."
+  placeholders:
+    tool: "Localized name of the drawing tool."
+mask.drawing.polygon_hint:
+  text: "单击添加顶点，然后按 Enter 或双击完成。"
+  context: "Guidance for completing a polygon mask."
+mask.drawing.alt_hint:
+  text: "按住 Alt 可反转效果。"
+  context: "Guidance for temporarily inverting a drawing tool's effect."
+mask.status.polygon_applied:
+  text: "多边形已应用到活动图层"
+  context: "Status confirming that a polygon edit was applied."
+mask.status.drawing_cancelled:
+  text: "已取消当前绘制"
+  context: "Status confirming that the current drawing was cancelled."
+mask.refine.select_layer:
+  text: "选择要微调的掩膜图层"
+  context: "Status explaining that refinement requires a selected mask layer."
+mask.refine.show_layer:
+  text: "微调前请先显示活动图层"
+  context: "Status explaining that a hidden layer must be shown before refinement."
+mask.refine.shrink:
+  text: "收缩"
+  context: "Name of the action that contracts a mask layer."
+mask.refine.grow:
+  text: "扩张"
+  context: "Name of the action that expands a mask layer."
+mask.error.unknown_detector:
+  text: "未知探测器：{detector}"
+  context: "Status shown when a detector identifier is not recognized."
+  placeholders:
+    detector: "Detector key from the instrument configuration."
+mask.error.no_mask_configured:
+  text: "未为 {detector} 配置掩膜"
+  context: "Status shown when the selected detector has no configured mask."
+  placeholders:
+    detector: "Configured detector display name."
+mask.status.loaded_instrument:
+  text: "已加载仪器掩膜：{name}"
+  context: "Status confirming which instrument mask file was loaded."
+  placeholders:
+    name: "Instrument mask filename."
+mask.error.mask_not_found:
+  text: "未找到掩膜文件：{path}。已检查：{checked}"
+  context: "Status listing the configured mask path and locations that were checked."
+  placeholders:
+    path: "Configured mask path."
+    checked: "List of filesystem locations checked for the mask."
+mask.error.load_instrument:
+  text: "无法加载仪器掩膜：{error}"
+  context: "Status shown when loading an instrument mask fails."
+  placeholders:
+    error: "Raw error detail from the mask-loading operation."
+mask.dialog.load_mask_title:
+  text: "加载掩膜文件"
+  context: "File chooser title for loading a custom mask."
+mask.dialog.mask_filter:
+  text: "掩膜文件 (*.npy *.tif *.tiff *.png *.xcf);;所有文件 (*)"
+  context: "File type choices for loading mask files."
+mask.dialog.export_title:
+  text: "导出掩膜"
+  context: "File chooser title for exporting a mask."
+mask.status.loaded_custom:
+  text: "已加载自定义掩膜：{name}"
+  context: "Status confirming which custom mask file was loaded."
+  placeholders:
+    name: "Name of the loaded mask file."
+mask.error.load_file:
+  text: "无法加载掩膜文件：{error}"
+  context: "Status shown when a mask file cannot be loaded."
+  placeholders:
+    error: "Raw error detail from the file-loading operation."
+mask.error.no_mask_to_export:
+  text: "没有可导出的掩膜"
+  context: "Status shown when no mask data is available for export."
+mask.dialog.export_filter:
+  text: "PNG 文件 (*.png);;NumPy 文件 (*.npy);;TIFF 文件 (*.tif);;所有文件 (*)"
+  context: "File type choices for exporting a mask."
+mask.status.exported_numpy:
+  text: "✓ 掩膜已导出 (numpy)：{name}"
+  context: "Status confirming that a NumPy mask file was exported."
+  placeholders:
+    name: "Name of the exported mask file."
+mask.status.exported_image:
+  text: "✓ 掩膜已导出（图像）：{name}"
+  context: "Status confirming that an image-format mask file was exported."
+  placeholders:
+    name: "Name of the exported mask file."
+mask.error.export:
+  text: "无法导出掩膜：{error}"
+  context: "Status shown when mask export fails."
+  placeholders:
+    error: "Raw error detail from the export operation."

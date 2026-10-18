@@ -29,8 +29,8 @@ class ViewerBehavior:
 @dataclass(frozen=True)
 class ViewerToolbarAction:
     key: str
-    label: str
-    tooltip: str
+    label_id: str
+    tooltip_id: str
 
 
 @dataclass(frozen=True)
@@ -244,14 +244,14 @@ def resolve_matplotlib_colormap(name: str):
     return LinearSegmentedColormap.from_list(name, _ordered_palette_colors(palette.colors), N=256)
 
 VIEWER_TOOLBAR_ACTIONS = (
-    ViewerToolbarAction("pan", "Pan", "Drag with the left mouse button to move the image."),
-    ViewerToolbarAction("zoom", "Zoom", "Drag a box with the left mouse button to zoom into an area."),
-    ViewerToolbarAction("beam_center", "Beam Center", "Show or hide the calibrated beam center."),
-    ViewerToolbarAction("mask", "Mask", "Show or hide the active mask."),
-    ViewerToolbarAction("home", "Home", "Show the full image."),
-    ViewerToolbarAction("auto", "Auto", "Set color limits from the current image."),
-    ViewerToolbarAction("copy", "Copy", "Copy the image view to the clipboard. Include the current colors and overlays."),
-    ViewerToolbarAction("save", "Save", "Save the image view as a PNG file. Include the current colors and overlays."),
+    ViewerToolbarAction("pan", "viewer.pan.label", "viewer.pan.tooltip"),
+    ViewerToolbarAction("zoom", "viewer.zoom.label", "viewer.zoom.tooltip"),
+    ViewerToolbarAction("beam_center", "viewer.beam_center.label", "viewer.beam_center.tooltip"),
+    ViewerToolbarAction("mask", "viewer.mask.label", "viewer.mask.tooltip"),
+    ViewerToolbarAction("home", "viewer.home.label", "viewer.home.tooltip"),
+    ViewerToolbarAction("auto", "viewer.auto.label", "viewer.auto.tooltip"),
+    ViewerToolbarAction("copy", "viewer.copy.label", "viewer.copy.tooltip"),
+    ViewerToolbarAction("save", "viewer.save.label", "viewer.save.tooltip"),
 )
 
 VIEWER_TOOLBAR_GROUPS = (

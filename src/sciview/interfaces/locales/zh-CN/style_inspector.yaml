@@ -1,0 +1,160 @@
+style_inspector.style_inspector_dev:
+  text: "样式检查器  [dev]"
+  context: Window title in the developer style inspector.
+style_inspector.qt_style:
+  text: Qt 样式
+  context: Settings group heading in the developer style inspector.
+style_inspector.theme:
+  text: 主题
+  context: Form field label in the developer style inspector.
+style_inspector.built_in_qt_styles_and_optional:
+  text: 内置 Qt 样式和可选外部主题会立即生效。
+  context: Label or note in the developer style inspector.
+style_inspector.live_stylesheet_re_applies_instantly:
+  text: "实时  (样式表立即重新应用)"
+  context: Settings group heading in the developer style inspector.
+style_inspector.live_typography_applies_instantly:
+  text: "实时排版  (立即生效)"
+  context: Settings group heading in the developer style inspector.
+style_inspector.optional_global_font_family_stack:
+  text: 可选的全局字体系列
+  context: Input hint in the developer style inspector.
+style_inspector.font_family:
+  text: 字体系列
+  context: Form field label in the developer style inspector.
+style_inspector.construction_time_ctrl_r_to_apply:
+  text: "构建时设置  (按 Ctrl+R 应用)"
+  context: Settings group heading in the developer style inspector.
+style_inspector.write_to_file_persists_values_into:
+  text: "“写入文件”会将设置保存到 app_style.py"
+  context: Label or note in the developer style inspector.
+style_inspector.write_to_file:
+  text: 写入文件
+  context: Button label in the developer style inspector.
+style_inspector.persist_current_spinbox_values_into_app:
+  text: 将当前数值框的值保存到 app_style.py
+  context: Tooltip in the developer style inspector.
+style_inspector.reload_from_file:
+  text: 从文件重新载入
+  context: Button label in the developer style inspector.
+style_inspector.re_read_values_from_app_style:
+  text: 从磁盘上的 app_style.py 重新读取设置
+  context: Tooltip in the developer style inspector.
+style_inspector.style_inspector_dev_theme_label:
+  text: "样式检查器  [dev]  • {theme_label}"
+  context: Window title in the developer style inspector.
+  placeholders:
+    theme_label: Current theme label value; preserve the format specification.
+style_inspector.style_inspector_dev_2:
+  text: "样式检查器  [dev]  •"
+  context: Window title in the developer style inspector.
+style_inspector.style_inspector_dev_3:
+  text: "样式检查器  [dev]  •"
+  context: Window title in the developer style inspector.
+style_inspector.style_inspector_dev_saved:
+  text: "样式检查器  [dev]  ✓ 已保存"
+  context: Window title in the developer style inspector.
+style_inspector.app_style_py_hot_reloaded:
+  text: app_style.py 已热重载
+  context: Status message in the developer style inspector.
+style_inspector.layout.panel_margin:
+  text: 面板外边距 (px)
+  context: Developer style setting. Margin around a UI panel in pixels.
+style_inspector.layout.panel_spacing:
+  text: 面板间距 (px)
+  context: Developer style setting. Spacing between controls in a UI panel, in pixels.
+style_inspector.layout.toolbar_spacing:
+  text: 工具栏间距 (px)
+  context: Developer style setting. Spacing between adjacent toolbar controls in pixels.
+style_inspector.layout.splitter_handle_width:
+  text: 分隔条宽度 (px)
+  context: Developer style setting. Width of the draggable divider between panels, in pixels.
+style_inspector.layout.control_panel_min_height:
+  text: 控件面板最小高度 (px)
+  context: Developer style setting. Minimum height of a controls panel in pixels.
+style_inspector.font.scale_pct:
+  text: 全局缩放 (%)
+  context: Developer style setting. Application-wide typography scale as a percentage.
+style_inspector.font.h1:
+  text: 一级标题 (px)
+  context: Developer style setting. Largest heading font size in pixels.
+style_inspector.font.h2:
+  text: 二级标题 (px)
+  context: Developer style setting. Second-level heading font size in pixels.
+style_inspector.font.h3:
+  text: 三级标题 (px)
+  context: Developer style setting. Third-level heading font size in pixels.
+style_inspector.font.body:
+  text: 正文字号 (px)
+  context: Developer style setting. Body-text font size in pixels.
+style_inspector.font.caption:
+  text: 说明文字号 (px)
+  context: Developer style setting. Caption-text font size in pixels.
+style_inspector.font.small:
+  text: 小字号 (px)
+  context: Developer style setting. Small-text font size in pixels.
+style_inspector.theme.qt:
+  text: 'Qt: {style}'
+  context: Theme selection label in the developer style inspector; library and theme identifiers remain unchanged.
+  placeholders:
+    style: Installed native Qt style name; do not translate the supplied name.
+style_inspector.theme.material_light:
+  text: 'qt-material: light_blue'
+  context: Theme selection label in the developer style inspector; library and theme identifiers remain unchanged.
+style_inspector.theme.material_dark:
+  text: 'qt-material: dark_teal'
+  context: Theme selection label in the developer style inspector; library and theme identifiers remain unchanged.
+style_inspector.theme.dark:
+  text: 'qdarktheme: dark'
+  context: Theme selection label in the developer style inspector; library and theme identifiers remain unchanged.
+style_inspector.theme.light:
+  text: 'qdarktheme: light'
+  context: Theme selection label in the developer style inspector; library and theme identifiers remain unchanged.
+style_inspector.css.label_padding_v:
+  text: 标签垂直内边距
+  context: Developer stylesheet setting for label padding v. The setting key itself is not translated.
+style_inspector.css.label_padding_h:
+  text: 标签水平内边距
+  context: Developer stylesheet setting for label padding h. The setting key itself is not translated.
+style_inspector.css.btn_padding_v:
+  text: 按钮垂直内边距
+  context: Developer stylesheet setting for btn padding v. The setting key itself is not translated.
+style_inspector.css.btn_padding_h:
+  text: 按钮水平内边距
+  context: Developer stylesheet setting for btn padding h. The setting key itself is not translated.
+style_inspector.css.input_padding_v:
+  text: 输入框垂直内边距
+  context: Developer stylesheet setting for input padding v. The setting key itself is not translated.
+style_inspector.css.input_padding_h:
+  text: 输入框水平内边距
+  context: Developer stylesheet setting for input padding h. The setting key itself is not translated.
+style_inspector.css.group_margin_top:
+  text: 分组上外边距
+  context: Developer stylesheet setting for group margin top. The setting key itself is not translated.
+style_inspector.css.group_padding_top:
+  text: 分组上内边距
+  context: Developer stylesheet setting for group padding top. The setting key itself is not translated.
+style_inspector.css.group_title_left:
+  text: 分组标题左侧位置
+  context: Developer stylesheet setting for group title left. The setting key itself is not translated.
+style_inspector.css.group_title_padding:
+  text: 分组标题内边距
+  context: Developer stylesheet setting for group title padding. The setting key itself is not translated.
+style_inspector.css.border_radius:
+  text: 圆角半径
+  context: Developer stylesheet setting for border radius. The setting key itself is not translated.
+style_inspector.css.button_height:
+  text: 按钮高度
+  context: Developer stylesheet setting for button height. The setting key itself is not translated.
+style_inspector.css.input_height:
+  text: 输入框高度
+  context: Developer stylesheet setting for input height. The setting key itself is not translated.
+style_inspector.css.tab_padding_h:
+  text: 标签页水平内边距
+  context: Developer stylesheet setting for tab padding h. The setting key itself is not translated.
+style_inspector.css.toolbar_font_weight:
+  text: 工具栏字重
+  context: Developer stylesheet setting for toolbar font weight. The setting key itself is not translated.
+style_inspector.css.toolbar_padding_horizontal:
+  text: 工具栏水平内边距
+  context: Developer stylesheet setting for toolbar padding horizontal. The setting key itself is not translated.
