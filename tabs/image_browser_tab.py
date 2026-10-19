@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QListWidget, QListWidgetItem, QCheckBox, QComboBox, QLineEdit,
     QFileDialog, QMessageBox, QScrollArea, QGridLayout, QSplitter,
-    QStyle,
+    QSizePolicy, QStyle,
 )
 from PyQt5.QtCore import QSignalBlocker, Qt, QThread, pyqtSignal, QTimer, QSize
 from PyQt5.QtGui import QPixmap, QIcon
@@ -654,6 +654,8 @@ class ImageBrowserApp(BaseImageTab):
         folder_layout = QHBoxLayout()
         self.folder_path_combo = QComboBox()
         self.folder_path_combo.setEditable(True)
+        self.folder_path_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.folder_path_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.folder_path_combo.setInsertPolicy(QComboBox.NoInsert)
         self.folder_path_combo.setToolTip(tr("image_browser.folder.path.tooltip"))
         self.folder_path_input = self.folder_path_combo.lineEdit()

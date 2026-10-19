@@ -433,6 +433,8 @@ class TiledBrowserTab(BaseImageTab):
         row.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         row.addWidget(QLabel(tr("tiled_browser.connection.catalog.label")))
         self.catalog_combo = QComboBox()
+        self.catalog_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.catalog_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.catalog_combo.currentIndexChanged.connect(self._on_catalog_changed)
         row.addWidget(self.catalog_combo, 1)
 
