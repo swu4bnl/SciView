@@ -151,7 +151,8 @@ class TransformTab(BaseImageTab):
         )):
             spin.setRange(6.0, 72.0)
             spin.setValue(value)
-            self._add_grid_field(style_layout, 0, index, label, spin)
+            style_layout.addWidget(QLabel(label), 0, index)
+            style_layout.addWidget(spin, 1, index)
 
         self.plot_dpi_spin = QSpinBox()
         self.plot_dpi_spin.setRange(72, 1200)
@@ -176,12 +177,17 @@ class TransformTab(BaseImageTab):
             spin.setDecimals(4)
             spin.setValue(0.0 if value is None else value)
             spin.setEnabled(False)
-        self._add_grid_field(style_layout, 0, 3, tr("transform.plot_style.export_resolution"), self.plot_dpi_spin)
-        self._add_grid_field(style_layout, 1, 0, tr("transform.plot_style.colormap"), self.plot_cmap_combo)
-        self._add_grid_field(style_layout, 1, 1, tr("transform.plot_style.intensity_scale"), self.plot_scale_combo)
-        self._add_grid_field(style_layout, 1, 2, tr("transform.plot_style.intensity_min"), self.plot_vmin_spin)
-        self._add_grid_field(style_layout, 1, 3, tr("transform.plot_style.intensity_max"), self.plot_vmax_spin)
-        style_layout.addWidget(self.color_auto_check, 2, 0, 1, 2)
+        style_layout.addWidget(QLabel(tr("transform.plot_style.export_resolution")), 0, 3)
+        style_layout.addWidget(self.plot_dpi_spin, 1, 3)
+        for index, (label, widget) in enumerate((
+            (tr("transform.plot_style.colormap"), self.plot_cmap_combo),
+            (tr("transform.plot_style.intensity_scale"), self.plot_scale_combo),
+            (tr("transform.plot_style.intensity_min"), self.plot_vmin_spin),
+            (tr("transform.plot_style.intensity_max"), self.plot_vmax_spin),
+        )):
+            style_layout.addWidget(QLabel(label), 2, index)
+            style_layout.addWidget(widget, 3, index)
+        style_layout.addWidget(self.color_auto_check, 4, 0, 1, 2)
         return style_group
 
     def _create_protocol_selector(self):

@@ -446,6 +446,7 @@ class MaskApp(BaseImageTab):
         checkable: bool = False,
     ) -> QToolButton:
         button = QToolButton()
+        button.setProperty("sciview_square_tool_button", True)
         button.setCheckable(checkable)
         button.setToolTip(tooltip)
         button.setText(text)

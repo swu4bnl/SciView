@@ -90,7 +90,7 @@ class BaseImageTab(QWidget):
         """Wrap a panel in a scroll area to keep all controls reachable."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setFrameShape(QScrollArea.NoFrame)
         scroll.setMinimumHeight(AppStyle.LAYOUT.get('control_panel_min_height', 96))
@@ -424,6 +424,7 @@ class BaseImageTab(QWidget):
         color_label.setToolTip(tr('base_image.colormap'))
         display_layout.addWidget(color_label, 0, 0)
         self.cmap_selector = QComboBox()
+        self.cmap_selector.setProperty("sciview_input_width", "wide_input_min_width")
         self.cmap_selector.setMinimumWidth(AppStyle.wide_input_min_width())
         self.cmap_selector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmap_selector.setAccessibleName(tr('base_image.colormap'))
@@ -437,6 +438,7 @@ class BaseImageTab(QWidget):
         scale_label.setToolTip(tr('base_image.intensity_scale_linear_or_log'))
         display_layout.addWidget(scale_label, 0, 2)
         self.img_scale_combo = QComboBox()
+        self.img_scale_combo.setProperty("sciview_input_width", "compact_input_min_width")
         self.img_scale_combo.setMinimumWidth(AppStyle.compact_input_min_width())
         self.img_scale_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.img_scale_combo.setAccessibleName(tr('base_image.intensity_scale'))
@@ -451,6 +453,7 @@ class BaseImageTab(QWidget):
         vmin_label.setToolTip(tr('base_image.color_map_minimum'))
         display_layout.addWidget(vmin_label, 1, 0)
         self.vmin_input = QLineEdit(str(self.display_settings['vmin']))
+        self.vmin_input.setProperty("sciview_input_width", "compact_input_min_width")
         self.vmin_input.setMinimumWidth(AppStyle.compact_input_min_width())
         self.vmin_input.setAccessibleName(tr('base_image.color_minimum'))
         self.vmin_input.setToolTip(tr('base_image.color_map_minimum'))
@@ -461,6 +464,7 @@ class BaseImageTab(QWidget):
         vmax_label.setToolTip(tr('base_image.color_map_maximum'))
         display_layout.addWidget(vmax_label, 1, 2)
         self.vmax_input = QLineEdit(str(self.display_settings['vmax']))
+        self.vmax_input.setProperty("sciview_input_width", "compact_input_min_width")
         self.vmax_input.setMinimumWidth(AppStyle.compact_input_min_width())
         self.vmax_input.setAccessibleName(tr('base_image.color_maximum'))
         self.vmax_input.setToolTip(tr('base_image.color_map_maximum'))
@@ -470,6 +474,7 @@ class BaseImageTab(QWidget):
         for column in (1, 3):
             display_layout.setColumnStretch(column, 1)
         for control in (self.cmap_selector, self.img_scale_combo, self.vmin_input, self.vmax_input):
+            control.setProperty("sciview_display_control", True)
             apply_input_style(control)
             control.setFixedHeight(AppStyle.toolbar_text_button_height())
         self.image_viewer.set_display_controls(display_controls)

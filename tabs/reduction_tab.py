@@ -166,7 +166,8 @@ class ReductionTab(BaseImageTab):
         )):
             spin.setRange(6.0, 72.0)
             spin.setValue(value)
-            self._add_grid_field(style_layout, 0, index, label, spin)
+            style_layout.addWidget(QLabel(label), 0, index)
+            style_layout.addWidget(spin, 1, index)
 
         self._line_color = plot_style.line_color
         self.plot_line_color_button = QPushButton()
@@ -179,12 +180,17 @@ class ReductionTab(BaseImageTab):
         self.plot_dpi_spin = QSpinBox()
         self.plot_dpi_spin.setRange(72, 1200)
         self.plot_dpi_spin.setValue(plot_style.dpi)
-        self._add_grid_field(style_layout, 0, 3, tr("reduction.plot_style.export_resolution"), self.plot_dpi_spin)
-        self._add_grid_field(style_layout, 1, 0, tr("reduction.plot_style.line_color"), self.plot_line_color_button)
-        self._add_grid_field(style_layout, 1, 1, tr("reduction.plot_style.line_width"), self.plot_line_width_spin)
+        style_layout.addWidget(QLabel(tr("reduction.plot_style.export_resolution")), 0, 3)
+        style_layout.addWidget(self.plot_dpi_spin, 1, 3)
+        for index, (label, widget) in enumerate((
+            (tr("reduction.plot_style.line_color"), self.plot_line_color_button),
+            (tr("reduction.plot_style.line_width"), self.plot_line_width_spin),
+        )):
+            style_layout.addWidget(QLabel(label), 2, index)
+            style_layout.addWidget(widget, 3, index)
 
-        style_layout.addWidget(QLabel(tr("reduction.plot_style.axis_scale")), 2, 0)
-        style_layout.addWidget(self._create_scale_toggle(), 2, 1, 1, 7)
+        style_layout.addWidget(QLabel(tr("reduction.plot_style.axis_scale")), 4, 0)
+        style_layout.addWidget(self._create_scale_toggle(), 4, 1, 1, 3)
         return style_group
 
     def _create_scale_toggle(self):

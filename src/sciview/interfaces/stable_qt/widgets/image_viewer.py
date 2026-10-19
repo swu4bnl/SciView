@@ -731,6 +731,7 @@ class ImageViewer(QWidget):
         AppStyle.apply_widget_style(self._toolbar, 'viewer_toolbar')
         for key, button in self._toolbar_buttons.items():
             AppStyle.apply_widget_style(button, 'compact_button')
+            button.setFixedSize(AppStyle.viewer_toolbar_button_size())
             button.setIcon(self._load_toolbar_icon(key))
             button.setIconSize(AppStyle.viewer_toolbar_icon_size())
 
@@ -748,6 +749,7 @@ class ImageViewer(QWidget):
     @staticmethod
     def _make_tool_button(action: Any, icon: QIcon) -> QToolButton:
         button = QToolButton()
+        button.setProperty("sciview_viewer_tool_button", True)
         button.setAccessibleName(tr(action.label_id))
         button.setAutoRaise(False)
         button.setFixedSize(AppStyle.viewer_toolbar_button_size())

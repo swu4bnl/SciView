@@ -219,6 +219,7 @@ class SciAnaApp(QMainWindow):
         
         # Set window sizing from config with screen-aware bounds.
         self._apply_window_size_from_config()
+        self._base_window_minimum_size = self.minimumSize()
         
         # Setup resource monitoring
         self._setup_resource_monitor()
@@ -435,6 +436,10 @@ class SciAnaApp(QMainWindow):
 
     def refresh_theme(self):
         """Refresh native sizing and theme-aware icons after a style change."""
+        self.setMinimumSize(
+            AppStyle.control_px(self._base_window_minimum_size.width()),
+            AppStyle.control_px(self._base_window_minimum_size.height()),
+        )
         self.tab_widget.setStyleSheet(AppStyle.tab_widget_stylesheet())
         self._update_theme_toggle_icon()
         tab_bar = self.tab_widget.tabBar()

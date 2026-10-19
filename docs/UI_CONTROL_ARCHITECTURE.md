@@ -23,8 +23,12 @@ toggle use the existing `FONTS.scale_pct` and `AppStyle` palette and shared
 refresh path; settings apply to the current session. Contrast mode restores the
 preceding theme when disabled, and follows the light/dark toggle while enabled.
 Text scaling changes interface typography, not scientific export style settings.
-The default scale is 100%.
-rendered sizes: H1 30 px, H2/tabs 24 px, H3 20 px, body 18 px, caption 16 px, and small text 14 px.
+Below 100%, shared control dimensions and padding also shrink, including live
+viewer controls. Manual settings extend down to 50% for smaller screens; startup
+remains at 100%, without automatic screen-dependent scaling.
+Side panels allow scrolling when their contents exceed the available space.
+At 100%, rendered sizes are H1 30 px, H2/tabs 24 px, H3 20 px, body 18 px,
+caption 16 px, and small text 14 px.
 
 ## Layer Map
 

@@ -12,7 +12,7 @@ import logging
 from typing import TYPE_CHECKING
 import xml.etree.ElementTree as ET
 
-from PyQt5.QtWidgets import QApplication, QPushButton, QToolButton
+from PyQt5.QtWidgets import QApplication, QPushButton, QToolBar, QToolButton
 from PyQt5.QtCore import Qt, QSize, QTimer, QDataStream, QFile, QIODevice, QSaveFile, QStandardPaths, QT_VERSION_STR
 from PyQt5.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap, QPixmapCache
 from PyQt5.QtSvg import QSvgRenderer
@@ -58,7 +58,7 @@ class AppStyle:
     CORNER_BUTTON_UI = {
         'spacing': 2,
     }
-    TEXT_SCALE_OPTIONS = (75, 100, 125, 150, 175, 200, 250)
+    TEXT_SCALE_OPTIONS = (50, 60, 75, 100, 125, 150, 175, 200, 250)
     HIGH_CONTRAST_COLORS = {
         'dark': {
             'window': '#000000', 'base': '#000000', 'text': '#ffffff',
@@ -578,8 +578,8 @@ class AppStyle:
             'small':          f"{cls.font_px('small')}px",
             'toolbar_symbol_font_size': f"{cls.font_px('h3')}px",
             'toolbar_text_font_size':   f"{cls.font_px('small')}px",
-            # --- CSS_TOKENS pass-through ---
-            **cls.CSS_TOKENS,
+            # --- compact control dimensions ---
+            **{key: cls.control_px(value) for key, value in cls.CSS_TOKENS.items()},
             # --- layout scalars used in QSS ---
             'handle_width': cls.LAYOUT['splitter_handle_width'],
         }
@@ -688,9 +688,9 @@ class AppStyle:
             f"color: {colors['text'].name()};"
             f"border: 1px solid {colors['border'].name()};"
             "border-bottom: none;"
-            f"padding: {cls.TAB_UI['padding_vertical']}px {cls.CSS_TOKENS['tab_padding_h']}px;"
+            f"padding: {cls.control_px(cls.TAB_UI['padding_vertical'])}px {cls.control_px(cls.CSS_TOKENS['tab_padding_h'])}px;"
             f"min-height: {cls.tab_min_height()}px;"
-            f"min-width: {cls.TAB_UI['min_width']}px;"
+            f"min-width: {cls.control_px(cls.TAB_UI['min_width'])}px;"
             "margin-right: 2px;"
             "margin-bottom: -1px;"
             "}"
@@ -817,32 +817,32 @@ class AppStyle:
     @classmethod
     def tab_min_height(cls):
         """Return a native-friendly tab height derived from the H2 font size."""
-        return max(cls.TAB_UI['min_height'], cls.font_px('h2') + (cls.TAB_UI['padding_vertical'] * 2) + 6)
+        return max(cls.control_px(cls.TAB_UI['min_height']), cls.font_px('h2') + cls.control_px((cls.TAB_UI['padding_vertical'] * 2) + 6))
 
     @classmethod
     def tab_icon_size(cls):
         """Return standard tab icon size."""
-        size = max(cls.TAB_UI['icon_size'], cls.font_px('h2'))
+        size = max(cls.control_px(cls.TAB_UI['icon_size']), cls.font_px('h2'))
         return QSize(size, size)
 
     @classmethod
     def corner_button_icon_size(cls):
         """Return standard corner-button icon size."""
-        size = max(cls.BUTTON_FORM['corner_icon_size'], cls.font_px('caption') + 4)
+        size = max(cls.control_px(cls.BUTTON_FORM['corner_icon_size']), cls.font_px('caption') + cls.control_px(4))
         return QSize(size, size)
 
     @classmethod
     def corner_button_size(cls):
         """Return standard corner-button size."""
-        height = max(cls.BUTTON_FORM['corner_height'], cls.font_px('caption') + 10)
-        width = max(cls.BUTTON_FORM['corner_min_width'], height)
+        height = max(cls.control_px(cls.BUTTON_FORM['corner_height']), cls.font_px('caption') + cls.control_px(10))
+        width = max(cls.control_px(cls.BUTTON_FORM['corner_min_width']), height)
         return QSize(width, height)
 
     @classmethod
     def toolbar_symbol_button_size(cls):
         """Return standard square toolbar-symbol button size."""
-        size = max(cls.BUTTON_FORM['symbol_size'], cls.font_px('body') + 18)
-        return QSize(size, max(cls.standard_button_min_height(), size - 2))
+        size = max(cls.control_px(cls.BUTTON_FORM['symbol_size']), cls.font_px('body') + cls.control_px(18))
+        return QSize(size, max(cls.standard_button_min_height(), size - cls.control_px(2)))
 
     @classmethod
     def viewer_toolbar_button_size(cls):
@@ -854,7 +854,7 @@ class AppStyle:
         redistribute, so both cells' top and bottom edges line up exactly.
         """
         display_controls_height = (2 * cls.toolbar_text_button_height()) + cls.LAYOUT['toolbar_spacing']
-        caption_height = cls.font_px('caption') + (cls.CSS_TOKENS['label_padding_v'] * 2)
+        caption_height = cls.font_px('caption') + (cls.control_px(cls.CSS_TOKENS['label_padding_v']) * 2)
         size = max(
             cls.toolbar_symbol_button_size().height(),
             display_controls_height - caption_height - cls.LAYOUT['tool_label_spacing'],
@@ -875,14 +875,14 @@ class AppStyle:
     @classmethod
     def mask_tool_button_size(cls):
         """Return larger button size for mask drawing tool icons."""
-        width = max(cls.BUTTON_FORM['mask_tool_width'], cls.font_px('body') + 24)
-        height = max(cls.BUTTON_FORM['mask_tool_height'], cls.font_px('body') + 20)
+        width = max(cls.control_px(cls.BUTTON_FORM['mask_tool_width']), cls.font_px('body') + cls.control_px(24))
+        height = max(cls.control_px(cls.BUTTON_FORM['mask_tool_height']), cls.font_px('body') + cls.control_px(20))
         return QSize(width, height)
 
     @classmethod
     def mask_tool_icon_size(cls):
         """Return larger icon size for mask drawing tools."""
-        size = max(cls.BUTTON_FORM['mask_tool_icon_size'], cls.font_px('body') + 6)
+        size = max(cls.control_px(cls.BUTTON_FORM['mask_tool_icon_size']), cls.font_px('body') + cls.control_px(6))
         return QSize(size, size)
 
     @staticmethod
@@ -898,52 +898,52 @@ class AppStyle:
     @classmethod
     def toolbar_text_button_height(cls):
         """Return standard toolbar text-button height."""
-        return cls.BUTTON_FORM['compact_text_height']
+        return cls.control_px(cls.BUTTON_FORM['compact_text_height'])
 
     @classmethod
     def toolbar_text_button_min_width(cls):
         """Return standard minimum width for toolbar text buttons."""
-        return cls.BUTTON_FORM['compact_text_min_width']
+        return cls.control_px(cls.BUTTON_FORM['compact_text_min_width'])
 
     @classmethod
     def wide_input_min_width(cls):
         """Return standard minimum width for prominent numeric entry fields."""
-        return cls.FORM_UI['wide_input_min_width']
+        return cls.control_px(cls.FORM_UI['wide_input_min_width'])
 
     @classmethod
     def compact_input_min_width(cls):
         """Return standard minimum width for compact numeric entry fields."""
-        return cls.FORM_UI['compact_input_min_width']
+        return cls.control_px(cls.FORM_UI['compact_input_min_width'])
 
     @classmethod
     def inline_label_width(cls):
         """Return standard inline label width for small control rows."""
-        return cls.FORM_UI['inline_label_width']
+        return cls.control_px(cls.FORM_UI['inline_label_width'])
 
     @classmethod
     def unit_label_width(cls):
         """Return standard inline unit-label width for small control rows."""
-        return cls.FORM_UI['unit_label_width']
+        return cls.control_px(cls.FORM_UI['unit_label_width'])
 
     @classmethod
     def status_led_size(cls):
         """Return standard diameter for a small round non-interactive status dot."""
-        return cls.FORM_UI['status_led_size']
+        return cls.control_px(cls.FORM_UI['status_led_size'])
 
     @classmethod
     def action_button_min_width(cls):
         """Return standard minimum width for emphasized action buttons."""
-        return cls.BUTTON_FORM['default_min_width']
+        return cls.control_px(cls.BUTTON_FORM['default_min_width'])
 
     @classmethod
     def standard_button_min_height(cls):
         """Return standard minimum height for buttons across the app."""
-        return max(cls.BUTTON_FORM['default_height'], cls.font_px('body') + 14)
+        return max(cls.control_px(cls.BUTTON_FORM['default_height']), cls.font_px('body') + cls.control_px(14))
 
     @classmethod
     def standard_button_min_width(cls):
         """Return standard minimum width for text buttons across the app."""
-        return cls.BUTTON_FORM['default_min_width']
+        return cls.control_px(cls.BUTTON_FORM['default_min_width'])
 
     @classmethod
     def icon_directory(cls, workspace_root: Path) -> Path:
@@ -1228,7 +1228,7 @@ class AppStyle:
             f"border: 1px solid {accent};"
             "border-radius: 5px;"
             "padding: 4px 12px;"
-            f"min-height: {cls.CSS_TOKENS['button_height']}px;"
+            f"min-height: {cls.control_px(cls.CSS_TOKENS['button_height'])}px;"
             "}"
             "QPushButton:hover {"
             f"background-color: {hover};"
@@ -1298,6 +1298,11 @@ class AppStyle:
         except ValueError:
             base_px = int(str(fallback if fallback is not None else '11px').replace('px', '').strip())
         return max(1, int(round(base_px * cls.font_scale_factor())))
+
+    @classmethod
+    def control_px(cls, pixels: int) -> int:
+        """Compact control dimensions below 100%, preserving larger-scale sizing."""
+        return max(0, round(pixels * min(1.0, cls.font_scale_factor())))
 
     @classmethod
     def font_scale_factor(cls):
@@ -1445,7 +1450,7 @@ class AppStyle:
                     widget.setFixedSize(size)
                     widget.setMinimumSize(size)
                 elif widget.property(cls.STYLE_KEY_PROPERTY) == 'protocol_selector_button':
-                    widget.setFixedHeight(cls.BUTTON_FORM['protocol_selector_height'])
+                    widget.setFixedHeight(cls.control_px(cls.BUTTON_FORM['protocol_selector_height']))
                 else:
                     if not style_key:
                         theme_key_check = str(cls.current_theme_key(app) or '')
@@ -1455,7 +1460,26 @@ class AppStyle:
                     widget.setMinimumHeight(cls.standard_button_min_height())
                     widget.setMinimumWidth(cls.standard_button_min_width())
             elif isinstance(widget, QToolButton):
-                widget.setMinimumHeight(cls.standard_button_min_height())
+                if widget.property("sciview_square_tool_button"):
+                    size = cls.toolbar_symbol_button_size()
+                    side = max(size.width(), size.height())
+                    widget.setFixedSize(side, side)
+                elif not widget.property("sciview_viewer_tool_button"):
+                    widget.setMinimumHeight(cls.standard_button_min_height())
+            elif isinstance(widget, QToolBar):
+                icon_size = widget.property("sciview_base_icon_size")
+                if not isinstance(icon_size, QSize):
+                    icon_size = widget.iconSize()
+                    widget.setProperty("sciview_base_icon_size", icon_size)
+                widget.setIconSize(QSize(cls.control_px(icon_size.width()), cls.control_px(icon_size.height())))
+            input_width = widget.property("sciview_input_width")
+            if input_width in cls.FORM_UI:
+                widget.setMinimumWidth(cls.control_px(cls.FORM_UI[input_width]))
+            label_width = widget.property("sciview_label_width")
+            if label_width in cls.FORM_UI:
+                widget.setMinimumWidth(cls.control_px(cls.FORM_UI[label_width]))
+            if widget.property("sciview_display_control"):
+                widget.setFixedHeight(cls.toolbar_text_button_height())
             if hasattr(widget, 'refresh_theme'):
                 widget.refresh_theme()
             elif hasattr(widget, 'figure'):
@@ -1618,7 +1642,7 @@ def apply_protocol_selector_button_style(widget):
     widget.setCheckable(True)
     AppStyle.apply_widget_style(widget, 'protocol_selector_button')
     AppStyle.set_font_role(widget, 'protocol_selector')
-    widget.setFixedHeight(AppStyle.BUTTON_FORM['protocol_selector_height'])
+    widget.setFixedHeight(AppStyle.control_px(AppStyle.BUTTON_FORM['protocol_selector_height']))
 
 def apply_input_style(widget):
     """Apply input field style to a widget"""
