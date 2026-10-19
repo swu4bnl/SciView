@@ -109,6 +109,8 @@ Use a short action label that predicts the result. Include the object when sever
 
 Do not add explanatory text inside a button. Put necessary detail in a nearby label, tooltip, or confirmation dialog.
 
+Omit incidental technical detail and explanations of self-evident secondary controls. Preserve scientifically meaningful values and units.
+
 ### Tooltips
 
 A tooltip must add information that the visible label or familiar icon does not provide. Do not repeat the button text in a full sentence.

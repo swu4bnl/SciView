@@ -7,18 +7,30 @@ This module provides consistent styling across all tabs and components.
 
 from pathlib import Path
 from copy import deepcopy
+from hashlib import sha256
+import logging
+from typing import TYPE_CHECKING
 import xml.etree.ElementTree as ET
 
-from PyQt5.QtWidgets import QApplication, QPushButton, QToolButton
-from PyQt5.QtCore import Qt, QSize, QTimer
-from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPalette, QPixmap
+from PyQt5.QtWidgets import QApplication, QPushButton, QToolBar, QToolButton
+from PyQt5.QtCore import Qt, QSize, QTimer, QDataStream, QFile, QIODevice, QSaveFile, QStandardPaths, QT_VERSION_STR
+from PyQt5.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap, QPixmapCache
 from PyQt5.QtSvg import QSvgRenderer
+
+if TYPE_CHECKING:
+    from pyqtgraph import PlotItem
+
+logger = logging.getLogger(__name__)
 
 
 class AppStyle:
     """Global application styling configuration"""
 
     ASSETS_RELATIVE_DIR = Path("src/sciview/interfaces/theme/assets")
+    _ICON_CACHE_LIMIT = 256
+    _ICON_CACHE_HEADER = b'SciView icon v1\n'
+    _ICON_SIZES = (16, 18, 20, 22, 24, 28, 32)
+    _ICON_STATES = ((QIcon.Normal, QIcon.Off), (QIcon.Normal, QIcon.On), (QIcon.Disabled, QIcon.Off))
 
     TAB_UI = {
         'icon_size': 24,
@@ -36,7 +48,7 @@ class AppStyle:
         'compact_text_min_width': 64,
         'corner_height': 28,
         'corner_min_width': 28,
-        'corner_icon_size': 14,
+        'corner_icon_size': 22,
         'symbol_size': 36,
         'mask_tool_width': 44,
         'mask_tool_height': 40,
@@ -46,6 +58,23 @@ class AppStyle:
     CORNER_BUTTON_UI = {
         'spacing': 2,
     }
+    TEXT_SCALE_OPTIONS = (50, 60, 75, 100, 125, 150, 175, 200, 250)
+    HIGH_CONTRAST_COLORS = {
+        'dark': {
+            'window': '#000000', 'base': '#000000', 'text': '#ffffff',
+            'muted': '#bfbfbf', 'grid': '#bfbfbf', 'accent': '#ffff00',
+            'border': '#ffffff', 'control_bg': '#000000', 'control_hover': '#333333',
+            'checked_fg': '#000000', 'icon': '#ffffff',
+        },
+        'light': {
+            'window': '#ffffff', 'base': '#ffffff', 'text': '#000000',
+            'muted': '#595959', 'grid': '#595959', 'accent': '#000080',
+            'border': '#000000', 'control_bg': '#ffffff', 'control_hover': '#e0e0e0',
+            'checked_fg': '#ffffff', 'icon': '#000000',
+        },
+    }
+    _STANDARD_APPEARANCE_PROPERTY = 'sciview_standard_appearance'
+    _GLOBAL_STYLE_PROPERTY = 'sciview_global_style'
 
     FORM_UI = {
         'section_label_width': 58,
@@ -63,6 +92,12 @@ class AppStyle:
         'app_update': 'app_update.svg',
         'sci_update': 'sci_update.svg',
         'clear_session': 'tool_delete.svg',
+        'high_contrast': 'tool_high_contrast.svg',
+        'text_smaller': 'tool_text_smaller.svg',
+        'text_larger': 'tool_text_larger.svg',
+        'light_mode': 'tool_light_mode.svg',
+        'dark_mode': 'tool_dark_mode.svg',
+        'style_inspector': 'tool_style_inspector.svg',
     }
 
     TAB_ICON_FILES = {
@@ -98,34 +133,40 @@ class AppStyle:
     
     # Typography
     FONTS = {
-        'family': "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-        'scale_pct': 125,
-        'h1': '18px',
-        'h2': '15px',
-        'h3': '13px',
-        'body': '11px',
-        'caption': '10px',
-        'small': '9px'
+        'family': 'Source Sans 3',
+        'scale_pct': 100,
+        'h1': '30px',
+        'h2': '24px',
+        'h3': '20px',
+        'body': '18px',
+        'caption': '16px',
+        'small': '14px'
     }
+    BUNDLED_FONT_FILES = (
+        'source-sans-3/SourceSans3-Regular.ttf',
+        'source-sans-3/SourceSans3-Bold.ttf',
+        'noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf',
+        'noto-sans-cjk-sc/NotoSansCJKsc-Bold.otf',
+    )
 
     FONT_ROLE_PROPERTY = "sciview_font_role"
     THEME_KEY_PROPERTY = "sciview_theme_key"
     STYLE_KEY_PROPERTY = "sciview_style_key"
 
     FONT_ROLE_MAP = {
-        'title': ('h1', 600),
-        'subtitle': ('h2', 500),
-        'section': ('h3', 500),
-        'body': ('body', 400),
-        'info': ('body', 400),
-        'status': ('caption', 400),
-        'button': ('body', 500),
-        'button_emphasis': ('body', 600),  # distinct role so refresh restores the heavier weight
-        'protocol_selector': ('h3', 600),
-        'toolbar_symbol': ('h3', 600),
-        'toolbar_text': ('small', 400),
-        'input': ('body', 400),
-        'group_box': ('h3', 500),
+        'title': ('h1', QFont.Bold),
+        'subtitle': ('h2', QFont.Bold),
+        'section': ('h3', QFont.Bold),
+        'body': ('body', QFont.Normal),
+        'info': ('body', QFont.Normal),
+        'status': ('caption', QFont.Normal),
+        'button': ('body', QFont.Normal),
+        'button_emphasis': ('body', QFont.Bold),
+        'protocol_selector': ('h3', QFont.Bold),
+        'toolbar_symbol': ('h3', QFont.Bold),
+        'toolbar_text': ('small', QFont.Normal),
+        'input': ('body', QFont.Normal),
+        'group_box': ('h3', QFont.Bold),
     }
     
     # ---------------------------------------------------------------------------
@@ -154,7 +195,6 @@ class AppStyle:
         'input_height': 22,
         'tab_padding_h': 10,    # horizontal padding inside tab bar tabs
         # Toolbar button internals — hot-editable in style inspector
-        'toolbar_font_weight': 400,
         'toolbar_padding_horizontal': 8,
     }
 
@@ -191,6 +231,8 @@ class AppStyle:
         'panel_inner_margin': 2, # inner margins of content sub-panels
         'panel_spacing': 3,
         'toolbar_spacing': 4,    # spacing inside icon/button toolbars
+        'toolbar_group_spacing': 12,
+        'viewer_toolbar_icon_ratio': 0.58,
         'tool_label_spacing': 1, # spacing between a tool icon and its caption
         'section_spacing': 6,    # spacing between major items in right-panel layouts
         # Image browser specifics
@@ -211,7 +253,7 @@ class AppStyle:
     WIDGET_STYLES = {
         # ── Text atoms ────────────────────────────────────────────────────────
         'title_label': """
-            font-weight: 600;
+            font-weight: bold;
             font-size: {title_font};
             color: {text_primary};
             padding: {label_padding_v}px {label_padding_h}px;
@@ -220,7 +262,7 @@ class AppStyle:
         """,
         
         'subtitle_label': """
-            font-weight: 500;
+            font-weight: bold;
             font-size: {subtitle_font};
             color: {text_primary};
             padding: {label_padding_v}px {label_padding_h}px;
@@ -260,8 +302,8 @@ class AppStyle:
         'primary_button': """
             QPushButton {{
                 background-color: {primary};
-                color: white;
-                font-weight: 500;
+                color: {checked_fg};
+                font-weight: normal;
                 font-size: {body_font};
                 border: none;
                 padding: {btn_padding_v}px {btn_padding_h}px;
@@ -304,7 +346,7 @@ class AppStyle:
                 background-color: {surface};
                 color: {text_primary};
                 font-size: {subtitle_font};
-                font-weight: 500;
+                font-weight: bold;
                 border: 2px solid {border};
                 border-radius: 4px;
                 padding: 7px 12px;
@@ -323,7 +365,7 @@ class AppStyle:
                 background-color: {border_active};
                 color: {checked_fg};
                 border: 2px solid {border_active};
-                font-weight: 600;
+                font-weight: bold;
             }}
         """,
 
@@ -380,7 +422,7 @@ class AppStyle:
 
         'group_box': """
             QGroupBox {{
-                font-weight: 500;
+                font-weight: bold;
                 font-size: {subtitle_font};
                 color: {text_primary};
                 border: 1px solid {border};
@@ -429,12 +471,21 @@ class AppStyle:
             }}
         """,
 
+        'viewer_toolbar': """
+            QWidget {{
+                background-color: transparent;
+                color: {text_primary};
+            }}
+            QWidget#imageViewerToolbar {{
+                background-color: {surface};
+            }}
+        """,
         'toolbar_symbol_button': """
             QPushButton {{
                 background-color: {surface};
                 color: {text_primary};
                 font-size: {toolbar_symbol_font_size};
-                font-weight: {toolbar_font_weight};
+                font-weight: bold;
                 padding: 0;
                 border: 1px solid {border};
                 border-radius: {border_radius}px;
@@ -448,7 +499,7 @@ class AppStyle:
             }}
             QPushButton:checked {{
                 background-color: {border_active};
-                color: white;
+                color: {checked_fg};
                 border-color: {border_active};
             }}
             QPushButton:disabled {{
@@ -463,7 +514,7 @@ class AppStyle:
                 background-color: {surface};
                 color: {text_primary};
                 font-size: {toolbar_text_font_size};
-                font-weight: {toolbar_font_weight};
+                font-weight: normal;
                 padding: 0 {toolbar_padding_horizontal}px;
                 border: 1px solid {border};
                 border-radius: {border_radius}px;
@@ -477,7 +528,7 @@ class AppStyle:
             }}
             QPushButton:checked {{
                 background-color: {border_active};
-                color: white;
+                color: {checked_fg};
                 border-color: {border_active};
             }}
             QPushButton:disabled {{
@@ -527,8 +578,8 @@ class AppStyle:
             'small':          f"{cls.font_px('small')}px",
             'toolbar_symbol_font_size': f"{cls.font_px('h3')}px",
             'toolbar_text_font_size':   f"{cls.font_px('small')}px",
-            # --- CSS_TOKENS pass-through ---
-            **cls.CSS_TOKENS,
+            # --- compact control dimensions ---
+            **{key: cls.control_px(value) for key, value in cls.CSS_TOKENS.items()},
             # --- layout scalars used in QSS ---
             'handle_width': cls.LAYOUT['splitter_handle_width'],
         }
@@ -544,21 +595,89 @@ class AppStyle:
         return style_template.format(**variables)
 
     @classmethod
-    def apply_global_style(cls, app, preserve_existing=False):
-        """Apply SciView's global rules, optionally over an external theme."""
+    def _global_style_rules(cls, app):
         base_styles = [
-            app.styleSheet() if preserve_existing else "",
+            "QWidget {"
+            f'font-family: "{cls.effective_font_family(app)}", "Noto Sans CJK SC";'
+            f"font-size: {cls.font_px('body')}px;"
+            "}",
             cls.tab_widget_stylesheet(),
             *(cls.format_style(style_key) for style_key in cls.GLOBAL_STYLE_KEYS),
         ]
-        app.setStyleSheet("\n".join(style for style in base_styles if style.strip()))
+        return "\n".join(style for style in base_styles if style.strip())
+
+    @classmethod
+    def apply_global_style(cls, app, preserve_existing=False, *, base_stylesheet=None):
+        """Compose the final stylesheet before applying it to live widgets."""
+        base = base_stylesheet if base_stylesheet is not None else (
+            app.styleSheet() if preserve_existing else ""
+        )
+        previous_rules = app.property(cls._GLOBAL_STYLE_PROPERTY) or ""
+        if previous_rules and base.endswith(previous_rules):
+            base = base[:-len(previous_rules)].rstrip()
+        rules = cls._global_style_rules(app)
+        app.setProperty(cls._GLOBAL_STYLE_PROPERTY, rules)
+        stylesheet = "\n".join(style for style in (base, rules) if style.strip())
+        if app.styleSheet() != stylesheet:
+            app.setStyleSheet(stylesheet)
         cls.refresh_runtime_theme(app, clear_widget_styles=False)
+
+    @classmethod
+    def set_high_contrast(cls, enabled: bool, app: QApplication | None = None) -> None:
+        """Switch contrast mode without discarding the preceding theme."""
+        app = app or QApplication.instance()
+        if app is None or enabled == cls.high_contrast_enabled(app):
+            return
+        if not enabled:
+            previous = app.property(cls._STANDARD_APPEARANCE_PROPERTY)
+            app.setProperty(cls.THEME_KEY_PROPERTY, previous['theme'])
+            app.setPalette(previous['palette'])
+            app.setProperty(cls._GLOBAL_STYLE_PROPERTY, previous['rules'])
+            app.setProperty(cls._STANDARD_APPEARANCE_PROPERTY, None)
+            cls.apply_global_style(app, base_stylesheet=previous['stylesheet'])
+            return
+
+        app.setProperty(cls._STANDARD_APPEARANCE_PROPERTY, {
+            'theme': cls.current_theme_key(app),
+            'palette': app.palette(),
+            'stylesheet': app.styleSheet(),
+            'rules': app.property(cls._GLOBAL_STYLE_PROPERTY),
+        })
+        variant = 'dark' if cls.theme_is_dark(app) else 'light'
+        app.setProperty(cls.THEME_KEY_PROPERTY, f'high-contrast:{variant}')
+        cls._apply_high_contrast_palette(app)
+        cls.apply_global_style(app)
+
+    @classmethod
+    def _apply_high_contrast_palette(cls, app):
+        colors = cls.theme_colors(app)
+        palette = QPalette(app.palette())
+        for role, key in (
+            (QPalette.Window, 'window'), (QPalette.WindowText, 'text'),
+            (QPalette.Base, 'base'), (QPalette.AlternateBase, 'control_hover'),
+            (QPalette.Text, 'text'), (QPalette.Button, 'control_bg'),
+            (QPalette.ButtonText, 'text'), (QPalette.Highlight, 'accent'),
+            (QPalette.HighlightedText, 'checked_fg'), (QPalette.ToolTipBase, 'base'),
+            (QPalette.ToolTipText, 'text'), (QPalette.Link, 'accent'),
+        ):
+            palette.setColor(role, colors[key])
+        for role in (QPalette.WindowText, QPalette.Text, QPalette.ButtonText):
+            palette.setColor(QPalette.Disabled, role, colors['muted'])
+        app.setPalette(palette)
+
+    @classmethod
+    def high_contrast_enabled(cls, app: QApplication | None = None) -> bool:
+        return str(cls.current_theme_key(app) or '').startswith('high-contrast:')
 
     @classmethod
     def tab_widget_stylesheet(cls):
         """Return stylesheet for top-level tab sizing and typography."""
         colors = cls.theme_colors()
         return (
+            "QTabBar {"
+            f"font-size: {cls.font_px('h2')}px;"
+            "font-weight: normal;"
+            "}"
             "QTabWidget::pane {"
             f"border: 1px solid {colors['border'].name()};"
             "border-top: none;"
@@ -569,9 +688,9 @@ class AppStyle:
             f"color: {colors['text'].name()};"
             f"border: 1px solid {colors['border'].name()};"
             "border-bottom: none;"
-            f"padding: {cls.TAB_UI['padding_vertical']}px {cls.CSS_TOKENS['tab_padding_h']}px;"
+            f"padding: {cls.control_px(cls.TAB_UI['padding_vertical'])}px {cls.control_px(cls.CSS_TOKENS['tab_padding_h'])}px;"
             f"min-height: {cls.tab_min_height()}px;"
-            f"min-width: {cls.TAB_UI['min_width']}px;"
+            f"min-width: {cls.control_px(cls.TAB_UI['min_width'])}px;"
             "margin-right: 2px;"
             "margin-bottom: -1px;"
             "}"
@@ -579,7 +698,7 @@ class AppStyle:
             f"background: {colors['accent'].name()};"
             f"color: {colors['checked_fg'].name()};"
             f"border-color: {colors['accent'].name()};"
-            "font-weight: 600;"
+            "font-weight: bold;"
             "border-bottom: none;"
             "}"
             "QTabBar::tab:hover:!selected {"
@@ -663,59 +782,107 @@ class AppStyle:
             if variant == 'auto':
                 darkdetect = __import__('darkdetect')
                 actual = str(darkdetect.theme() or 'dark').lower()
-            qdarktheme.setup_theme(actual)
+            contrast = cls.high_contrast_enabled(app)
+            # Install qdarktheme's proxy style once, before widgets exist.
+            if not app.property('sciview_qdarktheme_initialized'):
+                qdarktheme.setup_theme(actual)
+                app.setProperty('sciview_qdarktheme_initialized', True)
+            else:
+                qdarktheme.stop_sync()
+            base = qdarktheme.load_stylesheet(actual)
+            app.setPalette(qdarktheme.load_palette(actual, for_stylesheet=True))
             app.setProperty(cls.THEME_KEY_PROPERTY, f'qdarktheme:{actual}')
-            cls.apply_global_style(app, preserve_existing=True)
+            if contrast:
+                rules = cls._global_style_rules(app)
+                app.setProperty(cls._STANDARD_APPEARANCE_PROPERTY, {
+                    'theme': cls.current_theme_key(app),
+                    'palette': app.palette(),
+                    'stylesheet': base + "\n" + rules,
+                    'rules': rules,
+                })
+                app.setProperty(cls.THEME_KEY_PROPERTY, f'high-contrast:{actual}')
+                cls._apply_high_contrast_palette(app)
+                base = ""
+            cls.apply_global_style(app, base_stylesheet=base)
             return True
         except Exception:
+            logger.exception("Could not apply qdarktheme appearance")
             return False
 
     @classmethod
     def tab_font(cls):
         """Return the native tab-bar font, aligned with H2 section headings."""
-        return cls.make_font('h2', weight=500)
+        return cls.make_font('h2')
 
     @classmethod
     def tab_min_height(cls):
         """Return a native-friendly tab height derived from the H2 font size."""
-        return max(cls.TAB_UI['min_height'], cls.font_px('h2') + (cls.TAB_UI['padding_vertical'] * 2) + 6)
+        return max(cls.control_px(cls.TAB_UI['min_height']), cls.font_px('h2') + cls.control_px((cls.TAB_UI['padding_vertical'] * 2) + 6))
 
     @classmethod
     def tab_icon_size(cls):
         """Return standard tab icon size."""
-        size = max(cls.TAB_UI['icon_size'], cls.font_px('h2'))
+        size = max(cls.control_px(cls.TAB_UI['icon_size']), cls.font_px('h2'))
         return QSize(size, size)
 
     @classmethod
     def corner_button_icon_size(cls):
         """Return standard corner-button icon size."""
-        size = max(cls.BUTTON_FORM['corner_icon_size'], cls.font_px('caption') + 4)
+        size = max(cls.control_px(cls.BUTTON_FORM['corner_icon_size']), cls.font_px('caption') + cls.control_px(4))
         return QSize(size, size)
 
     @classmethod
     def corner_button_size(cls):
         """Return standard corner-button size."""
-        height = max(cls.BUTTON_FORM['corner_height'], cls.font_px('caption') + 10)
-        width = max(cls.BUTTON_FORM['corner_min_width'], height)
+        height = max(cls.control_px(cls.BUTTON_FORM['corner_height']), cls.font_px('caption') + cls.control_px(10))
+        width = max(cls.control_px(cls.BUTTON_FORM['corner_min_width']), height)
         return QSize(width, height)
 
     @classmethod
     def toolbar_symbol_button_size(cls):
         """Return standard square toolbar-symbol button size."""
-        size = max(cls.BUTTON_FORM['symbol_size'], cls.font_px('body') + 18)
-        return QSize(size, max(cls.standard_button_min_height(), size - 2))
+        size = max(cls.control_px(cls.BUTTON_FORM['symbol_size']), cls.font_px('body') + cls.control_px(18))
+        return QSize(size, max(cls.standard_button_min_height(), size - cls.control_px(2)))
+
+    @classmethod
+    def viewer_toolbar_button_size(cls):
+        """Return the fixed tool-button size for the image viewer toolbar.
+
+        Sized so a tool cell's natural height (icon + caption) exactly equals
+        the height of the two-row display controls (colormap/scale/levels)
+        placed beside it in the same toolbar row — leaving no slack for Qt to
+        redistribute, so both cells' top and bottom edges line up exactly.
+        """
+        display_controls_height = (2 * cls.toolbar_text_button_height()) + cls.LAYOUT['toolbar_spacing']
+        caption_height = cls.font_px('caption') + (cls.control_px(cls.CSS_TOKENS['label_padding_v']) * 2)
+        size = max(
+            cls.toolbar_symbol_button_size().height(),
+            display_controls_height - caption_height - cls.LAYOUT['tool_label_spacing'],
+        )
+        return QSize(size, size)
+
+    @classmethod
+    def viewer_toolbar_icon_size(cls):
+        """Return the themed icon size for viewer toolbar buttons.
+
+        Snapped to the nearest size pre-rendered by load_icon() so icons are
+        never rescaled on the fly.
+        """
+        target = cls.viewer_toolbar_button_size().width() * cls.LAYOUT['viewer_toolbar_icon_ratio']
+        size = min((16, 18, 20, 22, 24, 28, 32), key=lambda bucket: abs(bucket - target))
+        return QSize(size, size)
 
     @classmethod
     def mask_tool_button_size(cls):
         """Return larger button size for mask drawing tool icons."""
-        width = max(cls.BUTTON_FORM['mask_tool_width'], cls.font_px('body') + 24)
-        height = max(cls.BUTTON_FORM['mask_tool_height'], cls.font_px('body') + 20)
+        width = max(cls.control_px(cls.BUTTON_FORM['mask_tool_width']), cls.font_px('body') + cls.control_px(24))
+        height = max(cls.control_px(cls.BUTTON_FORM['mask_tool_height']), cls.font_px('body') + cls.control_px(20))
         return QSize(width, height)
 
     @classmethod
     def mask_tool_icon_size(cls):
         """Return larger icon size for mask drawing tools."""
-        size = max(cls.BUTTON_FORM['mask_tool_icon_size'], cls.font_px('body') + 6)
+        size = max(cls.control_px(cls.BUTTON_FORM['mask_tool_icon_size']), cls.font_px('body') + cls.control_px(6))
         return QSize(size, size)
 
     @staticmethod
@@ -731,52 +898,52 @@ class AppStyle:
     @classmethod
     def toolbar_text_button_height(cls):
         """Return standard toolbar text-button height."""
-        return cls.BUTTON_FORM['compact_text_height']
+        return cls.control_px(cls.BUTTON_FORM['compact_text_height'])
 
     @classmethod
     def toolbar_text_button_min_width(cls):
         """Return standard minimum width for toolbar text buttons."""
-        return cls.BUTTON_FORM['compact_text_min_width']
+        return cls.control_px(cls.BUTTON_FORM['compact_text_min_width'])
 
     @classmethod
     def wide_input_min_width(cls):
         """Return standard minimum width for prominent numeric entry fields."""
-        return cls.FORM_UI['wide_input_min_width']
+        return cls.control_px(cls.FORM_UI['wide_input_min_width'])
 
     @classmethod
     def compact_input_min_width(cls):
         """Return standard minimum width for compact numeric entry fields."""
-        return cls.FORM_UI['compact_input_min_width']
+        return cls.control_px(cls.FORM_UI['compact_input_min_width'])
 
     @classmethod
     def inline_label_width(cls):
         """Return standard inline label width for small control rows."""
-        return cls.FORM_UI['inline_label_width']
+        return cls.control_px(cls.FORM_UI['inline_label_width'])
 
     @classmethod
     def unit_label_width(cls):
         """Return standard inline unit-label width for small control rows."""
-        return cls.FORM_UI['unit_label_width']
+        return cls.control_px(cls.FORM_UI['unit_label_width'])
 
     @classmethod
     def status_led_size(cls):
         """Return standard diameter for a small round non-interactive status dot."""
-        return cls.FORM_UI['status_led_size']
+        return cls.control_px(cls.FORM_UI['status_led_size'])
 
     @classmethod
     def action_button_min_width(cls):
         """Return standard minimum width for emphasized action buttons."""
-        return cls.BUTTON_FORM['default_min_width']
+        return cls.control_px(cls.BUTTON_FORM['default_min_width'])
 
     @classmethod
     def standard_button_min_height(cls):
         """Return standard minimum height for buttons across the app."""
-        return max(cls.BUTTON_FORM['default_height'], cls.font_px('body') + 14)
+        return max(cls.control_px(cls.BUTTON_FORM['default_height']), cls.font_px('body') + cls.control_px(14))
 
     @classmethod
     def standard_button_min_width(cls):
         """Return standard minimum width for text buttons across the app."""
-        return cls.BUTTON_FORM['default_min_width']
+        return cls.control_px(cls.BUTTON_FORM['default_min_width'])
 
     @classmethod
     def icon_directory(cls, workspace_root: Path) -> Path:
@@ -792,12 +959,81 @@ class AppStyle:
         if path.suffix.lower() != '.svg':
             return QIcon(str(path))
 
-        icon = QIcon()
         colors = cls.theme_colors()
-        for size in (16, 18, 20, 22, 24, 28, 32):
+        identity = cls._ICON_CACHE_HEADER + path.read_bytes() + repr((
+            QT_VERSION_STR, cls._ICON_SIZES, colors['icon'].rgba(), colors['checked_fg'].rgba(),
+            colors['muted'].rgba(),
+        )).encode('ascii')
+        key = sha256(identity).hexdigest()
+        cached = QIcon()
+        for size in cls._ICON_SIZES:
+            for mode, state in cls._ICON_STATES:
+                pixmap = QPixmapCache.find(f'sciview:{key}:{size}:{mode}:{state}')
+                if pixmap is None:
+                    break
+                cached.addPixmap(pixmap, mode, state)
+            else:
+                continue
+            break
+        else:
+            return cached
+        cache_root = QStandardPaths.writableLocation(QStandardPaths.GenericCacheLocation)
+        cache_path = Path(cache_root) / 'sciview' / 'icons-v1' / f'{key}.icon' if cache_root else None
+        icon = QIcon()
+        if cache_path is not None and cache_path.is_file():
+            source = QFile(str(cache_path))
+            if source.open(QIODevice.ReadOnly):
+                stream = QDataStream(source)
+                stream.setVersion(QDataStream.Qt_5_15)
+                header = stream.readRawData(len(cls._ICON_CACHE_HEADER))
+                if header == cls._ICON_CACHE_HEADER and source.size() <= 1024 * 1024:
+                    stream >> icon
+                valid = stream.status() == QDataStream.Ok and not icon.isNull()
+                source.close()
+                if valid:
+                    cls._remember_icon(key, icon)
+                    return QIcon(icon)
+            logger.warning("Could not read icon cache %s; regenerating", cache_path)
+            icon = QIcon()
+        for size in cls._ICON_SIZES:
             icon.addPixmap(cls._render_svg_pixmap(path, size, colors['icon']))
+            icon.addPixmap(
+                cls._render_svg_pixmap(path, size, colors['checked_fg']),
+                QIcon.Normal, QIcon.On,
+            )
             icon.addPixmap(cls._render_svg_pixmap(path, size, colors['muted']), QIcon.Disabled)
-        return icon
+        if cache_path is not None:
+            try:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                target = QSaveFile(str(cache_path))
+                if not target.open(QIODevice.WriteOnly):
+                    raise OSError(target.errorString())
+                stream = QDataStream(target)
+                stream.setVersion(QDataStream.Qt_5_15)
+                stream.writeRawData(cls._ICON_CACHE_HEADER)
+                stream << icon
+                if stream.status() != QDataStream.Ok:
+                    target.cancelWriting()
+                    raise OSError("Could not serialize icon")
+                if not target.commit():
+                    raise OSError(target.errorString())
+                entries = sorted(cache_path.parent.glob('*.icon'), key=lambda p: p.stat().st_mtime)
+                for obsolete in entries[:-cls._ICON_CACHE_LIMIT]:
+                    obsolete.unlink()
+            except OSError:
+                logger.warning("Could not persist icon cache %s", cache_path, exc_info=True)
+        cls._remember_icon(key, icon)
+        return QIcon(icon)
+
+    @classmethod
+    def _remember_icon(cls, key: str, icon: QIcon) -> None:
+        # Qt owns this bounded cache and clears pixmaps before GUI teardown.
+        for size in cls._ICON_SIZES:
+            for mode, state in cls._ICON_STATES:
+                QPixmapCache.insert(
+                    f'sciview:{key}:{size}:{mode}:{state}',
+                    icon.pixmap(size, size, mode, state),
+                )
 
     @classmethod 
     def get_layout_ratios(cls):
@@ -840,7 +1076,7 @@ class AppStyle:
     def theme_is_dark(cls, app=None):
         """Return True when the current theme should be treated as dark."""
         theme_key = str(cls.current_theme_key(app) or '').lower()
-        if any(token in theme_key for token in ('qdarkstyle', 'qdarktheme:dark', 'dark_')):
+        if any(token in theme_key for token in ('qdarkstyle', 'qdarktheme:dark', 'high-contrast:dark', 'dark_')):
             return True
 
         app = app or QApplication.instance()
@@ -853,6 +1089,12 @@ class AppStyle:
         """Return theme-derived colors for icons and plotting surfaces."""
         app = app or QApplication.instance()
         theme_key = str(cls.current_theme_key(app) or '')
+        if cls.high_contrast_enabled(app):
+            variant = 'dark' if cls.theme_is_dark(app) else 'light'
+            return {
+                role: QColor(value)
+                for role, value in cls.HIGH_CONTRAST_COLORS[variant].items()
+            }
         if app is None:
             return {
                 'window': QColor('#f5f5f5'),
@@ -986,7 +1228,7 @@ class AppStyle:
             f"border: 1px solid {accent};"
             "border-radius: 5px;"
             "padding: 4px 12px;"
-            f"min-height: {cls.CSS_TOKENS['button_height']}px;"
+            f"min-height: {cls.control_px(cls.CSS_TOKENS['button_height'])}px;"
             "}"
             "QPushButton:hover {"
             f"background-color: {hover};"
@@ -1058,6 +1300,11 @@ class AppStyle:
         return max(1, int(round(base_px * cls.font_scale_factor())))
 
     @classmethod
+    def control_px(cls, pixels: int) -> int:
+        """Compact control dimensions below 100%, preserving larger-scale sizing."""
+        return max(0, round(pixels * min(1.0, cls.font_scale_factor())))
+
+    @classmethod
     def font_scale_factor(cls):
         """Return the configured global font scaling factor."""
         raw_scale = cls.FONTS.get('scale_pct', 100)
@@ -1070,29 +1317,71 @@ class AppStyle:
         return scale_pct / 100.0
 
     @classmethod
-    def make_font(cls, token_name, weight=400):
-        """Build a QFont from the configured token and optional weight."""
+    def make_font(cls, token_name, weight=QFont.Normal):
+        """Build a QFont from a size token and native regular/bold weight."""
         font = QFont()
         family = cls.effective_font_family()
-        if family:
-            font.setFamily(family.split(',')[0].strip().strip("'\""))
+        font.setFamilies([family, 'Noto Sans CJK SC'])
+        font.setStyleHint(QFont.SansSerif)
         font.setPixelSize(cls.font_px(token_name))
         font.setWeight(weight)
         return font
 
     @classmethod
     def effective_font_family(cls, app=None):
-        """Return the active font family with theme-specific overrides."""
-        theme_key = str(cls.current_theme_key(app) or '')
-        if theme_key.startswith('qt-material:'):
-            return 'Consolas'
-        return str(cls.FONTS.get('family', '')).strip()
+        """Return the configured UI family, independent of theme and locale."""
+        return str(cls.FONTS.get('family', 'Source Sans 3')).split(',')[0].strip().strip("'\"") or 'Source Sans 3'
+
+    @classmethod
+    def apply_bundled_fonts(cls, app: QApplication | None = None) -> None:
+        """Register package fonts with Qt and Matplotlib before creating views."""
+        app = app or QApplication.instance()
+        if app is None:
+            raise RuntimeError("A QApplication is required to register bundled fonts.")
+        from matplotlib import font_manager, rcParams
+
+        font_root = Path(__file__).resolve().parents[1] / 'fonts'
+        registered_qt = set(app.property('sciview_registered_fonts') or [])
+        registered_mpl = {Path(font.fname).resolve() for font in font_manager.fontManager.ttflist}
+        for relative_path in cls.BUNDLED_FONT_FILES:
+            path = font_root / relative_path
+            if not path.is_file():
+                raise FileNotFoundError(f"Bundled font is missing: {path}")
+            if str(path) not in registered_qt:
+                font_id = QFontDatabase.addApplicationFont(str(path))
+                if font_id < 0:
+                    raise RuntimeError(f"Qt could not register bundled font: {path}")
+                registered_qt.add(str(path))
+                app.setProperty('sciview_registered_fonts', sorted(registered_qt))
+            if path.resolve() not in registered_mpl:
+                font_manager.fontManager.addfont(str(path))
+        rcParams['font.family'] = ['Source Sans 3', 'Noto Sans CJK SC']
+        rcParams['font.sans-serif'] = ['Source Sans 3', 'Noto Sans CJK SC']
+        app.setFont(cls.make_font('body'))
 
     @classmethod
     def matplotlib_font_size(cls, token_name, fallback=None):
         """Return a scaled Matplotlib-friendly font size in points."""
         px_size = cls.font_px(token_name, fallback=fallback)
         return max(1.0, round(px_size * 0.75, 1))
+
+    @classmethod
+    def apply_pyqtgraph_plot_theme(cls, plot: "PlotItem") -> None:
+        """Refresh plot annotations without changing data or display ranges."""
+        colors = cls.theme_colors()
+        for name in ('left', 'bottom', 'right', 'top'):
+            axis = plot.getAxis(name)
+            axis.setTickFont(cls.make_font('body'))
+            axis.setPen(colors['text'])
+            axis.setTextPen(colors['text'])
+            axis.setLabel(
+                axis.labelText, units=axis.labelUnits,
+                **{
+                    **axis.labelStyle,
+                    'color': colors['text'].name(),
+                    'font-size': f"{cls.font_px('body')}px",
+                },
+            )
 
     @classmethod
     def apply_matplotlib_figure_theme(cls, figure):
@@ -1143,6 +1432,7 @@ class AppStyle:
             cls.apply_font_role(widget)
             if isinstance(widget, QPushButton):
                 if widget.property("sciview_compact_button"):
+                    cls.apply_widget_style(widget, 'compact_button')
                     compact_size = cls.corner_button_size()
                     widget.setMinimumHeight(compact_size.height())
                     widget.setMinimumWidth(compact_size.width())
@@ -1160,7 +1450,7 @@ class AppStyle:
                     widget.setFixedSize(size)
                     widget.setMinimumSize(size)
                 elif widget.property(cls.STYLE_KEY_PROPERTY) == 'protocol_selector_button':
-                    widget.setFixedHeight(cls.BUTTON_FORM['protocol_selector_height'])
+                    widget.setFixedHeight(cls.control_px(cls.BUTTON_FORM['protocol_selector_height']))
                 else:
                     if not style_key:
                         theme_key_check = str(cls.current_theme_key(app) or '')
@@ -1170,7 +1460,26 @@ class AppStyle:
                     widget.setMinimumHeight(cls.standard_button_min_height())
                     widget.setMinimumWidth(cls.standard_button_min_width())
             elif isinstance(widget, QToolButton):
-                widget.setMinimumHeight(cls.standard_button_min_height())
+                if widget.property("sciview_square_tool_button"):
+                    size = cls.toolbar_symbol_button_size()
+                    side = max(size.width(), size.height())
+                    widget.setFixedSize(side, side)
+                elif not widget.property("sciview_viewer_tool_button"):
+                    widget.setMinimumHeight(cls.standard_button_min_height())
+            elif isinstance(widget, QToolBar):
+                icon_size = widget.property("sciview_base_icon_size")
+                if not isinstance(icon_size, QSize):
+                    icon_size = widget.iconSize()
+                    widget.setProperty("sciview_base_icon_size", icon_size)
+                widget.setIconSize(QSize(cls.control_px(icon_size.width()), cls.control_px(icon_size.height())))
+            input_width = widget.property("sciview_input_width")
+            if input_width in cls.FORM_UI:
+                widget.setMinimumWidth(cls.control_px(cls.FORM_UI[input_width]))
+            label_width = widget.property("sciview_label_width")
+            if label_width in cls.FORM_UI:
+                widget.setMinimumWidth(cls.control_px(cls.FORM_UI[label_width]))
+            if widget.property("sciview_display_control"):
+                widget.setFixedHeight(cls.toolbar_text_button_height())
             if hasattr(widget, 'refresh_theme'):
                 widget.refresh_theme()
             elif hasattr(widget, 'figure'):
@@ -1183,30 +1492,35 @@ class AppStyle:
             widget.setProperty(cls.STYLE_KEY_PROPERTY, style_key)
 
         if style_key == 'compact_button':
-            widget.setStyleSheet(cls.compact_button_stylesheet())
+            cls._set_widget_stylesheet(widget, cls.compact_button_stylesheet())
             return
         if style_key == 'emphasis_button':
             # Native Qt themes: let the platform render the default-button highlight.
             # External themes (qdarkstyle, qt-material, etc.): use our custom accent QSS.
             theme_key = str(cls.current_theme_key() or '')
             if theme_key.startswith('qt:'):
-                widget.setStyleSheet('')
+                cls._set_widget_stylesheet(widget, '')
                 if isinstance(widget, QPushButton):
                     widget.setDefault(True)
             else:
                 if isinstance(widget, QPushButton):
                     widget.setDefault(False)
-                widget.setStyleSheet(cls.emphasis_button_stylesheet())
+                cls._set_widget_stylesheet(widget, cls.emphasis_button_stylesheet())
             return
 
         # Content-button styles pass through to native rendering on native Qt themes.
         if style_key in ('primary_button', 'secondary_button', 'toolbar_text_button'):
             theme_key = str(cls.current_theme_key() or '')
             if theme_key.startswith('qt:'):
-                widget.setStyleSheet('')
+                cls._set_widget_stylesheet(widget, '')
                 return
 
-        widget.setStyleSheet(cls.format_style(style_key))
+        cls._set_widget_stylesheet(widget, cls.format_style(style_key))
+
+    @staticmethod
+    def _set_widget_stylesheet(widget, stylesheet):
+        if widget.styleSheet() != stylesheet:
+            widget.setStyleSheet(stylesheet)
 
     @classmethod
     def set_font_role(cls, widget, role_name):
@@ -1221,7 +1535,7 @@ class AppStyle:
         if not role_name:
             return
 
-        token_name, weight = cls.FONT_ROLE_MAP.get(role_name, ('body', 400))
+        token_name, weight = cls.FONT_ROLE_MAP.get(role_name, ('body', QFont.Normal))
         widget.setFont(cls.make_font(token_name, weight=weight))
 
     @classmethod
@@ -1306,7 +1620,7 @@ def apply_toolbar_symbol_button_style(widget):
     widget.setFixedSize(AppStyle.toolbar_symbol_button_size())
     AppStyle.apply_widget_style(widget, 'compact_button')
     widget.setMinimumSize(AppStyle.toolbar_symbol_button_size())
-    widget.setFont(AppStyle.make_font('h3', weight=600))
+    widget.setFont(AppStyle.make_font('h3', weight=QFont.Bold))
     widget.setProperty(AppStyle.FONT_ROLE_PROPERTY, 'toolbar_symbol')
 
 def apply_toolbar_text_button_style(widget):
@@ -1328,7 +1642,7 @@ def apply_protocol_selector_button_style(widget):
     widget.setCheckable(True)
     AppStyle.apply_widget_style(widget, 'protocol_selector_button')
     AppStyle.set_font_role(widget, 'protocol_selector')
-    widget.setFixedHeight(AppStyle.BUTTON_FORM['protocol_selector_height'])
+    widget.setFixedHeight(AppStyle.control_px(AppStyle.BUTTON_FORM['protocol_selector_height']))
 
 def apply_input_style(widget):
     """Apply input field style to a widget"""

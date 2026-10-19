@@ -7,6 +7,7 @@ image loading, browsing, and management functionality with multiple data sources
 
 import os
 import sys
+import time
 import numpy as np
 import glob
 import fnmatch
@@ -15,9 +16,9 @@ from typing import List, Dict, Optional, Tuple
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QListWidget, QListWidgetItem, QComboBox, QLineEdit,
-    QFileDialog, QMessageBox, QScrollArea, QGridLayout, QTableWidget, QSplitter,
-    QTableWidgetItem, QHeaderView, QFrame
+    QListWidget, QListWidgetItem, QCheckBox, QComboBox, QLineEdit,
+    QFileDialog, QMessageBox, QScrollArea, QGridLayout, QSplitter,
+    QSizePolicy, QStyle,
 )
 from PyQt5.QtCore import QSignalBlocker, Qt, QThread, pyqtSignal, QTimer, QSize
 from PyQt5.QtGui import QPixmap, QIcon
@@ -26,20 +27,20 @@ from PyQt5.QtGui import QPixmap, QIcon
 from tabs.base_image_tab import BaseImageTab
 from sciview.interfaces.theme.app_style import (
     AppStyle,
-    apply_emphasis_button_style,
     apply_info_style,
     apply_title_style,
     apply_toolbar_symbol_button_style,
     setup_splitter_layout,
 )
-from sciview.settings.app_settings import SUPPORTED_FORMATS
+from sciview.interfaces.text import tr
+from sciview.settings.app_settings import SUPPORTED_FORMATS, IMAGE_BROWSER_SETTINGS
 
 # Import centralized tiled client manager
 from sciview.sources.tiled_client import tiled_manager
 
 # Import shared utilities
 from sciview.interfaces.stable_qt.utils.image_utils import ImageShapeConverter, ImageCacheManager
-from sciview.session.session_cache import choose_path
+from sciview.session.session_cache import choose_path, load_dialog_state, save_dialog_state
 
 
 class ImageLoadWorker(QThread):
@@ -93,9 +94,13 @@ class ImageLoadWorker(QThread):
             pct = 50 if chunks_done == 0 else 80
 
         label = (
-            f"Reading tile {chunks_done}/{total_chunks}…"
+            tr(
+                "image_browser.progress.reading_tile",
+                completed=chunks_done,
+                total=total_chunks,
+            )
             if total_chunks > 1
-            else "Reading image data…"
+            else tr("image_browser.progress.reading_image")
         )
         self.progress_updated.emit(pct, label)
 
@@ -119,7 +124,10 @@ class ImageLoadWorker(QThread):
         file_paths.sort()  # Sort for consistent ordering
         
         total_files = len(file_paths)
-        self.progress_updated.emit(0, f"Found {total_files} matching files")
+        self.progress_updated.emit(
+            0,
+            tr("image_browser.progress.matching_files", count=total_files),
+        )
         
         # Get parent reference if available to add images to session
         # Note: This worker doesn't directly access session manager
@@ -133,13 +141,25 @@ class ImageLoadWorker(QThread):
             
             # Update progress
             progress = int((i + 1) * 100 / total_files)
-            self.progress_updated.emit(progress, f"Added {i+1}/{total_files}: {os.path.basename(file_path)}")
+            self.progress_updated.emit(
+                progress,
+                tr(
+                    "image_browser.progress.added_file",
+                    current=i + 1,
+                    total=total_files,
+                    filename=os.path.basename(file_path),
+                ),
+            )
     
     def _load_from_tiled(self):
         """Load images from tiled client using scan ID (single or range)"""
         if not self.tiled_manager.is_available():
-            import_error = self.tiled_manager.get_import_error() or "unknown import error"
-            self.error_occurred.emit(f"Tiled client is not available: {import_error}")
+            import_error = self.tiled_manager.get_import_error() or tr(
+                "image_browser.error.unknown_import"
+            )
+            self.error_occurred.emit(
+                tr("image_browser.error.tiled_unavailable", error=import_error)
+            )
             return
         
         # Use configuration-based defaults from the manager
@@ -166,12 +186,29 @@ class ImageLoadWorker(QThread):
             
             for current_scan_id in range(start_id, end_id + 1):
                 if self.is_cancelled:
-                    self.progress_updated.emit(100, f"Cancelled: Loaded {loaded_count}, skipped {skipped_count} of {processed_count} scans")
+                    self.progress_updated.emit(
+                        100,
+                        tr(
+                            "image_browser.progress.cancelled_range",
+                            loaded=loaded_count,
+                            skipped=skipped_count,
+                            processed=processed_count,
+                        ),
+                    )
                     break
                 
                 processed_count += 1
                 progress = int((processed_count / total_scans) * 100)
-                self.progress_updated.emit(progress, f"Scan {current_scan_id}: loaded={loaded_count}, skipped={skipped_count}/{processed_count}")
+                self.progress_updated.emit(
+                    progress,
+                    tr(
+                        "image_browser.progress.scan_range",
+                        scan_id=current_scan_id,
+                        loaded=loaded_count,
+                        skipped=skipped_count,
+                        processed=processed_count,
+                    ),
+                )
                 
                 try:
                     # Attempt to load this scan
@@ -210,12 +247,23 @@ class ImageLoadWorker(QThread):
                     print(f"Skipped scan {current_scan_id}: {e}")
                     
             if not self.is_cancelled:
-                self.progress_updated.emit(100, f"Complete: Loaded {loaded_count}, skipped {skipped_count} of {total_scans} scans")
+                self.progress_updated.emit(
+                    100,
+                    tr(
+                        "image_browser.progress.complete_range",
+                        loaded=loaded_count,
+                        skipped=skipped_count,
+                        total=total_scans,
+                    ),
+                )
             
         else:
             # Load single scan
             try:
-                self.progress_updated.emit(10, f"Connecting to tiled server: {profile_name}")
+                self.progress_updated.emit(
+                    10,
+                    tr("image_browser.progress.connecting_tiled", profile=profile_name),
+                )
                 
                 # Use centralized tiled manager for loading; pass progress/retry
                 # callbacks so the bar advances as tiles arrive.
@@ -231,12 +279,16 @@ class ImageLoadWorker(QThread):
                     error_msg = metadata.get('error', 'Unknown tiled loading error')
                     # Check if it's a "not found" error vs connection error
                     if 'not found' in error_msg.lower():
-                        self.error_occurred.emit(f"Scan {scan_id} not found in catalog")
+                        self.error_occurred.emit(
+                            tr("image_browser.error.scan_not_found", scan_id=scan_id)
+                        )
                     else:
                         self.error_occurred.emit(error_msg)
                     return
                 
-                self.progress_updated.emit(90, "Processing image data...")
+                self.progress_updated.emit(
+                    90, tr("image_browser.progress.processing_image")
+                )
                 
                 # Convert image shape for display compatibility
                 image_array = self._convert_image_shape(image_array)
@@ -254,10 +306,15 @@ class ImageLoadWorker(QThread):
                 
                 # Emit the loaded image with metadata
                 self.image_loaded.emit(image_array, pseudo_path, image_metadata)
-                self.progress_updated.emit(100, f"Tiled loading complete - Scan {scan_id}")
+                self.progress_updated.emit(
+                    100,
+                    tr("image_browser.progress.tiled_complete", scan_id=scan_id),
+                )
                 
             except Exception as e:
-                self.error_occurred.emit(f"Tiled loading error: {str(e)}")
+                self.error_occurred.emit(
+                    tr("image_browser.error.tiled_loading", error=str(e))
+                )
                 import traceback
                 print(f"Detailed tiled error: {traceback.format_exc()}")
     
@@ -266,19 +323,31 @@ class ImageLoadWorker(QThread):
         file_path = self.kwargs['file_path']
         
         try:
-            self.progress_updated.emit(50, f"Loading {os.path.basename(file_path)}")
+            self.progress_updated.emit(
+                50,
+                tr(
+                    "image_browser.progress.loading_file",
+                    filename=os.path.basename(file_path),
+                ),
+            )
             image_data = self._load_image_file(file_path)
             
             if image_data is not None:
                 # File loading doesn't have Tiled metadata
                 file_metadata = {'source': 'file'}
                 self.image_loaded.emit(image_data, file_path, file_metadata)
-                self.progress_updated.emit(100, "File loading complete")
+                self.progress_updated.emit(
+                    100, tr("image_browser.progress.file_complete")
+                )
             else:
-                self.error_occurred.emit(f"Failed to load image from {file_path}")
+                self.error_occurred.emit(
+                    tr("image_browser.error.file_load_failed", path=file_path)
+                )
                 
         except Exception as e:
-            self.error_occurred.emit(f"Error loading file: {str(e)}")
+            self.error_occurred.emit(
+                tr("image_browser.error.loading_file", error=str(e))
+            )
     
     def _load_image_file(self, file_path):
         """Load image data from file path with shape conversion"""
@@ -340,7 +409,6 @@ class ImageSessionManager:
         
         # Use shared cache manager for data caching
         self.cache_manager = ImageCacheManager(cache_limit=cache_limit)
-        self.cache_manager.add_callback(self._on_cache_changed)
     
     def add_image(self, image_data, file_path, metadata=None, lazy=False):
         """Add an image to the session with optional deferred data loading.
@@ -448,15 +516,6 @@ class ImageSessionManager:
         """Add callback for session changes"""
         self.callbacks.append(callback)
     
-    def _on_cache_changed(self, cache_manager):
-        """Handle cache changes from shared manager"""
-        # Propagate cache changes to session callbacks
-        for callback in self.callbacks:
-            try:
-                callback(self)
-            except Exception as e:
-                print(f"Callback error: {e}")
-    
     def _notify_callbacks(self):
         """Notify all callbacks of session changes"""
         for callback in self.callbacks:
@@ -508,11 +567,19 @@ class ImageBrowserApp(BaseImageTab):
 
         self.folder_play_timer = QTimer(self)
         self.folder_play_timer.timeout.connect(self._advance_folder_playback)
+        self._folder_playback_rates = tuple(IMAGE_BROWSER_SETTINGS["playback_rates_fps"])
+        self._folder_playback_rate_index = self._folder_playback_rates.index(
+            IMAGE_BROWSER_SETTINGS["default_playback_rate_fps"]
+        )
         self.folder_refresh_timer = QTimer(self)
         self.folder_refresh_timer.setInterval(2000)
         self.folder_refresh_timer.timeout.connect(self._auto_refresh_folder_browser)
         self._folder_browser_paths = []
-        
+        self._folder_browser_dirs: list[str] = []
+        self._added_folder_paths: list[str] = []
+        self._last_browsed_folder: str = ""
+        self._folder_dir_count: int = 0
+
         # Build UI
         self._build_ui()
         
@@ -544,19 +611,10 @@ class ImageBrowserApp(BaseImageTab):
         visualization_panel = self._create_image_browser_panel()
         main_splitter.addWidget(visualization_panel)
 
-        # Right panel: Image loading options (upper) and session management (lower)
-        control_splitter = QSplitter(Qt.Vertical)
-        loading_panel = self._create_loading_panel()
-        control_splitter.addWidget(self.make_scrollable_panel(loading_panel))
-
-        session_panel = self._create_session_panel()
-        control_splitter.addWidget(self.make_scrollable_panel(session_panel))
-
-        # Use consistent layout ratios from global style config
+        # Right panel: Image loading options
         layout_ratios = AppStyle.get_layout_ratios()
-        setup_splitter_layout(control_splitter, [4, 1])
-
-        main_splitter.addWidget(control_splitter)
+        loading_panel = self._create_loading_panel()
+        main_splitter.addWidget(self.make_scrollable_panel(loading_panel))
         # Set main splitter to match other tabs: 3:1 visualization to controls
         setup_splitter_layout(main_splitter, layout_ratios['main_splitter_ratio'])
         
@@ -568,7 +626,7 @@ class ImageBrowserApp(BaseImageTab):
         layout = QVBoxLayout(panel)
         
         # Title
-        title = QLabel("Browse Images")
+        title = QLabel(tr("image_browser.title"))
         apply_title_style(title)
         layout.addWidget(title)
         
@@ -582,9 +640,8 @@ class ImageBrowserApp(BaseImageTab):
         layout.addWidget(folder_panel)
         
         # Status label
-        self.loading_status_label = QLabel("Ready to load images")
+        self.loading_status_label = QLabel(tr("image_browser.status.ready"))
         apply_info_style(self.loading_status_label)
-        layout.addWidget(self.loading_status_label)
 
         return panel
 
@@ -595,76 +652,140 @@ class ImageBrowserApp(BaseImageTab):
         
         # Folder selection
         folder_layout = QHBoxLayout()
-        self.folder_path_input = QLineEdit()
-        self.folder_path_input.setPlaceholderText("Select folder...")
-        folder_layout.addWidget(self.folder_path_input)
+        self.folder_path_combo = QComboBox()
+        self.folder_path_combo.setEditable(True)
+        self.folder_path_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.folder_path_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.folder_path_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.folder_path_combo.setToolTip(tr("image_browser.folder.path.tooltip"))
+        self.folder_path_input = self.folder_path_combo.lineEdit()
+        self.folder_path_input.setPlaceholderText(
+            tr("image_browser.folder.path.placeholder")
+        )
+        self.folder_path_combo.activated[str].connect(self._go_to_folder)
+        folder_layout.addWidget(self.folder_path_combo, 1)
         
-        btn_browse_folder = QPushButton("Open Folder")
+        self.folder_up_button = QPushButton()
+        self.folder_up_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowUp))
+        self.folder_up_button.setToolTip(tr("image_browser.folder.parent.tooltip"))
+        apply_toolbar_symbol_button_style(self.folder_up_button)
+        self.folder_up_button.clicked.connect(self._navigate_folder_up)
+        self.folder_up_button.setEnabled(False)
+        folder_layout.addWidget(self.folder_up_button)
+
+        btn_browse_folder = QPushButton()
+        btn_browse_folder.setIcon(self.style().standardIcon(QStyle.SP_DirOpenIcon))
+        btn_browse_folder.setToolTip(tr("image_browser.folder.choose.tooltip"))
         btn_browse_folder.clicked.connect(self._browse_folder)
-        apply_emphasis_button_style(btn_browse_folder)
+        apply_toolbar_symbol_button_style(btn_browse_folder)
         folder_layout.addWidget(btn_browse_folder)
+        self._populate_recent_folders()
         layout.addLayout(folder_layout)
-        
-        layout.addWidget(QLabel("Filename Filter:"))
+
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(QLabel(tr("image_browser.folder.filter.label")))
         self.pattern_input = QLineEdit()
-        self.pattern_input.setPlaceholderText("optional: saxs, *.tif, sample_*.h5")
-        layout.addWidget(self.pattern_input)
+        self.pattern_input.setPlaceholderText(
+            tr("image_browser.folder.filter.placeholder")
+        )
+        filter_layout.addWidget(self.pattern_input, 1)
 
-        layout.addWidget(QLabel("Sort:"))
+        filter_layout.addWidget(QLabel(tr("image_browser.folder.sort.label")))
         self.folder_sort_combo = QComboBox()
-        self.folder_sort_combo.addItem("Name A-Z", "name_asc")
-        self.folder_sort_combo.addItem("Name Z-A", "name_desc")
-        self.folder_sort_combo.addItem("Newest first", "mtime_desc")
-        self.folder_sort_combo.addItem("Oldest first", "mtime_asc")
-        layout.addWidget(self.folder_sort_combo)
+        self.folder_sort_combo.addItem(
+            tr("image_browser.folder.sort.name_ascending"), "name_asc"
+        )
+        self.folder_sort_combo.addItem(
+            tr("image_browser.folder.sort.name_descending"), "name_desc"
+        )
+        self.folder_sort_combo.addItem(
+            tr("image_browser.folder.sort.newest_first"), "mtime_desc"
+        )
+        self.folder_sort_combo.addItem(
+            tr("image_browser.folder.sort.oldest_first"), "mtime_asc"
+        )
+        filter_layout.addWidget(self.folder_sort_combo)
+        layout.addLayout(filter_layout)
 
-        layout.addWidget(QLabel("Images:"))
+        contents_header = QHBoxLayout()
+        contents_header.addWidget(QLabel(tr("image_browser.folder.contents.title")))
+        contents_header.addStretch()
+        self.folder_contents_count_label = QLabel(
+            tr("image_browser.folder.contents.empty")
+        )
+        apply_info_style(self.folder_contents_count_label)
+        contents_header.addWidget(self.folder_contents_count_label)
+
+        self.folder_auto_refresh_button = QCheckBox(
+            tr("image_browser.folder.auto_refresh.label")
+        )
+        self.folder_auto_refresh_button.setToolTip(
+            tr("image_browser.folder.auto_refresh.tooltip")
+        )
+        self.folder_auto_refresh_button.setChecked(True)
+        self.folder_auto_refresh_button.toggled.connect(self._update_folder_auto_refresh)
+        contents_header.addWidget(self.folder_auto_refresh_button)
+        layout.addLayout(contents_header)
+
         self.folder_files_list = QListWidget()
         self.folder_files_list.currentItemChanged.connect(self._open_folder_file)
         self.folder_files_list.itemClicked.connect(self._reopen_folder_file)
+        self.folder_files_list.itemDoubleClicked.connect(self._handle_folder_list_double_click)
+        self.folder_files_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.folder_files_list.setTextElideMode(Qt.ElideMiddle)
         layout.addWidget(self.folder_files_list, 1)
 
         controls_layout = QHBoxLayout()
         controls_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
 
-        self.add_all_folder_button = QPushButton("+")
-        self.add_all_folder_button.setToolTip("Add all visible folder images to the session")
-        apply_toolbar_symbol_button_style(self.add_all_folder_button)
-        self._apply_tool_icon(self.add_all_folder_button, 'tool_add_all.svg')
-        self.add_all_folder_button.clicked.connect(self._load_from_folder)
-        controls_layout.addWidget(self.add_all_folder_button)
-
         self.folder_play_button = QPushButton("▶")
-        self.folder_play_button.setToolTip("Play through the visible folder images")
+        self.folder_play_button.setToolTip(tr("image_browser.play.tooltip"))
         apply_toolbar_symbol_button_style(self.folder_play_button)
         self._apply_tool_icon(self.folder_play_button, 'tool_play.svg')
         self.folder_play_button.setCheckable(True)
         self.folder_play_button.clicked.connect(self._toggle_folder_playback)
         controls_layout.addWidget(self.folder_play_button)
 
-        self.folder_stop_button = QPushButton("■")
-        self.folder_stop_button.setToolTip("Stop playback")
-        apply_toolbar_symbol_button_style(self.folder_stop_button)
-        self._apply_tool_icon(self.folder_stop_button, 'tool_pause.svg')
-        self.folder_stop_button.clicked.connect(self._stop_folder_playback)
-        controls_layout.addWidget(self.folder_stop_button)
+        self.folder_playback_speed_button = QPushButton()
+        apply_toolbar_symbol_button_style(self.folder_playback_speed_button)
+        self._update_folder_playback_speed_button()
+        self.folder_playback_speed_button.clicked.connect(self._cycle_folder_playback_speed)
+        self.folder_playback_speed_button.hide()
+        controls_layout.addWidget(self.folder_playback_speed_button)
 
         self.folder_loop_button = QPushButton("∞")
-        self.folder_loop_button.setToolTip("Loop playback")
+        self.folder_loop_button.setToolTip(tr("image_browser.play.repeat.tooltip"))
         self.folder_loop_button.setCheckable(True)
         apply_toolbar_symbol_button_style(self.folder_loop_button)
         self._apply_tool_icon(self.folder_loop_button, 'tool_infinite.svg')
+        self.folder_loop_button.hide()
         controls_layout.addWidget(self.folder_loop_button)
-
-        self.folder_auto_refresh_button = QPushButton("⟳")
-        self.folder_auto_refresh_button.setToolTip("Refresh the folder list automatically when new images appear")
-        self.folder_auto_refresh_button.setCheckable(True)
-        self.folder_auto_refresh_button.setChecked(True)
-        apply_toolbar_symbol_button_style(self.folder_auto_refresh_button)
-        self._apply_tool_icon(self.folder_auto_refresh_button, 'tool_reload.svg')
-        self.folder_auto_refresh_button.toggled.connect(self._update_folder_auto_refresh)
-        controls_layout.addWidget(self.folder_auto_refresh_button)
         controls_layout.addStretch()
+
+        self.add_all_folder_button = QPushButton()
+        self.add_all_folder_button.setToolTip(
+            tr("image_browser.batch.add_all.tooltip")
+        )
+        apply_toolbar_symbol_button_style(self.add_all_folder_button)
+        self._apply_tool_icon(self.add_all_folder_button, 'tool_add_all.svg')
+        self.add_all_folder_button.clicked.connect(self._load_from_folder)
+        controls_layout.addWidget(self.add_all_folder_button)
+
+        self.collection_status_label = QLabel()
+        apply_info_style(self.collection_status_label)
+        self.collection_status_label.setVisible(False)
+        controls_layout.addWidget(self.collection_status_label)
+
+        self.clear_collection_button = QPushButton()
+        self.clear_collection_button.setToolTip(
+            tr("image_browser.batch.clear.tooltip")
+        )
+        apply_toolbar_symbol_button_style(self.clear_collection_button)
+        self._apply_tool_icon(self.clear_collection_button, 'tool_delete.svg')
+        self.clear_collection_button.clicked.connect(self._clear_collected_folders)
+        self.clear_collection_button.setEnabled(False)
+        self.clear_collection_button.setVisible(False)
+        controls_layout.addWidget(self.clear_collection_button)
         layout.addLayout(controls_layout)
 
         return tab
@@ -681,99 +802,54 @@ class ImageBrowserApp(BaseImageTab):
 
         return panel
 
-    def _create_session_panel(self):
-        """Create session management panel"""
-        panel = QWidget()
-        layout = QVBoxLayout(panel)
-        
-        # Title and controls
-        header_layout = QHBoxLayout()
-        title = QLabel("Loaded Images")
-        apply_title_style(title)
-        header_layout.addWidget(title)
-
-        # Playback controls for navigating through the session images
-        controls_layout = QHBoxLayout()
-        controls_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
-
-        self.prev_button = QPushButton("\u25c0")
-        self.prev_button.setToolTip("Previous image")
-        apply_toolbar_symbol_button_style(self.prev_button)
-        self.prev_button.clicked.connect(self._prev_image)
-        self.prev_button.setEnabled(False)
-        controls_layout.addWidget(self.prev_button)
-
-        self.image_counter_label = QLabel("0/0")
-        apply_info_style(self.image_counter_label)
-        controls_layout.addWidget(self.image_counter_label)
-
-        self.next_button = QPushButton("\u25b6")
-        self.next_button.setToolTip("Next image")
-        apply_toolbar_symbol_button_style(self.next_button)
-        self.next_button.clicked.connect(self._next_image)
-        self.next_button.setEnabled(False)
-        controls_layout.addWidget(self.next_button)
-        
-        btn_clear_session = QPushButton("Clear")
-        btn_clear_session.clicked.connect(self._clear_session)
-        header_layout.addWidget(btn_clear_session)
-        layout.addLayout(header_layout)
-        
-        # Image list table
-        self.session_table = QTableWidget()
-        self.session_table.setColumnCount(3)
-        self.session_table.setHorizontalHeaderLabels(["Filename", "Source", "Size"])
-        self.session_table.horizontalHeader().setStretchLastSection(True)
-        self.session_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.session_table.setMinimumHeight(92)
-        self.session_table.setMaximumHeight(140)
-        self.session_table.itemSelectionChanged.connect(self._on_session_selection_changed)
-        layout.addWidget(self.session_table)
-        
-        # Session info
-        self.session_info_label = QLabel("0 images loaded")
-        apply_info_style(self.session_info_label)
-        layout.addWidget(self.session_info_label)
-        
-        # Export options
-        # export_layout = QHBoxLayout()
-        # btn_export_list = QPushButton("Export List")
-        # btn_export_list.clicked.connect(self._export_session_list)
-        # export_layout.addWidget(btn_export_list)
-        
-        # btn_export_data = QPushButton("Export Data")
-        # btn_export_data.clicked.connect(self._export_session_data)
-        # export_layout.addWidget(btn_export_data)
-        # layout.addLayout(export_layout)
-        
-        return panel
-
     # Loading Methods
     def _load_from_folder(self):
-        """Add the current folder browser list to the session as deferred references."""
+        """Keep the current folder's visible images in the shared Batch list."""
         self._stop_folder_playback()
         file_paths = self._get_folder_image_paths()
 
         if not file_paths:
-            QMessageBox.warning(self, "No Files Found", "No supported image files found in this folder")
+            QMessageBox.warning(
+                self,
+                tr("image_browser.error.no_files.title"),
+                tr("image_browser.error.no_files.body"),
+            )
             return
 
-        self.is_batch_loading = True
-
         for file_path in file_paths:
-            self.session_manager.add_image_reference(str(file_path))
+            path_str = str(file_path)
+            if path_str not in self._added_folder_paths:
+                self._added_folder_paths.append(path_str)
 
-        self.is_batch_loading = False
-        self._update_display()
+        self._update_collection_status()
+        self._publish_shared_file_list()
+        message = tr(
+            "image_browser.batch.kept_images",
+            count=len(file_paths),
+        )
+        self.loading_status_label.setText(message)
+        self.parent_app.show_status(message)
 
-        self.loading_status_label.setText(f"Added {len(file_paths)} images")
-        self.parent_app.show_status(f"Added {len(file_paths)} images from folder")
+    def _clear_collected_folders(self) -> None:
+        """Clear images kept from previously browsed folders."""
+        self._added_folder_paths.clear()
+        self._update_collection_status()
+        self._publish_shared_file_list()
+        self.loading_status_label.setText(
+            tr("image_browser.batch.cleared_folders")
+        )
+
+    def _update_collection_status(self) -> None:
+        count = len(self._added_folder_paths)
+        self.collection_status_label.setText(
+            tr("image_browser.batch.count", count=count)
+        )
+        self.collection_status_label.setVisible(count > 0)
+        self.clear_collection_button.setEnabled(count > 0)
+        self.clear_collection_button.setVisible(count > 0)
 
     def _on_session_changed(self, session_manager):
         """Handle session changes"""
-        self._update_session_table()
-        self._update_navigation_controls()
-        self._publish_shared_file_list()
         # Only update display if we're not in the middle of batch loading
         # This prevents triggering data loads for every reference added
         if not self.is_batch_loading:
@@ -791,47 +867,6 @@ class ImageBrowserApp(BaseImageTab):
             source_tab=self,
         )
 
-    def _update_session_table(self):
-        """Update the session table display"""
-        images = self.session_manager.images
-        self.session_table.blockSignals(True)
-        self.session_table.setRowCount(len(images))
-
-        try:
-            for row, img in enumerate(images):
-                # Filename
-                self.session_table.setItem(row, 0, QTableWidgetItem(img['filename']))
-
-                # Source
-                self.session_table.setItem(row, 1, QTableWidgetItem(img['source']))
-
-                # Size
-                size_str = f"{img['size'][0]}x{img['size'][1]}" if img['size'] else "Unknown"
-                self.session_table.setItem(row, 2, QTableWidgetItem(size_str))
-
-            current = self.session_manager.current_index
-            if 0 <= current < len(images):
-                self.session_table.selectRow(current)
-            else:
-                self.session_table.clearSelection()
-        finally:
-            self.session_table.blockSignals(False)
-        
-        # Update info label
-        self.session_info_label.setText(f"{len(images)} images loaded")
-
-    def _update_navigation_controls(self):
-        """Update navigation button states"""
-        count = len(self.session_manager.images)
-        current = self.session_manager.current_index
-        
-        self.prev_button.setEnabled(current > 0)
-        self.next_button.setEnabled(current < count - 1)
-        if count > 0:
-            self.image_counter_label.setText(f"{current + 1} / {count}")
-        else:
-            self.image_counter_label.setText("0 / 0")
-
     def _update_display(self):
         """Update the image display with on-demand data loading.
         
@@ -845,8 +880,6 @@ class ImageBrowserApp(BaseImageTab):
         - Data is only kept in the session manager's LRU cache, which enforces memory limits
         - Explicitly triggers garbage collection when switching between images
         """
-        import gc
-        
         # Get current image, triggering on-demand loading if needed
         current_image = self.session_manager.get_current_image(
             load_data=True, 
@@ -854,14 +887,18 @@ class ImageBrowserApp(BaseImageTab):
         )
         
         if current_image is None:
-            self.image_viewer.clear_image('No Image Loaded')
-            self.filename_label.setText("No image loaded")
+            self.image_viewer.clear_image(tr("image_browser.image.empty.viewer"))
+            self.filename_label.setText(tr("image_browser.image.empty"))
             return
         
         # Check if data is available (might still be None if loading failed)
         if current_image['data'] is None:
-            self.image_viewer.clear_image(f"Loading: {current_image['filename']}")
-            self.filename_label.setText(f"Loading: {current_image['filename']}")
+            loading_message = tr(
+                "image_browser.image.loading",
+                filename=current_image["filename"],
+            )
+            self.image_viewer.clear_image(loading_message)
+            self.filename_label.setText(loading_message)
             return
         
         # Extract data and other info from current_image dict
@@ -876,11 +913,9 @@ class ImageBrowserApp(BaseImageTab):
         
         # Set title and update current image label
         self.image_viewer.set_title(filename)
-        self.filename_label.setText(f"{filename}  \u2502  {source}")
-        
-        # Explicitly trigger garbage collection to clean up evicted cached images
-        # This is important when switching between images in the session
-        gc.collect()
+        self.filename_label.setText(
+            tr("image_browser.image.filename_source", filename=filename, source=source)
+        )
     
     def _lazy_load_callback(self, path, metadata):
         """Load image data on-demand when accessed.
@@ -972,7 +1007,12 @@ class ImageBrowserApp(BaseImageTab):
             self.parent_app.image_path = current_image['path']
 
         if show_status:
-            self.parent_app.show_status(f"Synced image: {current_image['filename']}")
+            self.parent_app.show_status(
+                tr(
+                    "image_browser.status.synced_image",
+                    filename=current_image["filename"],
+                )
+            )
         return True
 
     def auto_publish_current_image(self) -> bool:
@@ -1020,24 +1060,28 @@ class ImageBrowserApp(BaseImageTab):
             self.session_manager.add_image_reference(last_path)
 
         if self._sync_to_parent(show_status=False):
-            self.parent_app.show_status(f"Restored last session image: {os.path.basename(last_path)}")
+            self.parent_app.show_status(
+                tr(
+                    "image_browser.status.restored_image",
+                    filename=os.path.basename(last_path),
+                )
+            )
 
 
     def get_current_file_list(self) -> list[str]:
-        """Return local file paths from the folder browser and/or loaded session."""
+        """Return the current folder's files plus files explicitly kept in Batch."""
         seen: set[str] = set()
         result: list[str] = []
 
-        # Prefer the folder browser list — it represents a full directory scan.
+        # The folder browser list — a full scan of the currently selected folder.
         for p in self._folder_browser_paths:
             if os.path.isfile(p) and p not in seen:
                 seen.add(p)
                 result.append(p)
 
-        # Also include any file-backed session entries (e.g. loaded via drag-drop or file dialog).
-        for img in self.session_manager.images:
-            p = img.get("path", "")
-            if img.get("source") == "file" and os.path.isfile(p) and p not in seen:
+        # Files explicitly added via "+ Add All", possibly from other folders.
+        for p in self._added_folder_paths:
+            if os.path.isfile(p) and p not in seen:
                 seen.add(p)
                 result.append(p)
 
@@ -1060,36 +1104,82 @@ class ImageBrowserApp(BaseImageTab):
             print(f"DEBUG: Error in create_data2d_object: {e}")
             return image_array
 
-    # Navigation methods
-    def _prev_image(self):
-        """Navigate to previous image"""
-        if self.session_manager.current_index > 0:
-            self.session_manager.set_current_index(self.session_manager.current_index - 1)
-
-    def _next_image(self):
-        """Navigate to next image"""
-        count = len(self.session_manager.images)
-        if self.session_manager.current_index < count - 1:
-            self.session_manager.set_current_index(self.session_manager.current_index + 1)
-
-    def _on_session_selection_changed(self):
-        """Handle selection change in session table"""
-        current_row = self.session_table.currentRow()
-        if current_row >= 0:
-            self.session_manager.set_current_index(current_row)
-
     # Utility methods
     def _browse_folder(self):
         """Browse for folder"""
-        folder, _ = choose_path(self, "Select Folder", mode="directory", key="folder_select")
+        folder, _ = choose_path(
+            self,
+            tr("image_browser.dialog.select_folder.title"),
+            mode="directory",
+            key="folder_select",
+        )
         if folder:
-            self.folder_path_input.setText(folder)
-            self._refresh_folder_browser(force=True)
-            self._update_folder_auto_refresh()
+            self._go_to_folder(folder)
 
     def _preview_folder_files(self):
         """Compatibility wrapper for older callers."""
         self._refresh_folder_browser()
+
+    def _go_to_folder(self, folder_path: str) -> None:
+        """Navigate the folder browser to folder_path (button, recent-list, or drill-down)."""
+        self.folder_path_input.setText(folder_path)
+        self._refresh_folder_browser(force=True)
+        self._update_folder_auto_refresh()
+
+    def _navigate_folder_up(self) -> None:
+        """Go to the parent of the currently browsed folder."""
+        current = self.folder_path_input.text().strip()
+        if not current:
+            return
+        parent = Path(current).parent
+        if str(parent) != current:
+            self._go_to_folder(str(parent))
+
+    def _handle_folder_list_double_click(self, item) -> None:
+        """Descend into a subfolder row."""
+        if item is None or item.data(Qt.UserRole + 1) != "dir":
+            return
+        path = item.data(Qt.UserRole)
+        if path:
+            self._go_to_folder(path)
+
+    def _add_recent_folder(self, folder_path: str) -> None:
+        """Persist folder_path at the front of the recent-folders list."""
+        state = load_dialog_state()
+        recents = state.get("recent_folders")
+        recents = [p for p in recents if isinstance(p, str)] if isinstance(recents, list) else []
+        recents = [p for p in recents if p != folder_path]
+        recents.insert(0, folder_path)
+        max_recent = IMAGE_BROWSER_SETTINGS.get("max_recent_files", 10)
+        state["recent_folders"] = recents[:max_recent]
+        save_dialog_state(state)
+        self._populate_recent_folders()
+
+    def _populate_recent_folders(self) -> None:
+        """Populate the editable path control with existing recent folders."""
+        state = load_dialog_state()
+        recents = state.get("recent_folders")
+        recents = [p for p in recents if isinstance(p, str)] if isinstance(recents, list) else []
+        recents = [p for p in recents if Path(p).is_dir()]
+        current = self.folder_path_input.text() if hasattr(self, "folder_path_input") else ""
+        with QSignalBlocker(self.folder_path_combo):
+            self.folder_path_combo.clear()
+            self.folder_path_combo.addItems(recents)
+            self.folder_path_combo.setEditText(current)
+
+    def _get_subfolder_paths(self, folder_path: str) -> list:
+        """Return immediate subdirectories of folder_path, sorted by name."""
+        if not folder_path:
+            return []
+        folder = Path(folder_path)
+        if not folder.is_dir():
+            return []
+        try:
+            subdirs = [p for p in folder.iterdir() if p.is_dir()]
+        except OSError:
+            return []
+        subdirs.sort(key=lambda p: p.name.lower())
+        return subdirs
 
     def _get_folder_image_paths(self):
         """Return supported image paths from the selected folder after filter and sort."""
@@ -1139,12 +1229,27 @@ class ImageBrowserApp(BaseImageTab):
         if stop_playback:
             self._stop_folder_playback()
 
+        folder_path = self.folder_path_input.text().strip() if hasattr(self, "folder_path_input") else ""
+        if folder_path != self._last_browsed_folder:
+            self._last_browsed_folder = folder_path
+            if folder_path and Path(folder_path).is_dir():
+                self._add_recent_folder(folder_path)
+
+        if hasattr(self, "folder_up_button"):
+            parent = Path(folder_path).parent if folder_path else None
+            can_go_up = bool(folder_path) and parent is not None and str(parent) != folder_path
+            self.folder_up_button.setEnabled(can_go_up)
+
         file_paths = self._get_folder_image_paths()
         path_strings = [str(path) for path in file_paths]
+        subfolders = self._get_subfolder_paths(folder_path)
+        subfolder_strings = [str(path) for path in subfolders]
 
-        if not force and path_strings == self._folder_browser_paths:
+        if not force and path_strings == self._folder_browser_paths and subfolder_strings == self._folder_browser_dirs:
             if self.folder_path_input.text() and hasattr(self, 'loading_status_label'):
-                self.loading_status_label.setText(f"Found {len(file_paths)} images")
+                self.loading_status_label.setText(
+                    tr("image_browser.folder.status.found_images", count=len(file_paths))
+                )
             self._publish_shared_file_list()
             return
 
@@ -1153,17 +1258,42 @@ class ImageBrowserApp(BaseImageTab):
 
         with QSignalBlocker(self.folder_files_list):
             self.folder_files_list.clear()
+            for subfolder in subfolders:
+                item = QListWidgetItem(subfolder.name)
+                item.setIcon(self.style().standardIcon(QStyle.SP_DirIcon))
+                item.setData(Qt.UserRole, str(subfolder))
+                item.setData(Qt.UserRole + 1, "dir")
+                self.folder_files_list.addItem(item)
             for path in file_paths:
                 item = QListWidgetItem(path.name)
+                item.setToolTip(path.name)
                 item.setData(Qt.UserRole, str(path))
                 self.folder_files_list.addItem(item)
             if current_path in path_strings:
-                self.folder_files_list.setCurrentRow(path_strings.index(current_path))
+                self.folder_files_list.setCurrentRow(len(subfolders) + path_strings.index(current_path))
 
+        self._folder_dir_count = len(subfolders)
+        self._folder_browser_dirs = subfolder_strings
         self._folder_browser_paths = path_strings
+        image_count_id = (
+            "image_browser.folder.count.one_image"
+            if len(file_paths) == 1
+            else "image_browser.folder.count.images"
+        )
+        folder_count_id = (
+            "image_browser.folder.count.one_folder"
+            if len(subfolders) == 1
+            else "image_browser.folder.count.folders"
+        )
+        count_parts = [tr(image_count_id, count=len(file_paths))]
+        if subfolders:
+            count_parts.append(tr(folder_count_id, count=len(subfolders)))
+        self.folder_contents_count_label.setText(" · ".join(count_parts))
 
         if self.folder_path_input.text() and hasattr(self, 'loading_status_label'):
-            self.loading_status_label.setText(f"Found {len(file_paths)} images")
+            self.loading_status_label.setText(
+                tr("image_browser.folder.status.found_images", count=len(file_paths))
+            )
 
         self._publish_shared_file_list()
 
@@ -1188,7 +1318,7 @@ class ImageBrowserApp(BaseImageTab):
 
     def _open_folder_file(self, item):
         """Show the selected folder image using deferred loading."""
-        if item is None:
+        if item is None or item.data(Qt.UserRole + 1) == "dir":
             return
         file_path = item.data(Qt.UserRole)
         if not file_path:
@@ -1204,10 +1334,17 @@ class ImageBrowserApp(BaseImageTab):
         else:
             self.session_manager.set_current_index(existing_index)
 
-        self.loading_status_label.setText(f"Selected {os.path.basename(file_path)}")
+        self.loading_status_label.setText(
+            tr(
+                "image_browser.folder.status.selected_file",
+                filename=os.path.basename(file_path),
+            )
+        )
 
     def _reopen_folder_file(self, item) -> None:
         """Reopen a selected folder row after session navigation."""
+        if item is None or item.data(Qt.UserRole + 1) == "dir":
+            return
         current_image = self.session_manager.get_current_image()
         file_path = item.data(Qt.UserRole)
         if current_image is None or current_image['path'] != file_path:
@@ -1215,18 +1352,63 @@ class ImageBrowserApp(BaseImageTab):
 
     def _toggle_folder_playback(self):
         """Play through the visible folder image list."""
-        if self.folder_files_list.count() == 0:
+        if self.folder_files_list.count() <= self._folder_dir_count:
             self.folder_play_button.setChecked(False)
             return
 
         if self.folder_play_button.isChecked():
-            if self.folder_files_list.currentRow() < 0:
-                self._select_folder_browser_row(0)
-            if self.folder_play_button.icon().isNull():
-                self.folder_play_button.setText("⏸")
-            self.folder_play_timer.start(500)
+            if self.folder_files_list.currentRow() < self._folder_dir_count:
+                self._select_folder_browser_row(self._folder_dir_count)
+            self.folder_playback_speed_button.show()
+            self.folder_loop_button.show()
+            self._apply_tool_icon(self.folder_play_button, 'tool_pause.svg')
+            self.folder_play_button.setToolTip(
+                tr("image_browser.play.pause.tooltip")
+            )
+            self.folder_play_timer.start(self._folder_playback_interval_ms())
         else:
             self._stop_folder_playback()
+
+    def _folder_playback_interval_ms(self) -> int:
+        rate = self._folder_playback_rates[self._folder_playback_rate_index]
+        return round(1000 / rate)
+
+    def _folder_playback_delay_ms(self, frame_elapsed_ms: float) -> int:
+        return max(1, round(self._folder_playback_interval_ms() - frame_elapsed_ms))
+
+    def _cycle_folder_playback_speed(self) -> None:
+        """Cycle through configured image playback rates."""
+        self._folder_playback_rate_index = (
+            self._folder_playback_rate_index + 1
+        ) % len(self._folder_playback_rates)
+        self._update_folder_playback_speed_button()
+        if self.folder_play_timer.isActive():
+            self.folder_play_timer.setInterval(self._folder_playback_interval_ms())
+
+    def _update_folder_playback_speed_button(self) -> None:
+        speed = tr(
+            (
+                "image_browser.playback.speed.slow",
+                "image_browser.playback.speed.medium",
+                "image_browser.playback.speed.fast",
+            )[self._folder_playback_rate_index]
+        )
+        self.folder_playback_speed_button.setAccessibleName(
+            tr("image_browser.playback.speed.accessible", speed=speed)
+        )
+        self.folder_playback_speed_button.setToolTip(
+            tr(
+                (
+                    "image_browser.playback.speed.tooltip.slow",
+                    "image_browser.playback.speed.tooltip.medium",
+                    "image_browser.playback.speed.tooltip.fast",
+                )[self._folder_playback_rate_index]
+            )
+        )
+        self._apply_tool_icon(
+            self.folder_playback_speed_button,
+            f'tool_speed_{self._folder_playback_rate_index + 1}.svg',
+        )
 
     def _stop_folder_playback(self):
         """Stop folder-list playback and reset the play button."""
@@ -1234,8 +1416,8 @@ class ImageBrowserApp(BaseImageTab):
             self.folder_play_timer.stop()
         if hasattr(self, 'folder_play_button'):
             self.folder_play_button.setChecked(False)
-            if self.folder_play_button.icon().isNull():
-                self.folder_play_button.setText("▶")
+            self.folder_play_button.setToolTip(tr("image_browser.play.tooltip"))
+            self._apply_tool_icon(self.folder_play_button, 'tool_play.svg')
 
     def _load_browser_icon(self, filename: str):
         workspace_root = getattr(self.parent_app, '_workspace_root', Path(__file__).resolve().parent.parent.parent)
@@ -1253,20 +1435,26 @@ class ImageBrowserApp(BaseImageTab):
     def refresh_theme(self) -> None:
         """Re-tint toolbar icons for the active dark/light theme."""
         pairs = [
-            (getattr(self, 'add_all_folder_button', None), 'tool_add_all.svg'),
-            (getattr(self, 'folder_play_button', None),    'tool_play.svg'),
-            (getattr(self, 'folder_stop_button', None),    'tool_pause.svg'),
+            (
+                getattr(self, 'folder_play_button', None),
+                'tool_pause.svg' if getattr(self, 'folder_play_button', None) is not None
+                and self.folder_play_button.isChecked() else 'tool_play.svg',
+            ),
             (getattr(self, 'folder_loop_button', None),    'tool_infinite.svg'),
-            (getattr(self, 'folder_auto_refresh_button', None), 'tool_reload.svg'),
+            (getattr(self, 'add_all_folder_button', None), 'tool_add_all.svg'),
+            (getattr(self, 'clear_collection_button', None), 'tool_delete.svg'),
         ]
         for button, filename in pairs:
             if button is not None:
                 self._apply_tool_icon(button, filename)
+        if getattr(self, 'folder_playback_speed_button', None) is not None:
+            self._update_folder_playback_speed_button()
 
     def _advance_folder_playback(self):
         """Advance to the next visible folder image during playback."""
+        started_at = time.perf_counter()
         count = self.folder_files_list.count()
-        if count == 0:
+        if count <= self._folder_dir_count:
             self._stop_folder_playback()
             return
 
@@ -1275,9 +1463,13 @@ class ImageBrowserApp(BaseImageTab):
             if not self.folder_loop_button.isChecked():
                 self._stop_folder_playback()
                 return
-            next_row = 0
+            next_row = self._folder_dir_count
 
         self._select_folder_browser_row(next_row)
+        frame_elapsed_ms = (time.perf_counter() - started_at) * 1000
+        self.folder_play_timer.setInterval(
+            self._folder_playback_delay_ms(frame_elapsed_ms)
+        )
 
     def _select_folder_browser_row(self, row):
         """Select and display a row from the visible folder browser list."""
@@ -1286,37 +1478,39 @@ class ImageBrowserApp(BaseImageTab):
 
         self.folder_files_list.setCurrentRow(row)
 
-    def _clear_session(self):
-        """Clear the session"""
-        reply = QMessageBox.question(self, "Clear Session",
-                                   "Clear all images and references from this session?",
-                                   QMessageBox.Yes | QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            self.session_manager.clear_session()
-
     def _export_session_list(self):
         """Export session file list"""
         if not self.session_manager.images:
-            QMessageBox.information(self, "No Data", "No images in session to export")
+            QMessageBox.information(
+                self,
+                tr("image_browser.export.empty.title"),
+                tr("image_browser.export.empty.body"),
+            )
             return
         
         file_path, _ = choose_path(
             self,
-            "Export Session List",
+            tr("image_browser.export.session_list.title"),
             mode="save", default_name="session_list.txt",
-            file_filter="Text Files (*.txt)",
+            file_filter=tr("image_browser.export.session_list.filter"),
             key="session_export",
         )
         if file_path:
             with open(file_path, 'w') as f:
                 for img in self.session_manager.images:
                     f.write(f"{img['path']}\n")
-            self.parent_app.show_status(f"Session list exported to {file_path}")
+            self.parent_app.show_status(
+                tr("image_browser.export.session_list.complete", path=file_path)
+            )
 
     def _export_session_data(self):
         """Export session data as HDF5 or similar"""
         # Placeholder for data export functionality
-        QMessageBox.information(self, "Export Data", "Data export functionality to be implemented")
+        QMessageBox.information(
+            self,
+            tr("image_browser.export.data.title"),
+            tr("image_browser.export.data.unavailable"),
+        )
 
     def _setup_parent_sync(self):
         """Setup synchronization with parent application"""
@@ -1326,20 +1520,48 @@ class ImageBrowserApp(BaseImageTab):
     def _add_tab_specific_status(self, info_lines):
         """Add image browser specific status information"""
         info_lines.append("")
-        info_lines.append("=== IMAGE BROWSER STATUS ===")
-        info_lines.append(f"Session images: {len(self.session_manager.images)}")
+        info_lines.append(tr("image_browser.debug.section_title"))
+        info_lines.append(
+            tr(
+                "image_browser.debug.session_images",
+                count=len(self.session_manager.images),
+            )
+        )
         
         # Cache information
         cache_info = self.session_manager.get_cache_info()
-        info_lines.append(f"Cached in memory: {cache_info['cached_images']}/{cache_info['total_images']} (limit: {cache_info['cache_limit']})")
+        info_lines.append(
+            tr(
+                "image_browser.debug.cache_summary",
+                cached=cache_info["cached_images"],
+                total=cache_info["total_images"],
+                limit=cache_info["cache_limit"],
+            )
+        )
         
         current_image = self.session_manager.get_current_image(load_data=False)
         if current_image:
-            info_lines.append(f"Current: {current_image['filename']}")
-            info_lines.append(f"Source: {current_image['source']}")
+            info_lines.append(
+                tr("image_browser.debug.current_image", filename=current_image["filename"])
+            )
+            info_lines.append(
+                tr("image_browser.debug.source", source=current_image["source"])
+            )
             # Show loading mode for developer context
-            loading_mode = "Deferred (on-demand)" if current_image.get('lazy', False) else "Immediate (preloaded)"
-            info_lines.append(f"Loading mode: {loading_mode}")
+            loading_mode = tr(
+                "image_browser.debug.loading_mode.deferred"
+                if current_image.get("lazy", False)
+                else "image_browser.debug.loading_mode.immediate"
+            )
+            info_lines.append(
+                tr("image_browser.debug.loading_mode.label", mode=loading_mode)
+            )
             if current_image['size']:
-                info_lines.append(f"Dimensions: {current_image['size'][0]} x {current_image['size'][1]}")
+                info_lines.append(
+                    tr(
+                        "image_browser.debug.dimensions",
+                        width=current_image["size"][0],
+                        height=current_image["size"][1],
+                    )
+                )
         

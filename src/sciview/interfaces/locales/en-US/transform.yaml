@@ -1,0 +1,391 @@
+transform.preview.title:
+  text: "Transform Preview"
+  context: "Heading above the transformed two-dimensional image preview."
+transform.preview.empty:
+  text: "No preview yet"
+  context: "Initial preview summary before a transform has been run."
+transform.plot_style.title:
+  text: "Plot Style"
+  context: "Group heading for transformed-image appearance controls."
+transform.plot_style.title_size:
+  text: "Plot title size"
+  context: "Label for the plot title font-size control."
+transform.plot_style.axis_label_size:
+  text: "Axis label size"
+  context: "Label for the plot axis-label font-size control."
+transform.plot_style.tick_label_size:
+  text: "Tick label size"
+  context: "Label for the plot tick-label font-size control."
+transform.plot_style.export_resolution:
+  text: "Export resolution (DPI)"
+  context: "Label for the exported plot resolution control."
+transform.plot_style.colormap:
+  text: "Colormap"
+  context: "Label for the displayed image colormap selector."
+transform.plot_style.intensity_scale:
+  text: "Intensity scale"
+  context: "Label for the image intensity scale selector."
+transform.plot_style.intensity_min:
+  text: "Intensity min"
+  context: "Label for the minimum image intensity display value."
+transform.plot_style.intensity_max:
+  text: "Intensity max"
+  context: "Label for the maximum image intensity display value."
+transform.plot_style.auto_intensity:
+  text: "Auto intensity range"
+  context: "Checkbox that automatically selects the displayed intensity range."
+transform.protocol.label:
+  text: "Protocol"
+  context: "Label identifying the transform operation selector."
+transform.operation.q_image:
+  text: "Q Image"
+  context: "Button label selecting the Q-space image transformation."
+transform.operation.q_phi_image:
+  text: "Q-Phi Image"
+  context: "Button label selecting the Q-phi image transformation."
+transform.operation.qr_qz_image:
+  text: "Qr-Qz Image"
+  context: "Button label selecting the radial-Q and Qz image transformation."
+transform.operation.status.q_image:
+  text: "Q Image"
+  context: "Result-summary operation name matching the Q-image protocol display name."
+transform.operation.status.q_phi_image:
+  text: "Q Phi Image"
+  context: "Result-summary operation name for the Q-phi transformation."
+transform.operation.status.qr_qz_image:
+  text: "Qr Qz Image"
+  context: "Result-summary operation name for the radial-Q and Qz transformation."
+transform.recipe.title:
+  text: "Recipe"
+  context: "Group heading for the editable transform recipe preview."
+transform.source.shared:
+  text: "Shared"
+  context: "Calibration or mask source option using shared application state."
+transform.source.custom:
+  text: "Custom"
+  context: "Calibration or mask source option using a file loaded in this tab."
+transform.source.none:
+  text: "None"
+  context: "Mask source option that disables masking."
+transform.calibration.label:
+  text: "Calibration"
+  context: "Label for choosing the calibration source."
+transform.mask.label:
+  text: "Mask"
+  context: "Label for choosing the mask source."
+transform.browse:
+  text: "Browse"
+  context: "Button opening a file picker for a custom calibration or mask."
+transform.preview.live:
+  text: "Live preview"
+  context: "Checkbox enabling preview updates when transform controls change."
+transform.parameters.title:
+  text: "Parameters"
+  context: "Group heading for operation-specific transform controls."
+transform.bins_relative:
+  text: "Bins (relative)"
+  context: "Label for the relative number of bins used during transformation."
+transform.crop.auto:
+  text: "Auto crop to calibration"
+  context: "Checkbox using axis limits derived from the active calibration."
+transform.qx_min:
+  text: "q<sub>x</sub> min (Å⁻¹)"
+  context: "Label for the minimum qx range in inverse angstroms."
+transform.qx_max:
+  text: "q<sub>x</sub> max (Å⁻¹)"
+  context: "Label for the maximum qx range in inverse angstroms."
+transform.qz_min:
+  text: "q<sub>z</sub> min (Å⁻¹)"
+  context: "Label for the minimum qz range in inverse angstroms."
+transform.qz_max:
+  text: "q<sub>z</sub> max (Å⁻¹)"
+  context: "Label for the maximum qz range in inverse angstroms."
+transform.incident_angle.tooltip:
+  text: "Grazing-incidence angle (GISAXS/GIWAXS); 0 for transmission/normal-incidence data"
+  context: "Tooltip describing the incident-angle value for grazing-incidence data."
+transform.incident_angle:
+  text: "Incident angle (°)"
+  context: "Label for the grazing-incidence angle control."
+transform.sample_normal.tooltip:
+  text: "Azimuthal (phi) reference offset for sample-stage misalignment"
+  context: "Tooltip describing the sample-normal azimuth reference offset."
+transform.sample_normal:
+  text: "Sample normal (°)"
+  context: "Label for the sample-normal azimuth angle control."
+transform.phi_bins:
+  text: "Phi bins"
+  context: "Label for the number of azimuthal bins in the Q-phi transform."
+transform.q_min:
+  text: "q min (Å⁻¹)"
+  context: "Label for the minimum q range in inverse angstroms."
+transform.q_max:
+  text: "q max (Å⁻¹)"
+  context: "Label for the maximum q range in inverse angstroms."
+transform.phi_min:
+  text: "Phi min (°)"
+  context: "Label for the minimum azimuthal angle."
+transform.phi_max:
+  text: "Phi max (°)"
+  context: "Label for the maximum azimuthal angle."
+transform.qr_min:
+  text: "q<sub>r</sub> min (Å⁻¹)"
+  context: "Label for the minimum radial q range in inverse angstroms."
+transform.qr_max:
+  text: "q<sub>r</sub> max (Å⁻¹)"
+  context: "Label for the maximum radial q range in inverse angstroms."
+transform.recipe.apply:
+  text: "Apply YAML"
+  context: "Button that applies the recipe text edited in the YAML view."
+transform.recipe.apply.tooltip:
+  text: "Parse the edited Recipe YAML above and apply it to the controls"
+  context: "Tooltip explaining that edited recipe YAML is parsed into the controls."
+transform.preview.refresh:
+  text: "Refresh Preview"
+  context: "Button that reruns the current transform preview."
+transform.export_data:
+  text: "Export Data"
+  context: "Button that saves the current transformed image result."
+transform.send_to_batch:
+  text: "Send to Batch"
+  context: "Button that sends the current transform settings to the Batch tab."
+transform.send_to_batch.tooltip:
+  text: "Push current settings as a protocol to the Batch tab"
+  context: "Tooltip explaining that current transform settings are sent to Batch."
+transform.status.invalid_plot_style:
+  text: "Invalid plot style: {error}"
+  context: "Status explaining why the current plot-style values are invalid."
+  placeholders:
+    error: "Raw plot-style validation error."
+transform.dialog.load_calibration:
+  text: "Load Calibration YAML"
+  context: "File dialog title for opening a calibration YAML file."
+transform.filter.yaml_all:
+  text: "YAML files (*.yaml *.yml);;All files (*)"
+  context: "File dialog filter for YAML files or any file."
+transform.status.calibration_loaded:
+  text: "Loaded custom calibration: {name}"
+  context: "Status confirming that a custom calibration file was loaded."
+  placeholders:
+    name: "Loaded calibration filename."
+transform.status.calibration_load_failed:
+  text: "Could not load the custom calibration file: {error}"
+  context: "Status explaining why the custom calibration file could not be loaded."
+  placeholders:
+    error: "Raw calibration-loading exception."
+transform.dialog.load_mask:
+  text: "Load Mask"
+  context: "File dialog title for opening a custom mask."
+transform.filter.mask_all:
+  text: "Mask files (*.png *.tif *.tiff *.npy);;All files (*)"
+  context: "File dialog filter for supported mask files or any file."
+transform.status.mask_loaded:
+  text: "Loaded custom mask: {name}"
+  context: "Status confirming that a custom mask file was loaded."
+  placeholders:
+    name: "Loaded mask filename."
+transform.status.mask_load_failed:
+  text: "Could not load the custom mask file: {error}"
+  context: "Status explaining why the custom mask file could not be loaded."
+  placeholders:
+    error: "Raw mask-loading exception."
+transform.tooltip.calibration.custom:
+  text: "Calibration: custom ({name})"
+  context: "Tooltip identifying the selected custom calibration filename."
+  placeholders:
+    name: "Custom calibration filename."
+transform.tooltip.calibration.unloaded:
+  text: "Calibration: from calibration tab (not loaded)"
+  context: "Tooltip indicating that shared calibration has not been loaded."
+transform.tooltip.calibration.shared:
+  text: "Calibration: from calibration tab"
+  context: "Tooltip identifying calibration from the shared calibration tab."
+transform.tooltip.mask.disabled:
+  text: "Mask: disabled"
+  context: "Tooltip indicating that mask application is disabled."
+transform.tooltip.mask.custom:
+  text: "Mask: custom ({name})"
+  context: "Tooltip identifying the selected custom mask filename."
+  placeholders:
+    name: "Custom mask filename."
+transform.tooltip.mask.shared:
+  text: "Mask: from mask tab"
+  context: "Tooltip identifying a mask loaded from the shared mask tab."
+transform.tooltip.mask.unloaded:
+  text: "Mask: from mask tab (not loaded)"
+  context: "Tooltip indicating that no shared mask has been loaded."
+transform.preview.calibration_required:
+  text: "Calibration required"
+  context: "Preview summary indicating that a calibration must be selected."
+transform.status.image_prepare_failed:
+  text: "Unable to prepare image array for transform"
+  context: "Status shown when the image cannot be prepared for transformation."
+transform.status.image_requires_2d:
+  text: "Transform requires 2D image data (got {dimensions}D)"
+  context: "Status explaining that transformation needs a two-dimensional image."
+  placeholders:
+    dimensions: "Number of image dimensions received."
+transform.status.mask_shape_mismatch:
+  text: "Mask shape does not match the active image; ignoring mask for preview"
+  context: "Status explaining that an incompatible mask is omitted from the preview."
+transform.status.calibration_required:
+  text: "Load calibration before running transform"
+  context: "Status prompting the user to load a calibration before transforming."
+transform.preview.image_calibration_unavailable:
+  text: "No image/calibration available"
+  context: "Preview summary shown when either image data or calibration is unavailable."
+transform.plot.load_image_calibration:
+  text: "Load an image and calibration first"
+  context: "Plot-area guidance shown before image data and calibration are available."
+transform.status.preview_failed:
+  text: "Preview failed: {error}"
+  context: "Preview summary explaining that transformation preview processing failed."
+  placeholders:
+    error: "Raw transform or rendering exception."
+transform.status.failed:
+  text: "Transform failed: {error}"
+  context: "Application status explaining that image transformation failed."
+  placeholders:
+    error: "Raw transform or rendering exception."
+transform.preview.result:
+  text: "{operation}: {size}"
+  context: "Transform preview summary reporting the selected operation and image size."
+  placeholders:
+    operation: "Localized transform operation name."
+    size: "Output image dimensions."
+transform.status.complete:
+  text: "{operation} complete: {size}"
+  context: "Status confirming transformation and reporting output image dimensions."
+  placeholders:
+    operation: "Localized transform operation name."
+    size: "Output image dimensions."
+transform.plot.no_preview:
+  text: "No transform preview\n\nLoad an image and run preview."
+  context: "Plot-area guidance shown before a transform preview is available."
+transform.status.preview_before_export:
+  text: "Run preview before export"
+  context: "Status prompting the user to generate a result before exporting."
+transform.dialog.export_image:
+  text: "Export transformed image"
+  context: "File dialog title for saving a transformed image."
+transform.filter.numpy_all:
+  text: "NumPy zipped (*.npz);;NumPy array (*.npy);;All files (*)"
+  context: "File dialog filter for NumPy archive, NumPy array, or any file."
+transform.status.image_exported:
+  text: "Transformed image exported to {path}"
+  context: "Status confirming the output path for the transformed image."
+  placeholders:
+    path: "Path returned by the transform image writer."
+transform.recipe.batch_header:
+  text: "# Recipe sent to Batch tab\n"
+  context: "Comment heading in the YAML recipe preview sent to Batch."
+transform.status.recipe_yaml_failed:
+  text: "Could not apply the recipe: invalid YAML — {error}"
+  context: "Status explaining that recipe text could not be parsed as YAML."
+  placeholders:
+    error: "Raw YAML parsing exception."
+transform.status.recipe_mapping_invalid:
+  text: "Invalid recipe: expected a YAML mapping"
+  context: "Status shown when a parsed recipe is not a mapping."
+transform.status.recipe_applied:
+  text: "Recipe applied from YAML"
+  context: "Status confirming that recipe edits were applied."
+transform.status.batch_unavailable:
+  text: "Batch tab not available"
+  context: "Status shown when the Batch tab cannot receive the recipe."
+transform.preview.pending:
+  text: "Preview pending..."
+  context: "Preview summary shown while a scheduled transform preview is waiting."
+transform.status.display_update_failed:
+  text: "Unable to update transform display"
+  context: "Fallback status shown when the transform display cannot be updated."
+transform.preview.image_loaded:
+  text: "Image loaded: {width}x{height}"
+  context: "Preview summary reporting the dimensions of the loaded image."
+  placeholders:
+    width: "Image width in pixels."
+    height: "Image height in pixels."
+transform.info.status_heading:
+  text: "=== TRANSFORM STATUS ==="
+  context: "Heading for transform-specific details in the image information display."
+transform.info.operation:
+  text: "Operation: {operation}"
+  context: "Information line identifying the selected transform operation."
+  placeholders:
+    operation: "Localized transform operation name."
+transform.info.mask_enabled:
+  text: "Mask enabled: {state}"
+  context: "Information line showing whether masking is enabled."
+  placeholders:
+    state: "Localized yes-or-no value."
+transform.info.yes:
+  text: "Yes"
+  context: "Affirmative value in the transform information display."
+transform.info.no:
+  text: "No"
+  context: "Negative value in the transform information display."
+transform.info.bins_relative:
+  text: "Bins (relative): {value:.2f}"
+  context: "Information line showing the relative bin count."
+  placeholders:
+    value: "Relative bin count formatted to two decimal places."
+transform.info.x_crop:
+  text: "x crop: {minimum:.4f} to {maximum:.4f}"
+  context: "Information line showing the x-axis crop range."
+  placeholders:
+    minimum: "Lower x-axis crop limit formatted to four decimal places."
+    maximum: "Upper x-axis crop limit formatted to four decimal places."
+transform.info.y_crop:
+  text: "y crop: {minimum:.4f} to {maximum:.4f}"
+  context: "Information line showing the y-axis crop range."
+  placeholders:
+    minimum: "Lower y-axis crop limit formatted to four decimal places."
+    maximum: "Upper y-axis crop limit formatted to four decimal places."
+transform.info.incident_angle:
+  text: "Incident angle: {value:.3f} deg"
+  context: "Information line showing the incident angle in degrees."
+  placeholders:
+    value: "Incident angle formatted to three decimal places."
+transform.info.sample_normal:
+  text: "Sample normal: {value:.3f} deg"
+  context: "Information line showing the sample-normal angle in degrees."
+  placeholders:
+    value: "Sample-normal angle formatted to three decimal places."
+transform.info.calibration_source:
+  text: "Calibration source: {source}"
+  context: "Information line identifying the selected calibration source."
+  placeholders:
+    source: "Displayed calibration source option."
+transform.info.source.calibration_shared:
+  text: "From calibration tab"
+  context: "Information value indicating that the calibration comes from the shared calibration tab."
+transform.info.source.calibration_custom:
+  text: "Custom profile"
+  context: "Information value indicating that a custom calibration profile is selected."
+transform.info.source.mask_shared:
+  text: "From mask tab"
+  context: "Information value indicating that the mask comes from the shared mask tab."
+transform.info.source.mask_custom:
+  text: "Custom mask"
+  context: "Information value indicating that a custom mask is selected."
+transform.info.source.mask_none:
+  text: "No mask"
+  context: "Information value indicating that mask application is disabled."
+transform.info.mask_source:
+  text: "Mask source: {source}"
+  context: "Information line identifying the selected mask source."
+  placeholders:
+    source: "Displayed mask source option."
+transform.info.last_preview:
+  text: "Last preview: {operation}"
+  context: "Information line identifying the most recently previewed operation."
+  placeholders:
+    operation: "Machine operation identifier, preserved verbatim."
+transform.info.preview_shape:
+  text: "Preview shape: {width}x{height}"
+  context: "Information line reporting the output image dimensions."
+  placeholders:
+    width: "Output image width in pixels."
+    height: "Output image height in pixels."
+transform.info.last_preview_none:
+  text: "Last preview: None"
+  context: "Information line indicating that no transform preview exists."

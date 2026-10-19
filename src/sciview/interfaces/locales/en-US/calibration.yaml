@@ -1,0 +1,273 @@
+calibration.plot.title:
+  text: "1D Profiles"
+  context: "Title for the one-dimensional calibration plot."
+calibration.plot.tip:
+  text: "Tweak beam center to align peaks"
+  context: "Brief guidance shown above the calibration profiles."
+calibration.plot.scale:
+  text: "Scale:"
+  context: "Label for the calibration plot scale selector."
+calibration.plot.scale_linear:
+  text: "linear"
+  context: "Choice that displays both profile axes with linear scales."
+calibration.plot.scale_log_x:
+  text: "logx"
+  context: "Choice that displays the horizontal profile axis logarithmically."
+calibration.plot.scale_log_y:
+  text: "logy"
+  context: "Choice that displays the vertical profile axis logarithmically."
+calibration.plot.scale_log_xy:
+  text: "loglog"
+  context: "Choice that displays both profile axes logarithmically."
+calibration.plot.export:
+  text: "Export 1D"
+  context: "Button that exports the one-dimensional profiles."
+calibration.parameters.title:
+  text: "Calibration Parameters"
+  context: "Heading for detector calibration inputs."
+calibration.beam_center_x:
+  text: "<u>Beam Center X</u>"
+  context: "Input label for the horizontal beam-center coordinate."
+calibration.beam_center_y:
+  text: "<u>Beam Center Y</u>"
+  context: "Input label for the vertical beam-center coordinate."
+calibration.beam_center.tooltip:
+  text: "Middle-click the raw image to set the beam center."
+  context: "Tooltip explaining how to place the beam center on the image."
+calibration.detector_orientation:
+  text: "Detector Orient (°)"
+  context: "Input label for detector orientation angle."
+calibration.detector_tilt:
+  text: "Detector Tilt (°)"
+  context: "Input label for detector tilt angle."
+calibration.detector_phi:
+  text: "Detector Phi (°)"
+  context: "Input label for detector phi angle."
+calibration.distance:
+  text: "<u>Distance (m)</u>"
+  context: "Input label for sample-to-detector distance in metres."
+calibration.pixel_size:
+  text: "Pixel Size (µm)"
+  context: "Input label for detector pixel size in micrometres."
+calibration.wavelength:
+  text: "Wavelength (Å):"
+  context: "Input label for X-ray wavelength in angstroms."
+calibration.energy:
+  text: "<u>Energy (eV):</u>"
+  context: "Input label for X-ray energy in electronvolts."
+calibration.action.calibrate:
+  text: "Calibrate"
+  context: "Button that applies the current calibration parameters."
+calibration.action.export:
+  text: "Export"
+  context: "Button that exports calibration parameters."
+calibration.ring.title:
+  text: "Calculate Ring Center"
+  context: "Heading and action label for ring-center calculation."
+calibration.ring.instructions:
+  text: "Right-click 3+ points on a ring."
+  context: "Instructions for selecting points to calculate a ring center."
+calibration.ring.snap_to_peak:
+  text: "Snap to Peak"
+  context: "Option to snap picked points to nearby intensity peaks."
+calibration.ring.snap_tooltip:
+  text: "Snap each right-click to the brightest nearby pixel."
+  context: "Tooltip explaining peak snapping for ring-point selection."
+calibration.ring.window:
+  text: "Window"
+  context: "Label for the local peak-search window size."
+calibration.ring.window_tooltip:
+  text: "Odd-size local search window (3-15 pixels)"
+  context: "Tooltip describing the permitted peak-search window size."
+calibration.ring.pixels:
+  text: "px"
+  context: "Unit label for the peak-search window measured in pixels."
+calibration.ring.point_required:
+  text: "Point {number} (required)"
+  context: "Tooltip identifying one of the required ring-point indicators."
+  placeholders:
+    number: "One-based point number."
+calibration.ring.point_optional:
+  text: "Point {number} (optional)"
+  context: "Tooltip identifying an optional ring-point indicator."
+  placeholders:
+    number: "One-based point number."
+calibration.ring.calculate:
+  text: "Calculate"
+  context: "Button that calculates the ring center from selected points."
+calibration.action.clear:
+  text: "Clear"
+  context: "Button that clears selected ring points."
+calibration.standard.title:
+  text: "Check Against a Standard"
+  context: "Heading for selecting a reference material."
+calibration.standard.none:
+  text: "None"
+  context: "Choice indicating that no reference standard is selected."
+calibration.standard.show_rings:
+  text: "Show Rings"
+  context: "Option to display reference rings for the selected standard."
+calibration.standard.show_rings_tooltip:
+  text: "Show the selected standard's reference rings on the detector image."
+  context: "Tooltip explaining the reference-ring display option."
+calibration.standard.instructions:
+  text: "Pick a standard above to overlay its reference lines."
+  context: "Guidance shown before a reference standard is selected."
+calibration.status.pending:
+  text: "Calibration update pending..."
+  context: "Status shown while a calibration update is scheduled."
+calibration.ring.points_needed:
+  text: "{picked}/{total} points picked (need 3+)"
+  context: "Ring-point progress when more points are needed for fitting."
+  placeholders:
+    picked: "Number of points currently selected."
+    total: "Maximum number of ring points."
+calibration.ring.points_picked:
+  text: "{picked}/{total} points picked"
+  context: "Ring-point progress when enough points are selected."
+  placeholders:
+    picked: "Number of points currently selected."
+    total: "Maximum number of ring points."
+calibration.ring.result:
+  text: "Center ({x:.1f}, {y:.1f}), r={radius:.1f}px, fit={score:.0f}%"
+  context: "Calculated ring center, radius, and fit score."
+  placeholders:
+    x: "Horizontal center coordinate in pixels."
+    y: "Vertical center coordinate in pixels."
+    radius: "Calculated ring radius in pixels."
+    score: "Fit quality as a percentage."
+calibration.ring.result_excluded:
+  text: "Center ({x:.1f}, {y:.1f}), r={radius:.1f}px, fit={score:.0f}% ({count} excluded)"
+  context: "Calculated ring result when outlier points were excluded."
+  placeholders:
+    x: "Horizontal center coordinate in pixels."
+    y: "Vertical center coordinate in pixels."
+    radius: "Calculated ring radius in pixels."
+    score: "Fit quality as a percentage."
+    count: "Number of excluded ring points."
+calibration.ring.status_calculated:
+  text: "Ring center calculated and applied: ({x:.2f}, {y:.2f}) using {count} points"
+  context: "Status confirming the calculated ring center was applied."
+  placeholders:
+    x: "Horizontal center coordinate in pixels."
+    y: "Vertical center coordinate in pixels."
+    count: "Number of points used in the fit."
+calibration.ring.status_outliers:
+  text: "Ring center calculated and applied: ({x:.2f}, {y:.2f}) using {count} points ({excluded} outliers excluded)"
+  context: "Status confirming the ring center was applied after excluding outliers."
+  placeholders:
+    x: "Horizontal center coordinate in pixels."
+    y: "Vertical center coordinate in pixels."
+    count: "Number of points used in the fit."
+    excluded: "Number of excluded outlier points."
+calibration.ring.fit_failed:
+  text: "Fit failed: {error}"
+  context: "Ring-center result shown when fitting fails."
+  placeholders:
+    error: "Raw error detail from the fitting operation."
+calibration.ring.fit_error:
+  text: "Could not calculate the ring center: {error}"
+  context: "Status shown when ring-center calculation fails."
+  placeholders:
+    error: "Raw error detail from the fitting operation."
+calibration.ring.cleared:
+  text: "Ring points cleared"
+  context: "Status confirming that selected ring points were cleared."
+calibration.status.updated:
+  text: "Calibration updated and plots refreshed"
+  context: "Status confirming calibration and its plots were refreshed."
+calibration.ring.status_heading:
+  text: "=== RING CENTER STATUS ==="
+  context: "Section heading in calibration status information."
+calibration.ring.status_count:
+  text: "Ring points entered: {count}/{total}"
+  context: "Selected ring-point count in calibration status information."
+  placeholders:
+    count: "Number of selected points."
+    total: "Maximum number of ring points."
+calibration.ring.status_center:
+  text: "Calculated center: ({x:.2f}, {y:.2f})"
+  context: "Calculated center coordinates in calibration status information."
+  placeholders:
+    x: "Horizontal center coordinate in pixels."
+    y: "Vertical center coordinate in pixels."
+calibration.ring.status_not_calculated:
+  text: "Ring center: Not calculated"
+  context: "Status indicating that a ring center has not been calculated."
+calibration.standard.status_heading:
+  text: "=== STANDARDS STATUS ==="
+  context: "Section heading for reference-standard status information."
+calibration.status.selected:
+  text: "Selected: {standard}"
+  context: "Name of the currently selected calibration standard."
+  placeholders:
+    standard: "Selected standard name from the reference database."
+calibration.standard.reference_lines:
+  text: "Reference lines: {count}"
+  context: "Number of reference lines for a selected standard."
+  placeholders:
+    count: "Number of reference lines."
+calibration.standard.showing:
+  text: "Showing {count} reference lines for {standard}."
+  context: "Information about reference lines overlaid for a standard."
+  placeholders:
+    count: "Number of reference lines."
+    standard: "Selected standard name from the reference database."
+calibration.plot.no_analysis:
+  text: "No Q-space analysis available\n\nRequires:\n• Valid image data\n• SciAnalysis library\n• Proper calibration parameters"
+  context: "Plot notice explaining why Q-space profiles are unavailable."
+calibration.plot.q_axis:
+  text: "Q (Å⁻¹)"
+  context: "Horizontal axis label for the scattering-vector magnitude."
+calibration.plot.intensity_axis:
+  text: "Intensity"
+  context: "Vertical axis label for scattering intensity."
+calibration.plot.circular_average:
+  text: "Circular Avg"
+  context: "Legend label for the circularly averaged scattering profile."
+calibration.plot.horizontal_0:
+  text: "Horizontal 0°"
+  context: "Legend label for the horizontal zero-degree profile."
+calibration.plot.horizontal_180:
+  text: "Horizontal 180°"
+  context: "Legend label for the horizontal 180-degree profile."
+calibration.plot.vertical_90:
+  text: "Vertical 90°"
+  context: "Legend label for the vertical 90-degree profile."
+calibration.plot.vertical_270:
+  text: "Vertical 270°"
+  context: "Legend label for the vertical 270-degree profile."
+calibration.export.select_directory:
+  text: "Select Directory to Export Calibration"
+  context: "Directory chooser title for exporting calibration parameters."
+calibration.exported:
+  text: "Calibration parameters exported to {path}"
+  context: "Status giving the path where calibration parameters were written."
+  placeholders:
+    path: "Path of the exported calibration file."
+calibration.export.no_profiles:
+  text: "No 1D profile data available to export. Load an image and calibrate first."
+  context: "Status explaining that profiles must be calculated before export."
+calibration.export.profiles_title:
+  text: "Export 1D Profiles"
+  context: "File chooser title for exporting one-dimensional profiles."
+calibration.export.profiles_filter:
+  text: "CSV files (*.csv);;Text files (*.txt);;All files (*)"
+  context: "File type choices for exporting profile data."
+calibration.exported_profiles:
+  text: "1D profiles exported to {path}"
+  context: "Status giving the path where profile data was exported."
+  placeholders:
+    path: "Path of the exported profile file."
+calibration.ring.all_points:
+  text: "All {count} points filled. Click '{button}' or continue right-clicking to replace points."
+  context: "Status explaining how to continue after all ring-point slots are filled."
+  placeholders:
+    count: "Maximum number of ring points."
+    button: "Localized label of the ring-center calculation action."
+calibration.ring.point_filled:
+  text: "Point {point} filled. Right-click for point {next_point}."
+  context: "Status showing ring-point selection progress."
+  placeholders:
+    point: "One-based number of the point just selected."
+    next_point: "One-based number of the next point to select."

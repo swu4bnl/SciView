@@ -1,0 +1,10 @@
+resource_monitor.not_available:
+  text: N/A
+  context: Resource-monitor readout when process memory information is unavailable.
+resource_monitor.cpu_cpu_str_mem_mem_info:
+  text: 'CPU: {cpu_str} | Mem: {mem_info_current} ({mem_info_percent})'
+  context: Status in the application resource status display.
+  placeholders:
+    cpu_str: Formatted CPU utilization percentage.
+    mem_info_current: Formatted process memory usage including its unit.
+    mem_info_percent: Formatted process memory usage as a percentage of system memory.

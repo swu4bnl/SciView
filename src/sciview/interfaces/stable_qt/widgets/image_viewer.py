@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from sciview.interfaces.text import tr
+
 import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PyQt5.QtCore import QEvent, QPointF, QSize, Qt, pyqtSignal
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PyQt5.QtCore import QEvent, QPointF, Qt, pyqtSignal
+from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtWidgets import QApplication, QFileDialog, QGridLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 import pyqtgraph as pg
 import pyqtgraph.exporters
@@ -26,6 +28,7 @@ from sciview.settings.viewer_config import (
     VIEWER_COLORS,
     VIEWER_TOOL_ICON_FILES,
     VIEWER_TOOLBAR_ACTIONS,
+    VIEWER_TOOLBAR_GROUPS,
     resolve_matplotlib_colormap,
 )
 
@@ -75,6 +78,7 @@ class ImageViewer(QWidget):
         self._levels: tuple[float | None, float | None] = (None, None)
         self._scale = "linear"
         self._colormap_name = SUPPORTED_IMAGE_COLORMAPS[0]
+        self._colormap_applied = False
         self._overlays: dict[str, tuple[Any, str | None]] = {}
         self._interaction_locked = False
         self._pointer_captured = False
@@ -112,16 +116,18 @@ class ImageViewer(QWidget):
         self._graphics.viewport().installEventFilter(self)
 
         toolbar_actions = {action.key: action for action in VIEWER_TOOLBAR_ACTIONS}
-        self._pan_button = self._make_tool_button(toolbar_actions["pan"], self._load_toolbar_icon("pan"))
-        self._zoom_button = self._make_tool_button(toolbar_actions["zoom"], self._load_toolbar_icon("zoom"))
-        self.beam_center_overlay_button = self._make_tool_button(
-            toolbar_actions["beam_center"], self._load_toolbar_icon("beam_center")
-        )
-        self.mask_overlay_button = self._make_tool_button(toolbar_actions["mask"], self._load_toolbar_icon("mask"))
-        self._home_button = self._make_tool_button(toolbar_actions["home"], self._load_toolbar_icon("home"))
-        self._auto_levels_button = self._make_tool_button(toolbar_actions["auto"], self._load_toolbar_icon("auto"))
-        self._copy_button = self._make_tool_button(toolbar_actions["copy"], self._load_toolbar_icon("copy"))
-        self._save_button = self._make_tool_button(toolbar_actions["save"], self._load_toolbar_icon("save"))
+        self._toolbar_buttons = {
+            action.key: self._make_tool_button(action, self._load_toolbar_icon(action.key))
+            for action in VIEWER_TOOLBAR_ACTIONS
+        }
+        self._pan_button = self._toolbar_buttons["pan"]
+        self._zoom_button = self._toolbar_buttons["zoom"]
+        self.beam_center_overlay_button = self._toolbar_buttons["beam_center"]
+        self.mask_overlay_button = self._toolbar_buttons["mask"]
+        self._home_button = self._toolbar_buttons["home"]
+        self._auto_levels_button = self._toolbar_buttons["auto"]
+        self._copy_button = self._toolbar_buttons["copy"]
+        self._save_button = self._toolbar_buttons["save"]
         self._palette_info_label = QLabel("")
         self._palette_info_label.setVisible(False)
         self._palette_info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -140,33 +146,47 @@ class ImageViewer(QWidget):
         self.beam_center_overlay_button.toggled.connect(self._emit_overlay_visibility_changed)
         self.mask_overlay_button.toggled.connect(self._emit_overlay_visibility_changed)
 
-        self._toolbar_layout = QHBoxLayout()
-        self._toolbar_layout.setContentsMargins(0, 0, 0, 0)
-        self._toolbar_layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
-        toolbar_buttons = {
-            "pan": self._pan_button,
-            "zoom": self._zoom_button,
-            "beam_center": self.beam_center_overlay_button,
-            "mask": self.mask_overlay_button,
-            "home": self._home_button,
-            "auto": self._auto_levels_button,
-            "copy": self._copy_button,
-            "save": self._save_button,
-        }
-        self._toolbar_cells = {}
-        for action in VIEWER_TOOLBAR_ACTIONS:
-            cell = self._make_labeled_tool_cell(action.label, toolbar_buttons[action.key])
-            self._toolbar_cells[action.key] = cell
-            self._toolbar_layout.addWidget(cell)
-        self._toolbar_cells["beam_center"].setVisible(False)
-        self._toolbar_cells["mask"].setVisible(False)
-        self._toolbar_layout.addWidget(self._palette_info_label)
+        self._toolbar = QWidget()
+        self._toolbar.setObjectName("imageViewerToolbar")
+        self._toolbar.setAttribute(Qt.WA_StyledBackground, True)
+        self._toolbar_layout = QGridLayout(self._toolbar)
+        self._toolbar_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
+        self._toolbar_layout.setHorizontalSpacing(AppStyle.LAYOUT['toolbar_spacing'])
+        self._overlay_tool_cells: list[QWidget] = []
+        column = 0
+        for specification in VIEWER_TOOLBAR_GROUPS:
+            if column:
+                self._toolbar_layout.setColumnMinimumWidth(column, AppStyle.LAYOUT['toolbar_group_spacing'])
+                self._toolbar_layout.setColumnStretch(column, 1)
+                column += 1
+            group_cells = []
+            for key in specification.actions:
+                action = toolbar_actions[key]
+                cell = self._make_labeled_tool_cell(tr(action.label_id), self._toolbar_buttons[key])
+                self._toolbar_layout.addWidget(cell, 0, column, Qt.AlignHCenter)
+                group_cells.append(cell)
+                column += 1
+            if specification.key == "overlays":
+                self._overlay_tool_cells = group_cells
+                for cell in group_cells:
+                    cell.setVisible(False)
+            elif specification.key == "display":
+                column += 1
+                self._toolbar_layout.setColumnMinimumWidth(column, AppStyle.LAYOUT['toolbar_group_spacing'])
+                self._toolbar_layout.setColumnStretch(column, 1)
+                column += 1
+                self._display_controls_column = column
+        column += 1
+        self._toolbar_layout.setColumnMinimumWidth(column, AppStyle.LAYOUT['toolbar_group_spacing'])
+        self._toolbar_layout.setColumnStretch(column, 1)
+        column += 1
+        self._toolbar_layout.addWidget(self._palette_info_label, 0, column)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
         layout.addWidget(self._graphics)
-        layout.addLayout(self._toolbar_layout)
+        layout.addWidget(self._toolbar)
 
         self.refresh_theme()
         self.set_colormap(self._colormap_name)
@@ -204,7 +224,7 @@ class ImageViewer(QWidget):
     def set_color_image(self, image: Any, *, preserve_view: bool = True) -> None:
         array = np.asarray(image)
         if array.ndim != 3 or array.shape[2] not in (3, 4):
-            self.clear_image("Color image must be RGB or RGBA")
+            self.clear_image(tr('viewer.color_image_must_be_rgb_or'))
             return
 
         old_shape = self._source_array.shape if self._source_array is not None else None
@@ -219,6 +239,7 @@ class ImageViewer(QWidget):
         self._display_levels = None
         self._message_item.setVisible(False)
         self._image_item.setLookupTable(None)
+        self._colormap_applied = False
         self._image_item.setVisible(True)
         self._image_item.setImage(array, autoLevels=False)
 
@@ -239,7 +260,10 @@ class ImageViewer(QWidget):
         self.set_title("")
 
     def set_levels(self, vmin: float | None, vmax: float | None) -> None:
-        self._levels = (self._finite_or_none(vmin), self._finite_or_none(vmax))
+        levels = (self._finite_or_none(vmin), self._finite_or_none(vmax))
+        if levels == self._levels:
+            return
+        self._levels = levels
         self._refresh_display_image(preserve_view=True)
 
     def auto_levels(self) -> tuple[float, float] | None:
@@ -288,9 +312,12 @@ class ImageViewer(QWidget):
     def set_colormap(self, name: str) -> None:
         if name not in self._SUPPORTED_COLORMAPS:
             raise ValueError(f"Unsupported colormap: {name}")
+        if name == self._colormap_name and self._colormap_applied:
+            return
         self._colormap_name = name
         lut = self._artist_palette_lut(name) if name in ARTIST_IMAGE_COLORMAPS else self._matplotlib_lut(name)
         self._image_item.setLookupTable(lut)
+        self._colormap_applied = True
         self._update_palette_info_label(name)
         try:
             self._histogram.gradient.setColorMap(pg.ColorMap(np.linspace(0.0, 1.0, lut.shape[0]), lut))
@@ -300,6 +327,8 @@ class ImageViewer(QWidget):
     def set_scale(self, scale: str) -> None:
         if scale not in SUPPORTED_IMAGE_SCALES:
             raise ValueError(f"Unsupported image scale: {scale}")
+        if scale == self._scale:
+            return
         self._scale = scale
         self._refresh_display_image(preserve_view=True)
 
@@ -330,8 +359,12 @@ class ImageViewer(QWidget):
 
     def enable_overlay_tools(self) -> None:
         """Show the beam-center and mask toolbar controls."""
-        self._toolbar_cells["beam_center"].setVisible(True)
-        self._toolbar_cells["mask"].setVisible(True)
+        for cell in self._overlay_tool_cells:
+            cell.setVisible(True)
+
+    def set_display_controls(self, controls: QWidget) -> None:
+        """Place tab-owned display controls beside the viewer tools, in the same toolbar row."""
+        self._toolbar_layout.addWidget(controls, 0, self._display_controls_column)
 
     def activate_navigation_mode(self, mode: str) -> None:
         """Unlock drawing input and select a supported viewer navigation mode."""
@@ -373,7 +406,7 @@ class ImageViewer(QWidget):
 
         text = f"{palette.artist} - {palette.artwork}"
         self._palette_info_label.setText(text)
-        self._palette_info_label.setToolTip(f"{palette.source}: {text}")
+        self._palette_info_label.setToolTip(tr('viewer.palette_source_text', palette_source=palette.source, text=text))
         self._palette_info_label.setVisible(True)
 
     def reset_view(self) -> None:
@@ -673,9 +706,9 @@ class ImageViewer(QWidget):
     def _choose_export_path(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save displayed image",
+            tr('viewer.save_displayed_image'),
             "",
-            "PNG Images (*.png);;All Files (*)",
+            tr('viewer.png_images_png_all_files'),
         )
         if path:
             self.export_rendered_view(path)
@@ -690,24 +723,17 @@ class ImageViewer(QWidget):
         self._graphics.setBackground(background)
         self._view_box.setBackgroundColor(background)
         self._message_item.setColor(muted_color)
-        self._plot_item.getAxis("left").setPen(text_color)
-        self._plot_item.getAxis("left").setTextPen(text_color)
-        self._plot_item.getAxis("bottom").setPen(text_color)
-        self._plot_item.getAxis("bottom").setTextPen(text_color)
+        AppStyle.apply_pyqtgraph_plot_theme(self._plot_item)
+        self._histogram.axis.setTickFont(AppStyle.make_font('body'))
+        self._histogram.axis.setTextPen(text_color)
+        self._histogram.axis.setPen(text_color)
 
-        for key, button in {
-            "pan": self._pan_button,
-            "zoom": self._zoom_button,
-            "beam_center": self.beam_center_overlay_button,
-            "mask": self.mask_overlay_button,
-            "home": self._home_button,
-            "auto": self._auto_levels_button,
-            "copy": self._copy_button,
-            "save": self._save_button,
-        }.items():
+        AppStyle.apply_widget_style(self._toolbar, 'viewer_toolbar')
+        for key, button in self._toolbar_buttons.items():
             AppStyle.apply_widget_style(button, 'compact_button')
+            button.setFixedSize(AppStyle.viewer_toolbar_button_size())
             button.setIcon(self._load_toolbar_icon(key))
-            button.setIconSize(AppStyle.tab_icon_size())
+            button.setIconSize(AppStyle.viewer_toolbar_icon_size())
 
         self._palette_info_label.setStyleSheet(f"color: {muted_color.name()};")
         self._graphics.update()
@@ -723,22 +749,23 @@ class ImageViewer(QWidget):
     @staticmethod
     def _make_tool_button(action: Any, icon: QIcon) -> QToolButton:
         button = QToolButton()
-        button.setAccessibleName(action.label)
+        button.setProperty("sciview_viewer_tool_button", True)
+        button.setAccessibleName(tr(action.label_id))
         button.setAutoRaise(False)
-        button.setFixedSize(AppStyle.toolbar_symbol_button_size())
+        button.setFixedSize(AppStyle.viewer_toolbar_button_size())
         AppStyle.apply_widget_style(button, 'compact_button')
         if icon.isNull():
-            button.setText(action.label)
-            button.setFont(AppStyle.make_font('h3', weight=600))
+            button.setText(tr(action.label_id))
+            button.setFont(AppStyle.make_font('h3', weight=QFont.Bold))
         else:
             button.setIcon(icon)
-            icon_size = max(16, min(button.width() - 10, button.height() - 10))
-            button.setIconSize(QSize(icon_size, icon_size))
-        button.setToolTip(action.tooltip)
+            button.setIconSize(AppStyle.viewer_toolbar_icon_size())
+        button.setToolTip(tr(action.tooltip_id))
         return button
 
     @staticmethod
     def _make_labeled_tool_cell(label_text: str, button: QToolButton) -> QWidget:
+        """Build a single icon-over-caption unit occupying one toolbar grid cell."""
         cell = QWidget()
         layout = QVBoxLayout(cell)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -747,7 +774,7 @@ class ImageViewer(QWidget):
         label = QLabel(label_text)
         label.setAlignment(Qt.AlignHCenter)
         AppStyle.set_font_role(label, 'toolbar_text')
-        layout.addWidget(label)
+        layout.addWidget(label, 0, Qt.AlignHCenter)
         return cell
 
     @staticmethod

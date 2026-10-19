@@ -5,6 +5,8 @@ This module contains the BaseImageTab class which provides common
 image-related functionality that can be reused across different tabs.
 """
 
+from sciview.interfaces.text import tr
+
 import os
 import sys
 import numpy as np
@@ -13,7 +15,7 @@ import datetime
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QFileDialog,
-    QTextEdit, QFormLayout, QScrollArea
+    QTextEdit, QFormLayout, QScrollArea, QSizePolicy
 )
 from PyQt5.QtCore import Qt
 
@@ -23,6 +25,7 @@ from sciview.interfaces.theme.app_style import (
     apply_info_style,
     apply_subtitle_style,
     apply_title_style,
+    apply_input_style,
 )
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_detector_config, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import DEFAULT_DISPLAY_SETTINGS, MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
@@ -87,7 +90,7 @@ class BaseImageTab(QWidget):
         """Wrap a panel in a scroll area to keep all controls reachable."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setFrameShape(QScrollArea.NoFrame)
         scroll.setMinimumHeight(AppStyle.LAYOUT.get('control_panel_min_height', 96))
@@ -137,7 +140,7 @@ class BaseImageTab(QWidget):
                         det_phi=DEFAULT_CALIBRATION['detector_phi_deg'],
                     )
             except Exception as e:
-                self.parent_app.report_error(f"Could not initialize the calibration: {e}", exc=e)
+                self.parent_app.report_error(tr('base_image.could_not_initialize_the_calibration_error', error=e), exc=e)
                 self.calibration = None
         else:
             self.calibration = None
@@ -185,7 +188,7 @@ class BaseImageTab(QWidget):
             return calibration
             
         except Exception as e:
-            self.parent_app.report_error(f"Could not create the calibration: {e}", exc=e)
+            self.parent_app.report_error(tr('base_image.could_not_create_the_calibration_error', error=e), exc=e)
             return None
 
     def create_data2d_object(self, image_array, file_path):
@@ -239,7 +242,7 @@ class BaseImageTab(QWidget):
         except Exception as e:
             # logger.exception (inside report_error) already captures the traceback.
             self.parent_app.report_error(
-                f"Could not attach calibration to the image; showing the raw image instead: {e}",
+                tr('base_image.could_not_attach_calibration_to_the', error=e),
                 exc=e,
             )
             return image_array
@@ -306,7 +309,7 @@ class BaseImageTab(QWidget):
 
     def _on_scale_changed(self, scale):
         """Handle scale change"""
-        self.update_display_settings(scale=scale)
+        self.update_display_settings(scale=self.img_scale_combo.currentData())
 
     def sync_display_controls(self):
         """Sync display controls with current settings"""
@@ -322,7 +325,7 @@ class BaseImageTab(QWidget):
         self.vmin_input.setText(str(self.display_settings['vmin']))
         self.vmax_input.setText(str(self.display_settings['vmax']))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
-        self.img_scale_combo.setCurrentText(self.display_settings['scale'])
+        self.img_scale_combo.setCurrentIndex(self.img_scale_combo.findData(self.display_settings['scale']))
         if hasattr(self, 'image_viewer'):
             self.image_viewer.beam_center_overlay_button.setChecked(
                 bool(self.display_settings.get('show_beam_center', False))
@@ -388,15 +391,15 @@ class BaseImageTab(QWidget):
         layout.setSpacing(0)  # Remove all spacing
 
         if show_header:
-            title = QLabel("Raw Image Display")
+            title = QLabel(tr('base_image.raw_image_display'))
             apply_subtitle_style(title)
             layout.addWidget(title)
 
-            self.filename_label = QLabel("File Name: No image loaded")
+            self.filename_label = QLabel(tr('base_image.file_name_no_image_loaded'))
             apply_info_style(self.filename_label)
             layout.addWidget(self.filename_label)
         else:
-            self.filename_label = QLabel("No image loaded")
+            self.filename_label = QLabel(tr('base_image.no_image_loaded'))
             self.filename_label.setVisible(False)
 
         self.image_viewer = ImageViewer(self)
@@ -411,34 +414,71 @@ class BaseImageTab(QWidget):
         self.image_viewer.overlay_visibility_changed.connect(self._on_overlay_visibility_changed)
         layout.addWidget(self.image_viewer)
 
-        # Image controls - now shared across all tabs
-        img_ctrl = QHBoxLayout()
-        img_ctrl.addWidget(QLabel("Color Map Minimum"))
-        self.vmin_input = QLineEdit(str(self.display_settings['vmin']))
-        self.vmin_input.editingFinished.connect(self._on_vmin_changed)
-        img_ctrl.addWidget(self.vmin_input)
+        display_controls = QWidget()
+        display_controls.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        display_layout = QGridLayout(display_controls)
+        display_layout.setContentsMargins(0, 0, 0, 0)
+        display_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
 
-        img_ctrl.addWidget(QLabel("Color Map Maximum"))
-        self.vmax_input = QLineEdit(str(self.display_settings['vmax']))
-        self.vmax_input.editingFinished.connect(self._on_vmax_changed)
-        img_ctrl.addWidget(self.vmax_input)
-
-        img_ctrl.addWidget(QLabel("Colormap"))
+        color_label = QLabel(tr('base_image.color'))
+        color_label.setToolTip(tr('base_image.colormap'))
+        display_layout.addWidget(color_label, 0, 0)
         self.cmap_selector = QComboBox()
+        self.cmap_selector.setProperty("sciview_input_width", "wide_input_min_width")
+        self.cmap_selector.setMinimumWidth(AppStyle.wide_input_min_width())
+        self.cmap_selector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.cmap_selector.setAccessibleName(tr('base_image.colormap'))
+        self.cmap_selector.setToolTip(tr('base_image.colormap'))
         self.cmap_selector.addItems(list(SUPPORTED_IMAGE_COLORMAPS))
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.cmap_selector.currentTextChanged.connect(self._on_cmap_changed)
-        img_ctrl.addWidget(self.cmap_selector)
+        display_layout.addWidget(self.cmap_selector, 0, 1)
 
-        img_ctrl.addWidget(QLabel("Scale"))
+        scale_label = QLabel(tr('base_image.scale'))
+        scale_label.setToolTip(tr('base_image.intensity_scale_linear_or_log'))
+        display_layout.addWidget(scale_label, 0, 2)
         self.img_scale_combo = QComboBox()
-        self.img_scale_combo.addItems(list(SUPPORTED_IMAGE_SCALES))
-        self.img_scale_combo.setCurrentText(self.display_settings['scale'])
+        self.img_scale_combo.setProperty("sciview_input_width", "compact_input_min_width")
+        self.img_scale_combo.setMinimumWidth(AppStyle.compact_input_min_width())
+        self.img_scale_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.img_scale_combo.setAccessibleName(tr('base_image.intensity_scale'))
+        self.img_scale_combo.setToolTip(tr('base_image.intensity_scale_linear_or_log'))
+        for scale in SUPPORTED_IMAGE_SCALES:
+            self.img_scale_combo.addItem(tr(f"base_image.scale.{scale}"), scale)
+        self.img_scale_combo.setCurrentIndex(self.img_scale_combo.findData(self.display_settings['scale']))
         self.img_scale_combo.currentTextChanged.connect(self._on_scale_changed)
-        img_ctrl.addWidget(self.img_scale_combo)
+        display_layout.addWidget(self.img_scale_combo, 0, 3)
 
-        layout.addLayout(img_ctrl)
-        
+        vmin_label = QLabel(tr('base_image.min'))
+        vmin_label.setToolTip(tr('base_image.color_map_minimum'))
+        display_layout.addWidget(vmin_label, 1, 0)
+        self.vmin_input = QLineEdit(str(self.display_settings['vmin']))
+        self.vmin_input.setProperty("sciview_input_width", "compact_input_min_width")
+        self.vmin_input.setMinimumWidth(AppStyle.compact_input_min_width())
+        self.vmin_input.setAccessibleName(tr('base_image.color_minimum'))
+        self.vmin_input.setToolTip(tr('base_image.color_map_minimum'))
+        self.vmin_input.editingFinished.connect(self._on_vmin_changed)
+        display_layout.addWidget(self.vmin_input, 1, 1)
+
+        vmax_label = QLabel(tr('base_image.max'))
+        vmax_label.setToolTip(tr('base_image.color_map_maximum'))
+        display_layout.addWidget(vmax_label, 1, 2)
+        self.vmax_input = QLineEdit(str(self.display_settings['vmax']))
+        self.vmax_input.setProperty("sciview_input_width", "compact_input_min_width")
+        self.vmax_input.setMinimumWidth(AppStyle.compact_input_min_width())
+        self.vmax_input.setAccessibleName(tr('base_image.color_maximum'))
+        self.vmax_input.setToolTip(tr('base_image.color_map_maximum'))
+        self.vmax_input.editingFinished.connect(self._on_vmax_changed)
+        display_layout.addWidget(self.vmax_input, 1, 3)
+
+        for column in (1, 3):
+            display_layout.setColumnStretch(column, 1)
+        for control in (self.cmap_selector, self.img_scale_combo, self.vmin_input, self.vmax_input):
+            control.setProperty("sciview_display_control", True)
+            apply_input_style(control)
+            control.setFixedHeight(AppStyle.toolbar_text_button_height())
+        self.image_viewer.set_display_controls(display_controls)
+
         return panel
 
     def _overlay_calibration(self):
@@ -501,7 +541,7 @@ class BaseImageTab(QWidget):
         layout.setSpacing(1)
 
         # Title
-        title = QLabel("Image Information")
+        title = QLabel(tr('base_image.image_information'))
         apply_title_style(title)
         layout.addWidget(title)
         
@@ -519,7 +559,7 @@ class BaseImageTab(QWidget):
 
     def _set_initial_image_info_text(self):
         """Set initial text for image info panel"""
-        initial_text = "No image loaded\n\nLoad an image to show file, detector, calibration, and processing details."
+        initial_text = tr('base_image.no_image_loaded_load_an_image')
         self._set_image_info_text(initial_text)
 
     def load_image(self):
@@ -534,7 +574,7 @@ class BaseImageTab(QWidget):
             
             # Update filename display if available
             if hasattr(self, 'filename_label'):
-                self.filename_label.setText(f"File Name: {os.path.basename(path)}")
+                self.filename_label.setText(tr('base_image.file_name_basename_path', basename_path=os.path.basename(path)))
             
             # Reset canvas views when loading new image
             self._reset_canvas_views()
@@ -644,68 +684,69 @@ class BaseImageTab(QWidget):
             info_lines = []
             
             # === APPLICATION STATUS ===
-            info_lines.append("=== APPLICATION STATUS ===")
-            info_lines.append(f"Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            info_lines.append(tr('base_image.application_status'))
+            info_lines.append(tr('base_image.timestamp_now_strftime_y_m_d', now_strftime_y_m_d_h_m_s=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
             
             # File information
             if image_path:
-                info_lines.append(f"Loaded: {os.path.basename(image_path)}")
-                info_lines.append(f"Path: {image_path}")
+                info_lines.append(tr('base_image.loaded_basename_image_path', basename_image_path=os.path.basename(image_path)))
+                info_lines.append(tr('base_image.path_image_path', image_path=image_path))
                 if os.path.exists(image_path):
                     file_size = os.path.getsize(image_path)
-                    info_lines.append(f"Size: {file_size:,} bytes")
+                    info_lines.append(tr('base_image.size_file_size_bytes', file_size=file_size))
                     mod_time = os.path.getmtime(image_path)
                     mod_time_str = datetime.datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M:%S")
-                    info_lines.append(f"Modified: {mod_time_str}")
+                    info_lines.append(tr('base_image.modified_mod_time_str', mod_time_str=mod_time_str))
             
             # Beamline configuration status
             if hasattr(self, 'measurement_type') and self.measurement_type:
-                info_lines.append(f"Measurement: {self.measurement_type}")
+                info_lines.append(tr('base_image.measurement_measurement_type', measurement_type=self.measurement_type))
             if hasattr(self, 'export_cali_path') and self.export_cali_path:
-                info_lines.append(f"Calibration file: {self.export_cali_path}")
+                info_lines.append(tr('base_image.calibration_file_export_cali_path', export_cali_path=self.export_cali_path))
             if hasattr(self, 'mask_path') and self.mask_path:
-                info_lines.append(f"Mask file: {self.mask_path}")
+                info_lines.append(tr('base_image.mask_file_mask_path', mask_path=self.mask_path))
             
             info_lines.append("")  # Blank line separator
             
             # === IMAGE DATA ===
-            info_lines.append("=== IMAGE DATA ===")
+            info_lines.append(tr('base_image.image_data'))
             if image_data is not None:
                 # Use shared utility function to extract image info (handles SciAnalysis objects & raw arrays)
                 img_info = get_image_info(image_data)
                 if img_info:
                     shape = img_info['shape']
                     dtype = img_info['dtype']
-                    info_lines.append(f"Dimensions: {shape[1]} x {shape[0]} pixels")
-                    info_lines.append(f"Data type: {dtype}")
-                    info_lines.append(f"Value range: {img_info['min_value']:.2f} to {img_info['max_value']:.2f}")
-                    info_lines.append(f"Mean: {img_info['mean_value']:.2f}")
-                    info_lines.append(f"Std dev: {img_info['std_value']:.2f}")
+                    info_lines.append(tr('base_image.dimensions_shape_x_shape_pixels', shape_1=shape[1], shape_0=shape[0]))
+                    info_lines.append(tr('base_image.data_type_dtype', dtype=dtype))
+                    info_lines.append(tr('base_image.value_range_img_info_min_value', img_info_min_value=img_info['min_value'], img_info_max_value=img_info['max_value']))
+                    info_lines.append(tr('base_image.mean_img_info_mean_value_f', img_info_mean_value=img_info['mean_value']))
+                    info_lines.append(tr('base_image.std_dev_img_info_std_value', img_info_std_value=img_info['std_value']))
                 else:
-                    info_lines.append("Unable to extract image information")
+                    info_lines.append(tr('base_image.unable_to_extract_image_information'))
             else:
-                info_lines.append("No image data loaded")
+                info_lines.append(tr('base_image.no_image_data_loaded'))
             
             info_lines.append("")  # Blank line separator
             
             # === CALIBRATION STATUS ===
-            info_lines.append("=== CALIBRATION STATUS ===")
-            info_lines.append(f"SciAnalysis: {'Available' if self.scianalysis_available else 'Not available'}")
+            info_lines.append(tr('base_image.calibration_status'))
+            availability = tr("base_image.available") if self.scianalysis_available else tr("base_image.not_available")
+            info_lines.append(tr('base_image.scianalysis_availability', availability=availability))
             if hasattr(self, 'spin_wl_ang'):
                 # If wavelength control exists, show calibration parameters
-                info_lines.append(f"Wavelength: {self.spin_wl_ang.value():.4f} Å")
-                info_lines.append(f"Energy: {self.spin_energy_ev.value():.1f} eV")
-                info_lines.append(f"Beam center: ({self.spin_x.value():.1f}, {self.spin_y.value():.1f})")
-                info_lines.append(f"Distance: {self.spin_dist.value():.3f} m")
-                info_lines.append(f"Pixel size: {self.spin_pixel.value():.1f} µm")
+                info_lines.append(tr('base_image.wavelength_spin_wl_ang_value_f', spin_wl_ang_value=self.spin_wl_ang.value()))
+                info_lines.append(tr('base_image.energy_spin_energy_ev_value_f', spin_energy_ev_value=self.spin_energy_ev.value()))
+                info_lines.append(tr('base_image.beam_center_spin_x_value_f', spin_x_value=self.spin_x.value(), spin_y_value=self.spin_y.value()))
+                info_lines.append(tr('base_image.distance_spin_dist_value_f_m', spin_dist_value=self.spin_dist.value()))
+                info_lines.append(tr('base_image.pixel_size_spin_pixel_value_f', spin_pixel_value=self.spin_pixel.value()))
                 if hasattr(self, 'spin_orient'):
-                    info_lines.append(f"Detector orient: {self.spin_orient.value():.1f}°")
-                    info_lines.append(f"Detector tilt: {self.spin_tilt.value():.1f}°")
-                    info_lines.append(f"Detector phi: {self.spin_phi.value():.1f}°")
+                    info_lines.append(tr('base_image.detector_orient_spin_orient_value_f', spin_orient_value=self.spin_orient.value()))
+                    info_lines.append(tr('base_image.detector_tilt_spin_tilt_value_f', spin_tilt_value=self.spin_tilt.value()))
+                    info_lines.append(tr('base_image.detector_phi_spin_phi_value_f', spin_phi_value=self.spin_phi.value()))
             else:
-                info_lines.append("Calibration parameters: Using defaults")
-                info_lines.append(f"Wavelength: {DEFAULT_CALIBRATION['wavelength_A']:.4f} Å")
-                info_lines.append(f"Energy: {DEFAULT_CALIBRATION['energy_eV']:.1f} eV")
+                info_lines.append(tr('base_image.calibration_parameters_using_defaults'))
+                info_lines.append(tr('base_image.wavelength_default_calibration_wavelength_a_f', default_calibration_wavelength_a=DEFAULT_CALIBRATION['wavelength_A']))
+                info_lines.append(tr('base_image.energy_default_calibration_energy_ev_f', default_calibration_energy_ev=DEFAULT_CALIBRATION['energy_eV']))
             
             # Add tab-specific status information
             self._add_tab_specific_status(info_lines)
@@ -719,9 +760,9 @@ class BaseImageTab(QWidget):
                 self.parent_app.publish_shared_info_text(info_text, source_tab=self)
             
         except Exception as e:
-            error_info = f"Error loading image info: {str(e)}\n\n"
-            error_info += f"Exception type: {type(e).__name__}\n"
-            error_info += f"Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            error_info = tr('base_image.error_loading_image_info_error', error=str(e))
+            error_info += tr('base_image.exception_type_type_e_name', type_e___name=type(e).__name__)
+            error_info += tr('base_image.timestamp_now_strftime_y_m_d', now_strftime_y_m_d_h_m_s=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             self._set_image_info_text(error_info)
 
             if hasattr(self.parent_app, 'publish_shared_info_text'):
@@ -740,13 +781,9 @@ class BaseImageTab(QWidget):
             self.populate_image_info(self.image_data, image_path)
         else:
             # Just update timestamp and show no image loaded
-            info_text = f"No image loaded\n\nLast update: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-            info_text += "Load an image to see detailed status information including:\n"
-            info_text += "• File information and metadata\n"
-            info_text += "• Image data statistics\n"
-            info_text += "• Current calibration parameters\n"
-            info_text += "• Processing status\n"
-            info_text += "• Beamline configuration status"
+            info_text = (
+                tr('base_image.no_image_loaded_last_update_now', now_strftime_y_m_d_h_m_s=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            )
             self._set_image_info_text(info_text)
 
             if hasattr(self.parent_app, 'publish_shared_info_text'):
@@ -759,7 +796,7 @@ class BaseImageTab(QWidget):
             return
         if hasattr(self, 'ax_plot') and event.inaxes == self.ax_plot:
             x, y = event.xdata, event.ydata
-            self.parent_app.show_status(f"Q={x:.3f}, I={y:.2f}")
+            self.parent_app.show_status(tr('base_image.q_x_f_i_y_f', x=x, y=y))
 
     def _on_viewer_cursor_moved(self, x, y, value):
         """Handle cursor movement over the PyQtGraph image viewer."""
@@ -769,11 +806,11 @@ class BaseImageTab(QWidget):
             value_text = f"{float(value):.2f}"
         except (TypeError, ValueError):
             value_text = str(value)
-        self.parent_app.show_status(f"Raw Pixel (x={int(x)}, y={int(y)}) = {value_text}")
+        self.parent_app.show_status(tr('base_image.raw_pixel_x_int_x_y', int_x=int(x), int_y=int(y), value_text=value_text))
 
     def create_filename_label(self, parent_layout=None):
         """Create a standardized filename display label"""
-        self.filename_label = QLabel("File Name: No image loaded")
+        self.filename_label = QLabel(tr('base_image.file_name_no_image_loaded'))
         apply_info_style(self.filename_label)
         if parent_layout:
             parent_layout.addWidget(self.filename_label)

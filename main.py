@@ -47,11 +47,12 @@ sys.path.insert(0, os.path.join(app_dir, 'src'))
 
 from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QMainWindow, QMessageBox, QPushButton, QTabWidget, QLabel,
-    QWidget
+    QWidget, QAction
 )
 from PyQt5.QtCore import Qt, QTimer
 
 # Import configuration from package modules.
+from sciview.interfaces.text import tr
 from sciview.interfaces.theme.app_style import AppStyle, apply_info_style
 from sciview.profiles.cms_profile import BEAMLINE_NAME, DEFAULT_CALIBRATION, get_calibration_class
 from sciview.settings.app_settings import (
@@ -83,7 +84,7 @@ class SciAnaApp(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"{QApplication.applicationName()} - {BEAMLINE_NAME}")
+        self.setWindowTitle(tr('shell.qapplication_applicationname_beamline_name', qapplication_applicationname=QApplication.applicationName(), beamline_name=BEAMLINE_NAME))
         self.status = self.statusBar()
         self._workspace_root = Path(__file__).resolve().parent
 
@@ -127,15 +128,19 @@ class SciAnaApp(QMainWindow):
             AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['refresh'])
         )
         self.refresh_button.setIconSize(AppStyle.corner_button_icon_size())
-        self.refresh_button.setToolTip("Reload current tab and clear cache (Ctrl+R)")
+        self.refresh_button.setToolTip(tr('shell.reload_current_tab_and_clear_cache'))
         self.refresh_button.setFixedSize(corner_button_size)
         self.refresh_button.clicked.connect(self._refresh_current_tab)
 
-        self.style_inspector_button = QPushButton("I")
+        self.style_inspector_button = QPushButton()
         self.style_inspector_button.setProperty("sciview_compact_button", True)
-        self.style_inspector_button.setToolTip("Open Style Inspector [dev] (Ctrl+Shift+I)")
+        self.style_inspector_button.setToolTip(tr('shell.open_style_inspector_dev_ctrl_shift'))
+        self.style_inspector_button.setAccessibleName(tr('shell.open_style_inspector_dev_ctrl_shift'))
+        self.style_inspector_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['style_inspector'])
+        )
+        self.style_inspector_button.setIconSize(AppStyle.corner_button_icon_size())
         self.style_inspector_button.setFixedSize(corner_button_size)
-        self.style_inspector_button.setEnabled(False)
         self.style_inspector_button.clicked.connect(self._show_style_inspector)
 
         self.theme_toggle_button = QPushButton()
@@ -144,15 +149,44 @@ class SciAnaApp(QMainWindow):
         self.theme_toggle_button.clicked.connect(self._toggle_dark_light_theme)
         self._update_theme_toggle_icon()
 
+        self.text_smaller_button = QPushButton()
+        self.text_larger_button = QPushButton()
+        for button, message_id, icon_key in (
+            (self.text_smaller_button, 'shell.text_smaller', 'text_smaller'),
+            (self.text_larger_button, 'shell.text_larger', 'text_larger'),
+        ):
+            button.setProperty("sciview_compact_button", True)
+            button.setFixedSize(corner_button_size)
+            button.setAccessibleName(tr(message_id))
+            button.setToolTip(tr(message_id))
+            button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES[icon_key]))
+            button.setIconSize(AppStyle.corner_button_icon_size())
+        self.text_smaller_button.clicked.connect(lambda: self._step_text_scale(False))
+        self.text_larger_button.clicked.connect(lambda: self._step_text_scale(True))
+        self._update_text_scale_tooltips()
+
+        self.high_contrast_button = QPushButton()
+        self.high_contrast_button.setProperty("sciview_compact_button", True)
+        self.high_contrast_button.setFixedSize(corner_button_size)
+        self.high_contrast_button.setAccessibleName(tr('shell.high_contrast'))
+        self.high_contrast_button.setToolTip(tr('shell.high_contrast'))
+        self.high_contrast_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['high_contrast'])
+        )
+        self.high_contrast_button.setIconSize(AppStyle.corner_button_icon_size())
+        self.high_contrast_button.setCheckable(True)
+        self.high_contrast_button.setChecked(AppStyle.high_contrast_enabled())
+        self.high_contrast_button.toggled.connect(AppStyle.set_high_contrast)
+
         self.clear_session_button = QPushButton()
-        self.clear_session_button.setAccessibleName("Clear saved session")
+        self.clear_session_button.setAccessibleName(tr('shell.clear_saved_session'))
         self.clear_session_button.setProperty("sciview_compact_button", True)
         self.clear_session_button.setIcon(
             AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['clear_session'])
         )
         self.clear_session_button.setIconSize(AppStyle.corner_button_icon_size())
         self.clear_session_button.setToolTip(
-            "Clear saved session cache (last image/calibration/mask/batch queue restore data)"
+            tr('shell.clear_saved_session_cache_last_image')
         )
         self.clear_session_button.setFixedSize(corner_button_size)
         self.clear_session_button.clicked.connect(self._clear_session_cache)
@@ -161,6 +195,9 @@ class SciAnaApp(QMainWindow):
         corner_layout = QHBoxLayout(corner_widget)
         corner_layout.setContentsMargins(0, 0, 0, 0)
         corner_layout.setSpacing(AppStyle.CORNER_BUTTON_UI['spacing'])
+        corner_layout.addWidget(self.text_smaller_button)
+        corner_layout.addWidget(self.text_larger_button)
+        corner_layout.addWidget(self.high_contrast_button)
         corner_layout.addWidget(self.theme_toggle_button)
         corner_layout.addWidget(self.refresh_button)
         corner_layout.addWidget(self.clear_session_button)
@@ -177,12 +214,13 @@ class SciAnaApp(QMainWindow):
         self._update_output_file = None
         self._update_running_message = ""
         self._update_success_message = ""
-        self._update_failure_prefix = "Update failed"
+        self._update_failure_prefix = tr('shell.update_failed')
         self._scianalysis_source_mode = SCIANALYSIS_SOURCE_MODE
         self._scianalysis_source_root = Path(SCIANALYSIS_SOURCE_ROOT) if SCIANALYSIS_SOURCE_ROOT else None
         
         # Set window sizing from config with screen-aware bounds.
         self._apply_window_size_from_config()
+        self._base_window_minimum_size = self.minimumSize()
         
         # Setup resource monitoring
         self._setup_resource_monitor()
@@ -194,47 +232,96 @@ class SciAnaApp(QMainWindow):
         self.refresh_shortcut.activated.connect(self._refresh_current_tab)
         self.theme_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
         self.theme_shortcut.activated.connect(self._toggle_dark_light_theme)
+        self.text_smaller_action = QAction(tr('shell.text_smaller'), self)
+        self.text_smaller_action.setShortcut(QKeySequence("Ctrl+-"))
+        self.text_smaller_action.triggered.connect(self.text_smaller_button.click)
+        self.addAction(self.text_smaller_action)
+        self.text_larger_action = QAction(tr('shell.text_larger'), self)
+        self.text_larger_action.setShortcuts([
+            QKeySequence("Ctrl++"), QKeySequence("Ctrl+="), QKeySequence("Ctrl+Shift++"),
+        ])
+        self.text_larger_action.triggered.connect(self.text_larger_button.click)
+        self.addAction(self.text_larger_action)
 
-        # Dev tools: hot-reload + style inspector (only when DEV_TOOLS=1)
+        # File hot-reload remains opt-in; the inspector is always available.
         self._style_hot_reloader = None
-        self._inspector_shortcut = None
+        self._style_inspector = None
+        self._inspector_shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
+        self._inspector_shortcut.setContext(Qt.ApplicationShortcut)
+        self._inspector_shortcut.activated.connect(self._show_style_inspector)
         if os.environ.get("DEV_TOOLS") == "1":
             self._start_dev_tools()
 
     def _toggle_dark_light_theme(self):
         """Switch between qdarktheme dark and light."""
-        if AppStyle.theme_is_dark():
-            AppStyle.apply_qdarktheme('light')
-        else:
-            AppStyle.apply_qdarktheme('dark')
+        variant = 'light' if AppStyle.theme_is_dark() else 'dark'
+        if not AppStyle.apply_qdarktheme(variant):
+            self.show_status(tr('shell.theme_unavailable'))
+
+    def _set_text_scale(self, percent):
+        AppStyle.update_font_tokens({'scale_pct': percent})
+        AppStyle.apply_global_style(QApplication.instance(), preserve_existing=True)
+
+    def _next_text_scale(self, increase: bool) -> int | None:
+        current = int(AppStyle.FONTS['scale_pct'])
+        options = AppStyle.TEXT_SCALE_OPTIONS
+        candidates = [scale for scale in options if scale > current] if increase else [
+            scale for scale in options if scale < current
+        ]
+        return (min(candidates) if increase else max(candidates)) if candidates else None
+
+    def _step_text_scale(self, increase: bool) -> None:
+        target = self._next_text_scale(increase)
+        if target is not None:
+            self._set_text_scale(target)
+
+    def _update_text_scale_tooltips(self) -> None:
+        current = int(AppStyle.FONTS['scale_pct'])
+        for button, message_id, increase in (
+            (self.text_smaller_button, 'shell.text_smaller', False),
+            (self.text_larger_button, 'shell.text_larger', True),
+        ):
+            target = self._next_text_scale(increase)
+            detail = (
+                tr('shell.text_scale_next', current=current, target=target)
+                if target is not None else tr('shell.text_scale_current', current=current)
+            )
+            tooltip = f"{tr(message_id)}\n{detail}"
+            button.setToolTip(tooltip)
+            button.setAccessibleDescription(detail)
+            button.setEnabled(target is not None)
 
     def _update_theme_toggle_icon(self):
         if AppStyle.theme_is_dark():
-            self.theme_toggle_button.setText("\u2600")  # sun = click to go light
-            self.theme_toggle_button.setToolTip("Switch to light mode (Ctrl+D)")
+            icon_key = 'light_mode'
+            self.theme_toggle_button.setToolTip(tr('shell.switch_to_light_mode_ctrl_d'))
         else:
-            self.theme_toggle_button.setText("\U0001f319")  # moon = click to go dark
-            self.theme_toggle_button.setToolTip("Switch to dark mode (Ctrl+D)")
+            icon_key = 'dark_mode'
+            self.theme_toggle_button.setToolTip(tr('shell.switch_to_dark_mode_ctrl_d'))
+        self.theme_toggle_button.setAccessibleName(self.theme_toggle_button.toolTip())
+        self.theme_toggle_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES[icon_key])
+        )
+        self.theme_toggle_button.setIconSize(AppStyle.corner_button_icon_size())
 
     def _show_style_inspector(self):
-        """Open the dev style inspector when dev tools are enabled."""
-        if self._style_hot_reloader is None:
-            self.show_status("Style Inspector is available only when DEV_TOOLS=1")
+        """Open the shared style inspector on demand."""
+        if self._style_hot_reloader is not None:
+            self._style_hot_reloader.show_inspector()
             return
-        self._style_hot_reloader.show_inspector()
+        if self._style_inspector is None:
+            from sciview.dev.style_inspector import StyleInspector
+            self._style_inspector = StyleInspector(self)
+        self._style_inspector.show()
+        self._style_inspector.raise_()
+        self._style_inspector.activateWindow()
 
     def _start_dev_tools(self):
-        """Start hot-reloader and register Ctrl+Shift+I for the style inspector."""
+        """Start optional file hot-reload."""
         try:
             from sciview.dev.style_inspector import StyleHotReloader
-            from PyQt5.QtWidgets import QShortcut
-            from PyQt5.QtGui import QKeySequence
             self._style_hot_reloader = StyleHotReloader()
-            self._inspector_shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
-            self._inspector_shortcut.setContext(Qt.ApplicationShortcut)
-            self._inspector_shortcut.activated.connect(self._show_style_inspector)
-            self.style_inspector_button.setEnabled(True)
-            self.show_status("Dev tools active: hot-reload ON  |  Ctrl+Shift+I or corner I button = Style Inspector")
+            self.show_status(tr('shell.dev_tools_active_hot_reload_on'))
         except Exception as exc:
             print(f"[dev tools] failed to start: {exc}")
 
@@ -353,16 +440,15 @@ class SciAnaApp(QMainWindow):
         """Manually wipe the on-disk session cache (no auto-pruning)."""
         response = QMessageBox.question(
             self,
-            "Clear Session Cache",
-            "This deletes the saved last-session restore data (image path, "
-            "calibration, mask layers, batch queue). Continue?",
+            tr('shell.clear_session_cache'),
+            tr('shell.this_deletes_the_saved_last_session'),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
         if response != QMessageBox.Yes:
             return
         session_cache.clear_session()
-        self.show_status("Session cache cleared")
+        self.show_status(tr('shell.session_cache_cleared'))
 
     def closeEvent(self, event):
         self.save_session_state()
@@ -371,6 +457,10 @@ class SciAnaApp(QMainWindow):
 
     def refresh_theme(self):
         """Refresh native sizing and theme-aware icons after a style change."""
+        self.setMinimumSize(
+            AppStyle.control_px(self._base_window_minimum_size.width()),
+            AppStyle.control_px(self._base_window_minimum_size.height()),
+        )
         self.tab_widget.setStyleSheet(AppStyle.tab_widget_stylesheet())
         self._update_theme_toggle_icon()
         tab_bar = self.tab_widget.tabBar()
@@ -398,6 +488,22 @@ class SciAnaApp(QMainWindow):
 
         self.style_inspector_button.setFixedSize(corner_button_size)
         self.theme_toggle_button.setFixedSize(corner_button_size)
+        self.text_smaller_button.setFixedSize(corner_button_size)
+        self.text_larger_button.setFixedSize(corner_button_size)
+        for button, icon_key in (
+            (self.text_smaller_button, 'text_smaller'),
+            (self.text_larger_button, 'text_larger'),
+            (self.style_inspector_button, 'style_inspector'),
+        ):
+            button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES[icon_key]))
+            button.setIconSize(corner_icon_size)
+        self._update_text_scale_tooltips()
+        self.high_contrast_button.setFixedSize(corner_button_size)
+        self.high_contrast_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['high_contrast'])
+        )
+        self.high_contrast_button.setIconSize(corner_icon_size)
+        self.high_contrast_button.setChecked(AppStyle.high_contrast_enabled())
 
     def publish_shared_image(self, image_data, image_path=None, source_tab=None):
         """Publish active image into shared app state and propagate to tabs."""
@@ -705,10 +811,10 @@ class SciAnaApp(QMainWindow):
             tuple: (image_data, file_path) or (None, None) if failed
         """
         if not SCIANALYSIS_AVAILABLE:
-            self.show_status("Could not load the image: SciAnalysis is not installed.")
+            self.show_status(tr('shell.could_not_load_the_image_scianalysis'))
             return None, None
             
-        path, _ = choose_path(self, "Open Image File", file_filter=file_filters, key="image_open")
+        path, _ = choose_path(self, tr('shell.open_image_file'), file_filter=file_filters, key="image_open")
         if not path:
             return None, None
             
@@ -745,12 +851,12 @@ class SciAnaApp(QMainWindow):
             calibration.clear_maps()
             
             # Show success status
-            self.show_status(f"Loaded image: {os.path.basename(path)} ({w}x{h} pixels)")
+            self.show_status(tr('shell.loaded_image_basename_path_w_x', basename_path=os.path.basename(path), w=w, h=h))
             
             return image_data, path
             
         except Exception as e:
-            self.report_error(f"Could not load {os.path.basename(path)}: {e}", exc=e)
+            self.report_error(tr('shell.could_not_load_basename_path_error', basename_path=os.path.basename(path), error=e), exc=e)
             return None, None
     
     def get_image_path(self):
@@ -767,13 +873,13 @@ class SciAnaApp(QMainWindow):
         tab_name = self.tab_widget.tabText(current_index)
         
         try:
-            self.show_status(f"Refreshing {tab_name}...")
+            self.show_status(tr('shell.refreshing_tab_name', tab_name=tab_name))
             
             # Clear cache if it's the Image Browser tab
             if hasattr(current_tab, 'session_manager'):
                 cache_info = current_tab.session_manager.get_cache_info()
                 current_tab.session_manager.clear_session()
-                self.show_status(f"Cleared {cache_info.get('cached_items', 0)} cached images")
+                self.show_status(tr('shell.cleared_cache_info_get_cached_items', cache_info_get_cached_items_0=cache_info.get('cached_items', 0)))
             
             # Dynamic module discovery - attempt to find the tab class from the instance
             # This makes the refresh button future-proof for new tabs
@@ -782,22 +888,22 @@ class SciAnaApp(QMainWindow):
             
             # Fallback to hardcoded map if dynamic discovery doesn't work
             if not module_name or 'tabs.' not in module_name:
+                stable_name = self._tab_icon_keys.get(current_index)
                 module_map = {
-                    "Image Browser": "tabs.image_browser_tab.ImageBrowserApp",
-                    "Tiled Browser": "tabs.tiled_browser_tab.TiledBrowserTab",
-                    "Calibration": "tabs.calibration_tab.CalibrationApp",
-                    "Mask Editing": "tabs.mask_tab.MaskApp",
-                    "Reduction": "tabs.reduction_tab.ReductionTab",
-                    "Transform": "tabs.transform_tab.TransformTab",
-                    "Batch": "tabs.batch_tab.BatchTab",
-                    "Info": "tabs.info_tab.InfoTab",
+                    "image_browser": "tabs.image_browser_tab.ImageBrowserApp",
+                    "tiled_browser": "tabs.tiled_browser_tab.TiledBrowserTab",
+                    "calibration": "tabs.calibration_tab.CalibrationApp",
+                    "mask_editing": "tabs.mask_tab.MaskApp",
+                    "reduction": "tabs.reduction_tab.ReductionTab",
+                    "transform": "tabs.transform_tab.TransformTab",
+                    "batch": "tabs.batch_tab.BatchTab",
+                    "info": "tabs.info_tab.InfoTab",
                 }
-                
-                if tab_name not in module_map:
-                    self.show_status(f"Cannot refresh {tab_name} - unknown tab type")
+                if stable_name not in module_map:
+                    self.show_status(tr('shell.cannot_refresh_tab_name_unknown_tab', tab_name=tab_name))
                     return
                 
-                module_path = module_map[tab_name]
+                module_path = module_map[stable_name]
                 module_name, class_name = module_path.rsplit('.', 1)
             
             # Reload the module
@@ -814,10 +920,10 @@ class SciAnaApp(QMainWindow):
             self.tab_widget.insertTab(current_index, new_tab, tab_name)
             self.tab_widget.setCurrentIndex(current_index)
             
-            self.show_status(f"✓ Refreshed {tab_name} successfully")
+            self.show_status(tr('shell.refreshed_tab_name_successfully', tab_name=tab_name))
             
         except Exception as e:
-            self.show_status(f"Error refreshing {tab_name}: {str(e)}")
+            self.show_status(tr('shell.error_refreshing_tab_name_error', tab_name=tab_name, error=str(e)))
             print(f"Error refreshing tab: {e}")
             import traceback
             traceback.print_exc()
@@ -836,7 +942,7 @@ class SciAnaApp(QMainWindow):
         failure_prefix: str,
     ):
         if self._update_process is not None:
-            self.show_status("Another update is already running")
+            self.show_status(tr('shell.another_update_is_already_running'))
             return
 
         response = QMessageBox.question(
@@ -847,7 +953,7 @@ class SciAnaApp(QMainWindow):
             QMessageBox.No,
         )
         if response != QMessageBox.Yes:
-            self.show_status(f"{title} canceled")
+            self.show_status(tr('shell.title_canceled', title=title))
             return
 
         self._set_update_ui_enabled(False)
@@ -872,7 +978,7 @@ class SciAnaApp(QMainWindow):
                 self._update_output_file.close()
                 self._update_output_file = None
             self._set_update_ui_enabled(True)
-            self.show_status(f"Failed to start update: {exc}")
+            self.show_status(tr('shell.failed_to_start_update_error', error=exc))
 
     def _update_sciview_source(self):
         """Update the SciView checkout from its git remote."""
@@ -881,52 +987,52 @@ class SciAnaApp(QMainWindow):
             return
 
         self._start_update_process(
-            title="Update SciView",
-            confirm_message="This will run git pull --ff-only in the SciView repository. Continue?",
+            title=tr('shell.update_sciview'),
+            confirm_message=tr('shell.this_will_run_git_pull_ff'),
             command=command,
-            running_message="Updating SciView source checkout...",
-            success_message="SciView source updated. Restart SciView to use the new version.",
-            failure_prefix="SciView update failed",
+            running_message=tr('shell.updating_sciview_source_checkout'),
+            success_message=tr('shell.sciview_source_updated_restart_sciview_to'),
+            failure_prefix=tr('shell.sciview_update_failed'),
         )
 
     def _update_scianalysis_source(self):
         """Update the active SciAnalysis source."""
         if self._scianalysis_source_mode == "pixi":
             command = self._build_pixi_update_command()
-            action_label = "Pixi-managed SciAnalysis package"
+            action_label = tr('shell.pixi_managed_scianalysis_package')
         else:
             command = self._build_git_update_command()
-            action_label = "SciAnalysis checkout"
+            action_label = tr('shell.scianalysis_checkout')
 
         if command is None:
             return
 
         self._start_update_process(
-            title="Update SciAnalysis",
-            confirm_message=f"This will update the active {action_label}. Continue?",
+            title=tr('shell.update_scianalysis'),
+            confirm_message=tr('shell.this_will_update_the_active_action', action_label=action_label),
             command=command,
-            running_message=f"Updating {action_label}...",
-            success_message="SciAnalysis source updated. Restart SciView to use the new version.",
-            failure_prefix="SciAnalysis update failed",
+            running_message=tr('shell.updating_action_label', action_label=action_label),
+            success_message=tr('shell.scianalysis_source_updated_restart_sciview_to'),
+            failure_prefix=tr('shell.scianalysis_update_failed'),
         )
 
     def _build_sciview_update_command(self):
         git_executable = shutil.which("git")
         if not git_executable:
-            self.show_status("Git executable not found on PATH")
+            self.show_status(tr('shell.git_executable_not_found_on_path'))
             QMessageBox.warning(
                 self,
-                "SciView Update",
-                "Git was not found on PATH, so SciView cannot update from a repository checkout.",
+                tr('shell.sciview_update'),
+                tr('shell.git_was_not_found_on_path'),
             )
             return None
 
         if not (self._workspace_root / ".git").exists():
-            self.show_status("SciView source is not a git checkout")
+            self.show_status(tr('shell.sciview_source_is_not_a_git'))
             QMessageBox.warning(
                 self,
-                "SciView Update",
-                "The current SciView source is not a git checkout, so it cannot be updated with git pull.",
+                tr('shell.sciview_update'),
+                tr('shell.the_current_sciview_source_is_not'),
             )
             return None
 
@@ -935,20 +1041,20 @@ class SciAnaApp(QMainWindow):
     def _build_pixi_update_command(self):
         pixi_executable = shutil.which("pixi")
         if not pixi_executable:
-            self.show_status("Pixi executable not found on PATH")
+            self.show_status(tr('shell.pixi_executable_not_found_on_path'))
             QMessageBox.warning(
                 self,
-                "SciAnalysis Update",
-                "Pixi was not found on PATH, so the Pixi-managed SciAnalysis package cannot be updated.",
+                tr('shell.scianalysis_update'),
+                tr('shell.pixi_was_not_found_on_path'),
             )
             return None
 
         if not (self._workspace_root / "pixi.toml").exists():
-            self.show_status("pixi.toml not found in workspace")
+            self.show_status(tr('shell.pixi_toml_not_found_in_workspace'))
             QMessageBox.warning(
                 self,
-                "SciAnalysis Update",
-                "pixi.toml was not found in the SciView workspace, so Pixi cannot update SciAnalysis here.",
+                tr('shell.scianalysis_update'),
+                tr('shell.pixi_toml_was_not_found_in'),
             )
             return None
 
@@ -957,29 +1063,29 @@ class SciAnaApp(QMainWindow):
     def _build_git_update_command(self):
         git_executable = shutil.which("git")
         if not git_executable:
-            self.show_status("Git executable not found on PATH")
+            self.show_status(tr('shell.git_executable_not_found_on_path'))
             QMessageBox.warning(
                 self,
-                "SciAnalysis Update",
-                "Git was not found on PATH, so SciAnalysis cannot be updated from a checkout.",
+                tr('shell.scianalysis_update'),
+                tr('shell.git_was_not_found_on_path_2'),
             )
             return None
 
         if self._scianalysis_source_root is None:
-            self.show_status("SciAnalysis checkout not configured")
+            self.show_status(tr('shell.scianalysis_checkout_not_configured'))
             QMessageBox.warning(
                 self,
-                "SciAnalysis Update",
-                "No SciAnalysis checkout is configured. Set SCIVIEW_SCIANALYSIS_SOURCE and SCIVIEW_SCIANALYSIS_PATH, or switch to pixi-managed SciAnalysis.",
+                tr('shell.scianalysis_update'),
+                tr('shell.no_scianalysis_checkout_is_configured_set'),
             )
             return None
 
         if not (self._scianalysis_source_root / ".git").exists():
-            self.show_status("SciAnalysis source is not a git checkout")
+            self.show_status(tr('shell.scianalysis_source_is_not_a_git'))
             QMessageBox.warning(
                 self,
-                "SciAnalysis Update",
-                "The selected SciAnalysis source is not a git checkout, so it cannot be updated with git pull.",
+                tr('shell.scianalysis_update'),
+                tr('shell.the_selected_scianalysis_source_is_not'),
             )
             return None
 
@@ -994,7 +1100,7 @@ class SciAnaApp(QMainWindow):
 
         return_code = process.poll()
         if return_code is None:
-            self.show_status(f"{self._update_running_message} still running")
+            self.show_status(tr('shell.value_update_running_message_still_running', value__update_running_message=self._update_running_message))
             return
 
         try:
@@ -1025,15 +1131,16 @@ class SciAnaApp(QMainWindow):
         else:
             tail = "\n".join(text.splitlines()[-8:]).strip()
             if tail:
-                self.show_status(f"{self._update_failure_prefix}: {tail}")
+                self.show_status(tr('shell.value_update_failure_prefix_tail', value__update_failure_prefix=self._update_failure_prefix, tail=tail))
             else:
-                self.show_status(f"{self._update_failure_prefix} with exit code {return_code}")
+                self.show_status(tr('shell.value_update_failure_prefix_with_exit', value__update_failure_prefix=self._update_failure_prefix, return_code=return_code))
 
 
 def create_application():
     """Create and configure the main application"""
     print("[SciView] Starting up...")
     app = QApplication(sys.argv)
+    AppStyle.apply_bundled_fonts(app)
 
     # Load layout/sizing ratios from runtime configuration before creating widgets.
     AppStyle.apply_gui_settings(GUI_SETTINGS)
@@ -1075,24 +1182,24 @@ def create_application():
     try:
         from tabs.image_browser_tab import ImageBrowserApp
         image_browser_tab = ImageBrowserApp(main_window)
-        main_window.add_tab(image_browser_tab, "Image Browser", icon_key="image_browser")
+        main_window.add_tab(image_browser_tab, tr('shell.image_browser'), icon_key="image_browser")
         _tab_done(t0)
     except ImportError as e:
         _tab_done(t0, failed=True)
-        placeholder = _build_placeholder_tab(f"Image Browser Tab\\n(Import error: {e})")
-        main_window.add_tab(placeholder, "Image Browser", icon_key="image_browser")
+        placeholder = _build_placeholder_tab(tr('shell.image_browser_tab_n_import_error', error=e))
+        main_window.add_tab(placeholder, tr('shell.image_browser'), icon_key="image_browser")
 
     # Tiled Browser
     t0 = _tab_start("Tiled Browser")
     try:
         from tabs.tiled_browser_tab import TiledBrowserTab
         tiled_browser_tab = TiledBrowserTab(main_window)
-        main_window.add_tab(tiled_browser_tab, "Tiled Browser", icon_key="tiled_browser")
+        main_window.add_tab(tiled_browser_tab, tr('shell.tiled_browser'), icon_key="tiled_browser")
         _tab_done(t0)
     except ImportError as e:
         _tab_done(t0, failed=True)
-        placeholder = _build_placeholder_tab(f"Tiled Browser Tab\\n(Import error: {e})")
-        main_window.add_tab(placeholder, "Tiled Browser", icon_key="tiled_browser")
+        placeholder = _build_placeholder_tab(tr('shell.tiled_browser_tab_n_import_error', error=e))
+        main_window.add_tab(placeholder, tr('shell.tiled_browser'), icon_key="tiled_browser")
 
     # Calibration
     t0 = _tab_start("Calibration")
@@ -1100,76 +1207,76 @@ def create_application():
         if SCIANALYSIS_AVAILABLE:
             from tabs.calibration_tab import CalibrationApp
             calibration_tab = CalibrationApp(main_window)
-            main_window.add_tab(calibration_tab, "Calibration", icon_key="calibration")
+            main_window.add_tab(calibration_tab, tr('shell.calibration'), icon_key="calibration")
             _tab_done(t0)
         else:
             _tab_done(t0, failed=True)
-            placeholder = _build_placeholder_tab("Calibration Tab\\n(SciAnalysis not available)")
-            main_window.add_tab(placeholder, "Calibration", icon_key="calibration")
+            placeholder = _build_placeholder_tab(tr('shell.calibration_tab_n_scianalysis_not_available'))
+            main_window.add_tab(placeholder, tr('shell.calibration'), icon_key="calibration")
     except ImportError as e:
         _tab_done(t0, failed=True)
-        placeholder = _build_placeholder_tab(f"Calibration Tab\\n(Import error: {e})")
-        main_window.add_tab(placeholder, "Calibration", icon_key="calibration")
+        placeholder = _build_placeholder_tab(tr('shell.calibration_tab_n_import_error_error', error=e))
+        main_window.add_tab(placeholder, tr('shell.calibration'), icon_key="calibration")
 
     # Mask Editing
     t0 = _tab_start("Mask Editing")
     try:
         from tabs.mask_tab import MaskApp
         mask_tab = MaskApp(main_window)
-        main_window.add_tab(mask_tab, "Mask Editing", icon_key="mask_editing")
+        main_window.add_tab(mask_tab, tr('shell.mask_editing'), icon_key="mask_editing")
         _tab_done(t0)
     except ImportError as e:
         _tab_done(t0, failed=True)
-        placeholder = _build_placeholder_tab(f"Mask Tab\\n(Import error: {e})")
-        main_window.add_tab(placeholder, "Mask Editing", icon_key="mask_editing")
+        placeholder = _build_placeholder_tab(tr('shell.mask_tab_n_import_error_error', error=e))
+        main_window.add_tab(placeholder, tr('shell.mask_editing'), icon_key="mask_editing")
 
     # Reduction
     t0 = _tab_start("Reduction")
     try:
         from tabs.reduction_tab import ReductionTab
         reduction_tab = ReductionTab(main_window)
-        main_window.add_tab(reduction_tab, "Reduction", icon_key="reduction")
+        main_window.add_tab(reduction_tab, tr('shell.reduction'), icon_key="reduction")
         _tab_done(t0)
     except ImportError as e:
         _tab_done(t0, failed=True)
-        placeholder = _build_placeholder_tab(f"Reduction Tab\\n(Import error: {e})")
-        main_window.add_tab(placeholder, "Reduction", icon_key="reduction")
+        placeholder = _build_placeholder_tab(tr('shell.reduction_tab_n_import_error_error', error=e))
+        main_window.add_tab(placeholder, tr('shell.reduction'), icon_key="reduction")
 
     # Transform
     t0 = _tab_start("Transform")
     try:
         from tabs.transform_tab import TransformTab
         transform_tab = TransformTab(main_window)
-        main_window.add_tab(transform_tab, "Transform", icon_key="transform")
+        main_window.add_tab(transform_tab, tr('shell.transform'), icon_key="transform")
         _tab_done(t0)
     except ImportError as e:
         _tab_done(t0, failed=True)
-        placeholder = _build_placeholder_tab(f"Transform Tab\\n(Import error: {e})")
-        main_window.add_tab(placeholder, "Transform", icon_key="transform")
+        placeholder = _build_placeholder_tab(tr('shell.transform_tab_n_import_error_error', error=e))
+        main_window.add_tab(placeholder, tr('shell.transform'), icon_key="transform")
 
     # Batch
     t0 = _tab_start("Batch")
     try:
         from tabs.batch_tab import BatchTab
         batch_tab = BatchTab(main_window)
-        main_window.add_tab(batch_tab, "Batch", icon_key="batch")
+        main_window.add_tab(batch_tab, tr('shell.batch'), icon_key="batch")
         _tab_done(t0)
     except ImportError as e:
         _tab_done(t0, failed=True)
-        placeholder = _build_placeholder_tab(f"Batch Tab\\n(Import error: {e})")
-        main_window.add_tab(placeholder, "Batch", icon_key="batch")
+        placeholder = _build_placeholder_tab(tr('shell.batch_tab_n_import_error_error', error=e))
+        main_window.add_tab(placeholder, tr('shell.batch'), icon_key="batch")
 
     # Info
     t0 = _tab_start("Info")
     try:
         from tabs.info_tab import InfoTab
         info_tab = InfoTab(main_window)
-        main_window.add_tab(info_tab, "Info", icon_key="info")
+        main_window.add_tab(info_tab, tr('shell.info'), icon_key="info")
         _tab_done(t0)
     except ImportError as e:
         _tab_done(t0, failed=True)
-        placeholder = _build_placeholder_tab(f"Info Tab\\n(Import error: {e})")
-        main_window.add_tab(placeholder, "Info", icon_key="info")
+        placeholder = _build_placeholder_tab(tr('shell.info_tab_n_import_error_error', error=e))
+        main_window.add_tab(placeholder, tr('shell.info'), icon_key="info")
 
     print("[SciView] All tabs loaded. Launching window...")
     main_window.restore_session_state()
@@ -1183,11 +1290,10 @@ def main():
         main_window.show()
         
         # Show startup status in GUI status bar
-        status_msg = f"SciAnalysis GUI started for {BEAMLINE_NAME}"
         if SCIANALYSIS_AVAILABLE:
-            status_msg += " - SciAnalysis loaded successfully"
+            status_msg = tr('shell.scianalysis_gui_started_for_beamline_name', beamline_name=BEAMLINE_NAME)
         else:
-            status_msg += " - SciAnalysis not available"
+            status_msg = tr('shell.scianalysis_gui_started_for_beamline_name_2', beamline_name=BEAMLINE_NAME)
         main_window.show_status(status_msg)
 
         sa_status = "available" if SCIANALYSIS_AVAILABLE else "NOT available"

@@ -12,31 +12,58 @@ It is written for three audiences:
 
 The main goal is a single-source, predictable UI system that stays maintainable as the app evolves.
 
+## Product Language And Control Preferences
+
+- Keep controls compact, discoverable, and accessible; omit incidental technical detail.
+- Focus guidance on the main workflow and meaningful decisions, not self-explanatory secondary controls.
+- Preserve precision where it affects scientific interpretation, reproducibility, or results.
+
+The upper-right text-size buttons (Ctrl+- / Ctrl++) and separate high-contrast
+toggle use the existing `FONTS.scale_pct` and `AppStyle` palette and shared
+refresh path; settings apply to the current session. Contrast mode restores the
+preceding theme when disabled, and follows the light/dark toggle while enabled.
+Text scaling changes interface typography, not scientific export style settings.
+Below 100%, shared control dimensions and padding also shrink, including live
+viewer controls. Manual settings extend down to 50% for smaller screens; startup
+remains at 100%, without automatic screen-dependent scaling.
+Side panels allow scrolling when their contents exceed the available space.
+At 100%, rendered sizes are H1 30 px, H2/tabs 24 px, H3 20 px, body 18 px,
+caption 16 px, and small text 14 px.
+
 ## Layer Map
 
 The UI stack is intentionally layered. Think of each layer as owning a different class of decision.
+
+Owned interface wording is maintained separately in the context-rich
+[message catalog](LOCALIZATION.md). Widgets resolve message IDs at the
+presentation boundary; stable settings and scientific identifiers are not
+translated.
 
 1. Product-level defaults and app startup
 - Module: main.py
 - Responsibility: create application, apply global style system, create top-level window, wire tabs.
 - Key point: all tabs and widgets should rely on the same style system initialized at app startup.
 
-2. Runtime settings layer
+1. Runtime settings layer
 - Modules: src/sciview/settings/app_settings.py, src/sciview/settings/viewer_config.py
 - Responsibility: non-theme defaults such as window sizing, splitter ratios, image display defaults, viewer behavior defaults.
 - Key point: this layer provides app defaults, not per-widget styling rules.
+- Viewer tool actions and group order are declared by `VIEWER_TOOLBAR_ACTIONS` and `VIEWER_TOOLBAR_GROUPS` in `viewer_config.py`. New tools need an action, icon mapping, group membership, and behavior connection; layout placement is derived from the group configuration.
 
-3. Design-system and style engine layer
+1. Design-system and style engine layer
 - Module: src/sciview/interfaces/theme/app_style.py
 - Responsibility: token definitions, style templates, style helper APIs, runtime theme refresh.
 - Key point: this is the primary source of truth for styling decisions.
+- The viewer toolbar uses one `QGridLayout` row containing icon-over-caption cells and the tab-owned, two-row display-controls widget. Stretchable gap columns separate tool groups while display controls stay compact. `AppStyle.viewer_toolbar_button_size()` derives tool dimensions from shared control and typography tokens; `viewer_toolbar_icon_size()` selects a pre-rendered icon size. Layout does not require runtime widget measurement or resize-event synchronization, and buttons reuse the shared `compact_button` style.
 
-4. Theme tooling layer (development-time)
+1. Theme tooling layer (development-time)
 - Module: src/sciview/dev/style_inspector.py
 - Responsibility: live editing for CSS tokens, typography, and selected layout values.
 - Key point: this is an editor for the design system, not a separate style system.
+- The corner inspector button and Ctrl+Shift+I are available by default.
+  Automatic file hot-reload remains opt-in with `DEV_TOOLS=1`.
 
-5. Widget and tab consumption layer
+1. Widget and tab consumption layer
 - Modules: tabs/*.py and src/sciview/interfaces/stable_qt/widgets/image_viewer.py
 - Responsibility: build UI, call style helpers, use layout tokens, implement domain-specific interaction.
 - Key point: these modules consume style APIs; they should not invent parallel style rules.
@@ -59,6 +86,8 @@ Owner: AppStyle constants in app_style.py
 Token groups:
 - COLORS: semantic fallback palette.
 - FONTS: scale and type roles.
+- Font roles use native Qt Normal/Bold weights; styles use normal/bold.
+  Intermediate numeric weight tuning is not exposed.
 - CSS_TOKENS: live stylesheet token values such as paddings, radius, height hints.
 - LAYOUT: construction-time spacings, splitter ratios, panel constraints.
 - BUTTON_FORM and FORM_UI: reusable control dimensions.
@@ -105,6 +134,40 @@ Controls:
 - Refreshes theme-aware widgets and matplotlib figures.
 
 This prevents style drift after theme changes and live token updates.
+
+## Runtime Performance
+
+- Appearance changes compose the final stylesheet before applying it. A
+  light/dark switch keeps high contrast enabled without rendering intermediate
+  appearances. The global traversal refreshes each viewer; tabs refresh only
+  visuals they own.
+- Identical widget stylesheets are not reassigned. Themed SVGs use Qt's bounded
+  pixmap cache and a persistent cache under the platform's generic cache directory,
+  in `sciview/icons-v1`. SVG content, tint colors, render sizes, and Qt version
+  identify entries. Writes are atomic, disk storage is capped at 256 entries,
+  and invalid entries are logged and regenerated. The cache can be removed
+  without affecting user data.
+- Startup checks for the installed Tiled package without importing its client.
+  Client dependencies load at the first data task; streaming plugins load only
+  when live monitoring starts. These imports use the existing background-task
+  path, including authentication refresh, so loading and error feedback remain
+  visible. The initial availability check is not a full dependency health check.
+- Status-bar CPU sampling is nonblocking and reports usage since the preceding
+  sample rather than pausing the UI for a measurement interval.
+
+### Measuring startup and appearance changes
+
+Run `pixi run benchmark-ui` on a desktop session. Optional arguments include
+`--runs 3 --samples 4 --json measurements.json`. The benchmark starts fresh
+processes, reports startup phases and appearance-handler/settled timings, and
+compares an empty icon cache with subsequent launches using the populated cache.
+It uses all eight tabs, an empty session, and a disposable cache; it neither
+loads detector files nor connects to Tiled. Saved user state is not modified.
+
+Results include queued layout and paint work, not an OS-compositor latency
+measurement. They exclude launcher overhead and session restoration. Keep the
+window visible, use the same machine/theme/locale, and avoid concurrent workloads
+when comparing runs. Timing results are diagnostic, not pytest thresholds.
 
 ## Stylesheet vs Token vs Runtime Theme: Practical Difference
 

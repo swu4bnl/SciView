@@ -1,0 +1,391 @@
+transform.preview.title:
+  text: "变换预览"
+  context: "Heading above the transformed two-dimensional image preview."
+transform.preview.empty:
+  text: "尚无预览"
+  context: "Initial preview summary before a transform has been run."
+transform.plot_style.title:
+  text: "绘图样式"
+  context: "Group heading for transformed-image appearance controls."
+transform.plot_style.title_size:
+  text: "绘图标题字号"
+  context: "Label for the plot title font-size control."
+transform.plot_style.axis_label_size:
+  text: "坐标轴标签字号"
+  context: "Label for the plot axis-label font-size control."
+transform.plot_style.tick_label_size:
+  text: "刻度标签字号"
+  context: "Label for the plot tick-label font-size control."
+transform.plot_style.export_resolution:
+  text: "导出分辨率 (DPI)"
+  context: "Label for the exported plot resolution control."
+transform.plot_style.colormap:
+  text: "色图"
+  context: "Label for the displayed image colormap selector."
+transform.plot_style.intensity_scale:
+  text: "强度刻度"
+  context: "Label for the image intensity scale selector."
+transform.plot_style.intensity_min:
+  text: "强度下限"
+  context: "Label for the minimum image intensity display value."
+transform.plot_style.intensity_max:
+  text: "强度上限"
+  context: "Label for the maximum image intensity display value."
+transform.plot_style.auto_intensity:
+  text: "自动设置强度范围"
+  context: "Checkbox that automatically selects the displayed intensity range."
+transform.protocol.label:
+  text: "协议"
+  context: "Label identifying the transform operation selector."
+transform.operation.q_image:
+  text: "Q 空间图像"
+  context: "Button label selecting the Q-space image transformation."
+transform.operation.q_phi_image:
+  text: "Q-φ 图像"
+  context: "Button label selecting the Q-phi image transformation."
+transform.operation.qr_qz_image:
+  text: "Qr-Qz 图像"
+  context: "Button label selecting the radial-Q and Qz image transformation."
+transform.operation.status.q_image:
+  text: "Q 空间图像"
+  context: "Result-summary operation name matching the Q-image protocol display name."
+transform.operation.status.q_phi_image:
+  text: "Q-φ 图像"
+  context: "Result-summary operation name for the Q-phi transformation."
+transform.operation.status.qr_qz_image:
+  text: "Qr-Qz 图像"
+  context: "Result-summary operation name for the radial-Q and Qz transformation."
+transform.recipe.title:
+  text: "配方"
+  context: "Group heading for the editable transform recipe preview."
+transform.source.shared:
+  text: "共享"
+  context: "Calibration or mask source option using shared application state."
+transform.source.custom:
+  text: "自定义"
+  context: "Calibration or mask source option using a file loaded in this tab."
+transform.source.none:
+  text: "无"
+  context: "Mask source option that disables masking."
+transform.calibration.label:
+  text: "校准"
+  context: "Label for choosing the calibration source."
+transform.mask.label:
+  text: "掩膜"
+  context: "Label for choosing the mask source."
+transform.browse:
+  text: "浏览"
+  context: "Button opening a file picker for a custom calibration or mask."
+transform.preview.live:
+  text: "实时预览"
+  context: "Checkbox enabling preview updates when transform controls change."
+transform.parameters.title:
+  text: "参数"
+  context: "Group heading for operation-specific transform controls."
+transform.bins_relative:
+  text: "分箱数（相对值）"
+  context: "Label for the relative number of bins used during transformation."
+transform.crop.auto:
+  text: "根据校准自动裁剪"
+  context: "Checkbox using axis limits derived from the active calibration."
+transform.qx_min:
+  text: "q<sub>x</sub> 下限 (Å⁻¹)"
+  context: "Label for the minimum qx range in inverse angstroms."
+transform.qx_max:
+  text: "q<sub>x</sub> 上限 (Å⁻¹)"
+  context: "Label for the maximum qx range in inverse angstroms."
+transform.qz_min:
+  text: "q<sub>z</sub> 下限 (Å⁻¹)"
+  context: "Label for the minimum qz range in inverse angstroms."
+transform.qz_max:
+  text: "q<sub>z</sub> 上限 (Å⁻¹)"
+  context: "Label for the maximum qz range in inverse angstroms."
+transform.incident_angle.tooltip:
+  text: "掠入射角 (GISAXS/GIWAXS)；透射或法向入射数据请设为 0"
+  context: "Tooltip describing the incident-angle value for grazing-incidence data."
+transform.incident_angle:
+  text: "入射角 (°)"
+  context: "Label for the grazing-incidence angle control."
+transform.sample_normal.tooltip:
+  text: "样品台未对准时的方位角 (phi) 参考偏移量"
+  context: "Tooltip describing the sample-normal azimuth reference offset."
+transform.sample_normal:
+  text: "样品法线 (°)"
+  context: "Label for the sample-normal azimuth angle control."
+transform.phi_bins:
+  text: "Phi 分箱数"
+  context: "Label for the number of azimuthal bins in the Q-phi transform."
+transform.q_min:
+  text: "q 下限 (Å⁻¹)"
+  context: "Label for the minimum q range in inverse angstroms."
+transform.q_max:
+  text: "q 上限 (Å⁻¹)"
+  context: "Label for the maximum q range in inverse angstroms."
+transform.phi_min:
+  text: "Phi 下限 (°)"
+  context: "Label for the minimum azimuthal angle."
+transform.phi_max:
+  text: "Phi 上限 (°)"
+  context: "Label for the maximum azimuthal angle."
+transform.qr_min:
+  text: "q<sub>r</sub> 下限 (Å⁻¹)"
+  context: "Label for the minimum radial q range in inverse angstroms."
+transform.qr_max:
+  text: "q<sub>r</sub> 上限 (Å⁻¹)"
+  context: "Label for the maximum radial q range in inverse angstroms."
+transform.recipe.apply:
+  text: "应用 YAML"
+  context: "Button that applies the recipe text edited in the YAML view."
+transform.recipe.apply.tooltip:
+  text: "解析上方编辑的配方 YAML 并应用到控件"
+  context: "Tooltip explaining that edited recipe YAML is parsed into the controls."
+transform.preview.refresh:
+  text: "刷新预览"
+  context: "Button that reruns the current transform preview."
+transform.export_data:
+  text: "导出数据"
+  context: "Button that saves the current transformed image result."
+transform.send_to_batch:
+  text: "发送到 Batch"
+  context: "Button that sends the current transform settings to the Batch tab."
+transform.send_to_batch.tooltip:
+  text: "将当前设置作为协议发送到 Batch 选项卡"
+  context: "Tooltip explaining that current transform settings are sent to Batch."
+transform.status.invalid_plot_style:
+  text: "绘图样式无效：{error}"
+  context: "Status explaining why the current plot-style values are invalid."
+  placeholders:
+    error: "Raw plot-style validation error."
+transform.dialog.load_calibration:
+  text: "加载校准 YAML"
+  context: "File dialog title for opening a calibration YAML file."
+transform.filter.yaml_all:
+  text: "YAML 文件 (*.yaml *.yml);;所有文件 (*)"
+  context: "File dialog filter for YAML files or any file."
+transform.status.calibration_loaded:
+  text: "已加载自定义校准：{name}"
+  context: "Status confirming that a custom calibration file was loaded."
+  placeholders:
+    name: "Loaded calibration filename."
+transform.status.calibration_load_failed:
+  text: "无法加载自定义校准文件：{error}"
+  context: "Status explaining why the custom calibration file could not be loaded."
+  placeholders:
+    error: "Raw calibration-loading exception."
+transform.dialog.load_mask:
+  text: "加载掩膜"
+  context: "File dialog title for opening a custom mask."
+transform.filter.mask_all:
+  text: "掩膜文件 (*.png *.tif *.tiff *.npy);;所有文件 (*)"
+  context: "File dialog filter for supported mask files or any file."
+transform.status.mask_loaded:
+  text: "已加载自定义掩膜：{name}"
+  context: "Status confirming that a custom mask file was loaded."
+  placeholders:
+    name: "Loaded mask filename."
+transform.status.mask_load_failed:
+  text: "无法加载自定义掩膜文件：{error}"
+  context: "Status explaining why the custom mask file could not be loaded."
+  placeholders:
+    error: "Raw mask-loading exception."
+transform.tooltip.calibration.custom:
+  text: "校准：自定义 ({name})"
+  context: "Tooltip identifying the selected custom calibration filename."
+  placeholders:
+    name: "Custom calibration filename."
+transform.tooltip.calibration.unloaded:
+  text: "校准：来自校准选项卡（尚未加载）"
+  context: "Tooltip indicating that shared calibration has not been loaded."
+transform.tooltip.calibration.shared:
+  text: "校准：来自校准选项卡"
+  context: "Tooltip identifying calibration from the shared calibration tab."
+transform.tooltip.mask.disabled:
+  text: "掩膜：已禁用"
+  context: "Tooltip indicating that mask application is disabled."
+transform.tooltip.mask.custom:
+  text: "掩膜：自定义 ({name})"
+  context: "Tooltip identifying the selected custom mask filename."
+  placeholders:
+    name: "Custom mask filename."
+transform.tooltip.mask.shared:
+  text: "掩膜：来自掩膜选项卡"
+  context: "Tooltip identifying a mask loaded from the shared mask tab."
+transform.tooltip.mask.unloaded:
+  text: "掩膜：来自掩膜选项卡（尚未加载）"
+  context: "Tooltip indicating that no shared mask has been loaded."
+transform.preview.calibration_required:
+  text: "需要校准"
+  context: "Preview summary indicating that a calibration must be selected."
+transform.status.image_prepare_failed:
+  text: "无法准备变换所需的图像数组"
+  context: "Status shown when the image cannot be prepared for transformation."
+transform.status.image_requires_2d:
+  text: "变换需要 2D 图像数据（当前为 {dimensions}D）"
+  context: "Status explaining that transformation needs a two-dimensional image."
+  placeholders:
+    dimensions: "Number of image dimensions received."
+transform.status.mask_shape_mismatch:
+  text: "掩膜尺寸与当前图像不匹配；预览时将忽略掩膜"
+  context: "Status explaining that an incompatible mask is omitted from the preview."
+transform.status.calibration_required:
+  text: "运行变换前请先加载校准"
+  context: "Status prompting the user to load a calibration before transforming."
+transform.preview.image_calibration_unavailable:
+  text: "没有可用的图像或校准"
+  context: "Preview summary shown when either image data or calibration is unavailable."
+transform.plot.load_image_calibration:
+  text: "请先加载图像和校准"
+  context: "Plot-area guidance shown before image data and calibration are available."
+transform.status.preview_failed:
+  text: "预览失败：{error}"
+  context: "Preview summary explaining that transformation preview processing failed."
+  placeholders:
+    error: "Raw transform or rendering exception."
+transform.status.failed:
+  text: "变换失败：{error}"
+  context: "Application status explaining that image transformation failed."
+  placeholders:
+    error: "Raw transform or rendering exception."
+transform.preview.result:
+  text: "{operation}：{size}"
+  context: "Transform preview summary reporting the selected operation and image size."
+  placeholders:
+    operation: "Localized transform operation name."
+    size: "Output image dimensions."
+transform.status.complete:
+  text: "{operation}完成：{size}"
+  context: "Status confirming transformation and reporting output image dimensions."
+  placeholders:
+    operation: "Localized transform operation name."
+    size: "Output image dimensions."
+transform.plot.no_preview:
+  text: "尚无变换预览。请加载图像并运行预览。"
+  context: "Plot-area guidance shown before a transform preview is available."
+transform.status.preview_before_export:
+  text: "导出前请先运行预览"
+  context: "Status prompting the user to generate a result before exporting."
+transform.dialog.export_image:
+  text: "导出变换后的图像"
+  context: "File dialog title for saving a transformed image."
+transform.filter.numpy_all:
+  text: "NumPy 压缩文件 (*.npz);;NumPy 数组 (*.npy);;所有文件 (*)"
+  context: "File dialog filter for NumPy archive, NumPy array, or any file."
+transform.status.image_exported:
+  text: "变换后的图像已导出至 {path}"
+  context: "Status confirming the output path for the transformed image."
+  placeholders:
+    path: "Path returned by the transform image writer."
+transform.recipe.batch_header:
+  text: "# 配方已发送至 Batch 选项卡\n"
+  context: "Comment heading in the YAML recipe preview sent to Batch."
+transform.status.recipe_yaml_failed:
+  text: "无法应用配方：YAML 无效 — {error}"
+  context: "Status explaining that recipe text could not be parsed as YAML."
+  placeholders:
+    error: "Raw YAML parsing exception."
+transform.status.recipe_mapping_invalid:
+  text: "配方无效：应为 YAML 映射"
+  context: "Status shown when a parsed recipe is not a mapping."
+transform.status.recipe_applied:
+  text: "已应用 YAML 配方"
+  context: "Status confirming that recipe edits were applied."
+transform.status.batch_unavailable:
+  text: "Batch 选项卡不可用"
+  context: "Status shown when the Batch tab cannot receive the recipe."
+transform.preview.pending:
+  text: "等待预览..."
+  context: "Preview summary shown while a scheduled transform preview is waiting."
+transform.status.display_update_failed:
+  text: "无法更新变换显示"
+  context: "Fallback status shown when the transform display cannot be updated."
+transform.preview.image_loaded:
+  text: "已加载图像：{width}x{height}"
+  context: "Preview summary reporting the dimensions of the loaded image."
+  placeholders:
+    width: "Image width in pixels."
+    height: "Image height in pixels."
+transform.info.status_heading:
+  text: "=== 变换状态 ==="
+  context: "Heading for transform-specific details in the image information display."
+transform.info.operation:
+  text: "操作：{operation}"
+  context: "Information line identifying the selected transform operation."
+  placeholders:
+    operation: "Localized transform operation name."
+transform.info.mask_enabled:
+  text: "掩膜已启用：{state}"
+  context: "Information line showing whether masking is enabled."
+  placeholders:
+    state: "Localized yes-or-no value."
+transform.info.yes:
+  text: "是"
+  context: "Affirmative value in the transform information display."
+transform.info.no:
+  text: "否"
+  context: "Negative value in the transform information display."
+transform.info.bins_relative:
+  text: "分箱数（相对值）：{value:.2f}"
+  context: "Information line showing the relative bin count."
+  placeholders:
+    value: "Relative bin count formatted to two decimal places."
+transform.info.x_crop:
+  text: "x 裁剪范围：{minimum:.4f} 至 {maximum:.4f}"
+  context: "Information line showing the x-axis crop range."
+  placeholders:
+    minimum: "Lower x-axis crop limit formatted to four decimal places."
+    maximum: "Upper x-axis crop limit formatted to four decimal places."
+transform.info.y_crop:
+  text: "y 裁剪范围：{minimum:.4f} 至 {maximum:.4f}"
+  context: "Information line showing the y-axis crop range."
+  placeholders:
+    minimum: "Lower y-axis crop limit formatted to four decimal places."
+    maximum: "Upper y-axis crop limit formatted to four decimal places."
+transform.info.incident_angle:
+  text: "入射角：{value:.3f} deg"
+  context: "Information line showing the incident angle in degrees."
+  placeholders:
+    value: "Incident angle formatted to three decimal places."
+transform.info.sample_normal:
+  text: "样品法线：{value:.3f} deg"
+  context: "Information line showing the sample-normal angle in degrees."
+  placeholders:
+    value: "Sample-normal angle formatted to three decimal places."
+transform.info.calibration_source:
+  text: "校准来源：{source}"
+  context: "Information line identifying the selected calibration source."
+  placeholders:
+    source: "Displayed calibration source option."
+transform.info.source.calibration_shared:
+  text: "来自校准选项卡"
+  context: "Information value indicating that the calibration comes from the shared calibration tab."
+transform.info.source.calibration_custom:
+  text: "自定义配置"
+  context: "Information value indicating that a custom calibration profile is selected."
+transform.info.source.mask_shared:
+  text: "来自掩膜选项卡"
+  context: "Information value indicating that the mask comes from the shared mask tab."
+transform.info.source.mask_custom:
+  text: "自定义掩膜"
+  context: "Information value indicating that a custom mask is selected."
+transform.info.source.mask_none:
+  text: "无掩膜"
+  context: "Information value indicating that mask application is disabled."
+transform.info.mask_source:
+  text: "掩膜来源：{source}"
+  context: "Information line identifying the selected mask source."
+  placeholders:
+    source: "Displayed mask source option."
+transform.info.last_preview:
+  text: "上次预览：{operation}"
+  context: "Information line identifying the most recently previewed operation."
+  placeholders:
+    operation: "Machine operation identifier, preserved verbatim."
+transform.info.preview_shape:
+  text: "预览尺寸：{width}x{height}"
+  context: "Information line reporting the output image dimensions."
+  placeholders:
+    width: "Output image width in pixels."
+    height: "Output image height in pixels."
+transform.info.last_preview_none:
+  text: "上次预览：无"
+  context: "Information line indicating that no transform preview exists."

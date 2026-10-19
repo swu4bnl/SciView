@@ -15,11 +15,6 @@ from typing import TYPE_CHECKING, Any, Callable
 if TYPE_CHECKING:
     from bluesky_tiled_plugins.streaming import BlueskyStreamSubscription
 
-try:
-    from bluesky_tiled_plugins import subscribe_to_streams
-except ImportError:
-    subscribe_to_streams = None
-
 from sciview.sources.tiled_client import tiled_manager
 from sciview.sources.tiled_source import TiledScanSummary, _summary_from_run
 
@@ -66,6 +61,12 @@ class TiledLiveMonitor:
         if self._running:
             raise RuntimeError("Tiled live monitor is already running")
 
+        try:
+            from bluesky_tiled_plugins import subscribe_to_streams
+        except ImportError as exc:
+            raise RuntimeError(
+                "Installed bluesky-tiled-plugins does not provide live streaming support"
+            ) from exc
         self._callback = callback
         catalog = (
             self._catalog
@@ -74,9 +75,6 @@ class TiledLiveMonitor:
         )
         if catalog is None:
             raise RuntimeError(f"Could not load Tiled catalog for profile: {self.profile_name}")
-        if subscribe_to_streams is None:
-            raise RuntimeError("Installed bluesky-tiled-plugins does not provide live streaming support")
-
         self._catalog = catalog
         try:
             subscription = subscribe_to_streams(

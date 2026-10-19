@@ -5,7 +5,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import numpy as np
 import pytest
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QLabel, QListWidgetItem, QWidget
+from PyQt5.QtWidgets import (
+    QApplication,
+    QListWidgetItem,
+    QWidget,
+)
 
 import pyqtgraph as pg
 
@@ -17,6 +21,7 @@ from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
     WatershedFillTool,
 )
 from sciview.masking.layers import MaskLayer, compose_mask_layers
+from tabs.image_browser_tab import ImageBrowserApp, ImageSessionManager
 
 
 @pytest.fixture(scope="module")
@@ -32,6 +37,47 @@ def viewer(qapp):
     widget.close()
 
 
+def test_image_browser_keeps_previous_folder_files_in_batch(tmp_path):
+    current = tmp_path / "current.tif"
+    kept = tmp_path / "kept.tif"
+    current.touch()
+    kept.touch()
+    browser = ImageBrowserApp.__new__(ImageBrowserApp)
+    browser._folder_browser_paths = [str(current)]
+    browser._added_folder_paths = [str(kept)]
+
+    assert browser.get_current_file_list() == [str(current), str(kept)]
+
+
+def test_image_session_cache_load_does_not_repeat_session_notification():
+    session = ImageSessionManager()
+    notifications = []
+    session.add_callback(lambda manager: notifications.append(manager.current_index))
+    session.add_image_reference("image.tif")
+
+    image = session.get_current_image(
+        load_data=True,
+        loader_callback=lambda path, metadata: np.zeros((2, 2)),
+    )
+
+    assert image["data"].shape == (2, 2)
+    assert notifications == [0]
+
+
+def test_image_session_selection_does_not_republish_file_list():
+    browser = ImageBrowserApp.__new__(ImageBrowserApp)
+    browser.is_batch_loading = False
+    published = []
+    displayed = []
+    browser._publish_shared_file_list = lambda: published.append(True)
+    browser._update_display = lambda: displayed.append(True)
+
+    browser._on_session_changed(None)
+
+    assert published == []
+    assert displayed == [True]
+
+
 def test_numpy_image_uses_row_column_coordinates(viewer):
     image = np.arange(3 * 5, dtype=float).reshape(3, 5)
 
@@ -43,6 +89,19 @@ def test_numpy_image_uses_row_column_coordinates(viewer):
     assert viewer.get_raw_value_at(4.2, 2.0) == image[2, 4]
     assert viewer.get_raw_value_at(-1.0, 0.0) is None
     assert viewer.get_raw_value_at(0.0, np.nan) is None
+
+
+@pytest.mark.parametrize("channels", [3, 4])
+def test_colormap_restored_after_color_image(viewer, channels):
+    scalar = np.arange(6, dtype=float).reshape(2, 3)
+    viewer.set_image(scalar)
+    viewer.set_colormap("viridis")
+    expected_image = viewer._image_item.getPixmap().toImage()
+    viewer.set_color_image(np.zeros((2, 3, channels), dtype=np.uint8))
+    viewer.set_image(scalar)
+    viewer.set_colormap("viridis")
+    assert viewer._image_item.getPixmap().toImage() == expected_image
+    assert viewer.source_array is scalar
 
 
 def test_same_shape_replacement_preserves_view_range(viewer):
@@ -71,24 +130,6 @@ def test_different_shape_replacement_resets_view_range(viewer):
     assert x_range[1] >= 6.0
     assert y_range[0] <= 0.0
     assert y_range[1] >= 4.0
-
-
-def test_viewer_toolbar_shows_action_labels(viewer):
-    labels = {
-        key: cell.findChild(QLabel).text()
-        for key, cell in viewer._toolbar_cells.items()
-    }
-
-    assert labels == {
-        "pan": "Pan",
-        "zoom": "Zoom",
-        "beam_center": "Beam Center",
-        "mask": "Mask",
-        "home": "Home",
-        "auto": "Auto",
-        "copy": "Copy",
-        "save": "Save",
-    }
 
 
 def test_linear_levels_and_colormap_do_not_change_source_or_view(viewer):
@@ -257,32 +298,6 @@ def test_folder_row_reopens_after_session_navigation(qapp, tmp_path):
         assert notifications[-1] == 0
     finally:
         tab.close()
-
-
-def test_shared_image_panel_uses_canvas_filename_without_redundant_header(qapp, tmp_path):
-    from tabs.calibration_tab import CalibrationApp
-
-    parent = DummyParentApp()
-    parent.image_path = str(tmp_path / "detector-frame.tif")
-    parent.image_data = np.ones((4, 6), dtype=float)
-    tab = CalibrationApp(parent)
-    try:
-        tab.update_plot(parent.image_data)
-
-        assert not tab.filename_label.isVisible()
-        assert tab.image_viewer._plot_item.titleLabel.text == "detector-frame.tif"
-    finally:
-        tab.close()
-
-
-def test_clear_session_icon_has_accessible_name(qapp):
-    from main import SciAnaApp
-
-    app = SciAnaApp()
-    try:
-        assert app.clear_session_button.accessibleName() == "Clear saved session"
-    finally:
-        app.close()
 
 
 @pytest.mark.parametrize(

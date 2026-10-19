@@ -1,0 +1,306 @@
+reduction.preview.title:
+  text: "Reduction Preview"
+  context: "Heading above the one-dimensional reduction plot."
+reduction.preview.empty:
+  text: "No preview yet"
+  context: "Initial preview summary before reduction has been run."
+reduction.plot_style.title:
+  text: "Plot Style"
+  context: "Group heading for plot appearance controls."
+reduction.plot_style.title_size:
+  text: "Plot title size"
+  context: "Label for the plot title font-size control."
+reduction.plot_style.axis_label_size:
+  text: "Axis label size"
+  context: "Label for the plot axis-label font-size control."
+reduction.plot_style.tick_label_size:
+  text: "Tick label size"
+  context: "Label for the plot tick-label font-size control."
+reduction.plot_style.export_resolution:
+  text: "Export resolution (DPI)"
+  context: "Label for the exported plot resolution control."
+reduction.plot_style.line_color:
+  text: "Line color"
+  context: "Label for the reduction plot line color control."
+reduction.plot_style.line_width:
+  text: "Line width"
+  context: "Label for the reduction plot line width control."
+reduction.plot_style.axis_scale:
+  text: "Axis Scale"
+  context: "Label for the axis-scale selection controls."
+reduction.scale.linear:
+  text: "Linear"
+  context: "Axis-scale choice using linear axes."
+reduction.scale.log_x:
+  text: "LogX"
+  context: "Axis-scale choice using a logarithmic x-axis."
+reduction.scale.log_y:
+  text: "LogY"
+  context: "Axis-scale choice using a logarithmic y-axis."
+reduction.scale.log_log:
+  text: "LogLog"
+  context: "Axis-scale choice using logarithmic x- and y-axes."
+reduction.protocol.label:
+  text: "Protocol"
+  context: "Label identifying the reduction operation selector."
+reduction.operation.circular_average:
+  text: "Circular Average"
+  context: "Button label selecting circular-average reduction."
+reduction.operation.sector_average:
+  text: "Sector Average"
+  context: "Button label selecting sector-average reduction."
+reduction.operation.linecut_q:
+  text: "I(q) at χ"
+  context: "Button label selecting an intensity-versus-q line cut at fixed azimuth."
+reduction.operation.linecut_angle:
+  text: "I(χ) at q"
+  context: "Button label selecting an intensity-versus-azimuth line cut at fixed q."
+reduction.recipe.title:
+  text: "Recipe"
+  context: "Group heading for the editable reduction recipe preview."
+reduction.source.shared:
+  text: "Shared"
+  context: "Calibration or mask source option using shared application state."
+reduction.source.custom:
+  text: "Custom"
+  context: "Calibration or mask source option using a file loaded in this tab."
+reduction.source.none:
+  text: "None"
+  context: "Mask source option that disables masking."
+reduction.calibration.label:
+  text: "Calibration"
+  context: "Label for choosing the calibration source."
+reduction.mask.label:
+  text: "Mask"
+  context: "Label for choosing the mask source."
+reduction.browse:
+  text: "Browse"
+  context: "Button opening a file picker for a custom calibration or mask."
+reduction.preview.live:
+  text: "Live preview"
+  context: "Checkbox enabling preview updates when reduction controls change."
+reduction.parameters.title:
+  text: "Parameters"
+  context: "Group heading for operation-specific reduction controls."
+reduction.bins_relative:
+  text: "Bins (relative)"
+  context: "Label for the relative number of bins used during reduction."
+reduction.crop.auto:
+  text: "Auto crop to calibration"
+  context: "Checkbox using the q-range derived from the active calibration."
+reduction.q_min:
+  text: "q min (Å⁻¹)"
+  context: "Label for the minimum q range in inverse angstroms."
+reduction.q_max:
+  text: "q max (Å⁻¹)"
+  context: "Label for the maximum q range in inverse angstroms."
+reduction.angle_start:
+  text: "Angle start (°)"
+  context: "Label for the starting azimuthal angle of the selected sector."
+reduction.angle_end:
+  text: "Angle end (°)"
+  context: "Label for the ending azimuthal angle of the selected sector."
+reduction.chi_center:
+  text: "χ center (°)"
+  context: "Label for the center azimuthal angle of the q line cut."
+reduction.q_half_width:
+  text: "Half-width Δq (Å⁻¹)"
+  context: "Label for the q half-width around the selected reduction line."
+reduction.chi_orientation:
+  text: "χ orientation: 0° right, +90° up"
+  context: "Note describing the screen orientation convention for azimuth χ."
+reduction.q_center:
+  text: "q center (Å⁻¹)"
+  context: "Label for the q center of the azimuthal line cut."
+reduction.recipe.operation.circular_average:
+  text: "Circular Average"
+  context: "Human-readable recipe name for circular-average reduction."
+reduction.recipe.operation.sector_average:
+  text: "Sector Average"
+  context: "Human-readable recipe name for sector-average reduction."
+reduction.recipe.operation.linecut_q:
+  text: "Line I(q) at Chi"
+  context: "Human-readable recipe name for an intensity-versus-q line cut."
+reduction.recipe.operation.linecut_angle:
+  text: "Line I(chi) at Q"
+  context: "Human-readable recipe name for an intensity-versus-azimuth line cut."
+reduction.recipe.apply:
+  text: "Apply YAML"
+  context: "Button that applies the recipe text edited in the YAML view."
+reduction.recipe.apply.tooltip:
+  text: "Parse the edited Recipe YAML above and apply it to the controls"
+  context: "Tooltip explaining that edited recipe YAML is parsed into the controls."
+reduction.preview.refresh:
+  text: "Refresh Preview"
+  context: "Button that reruns the current reduction preview."
+reduction.export_data:
+  text: "Export Data"
+  context: "Button that saves the current one-dimensional reduction result."
+reduction.send_to_batch:
+  text: "Send to Batch"
+  context: "Button that sends the current reduction settings to the Batch tab."
+reduction.send_to_batch.tooltip:
+  text: "Push current settings as a protocol to the Batch tab"
+  context: "Tooltip explaining that current reduction settings are sent to Batch."
+reduction.dialog.load_calibration:
+  text: "Load Calibration YAML"
+  context: "File dialog title for opening a calibration YAML file."
+reduction.dialog.select_line_color:
+  text: "Select Line Color"
+  context: "Color picker dialog title for choosing the reduction plot line color."
+reduction.filter.yaml_all:
+  text: "YAML files (*.yaml *.yml);;All files (*)"
+  context: "File dialog filter for YAML files or any file."
+reduction.status.calibration_loaded:
+  text: "Loaded custom calibration: {name}"
+  context: "Status confirming that a custom calibration file was loaded."
+  placeholders:
+    name: "Loaded calibration filename."
+reduction.status.calibration_load_failed:
+  text: "Could not load the custom calibration file: {error}"
+  context: "Status explaining why the custom calibration file could not be loaded."
+  placeholders:
+    error: "Raw calibration-loading exception."
+reduction.dialog.load_mask:
+  text: "Load Mask"
+  context: "File dialog title for opening a custom mask."
+reduction.filter.mask_all:
+  text: "Mask files (*.png *.tif *.tiff *.npy);;All files (*)"
+  context: "File dialog filter for supported mask files or any file."
+reduction.status.mask_loaded:
+  text: "Loaded custom mask: {name}"
+  context: "Status confirming that a custom mask file was loaded."
+  placeholders:
+    name: "Loaded mask filename."
+reduction.status.mask_load_failed:
+  text: "Could not load the custom mask file: {error}"
+  context: "Status explaining why the custom mask file could not be loaded."
+  placeholders:
+    error: "Raw mask-loading exception."
+reduction.tooltip.calibration.custom:
+  text: "Calibration: custom ({name})"
+  context: "Tooltip identifying the selected custom calibration filename."
+  placeholders:
+    name: "Custom calibration filename."
+reduction.tooltip.calibration.unloaded:
+  text: "Calibration: from calibration tab (not loaded)"
+  context: "Tooltip indicating that shared calibration has not been loaded."
+reduction.tooltip.calibration.shared:
+  text: "Calibration: from calibration tab"
+  context: "Tooltip identifying calibration from the shared calibration tab."
+reduction.tooltip.mask.disabled:
+  text: "Mask: disabled"
+  context: "Tooltip indicating that mask application is disabled."
+reduction.tooltip.mask.custom:
+  text: "Mask: custom ({name})"
+  context: "Tooltip identifying the selected custom mask filename."
+  placeholders:
+    name: "Custom mask filename."
+reduction.tooltip.mask.shared:
+  text: "Mask: from mask tab"
+  context: "Tooltip identifying a mask loaded from the shared mask tab."
+reduction.tooltip.mask.unloaded:
+  text: "Mask: from mask tab (not loaded)"
+  context: "Tooltip indicating that no shared mask has been loaded."
+reduction.status.image_prepare_failed:
+  text: "Unable to prepare image array for reduction"
+  context: "Status shown when the image cannot be prepared for reduction."
+reduction.status.image_requires_2d:
+  text: "Reduction requires 2D image data (got {dimensions}D)"
+  context: "Status explaining that reduction needs a two-dimensional image."
+  placeholders:
+    dimensions: "Number of image dimensions received."
+reduction.status.mask_shape_mismatch:
+  text: "Mask shape does not match the active image; ignoring mask for preview"
+  context: "Status explaining that an incompatible mask is omitted from the preview."
+reduction.preview.no_image:
+  text: "No image loaded"
+  context: "Preview summary shown when no image is available."
+reduction.status.preview_failed:
+  text: "Preview failed: {error}"
+  context: "Preview summary explaining that reduction preview processing failed."
+  placeholders:
+    error: "Raw reduction exception."
+reduction.status.failed:
+  text: "Reduction failed: {error}"
+  context: "Application status explaining that reduction processing failed."
+  placeholders:
+    error: "Raw reduction exception."
+reduction.operation.status.circular_average:
+  text: "Circular Average"
+  context: "Operation name shown in the reduction result summary."
+reduction.operation.status.sector_average:
+  text: "Sector Average"
+  context: "Operation name shown in the reduction result summary."
+reduction.operation.status.linecut_q:
+  text: "Linecut Q"
+  context: "Operation name shown in the q line-cut result summary."
+reduction.operation.status.linecut_angle:
+  text: "Linecut Angle"
+  context: "Operation name shown in the azimuthal line-cut result summary."
+reduction.preview.result:
+  text: "{operation}: {count} points"
+  context: "Reduction preview summary reporting the operation and output point count."
+  placeholders:
+    operation: "Localized reduction operation name."
+    count: "Number of output points."
+reduction.status.complete:
+  text: "{operation} complete: {count} points"
+  context: "Status confirming reduction completion and reporting output point count."
+  placeholders:
+    operation: "Localized reduction operation name."
+    count: "Number of output points."
+reduction.plot.no_preview:
+  text: "No preview\n\nLoad an image and select an operation."
+  context: "Plot-area guidance shown before a reduction preview is available."
+reduction.status.preview_before_export:
+  text: "Run preview before export"
+  context: "Status prompting the user to generate a result before exporting."
+reduction.dialog.export_data:
+  text: "Export 1D data"
+  context: "File dialog title for saving one-dimensional reduction data."
+reduction.filter.data_all:
+  text: "CSV files (*.csv);;Data files (*.dat);;Text files (*.txt);;All files (*)"
+  context: "File dialog filter for CSV, DAT, text, or any data file."
+reduction.status.data_exported:
+  text: "Reduction 1D data exported to {path}"
+  context: "Status confirming the output path for exported reduction data."
+  placeholders:
+    path: "Path returned by the reduction data writer."
+reduction.recipe.batch_header:
+  text: "# Recipe sent to Batch tab\n"
+  context: "Comment heading in the YAML recipe preview sent to Batch."
+reduction.status.recipe_yaml_failed:
+  text: "Could not apply the recipe: invalid YAML — {error}"
+  context: "Status explaining that recipe text could not be parsed as YAML."
+  placeholders:
+    error: "Raw YAML parsing exception."
+reduction.status.recipe_mapping_invalid:
+  text: "Invalid recipe: expected a YAML mapping"
+  context: "Status shown when a parsed recipe is not a mapping."
+reduction.status.recipe_applied:
+  text: "Recipe applied from YAML"
+  context: "Status confirming that recipe edits were applied."
+reduction.dialog.export_recipe:
+  text: "Export reduction recipe"
+  context: "File dialog title for exporting a reduction recipe."
+reduction.filter.yaml_json_all:
+  text: "YAML files (*.yaml *.yml);;JSON files (*.json);;All files (*)"
+  context: "File dialog filter for YAML, JSON, or any file."
+reduction.status.recipe_exported:
+  text: "Reduction recipe exported to {path}"
+  context: "Status confirming the path used to export the reduction recipe."
+  placeholders:
+    path: "Exported recipe path."
+reduction.status.batch_unavailable:
+  text: "Batch tab not available"
+  context: "Status shown when the Batch tab cannot receive the recipe."
+reduction.status.display_update_failed:
+  text: "Unable to update reduction display"
+  context: "Fallback status shown when the reduction display cannot be updated."
+reduction.preview.image_loaded:
+  text: "Image loaded: {width}x{height}"
+  context: "Preview summary reporting the dimensions of the loaded image."
+  placeholders:
+    width: "Image width in pixels."
+    height: "Image height in pixels."

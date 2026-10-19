@@ -1,0 +1,273 @@
+calibration.plot.title:
+  text: "一维曲线"
+  context: "Title for the one-dimensional calibration plot."
+calibration.plot.tip:
+  text: "调整束心，使峰位对齐"
+  context: "Brief guidance shown above the calibration profiles."
+calibration.plot.scale:
+  text: "坐标尺度："
+  context: "Label for the calibration plot scale selector."
+calibration.plot.scale_linear:
+  text: "linear"
+  context: "Choice that displays both profile axes with linear scales."
+calibration.plot.scale_log_x:
+  text: "logx"
+  context: "Choice that displays the horizontal profile axis logarithmically."
+calibration.plot.scale_log_y:
+  text: "logy"
+  context: "Choice that displays the vertical profile axis logarithmically."
+calibration.plot.scale_log_xy:
+  text: "loglog"
+  context: "Choice that displays both profile axes logarithmically."
+calibration.plot.export:
+  text: "导出一维曲线"
+  context: "Button that exports the one-dimensional profiles."
+calibration.parameters.title:
+  text: "标定参数"
+  context: "Heading for detector calibration inputs."
+calibration.beam_center_x:
+  text: "<u>束心 X</u>"
+  context: "Input label for the horizontal beam-center coordinate."
+calibration.beam_center_y:
+  text: "<u>束心 Y</u>"
+  context: "Input label for the vertical beam-center coordinate."
+calibration.beam_center.tooltip:
+  text: "在原始图像上单击鼠标中键以设置束心。"
+  context: "Tooltip explaining how to place the beam center on the image."
+calibration.detector_orientation:
+  text: "探测器方位角 (°)"
+  context: "Input label for detector orientation angle."
+calibration.detector_tilt:
+  text: "探测器倾角 (°)"
+  context: "Input label for detector tilt angle."
+calibration.detector_phi:
+  text: "探测器 Phi 角 (°)"
+  context: "Input label for detector phi angle."
+calibration.distance:
+  text: "<u>距离 (m)</u>"
+  context: "Input label for sample-to-detector distance in metres."
+calibration.pixel_size:
+  text: "像素尺寸 (µm)"
+  context: "Input label for detector pixel size in micrometres."
+calibration.wavelength:
+  text: "波长 (Å)："
+  context: "Input label for X-ray wavelength in angstroms."
+calibration.energy:
+  text: "<u>能量 (eV)：</u>"
+  context: "Input label for X-ray energy in electronvolts."
+calibration.action.calibrate:
+  text: "标定"
+  context: "Button that applies the current calibration parameters."
+calibration.action.export:
+  text: "导出"
+  context: "Button that exports calibration parameters."
+calibration.ring.title:
+  text: "计算环中心"
+  context: "Heading and action label for ring-center calculation."
+calibration.ring.instructions:
+  text: "在环上右键选择至少 3 个点。"
+  context: "Instructions for selecting points to calculate a ring center."
+calibration.ring.snap_to_peak:
+  text: "吸附到峰值"
+  context: "Option to snap picked points to nearby intensity peaks."
+calibration.ring.snap_tooltip:
+  text: "每次右键时自动吸附到附近最亮的像素。"
+  context: "Tooltip explaining peak snapping for ring-point selection."
+calibration.ring.window:
+  text: "窗口"
+  context: "Label for the local peak-search window size."
+calibration.ring.window_tooltip:
+  text: "局部搜索窗口，边长须为奇数 (3–15 像素)"
+  context: "Tooltip describing the permitted peak-search window size."
+calibration.ring.pixels:
+  text: "px"
+  context: "Unit label for the peak-search window measured in pixels."
+calibration.ring.point_required:
+  text: "点 {number}（必选）"
+  context: "Tooltip identifying one of the required ring-point indicators."
+  placeholders:
+    number: "One-based point number."
+calibration.ring.point_optional:
+  text: "点 {number}（可选）"
+  context: "Tooltip identifying an optional ring-point indicator."
+  placeholders:
+    number: "One-based point number."
+calibration.ring.calculate:
+  text: "计算"
+  context: "Button that calculates the ring center from selected points."
+calibration.action.clear:
+  text: "清除"
+  context: "Button that clears selected ring points."
+calibration.standard.title:
+  text: "与标准样品对照"
+  context: "Heading for selecting a reference material."
+calibration.standard.none:
+  text: "无"
+  context: "Choice indicating that no reference standard is selected."
+calibration.standard.show_rings:
+  text: "显示衍射环"
+  context: "Option to display reference rings for the selected standard."
+calibration.standard.show_rings_tooltip:
+  text: "在探测器图像上显示所选标准样品的参考环。"
+  context: "Tooltip explaining the reference-ring display option."
+calibration.standard.instructions:
+  text: "选择上方的标准样品以叠加参考线。"
+  context: "Guidance shown before a reference standard is selected."
+calibration.status.pending:
+  text: "标定更新处理中……"
+  context: "Status shown while a calibration update is scheduled."
+calibration.ring.points_needed:
+  text: "已选 {picked}/{total} 个点（至少需要 3 个）"
+  context: "Ring-point progress when more points are needed for fitting."
+  placeholders:
+    picked: "Number of points currently selected."
+    total: "Maximum number of ring points."
+calibration.ring.points_picked:
+  text: "已选 {picked}/{total} 个点"
+  context: "Ring-point progress when enough points are selected."
+  placeholders:
+    picked: "Number of points currently selected."
+    total: "Maximum number of ring points."
+calibration.ring.result:
+  text: "中心 ({x:.1f}, {y:.1f})，r={radius:.1f}px，拟合度={score:.0f}%"
+  context: "Calculated ring center, radius, and fit score."
+  placeholders:
+    x: "Horizontal center coordinate in pixels."
+    y: "Vertical center coordinate in pixels."
+    radius: "Calculated ring radius in pixels."
+    score: "Fit quality as a percentage."
+calibration.ring.result_excluded:
+  text: "中心 ({x:.1f}, {y:.1f})，r={radius:.1f}px，拟合度={score:.0f}%（已排除 {count} 个点）"
+  context: "Calculated ring result when outlier points were excluded."
+  placeholders:
+    x: "Horizontal center coordinate in pixels."
+    y: "Vertical center coordinate in pixels."
+    radius: "Calculated ring radius in pixels."
+    score: "Fit quality as a percentage."
+    count: "Number of excluded ring points."
+calibration.ring.status_calculated:
+  text: "环中心已计算并应用：({x:.2f}, {y:.2f})，使用了 {count} 个点"
+  context: "Status confirming the calculated ring center was applied."
+  placeholders:
+    x: "Horizontal center coordinate in pixels."
+    y: "Vertical center coordinate in pixels."
+    count: "Number of points used in the fit."
+calibration.ring.status_outliers:
+  text: "环中心已计算并应用：({x:.2f}, {y:.2f})，使用了 {count} 个点（已排除 {excluded} 个离群点）"
+  context: "Status confirming the ring center was applied after excluding outliers."
+  placeholders:
+    x: "Horizontal center coordinate in pixels."
+    y: "Vertical center coordinate in pixels."
+    count: "Number of points used in the fit."
+    excluded: "Number of excluded outlier points."
+calibration.ring.fit_failed:
+  text: "拟合失败：{error}"
+  context: "Ring-center result shown when fitting fails."
+  placeholders:
+    error: "Raw error detail from the fitting operation."
+calibration.ring.fit_error:
+  text: "无法计算环中心：{error}"
+  context: "Status shown when ring-center calculation fails."
+  placeholders:
+    error: "Raw error detail from the fitting operation."
+calibration.ring.cleared:
+  text: "已清除环上所选点"
+  context: "Status confirming that selected ring points were cleared."
+calibration.status.updated:
+  text: "标定已更新，图表已刷新"
+  context: "Status confirming calibration and its plots were refreshed."
+calibration.ring.status_heading:
+  text: "=== 环中心状态 ==="
+  context: "Section heading in calibration status information."
+calibration.ring.status_count:
+  text: "已输入环上点数：{count}/{total}"
+  context: "Selected ring-point count in calibration status information."
+  placeholders:
+    count: "Number of selected points."
+    total: "Maximum number of ring points."
+calibration.ring.status_center:
+  text: "计算得到的中心：({x:.2f}, {y:.2f})"
+  context: "Calculated center coordinates in calibration status information."
+  placeholders:
+    x: "Horizontal center coordinate in pixels."
+    y: "Vertical center coordinate in pixels."
+calibration.ring.status_not_calculated:
+  text: "环中心：尚未计算"
+  context: "Status indicating that a ring center has not been calculated."
+calibration.standard.status_heading:
+  text: "=== 标准样品状态 ==="
+  context: "Section heading for reference-standard status information."
+calibration.status.selected:
+  text: "已选：{standard}"
+  context: "Name of the currently selected calibration standard."
+  placeholders:
+    standard: "Selected standard name from the reference database."
+calibration.standard.reference_lines:
+  text: "参考线数：{count}"
+  context: "Number of reference lines for a selected standard."
+  placeholders:
+    count: "Number of reference lines."
+calibration.standard.showing:
+  text: "正在显示 {standard} 的 {count} 条参考线。"
+  context: "Information about reference lines overlaid for a standard."
+  placeholders:
+    count: "Number of reference lines."
+    standard: "Selected standard name from the reference database."
+calibration.plot.no_analysis:
+  text: "暂无 Q 空间分析结果\n\n需要满足：\n• 有效的图像数据\n• SciAnalysis 库\n• 正确的标定参数"
+  context: "Plot notice explaining why Q-space profiles are unavailable."
+calibration.plot.q_axis:
+  text: "Q (Å⁻¹)"
+  context: "Horizontal axis label for the scattering-vector magnitude."
+calibration.plot.intensity_axis:
+  text: "强度"
+  context: "Vertical axis label for scattering intensity."
+calibration.plot.circular_average:
+  text: "圆周平均"
+  context: "Legend label for the circularly averaged scattering profile."
+calibration.plot.horizontal_0:
+  text: "水平 0°"
+  context: "Legend label for the horizontal zero-degree profile."
+calibration.plot.horizontal_180:
+  text: "水平 180°"
+  context: "Legend label for the horizontal 180-degree profile."
+calibration.plot.vertical_90:
+  text: "垂直 90°"
+  context: "Legend label for the vertical 90-degree profile."
+calibration.plot.vertical_270:
+  text: "垂直 270°"
+  context: "Legend label for the vertical 270-degree profile."
+calibration.export.select_directory:
+  text: "选择标定参数导出目录"
+  context: "Directory chooser title for exporting calibration parameters."
+calibration.exported:
+  text: "标定参数已导出至 {path}"
+  context: "Status giving the path where calibration parameters were written."
+  placeholders:
+    path: "Path of the exported calibration file."
+calibration.export.no_profiles:
+  text: "没有可导出的一维曲线数据。请先载入图像并完成标定。"
+  context: "Status explaining that profiles must be calculated before export."
+calibration.export.profiles_title:
+  text: "导出一维曲线"
+  context: "File chooser title for exporting one-dimensional profiles."
+calibration.export.profiles_filter:
+  text: "CSV 文件 (*.csv);;文本文件 (*.txt);;所有文件 (*)"
+  context: "File type choices for exporting profile data."
+calibration.exported_profiles:
+  text: "一维曲线已导出至 {path}"
+  context: "Status giving the path where profile data was exported."
+  placeholders:
+    path: "Path of the exported profile file."
+calibration.ring.all_points:
+  text: "已填满全部 {count} 个点。点击“{button}”计算，或继续右键以替换已有点。"
+  context: "Status explaining how to continue after all ring-point slots are filled."
+  placeholders:
+    count: "Maximum number of ring points."
+    button: "Localized label of the ring-center calculation action."
+calibration.ring.point_filled:
+  text: "已选择第 {point} 个点。右键选择第 {next_point} 个点。"
+  context: "Status showing ring-point selection progress."
+  placeholders:
+    point: "One-based number of the point just selected."
+    next_point: "One-based number of the next point to select."

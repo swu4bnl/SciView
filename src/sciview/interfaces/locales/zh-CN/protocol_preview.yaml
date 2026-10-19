@@ -1,0 +1,416 @@
+protocol_preview.tab.raw_image:
+  text: "原始图像"
+  context: "Visualization tab containing the unprocessed input image."
+protocol_preview.tab.configuration:
+  text: "配置"
+  context: "Controls tab for calibration, mask, and image display settings."
+protocol_preview.tab.protocols:
+  text: "协议"
+  context: "Controls tab for arranging and running a protocol stack."
+protocol_preview.tab.info:
+  text: "信息"
+  context: "Controls tab showing image, calibration, mask, and protocol details."
+protocol_preview.calibration_mask.title:
+  text: "校准与掩膜"
+  context: "Section heading for loading shared calibration and mask files."
+protocol_preview.calibration.load:
+  text: "加载校准文件"
+  context: "Button opening a file picker for the calibration configuration."
+protocol_preview.mask.load:
+  text: "加载掩膜文件"
+  context: "Button opening a file picker for an image mask."
+protocol_preview.image_display.title:
+  text: "图像显示"
+  context: "Section heading for the input image color mapping and limits."
+protocol_preview.colormap:
+  text: "色图："
+  context: "Field label for selecting the color map used to display the image."
+protocol_preview.color_limits:
+  text: "颜色范围："
+  context: "Field label grouping the lower and upper image color limits."
+protocol_preview.minimum:
+  text: "最小值："
+  context: "Field label for the lower image color limit."
+protocol_preview.maximum:
+  text: "最大值："
+  context: "Field label for the upper image color limit."
+protocol_preview.export_settings.title:
+  text: "导出设置"
+  context: "Section heading for image-figure dimensions, resolution, and typography."
+protocol_preview.figure_size:
+  text: "图像尺寸："
+  context: "Field label for the output figure dimensions."
+protocol_preview.width_short:
+  text: "宽："
+  context: "Abbreviated width label for the figure-size control."
+protocol_preview.height_short:
+  text: "高："
+  context: "Abbreviated height label for the figure-size control."
+protocol_preview.inches:
+  text: "in"
+  context: "Unit label indicating figure dimensions are in inches."
+protocol_preview.dpi:
+  text: "DPI："
+  context: "Field label for dots-per-inch export resolution."
+protocol_preview.margins:
+  text: "边距（左/右/上/下）："
+  context: "Field label for left, right, top, and bottom figure margins."
+protocol_preview.font_settings.title:
+  text: "字体设置"
+  context: "Section heading for exported figure font family and size."
+protocol_preview.font:
+  text: "字体："
+  context: "Field label for selecting the exported figure font family."
+protocol_preview.size:
+  text: "字号："
+  context: "Field label for the exported figure font size."
+protocol_preview.points:
+  text: "pt"
+  context: "Unit label indicating the font size is measured in points."
+protocol_preview.image_rendering.title:
+  text: "图像渲染"
+  context: "Section heading for selecting image shading behavior."
+protocol_preview.shading:
+  text: "着色："
+  context: "Field label for selecting the image rendering shading method."
+protocol_preview.loaded_configuration:
+  text: "已加载的配置"
+  context: "Heading above the current calibration, mask, and protocol summary."
+protocol_preview.refresh_info:
+  text: "刷新信息"
+  context: "Button that rebuilds the displayed configuration summary."
+protocol_preview.info.status_heading:
+  text: "=== 配置状态 ==="
+  context: "Heading for the image, calibration, mask, and protocol status summary."
+protocol_preview.info.image_heading:
+  text: "图像："
+  context: "Section heading for input image availability and dimensions."
+protocol_preview.info.unknown:
+  text: "未知"
+  context: "Value shown when the input image dimensions are unavailable."
+protocol_preview.info.loaded:
+  text: "✓ 已加载"
+  context: "Status marker indicating that image, calibration, or mask data is loaded."
+protocol_preview.info.shape:
+  text: "尺寸：{shape}"
+  context: "Image information line displaying the array dimensions."
+  placeholders:
+    shape: "Image array shape."
+protocol_preview.info.not_loaded:
+  text: "✗ 未加载"
+  context: "Status marker indicating that no input image is loaded."
+protocol_preview.info.calibration_heading:
+  text: "校准："
+  context: "Section heading for the current calibration summary."
+protocol_preview.info.calibration.file:
+  text: "文件"
+  context: "Name of the calibration configuration file shown in the summary."
+protocol_preview.info.calibration.wavelength:
+  text: "波长"
+  context: "Calibration summary field for the X-ray wavelength."
+protocol_preview.info.calibration.image_size:
+  text: "图像尺寸"
+  context: "Calibration summary field for detector image dimensions."
+protocol_preview.info.calibration.pixel_size_um:
+  text: "像素尺寸（μm）"
+  context: "Calibration summary field for detector pixel size in micrometers."
+protocol_preview.info.calibration.beam_position:
+  text: "束心位置"
+  context: "Calibration summary field for the beam-center position."
+protocol_preview.info.calibration.distance_m:
+  text: "样品到探测器距离（m）"
+  context: "Calibration summary field for sample-to-detector distance in meters."
+protocol_preview.info.using_defaults:
+  text: "✗ 正在使用默认值"
+  context: "Status marker indicating that calibration defaults are in use."
+protocol_preview.info.mask_heading:
+  text: "掩膜："
+  context: "Section heading for the current mask summary."
+protocol_preview.info.mask.file:
+  text: "文件"
+  context: "Name of the mask file shown in the configuration summary."
+protocol_preview.info.mask.path:
+  text: "路径"
+  context: "Filesystem path of the mask file shown in the configuration summary."
+protocol_preview.info.optional_not_loaded:
+  text: "⊘ 可选（未加载）"
+  context: "Status marker explaining that no optional mask has been loaded."
+protocol_preview.info.protocol_count:
+  text: "协议数：{count}"
+  context: "Section heading reporting the number of configured protocols."
+  placeholders:
+    count: "Number of protocols in the stack."
+protocol_preview.protocol_stack.title:
+  text: "协议栈"
+  context: "Heading for the ordered list of protocol steps."
+protocol_preview.protocol_stack.instructions:
+  text: "添加并配置协议，按顺序运行"
+  context: "Guidance explaining how to build an ordered protocol stack."
+protocol_preview.add:
+  text: "添加"
+  context: "Button that opens the menu of available protocol steps."
+protocol_preview.remove:
+  text: "移除"
+  context: "Button that removes the selected protocol step from the stack."
+protocol_preview.parameters.title:
+  text: "协议参数"
+  context: "Heading for controls that configure the selected protocol step."
+protocol_preview.parameters.select_to_edit:
+  text: "选择要编辑参数的协议。"
+  context: "Guidance shown before a protocol step is selected for editing."
+protocol_preview.plot_settings.title:
+  text: "绘图设置"
+  context: "Heading for line width and axis-scale settings used in protocol plots."
+protocol_preview.line_width:
+  text: "线宽："
+  context: "Field label for the line width used by plotted protocol results."
+protocol_preview.x_log_scale:
+  text: "X 轴对数刻度"
+  context: "Checkbox enabling a logarithmic x-axis for protocol plots."
+protocol_preview.y_log_scale:
+  text: "Y 轴对数刻度"
+  context: "Checkbox enabling a logarithmic y-axis for protocol plots."
+protocol_preview.export.title:
+  text: "导出"
+  context: "Heading for exporting the configured protocol workflow."
+protocol_preview.format:
+  text: "格式："
+  context: "Field label for choosing the workflow export file format."
+protocol_preview.export.format_python:
+  text: "Python 脚本"
+  context: "Export format option that generates an executable Python script."
+protocol_preview.export.preview:
+  text: "预览导出内容"
+  context: "Button that opens a preview of the generated workflow file."
+protocol_preview.export.workflow:
+  text: "导出工作流"
+  context: "Button that saves the configured protocol workflow to a file."
+protocol_preview.run_preview:
+  text: "运行预览"
+  context: "Button that runs the configured protocol stack on the selected image."
+protocol_preview.dialog.load_calibration:
+  text: "加载校准文件"
+  context: "File dialog title for opening a calibration YAML file."
+protocol_preview.filter.yaml_all:
+  text: "YAML 文件 (*.yaml *.yml);;所有文件 (*)"
+  context: "File dialog filter for YAML files or any file."
+protocol_preview.status.calibration_create_warning:
+  text: "警告：无法创建 SciAnalysis 校准对象：{error}"
+  context: "Status warning that the loaded calibration could not be converted for SciAnalysis."
+  placeholders:
+    error: "Raw calibration conversion exception."
+protocol_preview.status.calibration_loaded:
+  text: "✓ 已加载校准：{filename}（供所有选项卡共用）"
+  context: "Status confirming that calibration was loaded and made available to other tabs."
+  placeholders:
+    filename: "Loaded calibration filename."
+protocol_preview.status.calibration_load_failed:
+  text: "加载校准失败：{error}"
+  context: "Status explaining that the calibration file could not be loaded."
+  placeholders:
+    error: "Raw calibration-loading exception."
+protocol_preview.dialog.load_mask:
+  text: "加载掩膜文件"
+  context: "File dialog title for opening a mask file."
+protocol_preview.filter.mask_all:
+  text: "掩膜文件 (*.png *.tif *.tiff *.xcf *.yaml);;所有文件 (*)"
+  context: "File dialog filter for supported mask files or any file."
+protocol_preview.status.mask_create_warning:
+  text: "警告：无法创建 SciAnalysis 掩膜对象：{error}"
+  context: "Status warning that the loaded mask could not be converted for SciAnalysis."
+  placeholders:
+    error: "Raw mask conversion exception."
+protocol_preview.status.mask_loaded:
+  text: "✓ 已加载掩膜：{filename}（供所有选项卡共用）"
+  context: "Status confirming that the mask was loaded and made available to other tabs."
+  placeholders:
+    filename: "Loaded mask filename."
+protocol_preview.status.mask_load_failed:
+  text: "加载掩膜失败：{error}"
+  context: "Status explaining that the mask file could not be loaded."
+  placeholders:
+    error: "Raw mask-loading exception."
+protocol_preview.menu.scianalysis_unavailable:
+  text: "SciAnalysis 不可用"
+  context: "Disabled menu item shown when SciAnalysis protocol support is unavailable."
+protocol_preview.status.protocol_added:
+  text: "已添加协议：{name}"
+  context: "Status confirming that a protocol step was added to the stack."
+  placeholders:
+    name: "Protocol identifier added to the stack."
+protocol_preview.status.no_protocol_selected:
+  text: "未选择协议"
+  context: "Status shown when a remove action occurs without a selected protocol."
+protocol_preview.status.protocol_removed:
+  text: "已移除协议：{name}"
+  context: "Status confirming that a protocol step was removed from the stack."
+  placeholders:
+    name: "Protocol identifier removed from the stack."
+protocol_preview.parameters.select_to_configure:
+  text: "选择要配置参数的协议"
+  context: "Guidance shown before a protocol step is selected for configuration."
+protocol_preview.q_min:
+  text: "Q 下限："
+  context: "Field label for the lower q boundary in circular-average protocol settings."
+protocol_preview.q_max:
+  text: "Q 上限："
+  context: "Field label for the upper q boundary in circular-average protocol settings."
+protocol_preview.q_space_transformation:
+  text: "Q 空间图像变换"
+  context: "Description of the selected protocol's Q-space image transformation."
+protocol_preview.resize_factor:
+  text: "缩放因子："
+  context: "Field label for the thumbnail resize fraction."
+protocol_preview.status.scianalysis_unavailable:
+  text: "SciAnalysis 不可用"
+  context: "Status shown when preview execution requires unavailable SciAnalysis support."
+protocol_preview.status.empty_stack:
+  text: "协议栈为空"
+  context: "Status shown when preview execution is requested with an empty protocol stack."
+protocol_preview.status.image_not_selected:
+  text: "未选择图像文件。请从 Image Browser 选项卡加载图像。"
+  context: "Status prompting the user to select an image before running protocols."
+protocol_preview.status.image_not_found:
+  text: "未找到图像文件：{path}"
+  context: "Status explaining that the selected image path does not exist."
+  placeholders:
+    path: "Selected image filesystem path."
+protocol_preview.status.preparing_image:
+  text: "正在准备图像数据..."
+  context: "Status shown while input image data is being prepared for protocol execution."
+protocol_preview.status.invalid_image_data:
+  text: "图像数据无效"
+  context: "Fallback validation message for an unusable image array."
+protocol_preview.status.image_validation_failed:
+  text: "错误：{error}"
+  context: "Status reporting the image validation failure detail."
+  placeholders:
+    error: "Validation detail returned by the image preparation utility."
+protocol_preview.status.image_validated:
+  text: "✓ 图像验证通过：尺寸={shape}"
+  context: "Status confirming validation and reporting the prepared image dimensions."
+  placeholders:
+    shape: "Validated two-dimensional image shape."
+protocol_preview.status.using_mask:
+  text: "正在使用已加载的掩膜"
+  context: "Status confirming that a previously loaded mask will be used."
+protocol_preview.status.creating_data:
+  text: "正在创建 Data2DScattering..."
+  context: "Status shown while the SciAnalysis scattering-data object is created."
+protocol_preview.status.data_created:
+  text: "✓ 已创建 Data2DScattering：尺寸={shape}"
+  context: "Status confirming object creation and reporting the image dimensions."
+  placeholders:
+    shape: "Scattering-data image shape."
+protocol_preview.status.running_protocol:
+  text: "正在运行协议 {index}/{count}：{name}..."
+  context: "Progress status identifying the current step in the protocol stack."
+  placeholders:
+    index: "One-based position of the running protocol."
+    count: "Number of enabled protocols."
+    name: "Protocol identifier being run."
+protocol_preview.status.protocol_completed:
+  text: "✓ 已完成：{name}"
+  context: "Status confirming successful completion of a protocol step."
+  placeholders:
+    name: "Protocol identifier that completed."
+protocol_preview.status.protocol_failed:
+  text: "协议 {name} 出错：{error}"
+  context: "Status reporting a failure while running a protocol step."
+  placeholders:
+    name: "Protocol identifier that failed."
+    error: "Raw exception raised by protocol execution."
+protocol_preview.status.execution_complete:
+  text: "✓ 协议执行完成：共 {count} 个协议"
+  context: "Status reporting completion of the enabled protocol stack."
+  placeholders:
+    count: "Number of enabled protocols run."
+protocol_preview.status.execution_failed:
+  text: "运行协议时出错：{error}"
+  context: "Status reporting an exception during protocol-stack execution."
+  placeholders:
+    error: "Raw protocol execution exception."
+protocol_preview.status.no_results:
+  text: "没有可显示的结果"
+  context: "Status shown when protocol execution produced no displayable results."
+protocol_preview.results.summary:
+  text: "协议：{protocol}\n\n已保存文件：\n"
+  context: "Heading for the fallback summary of files produced by a protocol."
+  placeholders:
+    protocol: "Protocol identifier that produced the files."
+protocol_preview.results.saved_file:
+  text: "  • {filename}\n"
+  context: "Line in the fallback results summary naming a saved file."
+  placeholders:
+    filename: "Basename of a saved output file."
+protocol_preview.results.saved_item:
+  text: "  • {item}\n"
+  context: "Line in the fallback results summary for a non-file output item."
+  placeholders:
+    item: "Short description of a saved result item."
+protocol_preview.results.tab_title:
+  text: "结果：{protocol}"
+  context: "Visualization tab title for the output of a protocol run."
+  placeholders:
+    protocol: "Protocol identifier that produced the results."
+protocol_preview.status.results_displayed:
+  text: "✓ 结果已显示在新选项卡中：{protocol}"
+  context: "Status confirming that protocol output is shown in a new visualization tab."
+  placeholders:
+    protocol: "Protocol identifier that produced the results."
+protocol_preview.status.visualization_tabs_missing:
+  text: "找不到可视化选项卡"
+  context: "Status explaining that results cannot be displayed because the visualization tabs are unavailable."
+protocol_preview.status.results_display_failed:
+  text: "无法显示结果：{error}"
+  context: "Status explaining why protocol output could not be displayed."
+  placeholders:
+    error: "Raw result display exception."
+protocol_preview.status.tab_closed:
+  text: "已关闭 {tab}"
+  context: "Status confirming that a visualization tab was closed."
+  placeholders:
+    tab: "Visible title of the closed tab."
+protocol_preview.status.no_protocols_to_export:
+  text: "没有可导出的协议"
+  context: "Status shown when workflow export is requested with an empty stack."
+protocol_preview.dialog.export_preview:
+  text: "导出预览"
+  context: "Title of the dialog showing generated workflow content."
+protocol_preview.dialog.export_preview_text:
+  text: "{format} 预览："
+  context: "Dialog message identifying the format of the generated workflow preview."
+  placeholders:
+    format: "Visible name of the selected export format."
+protocol_preview.filter.python:
+  text: "Python 文件 (*.py)"
+  context: "File dialog filter for Python workflow scripts."
+protocol_preview.filter.json:
+  text: "JSON 文件 (*.json)"
+  context: "File dialog filter for JSON workflow files."
+protocol_preview.filter.yaml:
+  text: "YAML 文件 (*.yaml *.yml)"
+  context: "File dialog filter for YAML workflow files."
+protocol_preview.dialog.export_workflow:
+  text: "导出工作流"
+  context: "File dialog title for saving the generated protocol workflow."
+protocol_preview.status.workflow_exported:
+  text: "工作流已导出至 {path}"
+  context: "Status confirming the filesystem path used to export the workflow."
+  placeholders:
+    path: "Exported workflow file path."
+protocol_preview.generated.python_header:
+  text: "# 由 SciAnaGui 协议预览生成"
+  context: "Comment identifying the application that generated an exported Python workflow."
+protocol_preview.generated.python_docstring:
+  text: "运行协议栈"
+  context: "Docstring describing the exported Python function that executes protocols."
+protocol_preview.generated.python_data_guidance:
+  text: "在此处加载数据"
+  context: "Comment prompting the user to add input-data loading code to the exported script."
+protocol_preview.generated.yaml_header:
+  text: "# SciAnalysis 协议工作流"
+  context: "Comment identifying the contents of an exported YAML workflow."
+protocol_preview.generated.yaml_attribution:
+  text: "# 由 SciAnaGui 协议预览生成"
+  context: "Comment identifying the application that generated an exported YAML workflow."

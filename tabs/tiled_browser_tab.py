@@ -51,9 +51,10 @@ from sciview.interfaces.theme.app_style import (
     apply_toolbar_symbol_button_style,
     apply_toolbar_text_button_style,
 )
+from sciview.interfaces.text import tr
 from sciview.interfaces.services.image_service import ImageService
 from sciview.settings.app_settings import IMAGE_BROWSER_SETTINGS
-from sciview.sources.tiled_source import TiledScanSummary
+from sciview.sources.tiled_source import TiledAuthState, TiledScanSummary
 from sciview.sources.tiled_stream import TiledLiveEvent, TiledLiveMonitor
 from tabs.base_image_tab import BaseImageTab
 
@@ -89,23 +90,23 @@ class _TiledAuthorizationDialog(QDialog):
         self._copy_feedback_timer = QTimer(self)
         self._copy_feedback_timer.setSingleShot(True)
         self._copy_feedback_timer.timeout.connect(self._reset_copy_button)
-        self.setWindowTitle("Sign in to Tiled")
+        self.setWindowTitle(tr("tiled_browser.auth.dialog.title"))
         self.setModal(False)
         self.setMinimumWidth(AppStyle.LAYOUT['tiled_auth_dialog_width'])
         layout = QVBoxLayout(self)
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
         layout.setSpacing(AppStyle.LAYOUT['section_spacing'])
 
-        title = QLabel("Authorize SciView")
+        title = QLabel(tr("tiled_browser.auth.dialog.heading"))
         apply_title_style(title)
         layout.addWidget(title)
 
-        instruction = QLabel("Use this one-time code to complete sign-in in your browser.")
+        instruction = QLabel(tr("tiled_browser.auth.dialog.instruction"))
         instruction.setWordWrap(True)
         apply_body_style(instruction)
         layout.addWidget(instruction)
 
-        code_label = QLabel("Device code")
+        code_label = QLabel(tr("tiled_browser.auth.dialog.code_label"))
         apply_subtitle_style(code_label)
         layout.addWidget(code_label)
 
@@ -114,15 +115,17 @@ class _TiledAuthorizationDialog(QDialog):
         self.code_input = QLineEdit(authorization.user_code)
         self.code_input.setReadOnly(True)
         self.code_input.setAlignment(Qt.AlignCenter)
-        self.code_input.setToolTip("Tiled device authorization code")
+        self.code_input.setToolTip(tr("tiled_browser.auth.dialog.code.tooltip"))
         apply_input_style(self.code_input)
         code_row.addWidget(self.code_input, 1)
 
-        self.copy_button = QPushButton("Copy code")
+        self.copy_button = QPushButton(tr("tiled_browser.auth.dialog.copy"))
         parent_app = getattr(parent, "parent_app", None)
         workspace_root = getattr(parent_app, "_workspace_root", Path(__file__).resolve().parent.parent)
         self.copy_button.setIcon(AppStyle.load_icon(workspace_root, "viewer_copy.svg"))
-        self.copy_button.setToolTip("Copy the device code to the clipboard")
+        self.copy_button.setToolTip(
+            tr("tiled_browser.auth.dialog.copy.tooltip")
+        )
         apply_secondary_button_style(self.copy_button)
         self.copy_button.clicked.connect(self._copy_code)
         code_row.addWidget(self.copy_button)
@@ -140,17 +143,17 @@ class _TiledAuthorizationDialog(QDialog):
         self.progress_bar.setFixedHeight(AppStyle.LAYOUT['tiled_auth_progress_height'])
         layout.addWidget(self.progress_bar)
 
-        self.status_label = QLabel("Waiting for authorization")
+        self.status_label = QLabel(tr("tiled_browser.auth.dialog.waiting"))
         apply_status_style(self.status_label)
         layout.addWidget(self.status_label)
 
         buttons = QHBoxLayout()
         buttons.addStretch()
-        cancel_button = QPushButton("Cancel")
+        cancel_button = QPushButton(tr("tiled_browser.action.cancel"))
         apply_secondary_button_style(cancel_button)
         cancel_button.clicked.connect(self.reject)
         buttons.addWidget(cancel_button)
-        self.open_button = QPushButton("Open sign-in page")
+        self.open_button = QPushButton(tr("tiled_browser.auth.dialog.open_page"))
         apply_primary_button_style(self.open_button)
         self.open_button.setDefault(True)
         self.open_button.clicked.connect(self._open_browser)
@@ -159,11 +162,11 @@ class _TiledAuthorizationDialog(QDialog):
 
     def _copy_code(self) -> None:
         QApplication.clipboard().setText(self.authorization.user_code)
-        self.copy_button.setText("Copied")
+        self.copy_button.setText(tr("tiled_browser.auth.dialog.copied"))
         self._copy_feedback_timer.start(1500)
 
     def _reset_copy_button(self) -> None:
-        self.copy_button.setText("Copy code")
+        self.copy_button.setText(tr("tiled_browser.auth.dialog.copy"))
 
     def _open_browser(self) -> None:
         QDesktopServices.openUrl(QUrl(self.authorization.verification_uri))
@@ -323,7 +326,11 @@ class TiledBrowserTab(BaseImageTab):
             if on_error is not None:
                 on_error(error)
                 return
-            QMessageBox.warning(self, "Tiled operation failed", str(error))
+            QMessageBox.warning(
+                self,
+                tr("tiled_browser.error.operation_failed.title"),
+                str(error),
+            )
             return
         on_success(result)
 
@@ -337,8 +344,9 @@ class TiledBrowserTab(BaseImageTab):
         self._operation_token += 1
         self._stop_playback()
         self._finish_operation()
-        self.parent_app.show_status("Cancelled current Tiled action")
-        self.search_status_label.setText("Cancelled current Tiled action")
+        message = tr("tiled_browser.status.cancelled")
+        self.parent_app.show_status(message)
+        self.search_status_label.setText(message)
 
     def _build_ui(self) -> None:
         root = QHBoxLayout(self)
@@ -359,7 +367,7 @@ class TiledBrowserTab(BaseImageTab):
         self._controls_panel = controls_scroll
 
         controls_layout = QVBoxLayout(controls)
-        title = QLabel("Tiled Browser")
+        title = QLabel(tr("tiled_browser.title"))
         apply_title_style(title)
         controls_layout.addWidget(title)
         controls_layout.addWidget(self._create_connection_group())
@@ -371,11 +379,13 @@ class TiledBrowserTab(BaseImageTab):
         viewer = QWidget()
         viewer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         viewer_layout = QVBoxLayout(viewer)
-        subtitle = QLabel("Preview")
+        subtitle = QLabel(tr("tiled_browser.preview.title"))
         apply_subtitle_style(subtitle)
         viewer_layout.addWidget(subtitle)
 
-        self.current_image_label = QLabel("No scan selected")
+        self.current_image_label = QLabel(
+            tr("tiled_browser.preview.no_scan_selected")
+        )
         apply_info_style(self.current_image_label)
         viewer_layout.addWidget(self.current_image_label)
         viewer_layout.addWidget(self._create_image_panel(), 1)
@@ -413,7 +423,7 @@ class TiledBrowserTab(BaseImageTab):
         self._main_splitter.setSizes([left, right])
 
     def _create_connection_group(self) -> QWidget:
-        group = QGroupBox("1) Connection")
+        group = QGroupBox(tr("tiled_browser.connection.group"))
         layout = QVBoxLayout(group)
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
         layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
@@ -421,31 +431,33 @@ class TiledBrowserTab(BaseImageTab):
 
         row = QHBoxLayout()
         row.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
-        row.addWidget(QLabel("catalog"))
+        row.addWidget(QLabel(tr("tiled_browser.connection.catalog.label")))
         self.catalog_combo = QComboBox()
+        self.catalog_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.catalog_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.catalog_combo.currentIndexChanged.connect(self._on_catalog_changed)
         row.addWidget(self.catalog_combo, 1)
 
-        self.auth_button = QPushButton("Login")
-        self.auth_button.setToolTip("Log in or refresh Tiled authentication")
+        self.auth_button = QPushButton(tr("tiled_browser.auth.login"))
+        self.auth_button.setToolTip(tr("tiled_browser.auth.login.tooltip"))
         apply_toolbar_text_button_style(self.auth_button)
         self.auth_button.clicked.connect(self._handle_login)
         row.addWidget(self.auth_button)
 
         self.refresh_button = QPushButton("↻")
-        self.refresh_button.setToolTip("Refresh connection status")
+        self.refresh_button.setToolTip(tr("tiled_browser.connection.refresh.tooltip"))
         apply_toolbar_symbol_button_style(self.refresh_button)
         self.refresh_button.clicked.connect(self._refresh_auth_state)
         row.addWidget(self.refresh_button)
         layout.addLayout(row)
 
-        self.auth_status_label = QLabel("Status: unknown")
+        self.auth_status_label = QLabel(tr("tiled_browser.auth.status.unknown"))
         apply_info_style(self.auth_status_label)
         layout.addWidget(self.auth_status_label)
         return group
 
     def _create_search_group(self) -> QWidget:
-        group = QGroupBox("2) Search")
+        group = QGroupBox(tr("tiled_browser.search.group"))
         layout = QVBoxLayout(group)
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
         layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
@@ -454,57 +466,70 @@ class TiledBrowserTab(BaseImageTab):
         search_grid = QGridLayout()
         search_grid.setHorizontalSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         search_grid.setVerticalSpacing(AppStyle.LAYOUT['panel_spacing'])
-        label_width = AppStyle.FORM_UI['section_label_width']
-        field_label_width = AppStyle.FORM_UI['field_label_width']
-        input_min_width = AppStyle.FORM_UI['input_min_width']
+        label_width = AppStyle.control_px(AppStyle.FORM_UI['section_label_width'])
+        field_label_width = AppStyle.control_px(AppStyle.FORM_UI['field_label_width'])
+        input_min_width = AppStyle.control_px(AppStyle.FORM_UI['input_min_width'])
 
-        scan_id_label = QLabel("Scan ID")
-        scan_id_label.setFixedWidth(label_width)
+        scan_id_label = QLabel(tr("tiled_browser.search.scan_id.label"))
+        scan_id_label.setProperty("sciview_label_width", "section_label_width")
+        scan_id_label.setMinimumWidth(label_width)
         search_grid.addWidget(scan_id_label, 0, 0)
 
-        start_label = QLabel("Start")
-        start_label.setFixedWidth(field_label_width)
+        start_label = QLabel(tr("tiled_browser.search.start.label"))
+        start_label.setProperty("sciview_label_width", "field_label_width")
+        start_label.setMinimumWidth(field_label_width)
         search_grid.addWidget(start_label, 0, 1)
         self.scan_id_start_input = QSpinBox()
+        self.scan_id_start_input.setProperty("sciview_input_width", "input_min_width")
         self.scan_id_start_input.setRange(-9999999, 9999999)
         self.scan_id_start_input.setValue(IMAGE_BROWSER_SETTINGS['default_scan_id'])
         self.scan_id_start_input.setMinimumWidth(input_min_width)
         search_grid.addWidget(self.scan_id_start_input, 0, 2)
 
-        end_label = QLabel("End")
-        end_label.setFixedWidth(field_label_width)
+        end_label = QLabel(tr("tiled_browser.search.end.label"))
+        end_label.setProperty("sciview_label_width", "field_label_width")
+        end_label.setMinimumWidth(field_label_width)
         search_grid.addWidget(end_label, 0, 3)
         self.scan_id_end_input = QSpinBox()
+        self.scan_id_end_input.setProperty("sciview_input_width", "input_min_width")
         self.scan_id_end_input.setRange(-9999999, 9999999)
         self.scan_id_end_input.setValue(IMAGE_BROWSER_SETTINGS['default_scan_id'])
         self.scan_id_end_input.setMinimumWidth(input_min_width)
         search_grid.addWidget(self.scan_id_end_input, 0, 4)
 
         self.run_scan_id_button = QPushButton("⌕")
-        self.run_scan_id_button.setToolTip("Find scans by scan ID or scan ID range")
+        self.run_scan_id_button.setToolTip(
+            tr("tiled_browser.search.scan_id.tooltip")
+        )
         apply_toolbar_symbol_button_style(self.run_scan_id_button)
         self.run_scan_id_button.clicked.connect(self._search_scan_ids)
         search_grid.addWidget(self.run_scan_id_button, 0, 5)
 
-        cycle_label = QLabel("Cycle")
-        cycle_label.setFixedWidth(label_width)
+        cycle_label = QLabel(tr("tiled_browser.search.cycle.label"))
+        cycle_label.setProperty("sciview_label_width", "section_label_width")
+        cycle_label.setMinimumWidth(label_width)
         search_grid.addWidget(cycle_label, 1, 0)
         self.cycle_combo = QComboBox()
+        self.cycle_combo.setProperty("sciview_input_width", "input_min_width")
         self.cycle_combo.setEditable(True)
         self.cycle_combo.addItems(["2026-2", "2026-1", "2025-3", "2025-2", "2025-1"])
         self.cycle_combo.setMinimumWidth(input_min_width)
         search_grid.addWidget(self.cycle_combo, 1, 1, 1, 2)
 
-        proposal_label = QLabel("Proposal")
-        proposal_label.setFixedWidth(field_label_width)
+        proposal_label = QLabel(tr("tiled_browser.search.proposal.label"))
+        proposal_label.setProperty("sciview_label_width", "field_label_width")
+        proposal_label.setMinimumWidth(field_label_width)
         search_grid.addWidget(proposal_label, 1, 3)
         self.proposal_input = QLineEdit()
+        self.proposal_input.setProperty("sciview_input_width", "input_min_width")
         self.proposal_input.setPlaceholderText("320406")
         self.proposal_input.setMinimumWidth(input_min_width)
         search_grid.addWidget(self.proposal_input, 1, 4)
 
         self.run_search_button = QPushButton("⌕")
-        self.run_search_button.setToolTip("Find scans by cycle and proposal metadata")
+        self.run_search_button.setToolTip(
+            tr("tiled_browser.search.proposal.tooltip")
+        )
         apply_toolbar_symbol_button_style(self.run_search_button)
         self.run_search_button.clicked.connect(self._search_scans)
         search_grid.addWidget(self.run_search_button, 1, 5)
@@ -527,42 +552,55 @@ class TiledBrowserTab(BaseImageTab):
 
         self.alias_input = QLineEdit()
         self.alias_input.setPlaceholderText("experiment_alias_directory")
-        advanced_filters.addRow("alias directory:", self.alias_input)
+        advanced_filters.addRow(
+            tr("tiled_browser.search.alias_directory.label"),
+            self.alias_input,
+        )
         self.advanced_filters_widget.setVisible(False)
         layout.addWidget(self.advanced_filters_widget)
 
         metadata_buttons = QHBoxLayout()
         metadata_buttons.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
-        self.more_filters_button = QPushButton("Filters")
+        self.more_filters_button = QPushButton(
+            tr("tiled_browser.search.filters.show")
+        )
         self.more_filters_button.setCheckable(True)
         apply_toolbar_text_button_style(self.more_filters_button)
         self.more_filters_button.toggled.connect(self.advanced_filters_widget.setVisible)
         self.more_filters_button.toggled.connect(
-            lambda checked: self.more_filters_button.setText("Hide Filters" if checked else "Filters")
+            lambda checked: self.more_filters_button.setText(
+                tr(
+                    "tiled_browser.search.filters.hide"
+                    if checked
+                    else "tiled_browser.search.filters.show"
+                )
+            )
         )
         metadata_buttons.addWidget(self.more_filters_button)
         metadata_buttons.addStretch()
         layout.addLayout(metadata_buttons)
 
-        self.search_status_label = QLabel("Search by scan ID or proposal.")
+        self.search_status_label = QLabel(
+            tr("tiled_browser.search.prompt")
+        )
         apply_info_style(self.search_status_label)
         layout.addWidget(self.search_status_label)
         return group
 
     def _create_results_group(self) -> QWidget:
-        group = QGroupBox("4) Results")
+        group = QGroupBox(tr("tiled_browser.results.group"))
         layout = QVBoxLayout(group)
         self.scan_table = QTableWidget(0, 8)
         self.scan_table.setHorizontalHeaderLabels(
             [
-                "scan_id",
-                "detector",
-                "filename",
-                "measure_type",
-                "proposal",
-                "alias",
-                "steps",
-                "time",
+                tr("tiled_browser.results.column.scan_id"),
+                tr("tiled_browser.results.column.detector"),
+                tr("tiled_browser.results.column.filename"),
+                tr("tiled_browser.results.column.measure_type"),
+                tr("tiled_browser.results.column.proposal"),
+                tr("tiled_browser.results.column.alias"),
+                tr("tiled_browser.results.column.steps"),
+                tr("tiled_browser.results.column.time"),
             ]
         )
         self.scan_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -580,7 +618,7 @@ class TiledBrowserTab(BaseImageTab):
         layout.addWidget(self.scan_table)
 
         row = QHBoxLayout()
-        self.load_button = QPushButton("Load")
+        self.load_button = QPushButton(tr("tiled_browser.results.load"))
         apply_emphasis_button_style(self.load_button)
         self.load_button.setEnabled(False)
         self.load_button.clicked.connect(self._load_selected_scan)
@@ -599,7 +637,7 @@ class TiledBrowserTab(BaseImageTab):
         return group
 
     def _create_live_group(self) -> QWidget:
-        group = QGroupBox("3) Live")
+        group = QGroupBox(tr("tiled_browser.live.group"))
         layout = QVBoxLayout(group)
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
         layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
@@ -607,14 +645,16 @@ class TiledBrowserTab(BaseImageTab):
 
         row = QHBoxLayout()
         row.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
-        self.live_start_button = QPushButton("Listen")
-        self.live_start_button.setToolTip("Listen for newly created runs in the selected Tiled catalog")
+        self.live_start_button = QPushButton(tr("tiled_browser.live.listen"))
+        self.live_start_button.setToolTip(
+            tr("tiled_browser.live.listen.tooltip")
+        )
         apply_toolbar_text_button_style(self.live_start_button)
         self.live_start_button.clicked.connect(self._start_live_monitor)
         row.addWidget(self.live_start_button)
 
-        self.live_stop_button = QPushButton("Stop")
-        self.live_stop_button.setToolTip("Stop listening for live Tiled updates")
+        self.live_stop_button = QPushButton(tr("tiled_browser.live.stop"))
+        self.live_stop_button.setToolTip(tr("tiled_browser.live.stop.tooltip"))
         apply_toolbar_text_button_style(self.live_stop_button)
         self.live_stop_button.setEnabled(False)
         self.live_stop_button.clicked.connect(self._stop_live_monitor)
@@ -622,13 +662,13 @@ class TiledBrowserTab(BaseImageTab):
         row.addStretch()
         layout.addLayout(row)
 
-        self.live_status_label = QLabel("Live stream idle")
+        self.live_status_label = QLabel(tr("tiled_browser.live.idle"))
         apply_info_style(self.live_status_label)
         layout.addWidget(self.live_status_label)
         return group
 
     def _create_playback_group(self) -> QWidget:
-        group = QGroupBox("5) Series")
+        group = QGroupBox(tr("tiled_browser.series.group"))
         layout = QVBoxLayout(group)
         self.series_slider = QSlider(Qt.Horizontal)
         self.series_slider.setEnabled(False)
@@ -638,38 +678,38 @@ class TiledBrowserTab(BaseImageTab):
         controls = QHBoxLayout()
         controls.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         self.prev_button = QPushButton("◀")
-        self.prev_button.setToolTip("Previous scan")
+        self.prev_button.setToolTip(tr("tiled_browser.series.previous.tooltip"))
         apply_toolbar_symbol_button_style(self.prev_button)
         self.prev_button.clicked.connect(self._select_previous)
         controls.addWidget(self.prev_button)
 
         self.play_button = QPushButton("▶")
-        self.play_button.setToolTip("Play scan series")
+        self.play_button.setToolTip(tr("tiled_browser.series.play.tooltip"))
         apply_toolbar_symbol_button_style(self.play_button)
         self.play_button.setCheckable(True)
         self.play_button.clicked.connect(self._toggle_playback)
         controls.addWidget(self.play_button)
 
         self.stop_button = QPushButton("■")
-        self.stop_button.setToolTip("Stop playback")
+        self.stop_button.setToolTip(tr("tiled_browser.series.stop.tooltip"))
         apply_toolbar_symbol_button_style(self.stop_button)
         self.stop_button.clicked.connect(self._stop_playback)
         controls.addWidget(self.stop_button)
 
         self.next_button = QPushButton("▶")
-        self.next_button.setToolTip("Next scan")
+        self.next_button.setToolTip(tr("tiled_browser.series.next.tooltip"))
         apply_toolbar_symbol_button_style(self.next_button)
         self.next_button.clicked.connect(self._select_next)
         controls.addWidget(self.next_button)
 
         self.loop_button = QPushButton("∞")
-        self.loop_button.setToolTip("Loop playback")
+        self.loop_button.setToolTip(tr("tiled_browser.series.loop.tooltip"))
         self.loop_button.setCheckable(True)
         apply_toolbar_symbol_button_style(self.loop_button)
         controls.addWidget(self.loop_button)
 
         self.cancel_button = QPushButton("✕")
-        self.cancel_button.setToolTip("Cancel current Tiled action")
+        self.cancel_button.setToolTip(tr("tiled_browser.action.cancel.tooltip"))
         apply_toolbar_symbol_button_style(self.cancel_button)
         self.cancel_button.setEnabled(False)
         self.cancel_button.clicked.connect(self._cancel_operation)
@@ -678,14 +718,16 @@ class TiledBrowserTab(BaseImageTab):
         return group
 
     def _create_frame_group(self) -> QWidget:
-        group = QGroupBox("Stacked Frames")
+        group = QGroupBox(tr("tiled_browser.frames.group"))
         layout = QHBoxLayout(group)
         self.frame_slider = QSlider(Qt.Horizontal)
         self.frame_slider.setEnabled(False)
         self.frame_slider.valueChanged.connect(self._on_frame_changed)
-        layout.addWidget(QLabel("Frame"))
+        layout.addWidget(QLabel(tr("tiled_browser.frames.label")))
         layout.addWidget(self.frame_slider, 1)
-        self.frame_label = QLabel("1 / 1")
+        self.frame_label = QLabel(
+            tr("tiled_browser.frames.position", current=1, total=1)
+        )
         apply_info_style(self.frame_label)
         layout.addWidget(self.frame_label)
         return group
@@ -693,7 +735,9 @@ class TiledBrowserTab(BaseImageTab):
     def _initialize_defaults(self) -> None:
         if not self.image_service.tiled_is_available():
             msg = self.image_service.tiled_import_error() or "Tiled unavailable"
-            self.auth_status_label.setText(f"Status: unavailable ({msg})")
+            self.auth_status_label.setText(
+                tr("tiled_browser.auth.status.unavailable", error=msg)
+            )
             for widget in (
                 self.auth_button,
                 self.refresh_button,
@@ -702,7 +746,9 @@ class TiledBrowserTab(BaseImageTab):
                 self.live_start_button,
             ):
                 widget.setEnabled(False)
-            self.parent_app.show_status(f"Tiled browser disabled: {msg}")
+            self.parent_app.show_status(
+                tr("tiled_browser.status.disabled", error=msg)
+            )
             return
 
         self.catalog_combo.blockSignals(True)
@@ -719,7 +765,9 @@ class TiledBrowserTab(BaseImageTab):
         finally:
             self.catalog_combo.blockSignals(False)
 
-        self.auth_status_label.setText("Status: not connected")
+        self.auth_status_label.setText(
+            tr("tiled_browser.auth.status.not_connected")
+        )
 
     def _active_profile(self) -> str | None:
         data = self.catalog_combo.currentData()
@@ -728,18 +776,31 @@ class TiledBrowserTab(BaseImageTab):
         return self.image_service.tiled_default_profile()
 
     def _refresh_auth_state(self) -> None:
+        if self._active_thread is not None:
+            self.parent_app.show_status(tr("tiled_browser.status.operation_in_progress"))
+            return
         profile = self._active_profile()
         if profile is None:
             return
-        state = self.image_service.tiled_auth_state(profile)
+        self._run_background(
+            tr("tiled_browser.status.connecting_profile", profile=profile),
+            lambda: self.image_service.tiled_auth_state(profile),
+            self._display_auth_state,
+        )
+
+    def _display_auth_state(self, state: TiledAuthState) -> None:
         if state.authenticated:
-            user = state.username or "cached session"
-            self.auth_status_label.setText(f"Status: logged in ({user})")
-            self.auth_button.setText("Reauth")
+            user = state.username or tr("tiled_browser.auth.status.cached_session")
+            self.auth_status_label.setText(
+                tr("tiled_browser.auth.status.logged_in", username=user)
+            )
+            self.auth_button.setText(tr("tiled_browser.auth.reauthenticate"))
         else:
             suffix = f": {state.error}" if state.error else ""
-            self.auth_status_label.setText(f"Status: not logged in{suffix}")
-            self.auth_button.setText("Login")
+            self.auth_status_label.setText(
+                tr("tiled_browser.auth.status.not_logged_in", suffix=suffix)
+            )
+            self.auth_button.setText(tr("tiled_browser.auth.login"))
 
     def _handle_login(self) -> None:
         profile = self._active_profile()
@@ -747,9 +808,11 @@ class TiledBrowserTab(BaseImageTab):
             return
         # Reject login if another operation is active
         if self._active_thread is not None or self._auth_cancel_event is not None:
-            self.parent_app.show_status("Another operation is already in progress")
+            self.parent_app.show_status(
+                tr("tiled_browser.status.operation_in_progress")
+            )
             return
-        self.parent_app.show_status("Preparing Tiled login...")
+        self.parent_app.show_status(tr("tiled_browser.status.preparing_login"))
         auth_cancel_event = threading.Event()
         self._auth_cancel_event = auth_cancel_event
 
@@ -764,15 +827,21 @@ class TiledBrowserTab(BaseImageTab):
             )
 
         def done(auth):
-            self._refresh_auth_state()
+            self._display_auth_state(auth)
             if self._auth_dialog is not None:
                 self._auth_dialog.accept()
                 self._auth_dialog = None
             self._auth_cancel_event = None
             if not auth.authenticated:
-                QMessageBox.warning(self, "Login failed", auth.error or "Could not authenticate")
+                QMessageBox.warning(
+                    self,
+                    tr("tiled_browser.error.login_failed.title"),
+                    auth.error or tr("tiled_browser.error.login_failed.body"),
+                )
                 return
-            self.parent_app.show_status(f"Logged in to Tiled profile {profile}")
+            self.parent_app.show_status(
+                tr("tiled_browser.status.logged_in_profile", profile=profile)
+            )
 
         def failed(error: Exception) -> None:
             if self._auth_dialog is not None:
@@ -780,11 +849,19 @@ class TiledBrowserTab(BaseImageTab):
                 self._auth_dialog = None
             self._auth_cancel_event = None
             if str(error) == "Tiled login cancelled":
-                self.parent_app.show_status("Tiled login cancelled")
+                self.parent_app.show_status(
+                    tr("tiled_browser.status.login_cancelled")
+                )
                 return
-            QMessageBox.warning(self, "Login failed", str(error))
+            QMessageBox.warning(
+                self,
+                tr("tiled_browser.error.login_failed.title"),
+                str(error),
+            )
 
-        token = self._begin_operation(f"Connecting to Tiled profile {profile}...")
+        token = self._begin_operation(
+            tr("tiled_browser.status.connecting_profile", profile=profile)
+        )
         thread = QThread(self)
         worker = _OperationWorker(token, do_login)
         authorization_emit_box[0] = worker.authorization_requested.emit
@@ -817,15 +894,21 @@ class TiledBrowserTab(BaseImageTab):
         self._stop_live_monitor()
         self._cancel_operation()
         self._clear_selection()
-        self.auth_status_label.setText("Status: not connected")
-        self.auth_button.setText("Login")
+        self.auth_status_label.setText(
+            tr("tiled_browser.auth.status.not_connected")
+        )
+        self.auth_button.setText(tr("tiled_browser.auth.login"))
 
     def _start_live_monitor(self) -> None:
         profile = self._active_profile()
         if profile is None:
             return
         if self._live_monitor is not None and self._live_monitor.is_running:
-            QMessageBox.information(self, "Tiled live stream", "Live stream is already running")
+            QMessageBox.information(
+                self,
+                tr("tiled_browser.live.dialog.title"),
+                tr("tiled_browser.live.already_running"),
+            )
             return
 
         def do_start():
@@ -837,10 +920,18 @@ class TiledBrowserTab(BaseImageTab):
             self._live_monitor = monitor
             self.live_start_button.setEnabled(False)
             self.live_stop_button.setEnabled(True)
-            self.live_status_label.setText(f"Listening for new runs in {profile}")
-            self.parent_app.show_status(f"Listening for Tiled live updates from {profile}")
+            self.live_status_label.setText(
+                tr("tiled_browser.live.listening_profile", profile=profile)
+            )
+            self.parent_app.show_status(
+                tr("tiled_browser.status.listening_profile", profile=profile)
+            )
 
-        self._run_background(f"Starting live Tiled stream for {profile}...", do_start, done)
+        self._run_background(
+            tr("tiled_browser.status.starting_live_stream", profile=profile),
+            do_start,
+            done,
+        )
 
     def _stop_live_monitor(self) -> None:
         monitor = self._live_monitor
@@ -848,7 +939,7 @@ class TiledBrowserTab(BaseImageTab):
             try:
                 monitor.stop()
             except Exception as exc:
-                message = f"Could not stop Tiled live stream: {exc}"
+                message = tr("tiled_browser.error.stop_live_stream", error=str(exc))
                 self.live_start_button.setEnabled(False)
                 self.live_stop_button.setEnabled(True)
                 self.live_status_label.setText(message)
@@ -858,27 +949,40 @@ class TiledBrowserTab(BaseImageTab):
         if hasattr(self, "live_start_button"):
             self.live_start_button.setEnabled(self.image_service.tiled_is_available())
             self.live_stop_button.setEnabled(False)
-            self.live_status_label.setText("Live stream idle")
+            self.live_status_label.setText(tr("tiled_browser.live.idle"))
 
     def _handle_live_event(self, event: TiledLiveEvent) -> None:
         if event.event_type == "started":
-            self.live_status_label.setText(f"Listening for new runs in {event.profile_name}")
+            self.live_status_label.setText(
+                tr(
+                    "tiled_browser.live.listening_profile",
+                    profile=event.profile_name,
+                )
+            )
             return
         if event.event_type == "stopped":
-            self.live_status_label.setText("Live stream idle")
+            self.live_status_label.setText(tr("tiled_browser.live.idle"))
             return
         if event.event_type == "error":
-            message = event.error or "Unknown live stream error"
-            self.live_status_label.setText(f"Live stream error: {message}")
-            self.parent_app.show_status(f"Tiled live stream error: {message}")
+            message = event.error or tr("tiled_browser.error.unknown_live_stream")
+            self.live_status_label.setText(
+                tr("tiled_browser.live.error", error=message)
+            )
+            self.parent_app.show_status(
+                tr("tiled_browser.status.live_stream_error", error=message)
+            )
             return
         if event.event_type not in {"child_created", "new_data"} or event.scan is None:
             return
 
         row_index = self._upsert_live_scan(event.scan)
         scan_label = event.scan.scan_id if event.scan.scan_id is not None else event.scan.uid[:8]
-        self.live_status_label.setText(f"New run: scan_id={scan_label}")
-        self.parent_app.show_status(f"New Tiled run detected: scan_id={scan_label}")
+        self.live_status_label.setText(
+            tr("tiled_browser.live.new_run", scan_id=scan_label)
+        )
+        self.parent_app.show_status(
+            tr("tiled_browser.status.new_run", scan_id=scan_label)
+        )
         self._auto_load_live_scan(row_index, event.scan)
 
     def _auto_load_live_scan(self, row_index: int, scan: TiledScanSummary) -> None:
@@ -910,14 +1014,30 @@ class TiledBrowserTab(BaseImageTab):
         self._live_auto_load_attempts[key] = attempts
         if attempts >= self.live_auto_load_max_attempts:
             suffix = f": {error}" if error is not None else ""
-            self.live_status_label.setText(f"Live scan not ready after {attempts} attempts{suffix}")
+            self.live_status_label.setText(
+                tr(
+                    "tiled_browser.live.scan_not_ready",
+                    attempts=attempts,
+                    suffix=suffix,
+                )
+            )
             self.parent_app.show_status(
-                f"Could not auto-load live scan {scan.scan_id} after {attempts} attempts{suffix}"
+                tr(
+                    "tiled_browser.status.live_scan_load_failed",
+                    scan_id=scan.scan_id,
+                    attempts=attempts,
+                    suffix=suffix,
+                )
             )
             return
 
         self.live_status_label.setText(
-            f"Waiting for scan {scan.scan_id} data, retry {attempts + 1}/{self.live_auto_load_max_attempts}"
+            tr(
+                "tiled_browser.live.waiting_for_scan",
+                scan_id=scan.scan_id,
+                retry=attempts + 1,
+                max_attempts=self.live_auto_load_max_attempts,
+            )
         )
         QTimer.singleShot(self.live_auto_load_delay_ms, lambda: self._retry_live_auto_load(key))
 
@@ -965,7 +1085,7 @@ class TiledBrowserTab(BaseImageTab):
         self.load_button.setEnabled(False)
         self.frame_slider.setEnabled(False)
         self.frame_slider.setMaximum(0)
-        self.frame_label.setText("1 / 1")
+        self.frame_label.setText(tr("tiled_browser.frames.position", current=1, total=1))
         self.metadata_text.clear()
 
     def _search_scans(self) -> None:
@@ -975,7 +1095,11 @@ class TiledBrowserTab(BaseImageTab):
         cycle = self.cycle_combo.currentText().strip()
         proposal_id = self.proposal_input.text().strip()
         if not cycle or not proposal_id:
-            QMessageBox.warning(self, "Missing query", "Enter both cycle and proposal ID")
+            QMessageBox.warning(
+                self,
+                tr("tiled_browser.error.missing_query.title"),
+                tr("tiled_browser.error.missing_query.body"),
+            )
             return
 
         filters = {
@@ -992,7 +1116,15 @@ class TiledBrowserTab(BaseImageTab):
                 filters=filters,
             )
 
-        self._run_background(f"Searching Tiled for cycle {cycle}, proposal {proposal_id}...", do_search, self._apply_search_result)
+        self._run_background(
+            tr(
+                "tiled_browser.status.searching_cycle_proposal",
+                cycle=cycle,
+                proposal=proposal_id,
+            ),
+            do_search,
+            self._apply_search_result,
+        )
 
     def _search_scan_ids(self) -> None:
         profile = self._active_profile()
@@ -1002,7 +1134,11 @@ class TiledBrowserTab(BaseImageTab):
         start_scan_id = self.scan_id_start_input.value()
         end_scan_id = self.scan_id_end_input.value()
         if start_scan_id > end_scan_id:
-            QMessageBox.warning(self, "Invalid Range", "Start scan ID must be <= end scan ID")
+            QMessageBox.warning(
+                self,
+                tr("tiled_browser.error.invalid_range.title"),
+                tr("tiled_browser.error.invalid_range.body"),
+            )
             return
 
         def do_search():
@@ -1013,9 +1149,16 @@ class TiledBrowserTab(BaseImageTab):
             )
 
         if start_scan_id == end_scan_id:
-            message = f"Searching Tiled for scan_id {start_scan_id}..."
+            message = tr(
+                "tiled_browser.status.searching_scan",
+                scan_id=start_scan_id,
+            )
         else:
-            message = f"Searching Tiled for scan_id {start_scan_id}-{end_scan_id}..."
+            message = tr(
+                "tiled_browser.status.searching_scan_range",
+                start=start_scan_id,
+                end=end_scan_id,
+            )
         self._run_background(message, do_search, self._apply_search_result)
 
     def _apply_search_result(self, result) -> None:
@@ -1028,10 +1171,19 @@ class TiledBrowserTab(BaseImageTab):
             self.series_slider.setValue(0)
             self.series_slider.blockSignals(False)
             self.scan_table.selectRow(0)
-        scan_range = "n/a"
+        scan_range = tr("tiled_browser.search.range_unavailable")
         if result.scan_id_min is not None and result.scan_id_max is not None:
-            scan_range = f"{result.scan_id_min} - {result.scan_id_max}"
-        status = f"Available scans: {len(self.scan_rows)} of {result.scanned_ids}; scan_id range: {scan_range}"
+            scan_range = tr(
+                "tiled_browser.search.range",
+                start=result.scan_id_min,
+                end=result.scan_id_max,
+            )
+        status = tr(
+            "tiled_browser.search.results_status",
+            available=len(self.scan_rows),
+            scanned=result.scanned_ids,
+            scan_range=scan_range,
+        )
         self.search_status_label.setText(status)
         self.parent_app.show_status(status)
 
@@ -1117,11 +1269,19 @@ class TiledBrowserTab(BaseImageTab):
             return
         scan = self.scan_rows[row_index]
         if scan.scan_id is None:
-            QMessageBox.warning(self, "Missing scan ID", "Selected row does not have a scan_id")
+            QMessageBox.warning(
+                self,
+                tr("tiled_browser.error.missing_scan_id.title"),
+                tr("tiled_browser.error.missing_scan_id.body"),
+            )
             return
         detector = self._row_detector(row_index)
         if not detector:
-            QMessageBox.warning(self, "Missing detector", "No detector is available for this scan")
+            QMessageBox.warning(
+                self,
+                tr("tiled_browser.error.missing_detector.title"),
+                tr("tiled_browser.error.missing_detector.body"),
+            )
             return
 
         def do_load(progress_cb, retry_cb):
@@ -1148,7 +1308,11 @@ class TiledBrowserTab(BaseImageTab):
             if live_auto_load:
                 self._schedule_live_auto_load_retry(scan, error)
                 return
-            QMessageBox.warning(self, "Tiled operation failed", str(error))
+            QMessageBox.warning(
+                self,
+                tr("tiled_browser.error.operation_failed.title"),
+                str(error),
+            )
 
         def on_success(payload) -> None:
             if live_auto_load:
@@ -1156,7 +1320,11 @@ class TiledBrowserTab(BaseImageTab):
             self._apply_loaded_image(payload)
 
         self._run_background_ex(
-            f"Loading scan {scan.scan_id} detector {detector}...",
+            tr(
+                "tiled_browser.status.loading_scan",
+                scan_id=scan.scan_id,
+                detector=detector,
+            ),
             do_load,
             on_success,
             on_progress=self._on_load_progress,
@@ -1178,7 +1346,9 @@ class TiledBrowserTab(BaseImageTab):
 
     def _on_load_retry(self, attempt: int, message: str) -> None:
         """Show a transient retry indicator when the HTTP client retries a request."""
-        self.load_retry_label.setText(f"⟳ (attempt {attempt}) {message}")
+        self.load_retry_label.setText(
+            tr("tiled_browser.status.retrying_load", attempt=attempt, message=message)
+        )
         self.load_retry_label.setVisible(True)
 
     def _apply_loaded_image(self, payload) -> None:
@@ -1193,9 +1363,16 @@ class TiledBrowserTab(BaseImageTab):
         self.image_data = display_frame
         self.update_plot(display_frame, display_name=self._current_display_name())
         self.current_image_label.setText(
-            f"scan_id={scan.scan_id} detector={detector} sample={scan.sample_name or scan.sample_savename or '?'}"
+            tr(
+                "tiled_browser.preview.scan_details",
+                scan_id=scan.scan_id,
+                detector=detector,
+                sample=scan.sample_name or scan.sample_savename or "?",
+            )
         )
-        self.parent_app.show_status(f"Loaded Tiled scan {scan.scan_id}")
+        self.parent_app.show_status(
+            tr("tiled_browser.status.loaded_scan", scan_id=scan.scan_id)
+        )
 
     def _row_detector(self, row_index: int) -> str:
         widget = self.scan_table.cellWidget(row_index, 1)
@@ -1231,7 +1408,9 @@ class TiledBrowserTab(BaseImageTab):
         self.frame_slider.setMaximum(max(frame_count - 1, 0))
         self.frame_slider.setValue(0)
         self.frame_slider.blockSignals(False)
-        self.frame_label.setText(f"1 / {frame_count}")
+        self.frame_label.setText(
+            tr("tiled_browser.frames.position", current=1, total=frame_count)
+        )
 
     def _on_frame_changed(self, frame_index: int) -> None:
         if self.current_image_array is None:
@@ -1240,13 +1419,23 @@ class TiledBrowserTab(BaseImageTab):
         frame = self._frame_at(self.current_image_array, frame_index)
         self.current_frame_array = frame
         self.image_data = frame
-        self.frame_label.setText(f"{frame_index + 1} / {frame_count}")
+        self.frame_label.setText(
+            tr(
+                "tiled_browser.frames.position",
+                current=frame_index + 1,
+                total=frame_count,
+            )
+        )
         self.update_plot(frame, display_name=self._current_display_name())
 
     def _current_display_name(self) -> str:
         if self.current_scan is None:
             return str(self.current_image_source or '')
-        return f"Scan {self.current_scan.scan_id} - {self.current_detector}"
+        return tr(
+            "tiled_browser.preview.display_name",
+            scan_id=self.current_scan.scan_id,
+            detector=self.current_detector,
+        )
 
     def _on_slider_changed(self, position: int) -> None:
         if self.scan_rows and 0 <= position < len(self.scan_rows):
@@ -1304,7 +1493,12 @@ class TiledBrowserTab(BaseImageTab):
             self.parent_app.image_path = self.current_image_source
 
         if show_status:
-            self.parent_app.show_status(f"Synced scan {self.current_scan.scan_id} to other tabs")
+            self.parent_app.show_status(
+                tr(
+                    "tiled_browser.status.synced_scan",
+                    scan_id=self.current_scan.scan_id,
+                )
+            )
         return True
 
     def auto_publish_current_image(self) -> bool:
@@ -1315,11 +1509,20 @@ class TiledBrowserTab(BaseImageTab):
         if self.current_scan is None:
             return
         info_lines.append("")
-        info_lines.append("=== TILED ===")
-        info_lines.append(f"Scan ID: {self.current_scan.scan_id}")
-        info_lines.append(f"UID: {self.current_scan.uid}")
-        info_lines.append(f"Detector: {self.current_detector}")
-        info_lines.append(f"Detectors: {', '.join(self.current_scan.detectors)}")
+        info_lines.append(tr("tiled_browser.debug.section_title"))
+        info_lines.append(
+            tr("tiled_browser.debug.scan_id", scan_id=self.current_scan.scan_id)
+        )
+        info_lines.append(tr("tiled_browser.debug.uid", uid=self.current_scan.uid))
+        info_lines.append(
+            tr("tiled_browser.debug.detector", detector=self.current_detector)
+        )
+        info_lines.append(
+            tr(
+                "tiled_browser.debug.detectors",
+                detectors=", ".join(self.current_scan.detectors),
+            )
+        )
 
     def closeEvent(self, event):
         self._stop_live_monitor()

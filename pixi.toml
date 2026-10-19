@@ -8,6 +8,7 @@ version = "0.1.0"
 [tasks]
 launch-app = { cmd = "python -m sciview.launchers app", env = { PYTHONPATH = "src" } }
 test = { cmd = "python -m pytest", env = { PYTHONPATH = "src", QT_QPA_PLATFORM = "offscreen" } }
+benchmark-ui = { cmd = "python -m sciview.dev.benchmark_ui", env = { PYTHONPATH = "src" } }
 verify-installation = { cmd = "python scripts/verify_installation.py", env = { QT_QPA_PLATFORM = "offscreen" } }
 test-installation = { cmd = "python scripts/test_installation.py", env = { QT_QPA_PLATFORM = "offscreen" } }
 

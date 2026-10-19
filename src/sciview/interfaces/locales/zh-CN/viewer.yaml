@@ -1,0 +1,66 @@
+viewer.color_image_must_be_rgb_or:
+  text: 彩色图像必须为 RGB 或 RGBA 格式
+  context: Empty-view error when a color image has an unsupported number of color channels.
+viewer.palette_source_text:
+  text: '{palette_source}: {text}'
+  context: Tooltip in the shared image viewer.
+  placeholders:
+    palette_source: Name of the artwork palette source, used as an attribution.
+    text: Artist and artwork names associated with the selected color palette.
+viewer.save_displayed_image:
+  text: 保存当前图像视图
+  context: File chooser title or type filter in the shared image viewer.
+viewer.png_images_png_all_files:
+  text: PNG 图像 (*.png);;所有文件 (*)
+  context: Image export file filter; preserve the glob patterns and double-semicolon separator.
+viewer.pan.label:
+  text: 平移
+  context: Image-viewer navigation tool for moving the displayed image by dragging with the mouse.
+viewer.chi_convention:
+  text: "χ：0° 向右，+90° 向上"
+  context: Scientific image-overlay note defining the displayed azimuthal-angle convention; preserve the angles.
+viewer.pan.tooltip:
+  text: 按住鼠标左键拖动以移动图像。
+  context: Mouse interaction instructions for the image-viewer Pan tool.
+viewer.zoom.label:
+  text: 缩放
+  context: Image-viewer navigation tool for enlarging a selected image region.
+viewer.zoom.tooltip:
+  text: 按住鼠标左键拖出矩形框以放大该区域。
+  context: Mouse interaction instructions for the rectangular image zoom tool.
+viewer.beam_center.label:
+  text: 束心
+  context: Toggle for the calibrated direct-beam position marker on the detector image.
+viewer.beam_center.tooltip:
+  text: 显示或隐藏已校准的束心。
+  context: Visibility control for the calibrated direct-beam position marker.
+viewer.mask.label:
+  text: 掩膜
+  context: Visibility toggle for the detector mask overlay, not a mask editing command.
+viewer.mask.tooltip:
+  text: 显示或隐藏当前掩膜。
+  context: Visibility control for the active detector mask overlay.
+viewer.home.label:
+  text: 复位
+  context: Image-viewer command for returning to the full image extent.
+viewer.home.tooltip:
+  text: 显示完整图像。
+  context: Resets image pan and zoom without modifying pixel data.
+viewer.auto.label:
+  text: 自动
+  context: Image-viewer command for automatically setting color limits from image intensities.
+viewer.auto.tooltip:
+  text: 根据当前图像设置颜色范围。
+  context: Automatic intensity display limits; image pixel data is unchanged.
+viewer.copy.label:
+  text: 复制
+  context: Command for copying the displayed image view to the system clipboard.
+viewer.copy.tooltip:
+  text: 将图像视图复制到剪贴板，包括当前颜色和叠加层。
+  context: Copies a visual rendering rather than the source detector data.
+viewer.save.label:
+  text: 保存
+  context: Command for exporting the displayed image view as a PNG file.
+viewer.save.tooltip:
+  text: 将图像视图保存为 PNG 文件，包括当前颜色和叠加层。
+  context: Exports a visual rendering rather than saving raw detector data.

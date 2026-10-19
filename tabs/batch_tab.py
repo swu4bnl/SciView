@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
 )
 
 from sciview.session.session_cache import choose_path
+from sciview.interfaces.text import tr
 from sciview.interfaces.theme.app_style import (
     AppStyle, apply_emphasis_button_style, apply_info_style,
     apply_subtitle_style, apply_title_style, setup_splitter_layout,
@@ -80,6 +81,16 @@ _DEFAULT_PARAMS: dict[str, dict[str, Any]] = {
 }
 
 _STATUS_SYMBOL = {"ok": "OK", "error": "ERR", "skipped": "---", "running": "..."}
+_OPERATION_LABELS = {
+    "circular_average": "batch.operation.circular_average",
+    "sector_average": "batch.operation.sector_average",
+    "linecut_q": "batch.operation.linecut_q",
+    "linecut_angle": "batch.operation.linecut_angle",
+    "q_image": "batch.operation.q_image",
+    "q_phi_image": "batch.operation.q_phi_image",
+    "qr_qz_image": "batch.operation.qr_qz_image",
+    "thumbnails": "batch.operation.thumbnails",
+}
 
 
 class BatchTab(QWidget):
@@ -124,8 +135,8 @@ class BatchTab(QWidget):
 
         if not paths:
             browser = self._find_image_browser()
-            if browser is not None and hasattr(browser, "session_manager"):
-                paths = [img.get("path", "") for img in browser.session_manager.images]
+            if browser is not None and hasattr(browser, "get_current_file_list"):
+                paths = browser.get_current_file_list()
 
         self._apply_file_list(paths)
 
@@ -152,11 +163,11 @@ class BatchTab(QWidget):
         for p in paths:
             self._file_list_widget.addItem(os.path.basename(p))
 
-        suffix = f" ({skipped} Tiled file(s) skipped — not yet supported)" if skipped else ""
+        suffix = tr("batch.files.tiled_skipped", count=skipped) if skipped else ""
         if paths:
-            self._file_count_label.setText(f"{len(paths)} file(s) loaded{suffix}")
+            self._file_count_label.setText(tr("batch.files.loaded", count=len(paths), suffix=suffix))
         else:
-            self._file_count_label.setText(f"0 file(s) loaded{suffix} — load images in Image Browser first")
+            self._file_count_label.setText(tr("batch.files.empty", suffix=suffix))
 
 
     # ------------------------------------------------------------------
@@ -193,19 +204,19 @@ class BatchTab(QWidget):
         lay.setContentsMargins(m, m, m, m)
         lay.setSpacing(AppStyle.LAYOUT["section_spacing"])
 
-        title = QLabel("Input Files")
+        title = QLabel(tr("batch.input_files.title"))
         apply_title_style(title)
         lay.addWidget(title)
 
-        group = QGroupBox("File List")
+        group = QGroupBox(tr("batch.file_list.title"))
         form = QVBoxLayout(group)
 
-        btn_load = QPushButton("Refresh File List")
+        btn_load = QPushButton(tr("batch.file_list.refresh"))
         apply_emphasis_button_style(btn_load)
         btn_load.clicked.connect(self._load_from_session)
         form.addWidget(btn_load)
 
-        self._file_count_label = QLabel("0 file(s) loaded — load images in Image Browser first")
+        self._file_count_label = QLabel(tr("batch.files.empty", suffix=""))
         apply_info_style(self._file_count_label)
         form.addWidget(self._file_count_label)
 
@@ -225,11 +236,11 @@ class BatchTab(QWidget):
         lay.setSpacing(AppStyle.LAYOUT["section_spacing"])
 
         hdr = QHBoxLayout()
-        lbl = QLabel("Output Log")
+        lbl = QLabel(tr("batch.output_log.title"))
         apply_subtitle_style(lbl)
         hdr.addWidget(lbl)
         hdr.addStretch()
-        btn_clear = QPushButton("Clear")
+        btn_clear = QPushButton(tr("batch.clear"))
         btn_clear.clicked.connect(self._clear_log)
         hdr.addWidget(btn_clear)
         lay.addLayout(hdr)
@@ -238,14 +249,15 @@ class BatchTab(QWidget):
         self.progress_bar.setTextVisible(True)
         lay.addWidget(self.progress_bar)
 
-        self.status_label = QLabel("Ready")
+        self.status_label = QLabel(tr("batch.status.ready"))
         apply_info_style(self.status_label)
         lay.addWidget(self.status_label)
 
         self.results_table = QTableWidget()
         self.results_table.setColumnCount(5)
         self.results_table.setHorizontalHeaderLabels(
-            ["File", "Protocol", "Status", "Time (s)", "Message"]
+            [tr("batch.table.file"), tr("batch.table.protocol"), tr("batch.table.status"),
+             tr("batch.table.time"), tr("batch.table.message")]
         )
         self.results_table.horizontalHeader().setStretchLastSection(True)
         self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -261,32 +273,34 @@ class BatchTab(QWidget):
         lay.setContentsMargins(m, m, m, m)
         lay.setSpacing(AppStyle.LAYOUT["section_spacing"])
 
-        title = QLabel("Batch Controls")
+        title = QLabel(tr("batch.controls.title"))
         apply_title_style(title)
         lay.addWidget(title)
 
-        out_group = QGroupBox("Output")
+        out_group = QGroupBox(tr("batch.output.title"))
         out_form = QFormLayout(out_group)
         BaseImageTab.configure_adaptive_form_layout(out_form)
 
         self.output_mode_combo = QComboBox()
-        self.output_mode_combo.addItem("SciAnalysis-Style plots", "scianalysis")
-        self.output_mode_combo.addItem("WYSIWYG previews", "preview")
+        self.output_mode_combo.addItem(tr("batch.output.mode.scianalysis"), "scianalysis")
+        self.output_mode_combo.addItem(tr("batch.output.mode.preview"), "preview")
         self.output_mode_combo.setToolTip(
-            "Match previews saves PNG plots with the same style, scale, crop, and theme shown in SciView"
+            tr("batch.output.mode.preview.tooltip")
         )
-        out_form.addRow("Plot output", self.output_mode_combo)
+        out_form.addRow(tr("batch.output.plot_output"), self.output_mode_combo)
         lay.addWidget(out_group)
 
         # Protocol queue
-        proto_group = QGroupBox("Protocol Queue")
+        proto_group = QGroupBox(tr("batch.protocol_queue.title"))
         pv = QVBoxLayout(proto_group)
 
         tb = QHBoxLayout()
         self.proto_combo = QComboBox()
-        self.proto_combo.addItems(list(REDUCTION_OPERATIONS) + list(TRANSFORM_OPERATIONS))
+        for operation in list(REDUCTION_OPERATIONS) + list(TRANSFORM_OPERATIONS):
+            label_id = _OPERATION_LABELS.get(operation)
+            self.proto_combo.addItem(tr(label_id) if label_id else operation, operation)
         tb.addWidget(self.proto_combo, 1)
-        btn_add = QPushButton("+ Add")
+        btn_add = QPushButton(tr("batch.protocol_queue.add"))
         btn_add.clicked.connect(self._add_protocol_from_combo)
         tb.addWidget(btn_add)
         pv.addLayout(tb)
@@ -298,9 +312,9 @@ class BatchTab(QWidget):
         pv.addWidget(self.protocol_list)
 
         br = QHBoxLayout()
-        self.btn_remove = QPushButton("Remove")
+        self.btn_remove = QPushButton(tr("batch.remove"))
         self.btn_remove.clicked.connect(self._remove_protocol)
-        self.btn_clear_queue = QPushButton("Clear Queue")
+        self.btn_clear_queue = QPushButton(tr("batch.protocol_queue.clear"))
         self.btn_clear_queue.clicked.connect(self._clear_protocol_queue)
         self.btn_up = QPushButton("↑"); self.btn_up.clicked.connect(self._move_up)
         self.btn_dn = QPushButton("↓"); self.btn_dn.clicked.connect(self._move_down)
@@ -311,21 +325,21 @@ class BatchTab(QWidget):
         lay.addWidget(proto_group)
 
         # Param editor
-        pg = QGroupBox("Edit Selected Protocol Recipe")
+        pg = QGroupBox(tr("batch.recipe.edit_title"))
         pgl = QVBoxLayout(pg)
-        self.param_name_label = QLabel("No protocol selected")
+        self.param_name_label = QLabel(tr("batch.protocol.none_selected"))
         apply_info_style(self.param_name_label)
         pgl.addWidget(self.param_name_label)
         self.param_editor = QTextEdit()
-        self.param_editor.setPlaceholderText("YAML recipe (operation, name, params...)")
+        self.param_editor.setPlaceholderText(tr("batch.recipe.placeholder"))
         self.param_editor.setFontFamily("monospace")
         self.param_editor.setMinimumHeight(220)
         pgl.addWidget(self.param_editor, 1)
         btn_row = QHBoxLayout()
-        btn_apply = QPushButton("Apply Params")
+        btn_apply = QPushButton(tr("batch.recipe.apply_params"))
         btn_apply.clicked.connect(self._apply_params)
         btn_row.addWidget(btn_apply)
-        btn_reset = QPushButton("Reset to Defaults")
+        btn_reset = QPushButton(tr("batch.recipe.reset"))
         btn_reset.clicked.connect(self._reset_params)
         btn_row.addWidget(btn_reset)
         pgl.addLayout(btn_row)
@@ -333,17 +347,17 @@ class BatchTab(QWidget):
 
         # Recipe I/O
         rr = QHBoxLayout()
-        btn_ld = QPushButton("Load Recipe"); btn_ld.clicked.connect(self._load_recipe)
-        btn_sv = QPushButton("Save Recipe"); btn_sv.clicked.connect(self._save_recipe)
+        btn_ld = QPushButton(tr("batch.recipe.load")); btn_ld.clicked.connect(self._load_recipe)
+        btn_sv = QPushButton(tr("batch.recipe.save")); btn_sv.clicked.connect(self._save_recipe)
         rr.addWidget(btn_ld); rr.addWidget(btn_sv)
         lay.addLayout(rr)
 
         # Run / Stop
         run_row = QHBoxLayout()
-        self.run_button = QPushButton("Run Batch")
+        self.run_button = QPushButton(tr("batch.run"))
         apply_emphasis_button_style(self.run_button)
         self.run_button.clicked.connect(lambda: self._start_batch())
-        self.stop_button = QPushButton("Stop")
+        self.stop_button = QPushButton(tr("batch.stop"))
         self.stop_button.clicked.connect(self._stop_batch)
         self.stop_button.setEnabled(False)
         run_row.addWidget(self.run_button)
@@ -365,7 +379,9 @@ class BatchTab(QWidget):
         if 0 <= row < len(self._protocols):
             proto = self._protocols[row]
             self._selected_proto_row = row
-            self.param_name_label.setText(f"{proto.name}  ({proto.operation})")
+            self.param_name_label.setText(
+                tr("batch.protocol.selected", name=proto.name, operation=proto.operation)
+            )
             self.param_editor.setPlainText(yaml.safe_dump(proto.recipe, sort_keys=False))
 
     def _add_protocol(self, proto: BatchProtocol, select: bool = True) -> None:
@@ -379,7 +395,7 @@ class BatchTab(QWidget):
             self._show_protocol_params(new_row)
 
     def _add_protocol_from_combo(self) -> None:
-        op = self.proto_combo.currentText()
+        op = self.proto_combo.currentData()
         recipe = {"name": op, "operation": op, "source": "manual", **dict(_DEFAULT_PARAMS.get(op, {}))}
         self._add_protocol(BatchProtocol(recipe=recipe), select=True)
 
@@ -397,10 +413,10 @@ class BatchTab(QWidget):
                 self.protocol_list.item(i).setText(self._proto_label(proto))
                 self.protocol_list.setCurrentRow(i)
                 self._show_protocol_params(i)
-                self.parent_app.show_status(f"Batch: updated '{proto.name}'")
+                self.parent_app.show_status(tr("batch.status.protocol_updated", name=proto.name))
                 return
         self._add_protocol(proto, select=True)
-        self.parent_app.show_status(f"Batch: added '{proto.name}'")
+        self.parent_app.show_status(tr("batch.status.protocol_added", name=proto.name))
 
     def _remove_protocol(self) -> None:
         row = self.protocol_list.currentRow()
@@ -414,7 +430,7 @@ class BatchTab(QWidget):
             self.protocol_list.setCurrentRow(new_row)
             self._show_protocol_params(new_row)
         else:
-            self.param_name_label.setText("No protocol selected")
+            self.param_name_label.setText(tr("batch.protocol.none_selected"))
             self.param_editor.clear()
 
     def _clear_protocol_queue(self) -> None:
@@ -422,8 +438,8 @@ class BatchTab(QWidget):
         if not self._protocols:
             return
         reply = QMessageBox.question(
-            self, "Clear Protocol Queue",
-            "Clear all protocols from the queue? This cannot be undone.",
+            self, tr("batch.protocol_queue.clear.title"),
+            tr("batch.protocol_queue.clear.confirm"),
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
@@ -431,9 +447,9 @@ class BatchTab(QWidget):
         self._selected_proto_row = -1
         self.protocol_list.clear()
         self._protocols.clear()
-        self.param_name_label.setText("No protocol selected")
+        self.param_name_label.setText(tr("batch.protocol.none_selected"))
         self.param_editor.clear()
-        self.parent_app.show_status("Batch: cleared protocol queue")
+        self.parent_app.show_status(tr("batch.status.queue_cleared"))
 
     def _move_up(self) -> None:
         row = self.protocol_list.currentRow()
@@ -485,7 +501,7 @@ class BatchTab(QWidget):
 
         if row < 0 or row >= len(self._protocols):
             self._selected_proto_row = -1
-            self.param_name_label.setText("No protocol selected")
+            self.param_name_label.setText(tr("batch.protocol.none_selected"))
             self.param_editor.clear()
             return
 
@@ -498,13 +514,13 @@ class BatchTab(QWidget):
         try:
             new_recipe = yaml.safe_load(self.param_editor.toPlainText()) or {}
             if not isinstance(new_recipe, dict):
-                raise ValueError("must be a YAML mapping")
+                raise ValueError(tr("batch.error.yaml_mapping"))
             self._protocols[row].recipe = new_recipe
             self._selected_proto_row = row
             self.protocol_list.item(row).setText(self._proto_label(self._protocols[row]))
-            self.parent_app.show_status("Batch: recipe updated")
+            self.parent_app.show_status(tr("batch.status.recipe_updated"))
         except Exception as exc:
-            self.parent_app.show_status(f"Batch: could not apply the recipe — invalid YAML: {exc}")
+            self.parent_app.show_status(tr("batch.status.recipe_apply_failed", error=exc))
 
     def _reset_params(self) -> None:
         """Reset the selected protocol's params to registered defaults, keeping
@@ -515,12 +531,14 @@ class BatchTab(QWidget):
         proto = self._protocols[row]
         defaults = dict(_DEFAULT_PARAMS.get(proto.operation, {}))
         if not defaults:
-            self.parent_app.show_status(f"Batch: no defaults registered for '{proto.operation}'")
+            self.parent_app.show_status(
+                tr("batch.status.defaults_missing", operation=proto.operation)
+            )
             return
         proto.recipe = {"name": proto.name, "operation": proto.operation, "source": proto.source, **defaults}
         self._selected_proto_row = row
         self.param_editor.setPlainText(yaml.safe_dump(proto.recipe, sort_keys=False))
-        self.parent_app.show_status(f"Batch: reset '{proto.name}' params to defaults")
+        self.parent_app.show_status(tr("batch.status.params_reset", name=proto.name))
 
     # ------------------------------------------------------------------
     # Recipe I/O
@@ -538,8 +556,8 @@ class BatchTab(QWidget):
             "plot_style": resolve_plot_style(self.parent_app).to_dict(),
         }
         path, _ = choose_path(
-            self, "Save Batch Recipe", mode="save", default_name="batch_recipe.yaml",
-            file_filter="YAML files (*.yaml *.yml);;JSON files (*.json);;All files (*)",
+            self, tr("batch.dialog.save_recipe"), mode="save", default_name="batch_recipe.yaml",
+            file_filter=tr("batch.filter.yaml_and_json_all"),
             key="batch_recipe_save",
         )
         if not path:
@@ -547,12 +565,12 @@ class BatchTab(QWidget):
         p = Path(path)
         with p.open("w", encoding="utf-8") as fh:
             yaml.safe_dump(payload, fh, sort_keys=False) if p.suffix.lower() != ".json" else __import__("json").dump(payload, fh, indent=2)
-        self.parent_app.show_status(f"Recipe saved to {p.name}")
+        self.parent_app.show_status(tr("batch.status.recipe_saved", filename=p.name))
 
     def _load_recipe(self) -> None:
         path, _ = choose_path(
-            self, "Load Batch Recipe",
-            file_filter="YAML/JSON files (*.yaml *.yml *.json);;All files (*)",
+            self, tr("batch.dialog.load_recipe"),
+            file_filter=tr("batch.filter.yaml_json_all"),
             key="batch_recipe_load",
         )
         if not path:
@@ -573,11 +591,11 @@ class BatchTab(QWidget):
                 self.protocol_list.setCurrentRow(0)
                 self._show_protocol_params(0)
             else:
-                self.param_name_label.setText("No protocol selected")
+                self.param_name_label.setText(tr("batch.protocol.none_selected"))
                 self.param_editor.clear()
-            self.parent_app.show_status(f"Recipe loaded: {len(self._protocols)} protocols")
+            self.parent_app.show_status(tr("batch.status.recipe_loaded", count=len(self._protocols)))
         except Exception as exc:
-            self.parent_app.show_status(f"Batch: could not load the recipe — {exc}")
+            self.parent_app.show_status(tr("batch.status.recipe_load_failed", error=exc))
 
     def get_session_state(self) -> dict:
         """Serialize the protocol queue for restart restore (same shape as _save_recipe)."""
@@ -603,7 +621,9 @@ class BatchTab(QWidget):
         if self._protocols:
             self.protocol_list.setCurrentRow(0)
             self._show_protocol_params(0)
-        self.parent_app.show_status(f"Batch: restored {len(self._protocols)} protocol(s) from last session")
+        self.parent_app.show_status(
+            tr("batch.status.session_restored", count=len(self._protocols))
+        )
 
 
     # ------------------------------------------------------------------
@@ -619,7 +639,7 @@ class BatchTab(QWidget):
 
         if not self._file_paths:
             self.parent_app.show_status(
-                "Batch: no files — load images in Image Browser first"
+                tr("batch.status.no_files")
             )
             return
 
@@ -631,20 +651,21 @@ class BatchTab(QWidget):
 
         active = [p for p in self._protocols if p.enabled]
         if not active:
-            self.parent_app.show_status("Batch: no enabled protocols")
+            self.parent_app.show_status(tr("batch.status.no_enabled_protocols"))
             return
 
         output_mode = str(self.output_mode_combo.currentData())
         if output_mode == "preview" and any(p.operation == "thumbnails" for p in active):
             self.parent_app.show_status(
-                "Batch: thumbnails have no WYSIWYG preview — disable them or "
-                "switch Plot output to 'SciAnalysis-Style plots'"
+                tr("batch.status.thumbnails_preview_unavailable")
             )
             return
 
-        output_dir, _ = choose_path(self, "Select Batch Output Folder", mode="directory", key="batch_output_folder")
+        output_dir, _ = choose_path(
+            self, tr("batch.dialog.output_folder"), mode="directory", key="batch_output_folder"
+        )
         if not output_dir:
-            self.parent_app.show_status("Batch: select an output folder to run")
+            self.parent_app.show_status(tr("batch.status.output_folder_required"))
             return
 
         cal = getattr(self.parent_app, "calibration", None)
@@ -685,7 +706,7 @@ class BatchTab(QWidget):
         self.progress_bar.setValue(0)
         self.run_button.setEnabled(False)
         self.stop_button.setEnabled(True)
-        self.status_label.setText("Running...")
+        self.status_label.setText(tr("batch.status.running"))
 
         self._runner = BatchRunner(job)
         self._runner.progress.connect(self._on_progress)
@@ -718,7 +739,9 @@ class BatchTab(QWidget):
         self.run_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.progress_bar.setValue(self.progress_bar.maximum())
-        self.parent_app.show_status(f"Batch done — {ok} succeeded, {err} failed")
+        self.parent_app.show_status(
+            tr("batch.status.finished", succeeded=ok, failed=err)
+        )
         self._save_cookbook()
 
     def _save_cookbook(self) -> None:
@@ -771,12 +794,15 @@ class BatchTab(QWidget):
             with out.open("w", encoding="utf-8") as fh:
                 yaml.safe_dump(cookbook, fh, sort_keys=False, allow_unicode=True)
             self.parent_app.show_status(
-                f"Batch done — {len([r for r in self._results if r.status=='ok'])} OK  "
-                f"| cookbook saved to {out.name}"
+                tr(
+                    "batch.status.cookbook_saved",
+                    count=len([r for r in self._results if r.status == "ok"]),
+                    filename=out.name,
+                )
             )
         except Exception as exc:
             self.parent_app.show_status(
-                f"Batch done — cookbook save failed: {exc}"
+                tr("batch.status.cookbook_save_failed", error=exc)
             )
 
     def _clear_log(self) -> None:

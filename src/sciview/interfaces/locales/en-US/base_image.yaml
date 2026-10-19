@@ -1,0 +1,273 @@
+base_image.could_not_initialize_the_calibration_error:
+  text: 'Could not initialize the calibration: {error}'
+  context: User-visible error in the shared image display and image information panel.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+base_image.could_not_create_the_calibration_error:
+  text: 'Could not create the calibration: {error}'
+  context: User-visible error in the shared image display and image information panel.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+base_image.could_not_attach_calibration_to_the:
+  text: 'Could not attach calibration to the image; showing the raw image instead: {error}'
+  context: User-visible error in the shared image display and image information panel.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+base_image.raw_image_display:
+  text: Raw Image Display
+  context: Heading for the source detector image panel.
+base_image.file_name_no_image_loaded:
+  text: 'File Name: No image loaded'
+  context: Filename readout before any detector image has been loaded.
+base_image.no_image_loaded:
+  text: No image loaded
+  context: Empty-state text in the detector image panel.
+base_image.color:
+  text: Color
+  context: Label for the colormap selector that maps image intensity to display colors.
+base_image.colormap:
+  text: Colormap
+  context: Tooltip or accessible name for the image-intensity color palette selector.
+base_image.scale:
+  text: Scale
+  context: Label for the linear or logarithmic intensity-to-color mapping selector.
+base_image.intensity_scale_linear_or_log:
+  text: Intensity scale (linear or log)
+  context: Tooltip for choosing linear or logarithmic image-intensity display.
+base_image.intensity_scale:
+  text: Intensity scale
+  context: Accessible name for the linear or logarithmic image-intensity display selector.
+base_image.min:
+  text: Min
+  context: Lower image intensity limit mapped to the bottom of the display colormap.
+base_image.color_map_minimum:
+  text: Color Map Minimum
+  context: Tooltip for the lower image intensity display limit.
+base_image.color_minimum:
+  text: Color minimum
+  context: Accessible name for the lower image intensity display limit.
+base_image.max:
+  text: Max
+  context: Upper image intensity limit mapped to the top of the display colormap.
+base_image.color_map_maximum:
+  text: Color Map Maximum
+  context: Tooltip for the upper image intensity display limit.
+base_image.color_maximum:
+  text: Color maximum
+  context: Accessible name for the upper image intensity display limit.
+base_image.image_information:
+  text: Image Information
+  context: Title of the panel showing file metadata, image statistics, and calibration status.
+base_image.no_image_loaded_load_an_image:
+  text: 'No image loaded
+
+
+    Load an image to show file, detector, calibration, and processing details.'
+  context: Initial text in the shared image display and image information panel.
+base_image.file_name_basename_path:
+  text: 'File Name: {basename_path}'
+  context: Dynamic display text in the shared image display and image information panel.
+  placeholders:
+    basename_path: Filename of the selected image, without its directory.
+base_image.application_status:
+  text: === APPLICATION STATUS ===
+  context: Section heading for file and application metadata in the image information panel.
+base_image.timestamp_now_strftime_y_m_d:
+  text: 'Timestamp: {now_strftime_y_m_d_h_m_s}'
+  context: Error info in the shared image display and image information panel.
+  placeholders:
+    now_strftime_y_m_d_h_m_s: Current timestamp formatted as year-month-day and 24-hour time.
+base_image.loaded_basename_image_path:
+  text: 'Loaded: {basename_image_path}'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    basename_image_path: Filename of the loaded image, without its directory.
+base_image.path_image_path:
+  text: 'Path: {image_path}'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    image_path: Local path of the loaded image; do not translate the supplied path.
+base_image.size_file_size_bytes:
+  text: 'Size: {file_size:,} bytes'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    file_size: Size of the image file in bytes.
+base_image.modified_mod_time_str:
+  text: 'Modified: {mod_time_str}'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    mod_time_str: Formatted modification time of the image file.
+base_image.measurement_measurement_type:
+  text: 'Measurement: {measurement_type}'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    measurement_type: Measurement identifier from the beamline profile.
+base_image.calibration_file_export_cali_path:
+  text: 'Calibration file: {export_cali_path}'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    export_cali_path: Path of the associated calibration file; do not translate the path.
+base_image.mask_file_mask_path:
+  text: 'Mask file: {mask_path}'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    mask_path: Path of the associated detector mask file; do not translate the path.
+base_image.image_data:
+  text: === IMAGE DATA ===
+  context: Section heading for array dimensions, data type, and image-intensity statistics.
+base_image.dimensions_shape_x_shape_pixels:
+  text: 'Dimensions: {shape_1} x {shape_0} pixels'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    shape_1: Image width in pixels, corresponding to array columns.
+    shape_0: Image height in pixels, corresponding to array rows.
+base_image.data_type_dtype:
+  text: 'Data type: {dtype}'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    dtype: NumPy array data type identifier.
+base_image.value_range_img_info_min_value:
+  text: 'Value range: {img_info_min_value:.2f} to {img_info_max_value:.2f}'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    img_info_min_value: Minimum intensity value in the loaded image.
+    img_info_max_value: Maximum intensity value in the loaded image.
+base_image.mean_img_info_mean_value_f:
+  text: 'Mean: {img_info_mean_value:.2f}'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    img_info_mean_value: Mean intensity value across the image.
+base_image.std_dev_img_info_std_value:
+  text: 'Std dev: {img_info_std_value:.2f}'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    img_info_std_value: Standard deviation of intensity values across the image.
+base_image.unable_to_extract_image_information:
+  text: Unable to extract image information
+  context: Image information readout in the shared image display and image information panel.
+base_image.no_image_data_loaded:
+  text: No image data loaded
+  context: Image information readout in the shared image display and image information panel.
+base_image.calibration_status:
+  text: === CALIBRATION STATUS ===
+  context: Section heading for scientific calibration values and SciAnalysis availability.
+base_image.scianalysis_availability:
+  text: 'SciAnalysis: {availability}'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    availability: Localized availability status of the SciAnalysis processing package.
+base_image.wavelength_spin_wl_ang_value_f:
+  text: 'Wavelength: {spin_wl_ang_value:.4f} Å'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    spin_wl_ang_value: Calibrated X-ray wavelength in angstroms.
+base_image.energy_spin_energy_ev_value_f:
+  text: 'Energy: {spin_energy_ev_value:.1f} eV'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    spin_energy_ev_value: Calibrated photon energy in electronvolts.
+base_image.beam_center_spin_x_value_f:
+  text: 'Beam center: ({spin_x_value:.1f}, {spin_y_value:.1f})'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    spin_x_value: Horizontal detector beam-center coordinate in pixels.
+    spin_y_value: Vertical detector beam-center coordinate in pixels.
+base_image.distance_spin_dist_value_f_m:
+  text: 'Distance: {spin_dist_value:.3f} m'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    spin_dist_value: Sample-to-detector distance in meters.
+base_image.pixel_size_spin_pixel_value_f:
+  text: 'Pixel size: {spin_pixel_value:.1f} µm'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    spin_pixel_value: Detector pixel size in micrometers.
+base_image.detector_orient_spin_orient_value_f:
+  text: 'Detector orient: {spin_orient_value:.1f}°'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    spin_orient_value: Detector orientation angle in degrees.
+base_image.detector_tilt_spin_tilt_value_f:
+  text: 'Detector tilt: {spin_tilt_value:.1f}°'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    spin_tilt_value: Detector tilt angle in degrees.
+base_image.detector_phi_spin_phi_value_f:
+  text: 'Detector phi: {spin_phi_value:.1f}°'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    spin_phi_value: Detector phi angle in degrees.
+base_image.calibration_parameters_using_defaults:
+  text: 'Calibration parameters: Using defaults'
+  context: Image information readout in the shared image display and image information panel.
+base_image.wavelength_default_calibration_wavelength_a_f:
+  text: 'Wavelength: {default_calibration_wavelength_a:.4f} Å'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    default_calibration_wavelength_a: Default X-ray wavelength in angstroms.
+base_image.energy_default_calibration_energy_ev_f:
+  text: 'Energy: {default_calibration_energy_ev:.1f} eV'
+  context: Image information readout in the shared image display and image information panel.
+  placeholders:
+    default_calibration_energy_ev: Default photon energy in electronvolts.
+base_image.error_loading_image_info_error:
+  text: 'Error loading image info: {error}
+
+
+    '
+  context: Error info in the shared image display and image information panel.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+base_image.exception_type_type_e_name:
+  text: 'Exception type: {type_e___name}
+
+    '
+  context: Error info in the shared image display and image information panel.
+  placeholders:
+    type_e___name: Python exception class name, retained for diagnosis.
+base_image.no_image_loaded_last_update_now:
+  text: 'No image loaded
+
+
+    Last update: {now_strftime_y_m_d_h_m_s}
+
+
+    Load an image to see detailed status information including:
+
+    • File information and metadata
+
+    • Image data statistics
+
+    • Current calibration parameters
+
+    • Processing status
+
+    • Beamline configuration status'
+  context: Info text in the shared image display and image information panel.
+  placeholders:
+    now_strftime_y_m_d_h_m_s: Current timestamp formatted as year-month-day and 24-hour time.
+base_image.q_x_f_i_y_f:
+  text: Q={x:.3f}, I={y:.2f}
+  context: Status message in the shared image display and image information panel.
+  placeholders:
+    x: Scattering-vector magnitude q at the plot cursor.
+    y: Scattering intensity at the plot cursor.
+base_image.raw_pixel_x_int_x_y:
+  text: Raw Pixel (x={int_x}, y={int_y}) = {value_text}
+  context: Status message in the shared image display and image information panel.
+  placeholders:
+    int_x: Horizontal image pixel coordinate at the cursor.
+    int_y: Vertical image pixel coordinate at the cursor.
+    value_text: Formatted raw image intensity at the cursor.
+base_image.scale.linear:
+  text: linear
+  context: Intensity scale choice that maps image values linearly to colors.
+base_image.scale.log:
+  text: log
+  context: Intensity scale choice that maps image values logarithmically to colors.
+base_image.available:
+  text: Available
+  context: SciAnalysis availability in image information.
+base_image.not_available:
+  text: Not available
+  context: SciAnalysis availability in image information.

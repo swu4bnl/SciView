@@ -1,0 +1,66 @@
+viewer.color_image_must_be_rgb_or:
+  text: Color image must be RGB or RGBA
+  context: Empty-view error when a color image has an unsupported number of color channels.
+viewer.palette_source_text:
+  text: '{palette_source}: {text}'
+  context: Tooltip in the shared image viewer.
+  placeholders:
+    palette_source: Name of the artwork palette source, used as an attribution.
+    text: Artist and artwork names associated with the selected color palette.
+viewer.save_displayed_image:
+  text: Save displayed image
+  context: File chooser title or type filter in the shared image viewer.
+viewer.png_images_png_all_files:
+  text: PNG Images (*.png);;All Files (*)
+  context: Image export file filter; preserve the glob patterns and double-semicolon separator.
+viewer.pan.label:
+  text: Pan
+  context: Image-viewer navigation tool for moving the displayed image by dragging with the mouse.
+viewer.chi_convention:
+  text: "chi: 0° right, +90° up"
+  context: Scientific image-overlay note defining the displayed azimuthal-angle convention; preserve the angles.
+viewer.pan.tooltip:
+  text: Drag with the left mouse button to move the image.
+  context: Mouse interaction instructions for the image-viewer Pan tool.
+viewer.zoom.label:
+  text: Zoom
+  context: Image-viewer navigation tool for enlarging a selected image region.
+viewer.zoom.tooltip:
+  text: Drag a box with the left mouse button to zoom into an area.
+  context: Mouse interaction instructions for the rectangular image zoom tool.
+viewer.beam_center.label:
+  text: Beam Center
+  context: Toggle for the calibrated direct-beam position marker on the detector image.
+viewer.beam_center.tooltip:
+  text: Show or hide the calibrated beam center.
+  context: Visibility control for the calibrated direct-beam position marker.
+viewer.mask.label:
+  text: Mask
+  context: Visibility toggle for the detector mask overlay, not a mask editing command.
+viewer.mask.tooltip:
+  text: Show or hide the active mask.
+  context: Visibility control for the active detector mask overlay.
+viewer.home.label:
+  text: Home
+  context: Image-viewer command for returning to the full image extent.
+viewer.home.tooltip:
+  text: Show the full image.
+  context: Resets image pan and zoom without modifying pixel data.
+viewer.auto.label:
+  text: Auto
+  context: Image-viewer command for automatically setting color limits from image intensities.
+viewer.auto.tooltip:
+  text: Set color limits from the current image.
+  context: Automatic intensity display limits; image pixel data is unchanged.
+viewer.copy.label:
+  text: Copy
+  context: Command for copying the displayed image view to the system clipboard.
+viewer.copy.tooltip:
+  text: Copy the image view to the clipboard. Include the current colors and overlays.
+  context: Copies a visual rendering rather than the source detector data.
+viewer.save.label:
+  text: Save
+  context: Command for exporting the displayed image view as a PNG file.
+viewer.save.tooltip:
+  text: Save the image view as a PNG file. Include the current colors and overlays.
+  context: Exports a visual rendering rather than saving raw detector data.

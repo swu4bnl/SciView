@@ -5,6 +5,8 @@ Provides utilities for monitoring CPU and memory usage of the application.
 Used for displaying performance metrics in the UI for debugging and optimization.
 """
 
+from sciview.interfaces.text import tr
+
 import os
 import psutil
 from typing import Dict, Tuple
@@ -17,6 +19,7 @@ class ResourceMonitor:
         """Initialize the resource monitor"""
         try:
             self.process = psutil.Process(os.getpid())
+            self.process.cpu_percent(interval=None)
             self.available = True
         except Exception as e:
             print(f"Warning: psutil not available for resource monitoring: {e}")
@@ -49,12 +52,13 @@ class ResourceMonitor:
             print(f"Error getting memory usage: {e}")
             return {}
     
-    def get_cpu_usage(self, interval: float = 0.1) -> str:
+    def get_cpu_usage(self, interval: float | None = None) -> str:
         """
         Get current CPU usage percentage of the application.
         
         Args:
-            interval: Time interval in seconds for measurement. Default 0.1s.
+            interval: Optional blocking sample interval. By default, sample
+                CPU use since the preceding call without blocking the UI.
         
         Returns:
             Formatted string with CPU percentage, or empty string if unavailable.
@@ -80,7 +84,7 @@ class ResourceMonitor:
         """
         cpu_str = self.get_cpu_usage()
         mem_info = self.get_memory_usage()
-        mem_str = mem_info.get('current', 'N/A')
+        mem_str = mem_info.get('current', tr("resource_monitor.not_available"))
         
         return (cpu_str, mem_str)
     
@@ -100,7 +104,7 @@ class ResourceMonitor:
             mem_info = self.get_memory_usage()
             
             if cpu_str and mem_info:
-                return f"CPU: {cpu_str} | Mem: {mem_info['current']} ({mem_info['percent']})"
+                return tr('resource_monitor.cpu_cpu_str_mem_mem_info', cpu_str=cpu_str, mem_info_current=mem_info['current'], mem_info_percent=mem_info['percent'])
             return ""
         except Exception as e:
             print(f"Error getting resource status: {e}")

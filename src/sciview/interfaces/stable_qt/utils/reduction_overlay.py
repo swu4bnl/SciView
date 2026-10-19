@@ -6,6 +6,8 @@ from typing import Any
 
 import numpy as np
 
+from sciview.interfaces.text import tr
+
 from sciview.processing.angle_conventions import (
     DISPLAY_CHI_CONVENTION,
     display_angle_map,
@@ -42,7 +44,7 @@ def chi_to_screen_vector(chi_deg: float, calibration: Any | None = None) -> tupl
 
 
 def chi_convention_text(calibration: Any | None = None) -> str:
-    return "chi: 0\u00b0 right, +90\u00b0 up"
+    return tr("viewer.chi_convention")
 
 
 def sector_roi_mask(

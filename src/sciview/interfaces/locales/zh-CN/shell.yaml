@@ -1,0 +1,308 @@
+shell.qapplication_applicationname_beamline_name:
+  text: "{qapplication_applicationname} - {beamline_name}"
+  context: Window title in the main application window.
+  placeholders:
+    qapplication_applicationname: SciView application display name.
+    beamline_name: Configured beamline name; do not translate the supplied name.
+shell.reload_current_tab_and_clear_cache:
+  text: "重新加载当前选项卡并清除缓存 (Ctrl+R)"
+  context: Tooltip in the main application window.
+shell.i:
+  text: "I"
+  context: Abbreviated button caption for opening the developer Style Inspector.
+shell.open_style_inspector_dev_ctrl_shift:
+  text: "打开样式检查器 (Ctrl+Shift+I)"
+  context: Tooltip in the main application window.
+shell.clear_saved_session:
+  text: "清除已保存的会话"
+  context: Accessible control name in the main application window.
+shell.clear_saved_session_cache_last_image:
+  text: "清除已保存的会话缓存（上次图像/校准/掩膜/批处理队列恢复数据）"
+  context: Tooltip in the main application window.
+shell.update_failed:
+  text: "更新失败"
+  context: Failure summary for a software-update operation in the main window.
+shell.settext:
+  text: "☀"
+  context: Sun symbol used as a fallback icon for switching to the light theme.
+shell.switch_to_light_mode_ctrl_d:
+  text: "切换到浅色模式 (Ctrl+D)"
+  context: Tooltip in the main application window.
+shell.settext_2:
+  text: "🌙"
+  context: Moon symbol used as a fallback icon for switching to the dark theme.
+shell.switch_to_dark_mode_ctrl_d:
+  text: "切换到深色模式 (Ctrl+D)"
+  context: Tooltip in the main application window.
+shell.dev_tools_active_hot_reload_on:
+  text: "开发工具已启用：热重载开启 | 按 Ctrl+Shift+I 或单击衣服图标打开样式检查器"
+  context: Status message in the main application window.
+shell.clear_session_cache:
+  text: "清除会话缓存"
+  context: Dialog message or title in the main application window.
+shell.this_deletes_the_saved_last_session:
+  text: "这将删除上次会话的恢复数据（图像路径、校准、掩膜图层、批处理队列）。是否继续？"
+  context: Dialog message or title in the main application window.
+shell.session_cache_cleared:
+  text: "会话缓存已清除"
+  context: Status message in the main application window.
+shell.could_not_load_the_image_scianalysis:
+  text: "无法加载图像：未安装 SciAnalysis。"
+  context: Status message in the main application window.
+shell.open_image_file:
+  text: "打开图像文件"
+  context: File chooser title or type filter in the main application window.
+shell.loaded_image_basename_path_w_x:
+  text: "已加载图像：{basename_path}（{w}x{h} 像素）"
+  context: Status message in the main application window.
+  placeholders:
+    basename_path: Filename of the selected image, without its directory.
+    w: Image width in pixels.
+    h: Image height in pixels.
+shell.could_not_load_basename_path_error:
+  text: "无法加载 {basename_path}：{error}"
+  context: User-visible error in the main application window.
+  placeholders:
+    basename_path: Filename of the selected image, without its directory.
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.refreshing_tab_name:
+  text: "正在刷新 {tab_name}..."
+  context: Status message in the main application window.
+  placeholders:
+    tab_name: Localized caption of the application tab being refreshed.
+shell.cleared_cache_info_get_cached_items:
+  text: "已清除 {cache_info_get_cached_items_0} 个缓存图像"
+  context: Status message in the main application window.
+  placeholders:
+    cache_info_get_cached_items_0: Number of cached image objects removed.
+shell.cannot_refresh_tab_name_unknown_tab:
+  text: "无法刷新 {tab_name}：未知的选项卡类型"
+  context: Status message in the main application window.
+  placeholders:
+    tab_name: Localized caption of the application tab being refreshed.
+shell.refreshed_tab_name_successfully:
+  text: "✓ 已成功刷新 {tab_name}"
+  context: Status message in the main application window.
+  placeholders:
+    tab_name: Localized caption of the application tab being refreshed.
+shell.error_refreshing_tab_name_error:
+  text: "刷新 {tab_name} 时出错：{error}"
+  context: Status message in the main application window.
+  placeholders:
+    tab_name: Localized caption of the application tab being refreshed.
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.another_update_is_already_running:
+  text: "另一个更新任务正在运行"
+  context: Status message in the main application window.
+shell.title_canceled:
+  text: "已取消{title}"
+  context: Status message in the main application window.
+  placeholders:
+    title: Localized title of the software-update operation.
+shell.failed_to_start_update_error:
+  text: "无法启动更新：{error}"
+  context: Status message in the main application window.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.update_sciview:
+  text: "更新 SciView"
+  context: Update title in the main application window.
+shell.this_will_run_git_pull_ff:
+  text: "此操作将在 SciView 仓库中运行 git pull --ff-only。是否继续？"
+  context: Update confirm message in the main application window.
+shell.updating_sciview_source_checkout:
+  text: "正在更新 SciView 源代码仓库..."
+  context: Update running message in the main application window.
+shell.sciview_source_updated_restart_sciview_to:
+  text: "SciView 源代码已更新。请重启 SciView 以使用新版本。"
+  context: Update success message in the main application window.
+shell.sciview_update_failed:
+  text: "SciView 更新失败"
+  context: Update failure prefix in the main application window.
+shell.pixi_managed_scianalysis_package:
+  text: "由 Pixi 管理的 SciAnalysis 软件包"
+  context: Action label in the main application window.
+shell.scianalysis_checkout:
+  text: "SciAnalysis 源代码仓库"
+  context: Action label in the main application window.
+shell.update_scianalysis:
+  text: "更新 SciAnalysis"
+  context: Update title in the main application window.
+shell.this_will_update_the_active_action:
+  text: "此操作将更新当前的{action_label}。是否继续？"
+  context: Update confirm message in the main application window.
+  placeholders:
+    action_label: Localized description of the active SciAnalysis installation.
+shell.updating_action_label:
+  text: "正在更新{action_label}..."
+  context: Update running message in the main application window.
+  placeholders:
+    action_label: Localized description of the active SciAnalysis installation.
+shell.scianalysis_source_updated_restart_sciview_to:
+  text: "SciAnalysis 源代码已更新。请重启 SciView 以使用新版本。"
+  context: Update success message in the main application window.
+shell.scianalysis_update_failed:
+  text: "SciAnalysis 更新失败"
+  context: Update failure prefix in the main application window.
+shell.git_executable_not_found_on_path:
+  text: "PATH 中未找到 Git 可执行文件"
+  context: Status message in the main application window.
+shell.sciview_update:
+  text: "SciView 更新"
+  context: Dialog message or title in the main application window.
+shell.git_was_not_found_on_path:
+  text: "PATH 中未找到 Git，因此无法从仓库检出版本更新 SciView。"
+  context: Dialog message or title in the main application window.
+shell.sciview_source_is_not_a_git:
+  text: "SciView 源代码不是 Git 仓库检出版本"
+  context: Status message in the main application window.
+shell.the_current_sciview_source_is_not:
+  text: "当前 SciView 源代码不是 Git 仓库检出版本，无法通过 git pull 更新。"
+  context: Dialog message or title in the main application window.
+shell.pixi_executable_not_found_on_path:
+  text: "PATH 中未找到 Pixi 可执行文件"
+  context: Status message in the main application window.
+shell.scianalysis_update:
+  text: "SciAnalysis 更新"
+  context: Dialog message or title in the main application window.
+shell.pixi_was_not_found_on_path:
+  text: "PATH 中未找到 Pixi，因此无法更新由 Pixi 管理的 SciAnalysis 软件包。"
+  context: Dialog message or title in the main application window.
+shell.pixi_toml_not_found_in_workspace:
+  text: "工作区中未找到 pixi.toml"
+  context: Status message in the main application window.
+shell.pixi_toml_was_not_found_in:
+  text: "SciView 工作区中未找到 pixi.toml，因此无法在此处通过 Pixi 更新 SciAnalysis。"
+  context: Dialog message or title in the main application window.
+shell.git_was_not_found_on_path_2:
+  text: "PATH 中未找到 Git，因此无法从检出版本更新 SciAnalysis。"
+  context: Dialog message or title in the main application window.
+shell.scianalysis_checkout_not_configured:
+  text: "未配置 SciAnalysis 源代码仓库"
+  context: Status message in the main application window.
+shell.no_scianalysis_checkout_is_configured_set:
+  text: "尚未配置 SciAnalysis 源代码仓库。请设置 SCIVIEW_SCIANALYSIS_SOURCE 和 SCIVIEW_SCIANALYSIS_PATH，或切换到由 Pixi 管理的 SciAnalysis。"
+  context: Dialog message or title in the main application window.
+shell.scianalysis_source_is_not_a_git:
+  text: "SciAnalysis 源代码不是 Git 仓库检出版本"
+  context: Status message in the main application window.
+shell.the_selected_scianalysis_source_is_not:
+  text: "所选 SciAnalysis 源代码不是 Git 仓库检出版本，无法通过 git pull 更新。"
+  context: Dialog message or title in the main application window.
+shell.value_update_running_message_still_running:
+  text: "{value__update_running_message}仍在运行"
+  context: Status message in the main application window.
+  placeholders:
+    value__update_running_message: Localized status of the ongoing software update.
+shell.value_update_failure_prefix_tail:
+  text: "{value__update_failure_prefix}：{tail}"
+  context: Status message in the main application window.
+  placeholders:
+    value__update_failure_prefix: Localized summary identifying which software update failed.
+    tail: Last lines of subprocess output; retain the supplied diagnostic text.
+shell.value_update_failure_prefix_with_exit:
+  text: "{value__update_failure_prefix}，退出代码为 {return_code}"
+  context: Status message in the main application window.
+  placeholders:
+    value__update_failure_prefix: Localized summary identifying which software update failed.
+    return_code: Integer exit code from the software-update subprocess.
+shell.image_browser:
+  text: "图像浏览器"
+  context: Tab for browsing local image files and selecting the shared image.
+shell.image_browser_tab_n_import_error:
+  text: "图像浏览器选项卡\n（导入错误：{error}）"
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.tiled_browser:
+  text: "Tiled 浏览器"
+  context: Tab for finding and loading images from a Tiled data service.
+shell.tiled_browser_tab_n_import_error:
+  text: "Tiled 浏览器选项卡\n（导入错误：{error}）"
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.calibration:
+  text: "校准"
+  context: Tab for configuring detector geometry and X-ray calibration.
+shell.calibration_tab_n_scianalysis_not_available:
+  text: "校准选项卡\n（SciAnalysis 不可用）"
+  context: Fallback panel shown when an application tab cannot be imported.
+shell.calibration_tab_n_import_error_error:
+  text: "校准选项卡\n（导入错误：{error}）"
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.mask_editing:
+  text: "掩膜编辑"
+  context: Tab for editing the detector pixel-exclusion mask.
+shell.mask_tab_n_import_error_error:
+  text: "掩膜选项卡\n（导入错误：{error}）"
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.reduction:
+  text: "积分"
+  context: Tab for reducing a two-dimensional detector image to scientific scattering curves.
+shell.reduction_tab_n_import_error_error:
+  text: "积分选项卡\n（导入错误：{error}）"
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.transform:
+  text: "变换"
+  context: Tab for transforming detector images into scientific coordinate systems.
+shell.transform_tab_n_import_error_error:
+  text: "变换选项卡\n（导入错误：{error}）"
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.batch:
+  text: "批处理"
+  context: Tab for applying a processing recipe to a collection of images.
+shell.batch_tab_n_import_error_error:
+  text: "批处理选项卡\n（导入错误：{error}）"
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.info:
+  text: "信息"
+  context: Tab showing file metadata, image statistics, and calibration information.
+shell.info_tab_n_import_error_error:
+  text: "信息选项卡\n（导入错误：{error}）"
+  context: Fallback panel shown when an application tab cannot be imported.
+  placeholders:
+    error: Diagnostic details from the failed operation; retain the supplied details.
+shell.scianalysis_gui_started_for_beamline_name:
+  text: "{beamline_name} 的 SciAnalysis 图形界面已启动 - SciAnalysis 已成功加载"
+  context: Status msg in the main application window.
+  placeholders:
+    beamline_name: Configured beamline name; do not translate the supplied name.
+shell.scianalysis_gui_started_for_beamline_name_2:
+  text: "{beamline_name} 的 SciAnalysis 图形界面已启动 - SciAnalysis 不可用"
+  context: Status msg in the main application window.
+  placeholders:
+    beamline_name: Configured beamline name; do not translate the supplied name.
+shell.text_smaller:
+  text: 缩小文字 (Ctrl+-)
+  context: Button and keyboard action to decrease interface text size.
+shell.text_larger:
+  text: 放大文字 (Ctrl++)
+  context: Button and keyboard action to increase interface text size.
+shell.text_scale_next:
+  text: "当前：{current}% — 调整为：{target}%"
+  context: Text-size button tooltip showing the current interface scale and the scale after clicking.
+  placeholders:
+    current: Current interface scale as an integer percentage.
+    target: Interface scale after clicking as an integer percentage.
+shell.text_scale_current:
+  text: "当前：{current}%"
+  context: Text-size button tooltip at the scale limit, when no further step is available.
+  placeholders:
+    current: Current interface scale as an integer percentage.
+shell.high_contrast:
+  text: 高对比度
+  context: Toggle for a high-contrast interface palette using the current light or dark mode.
+shell.theme_unavailable:
+  text: 无法切换主题。
+  context: Status when the requested interface theme cannot be applied.
