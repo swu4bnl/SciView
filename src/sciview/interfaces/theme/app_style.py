@@ -40,7 +40,7 @@ class AppStyle:
         'compact_text_min_width': 64,
         'corner_height': 28,
         'corner_min_width': 28,
-        'corner_icon_size': 14,
+        'corner_icon_size': 22,
         'symbol_size': 36,
         'mask_tool_width': 44,
         'mask_tool_height': 40,
@@ -84,7 +84,12 @@ class AppStyle:
         'app_update': 'app_update.svg',
         'sci_update': 'sci_update.svg',
         'clear_session': 'tool_delete.svg',
-        'high_contrast': 'tool_contrast.svg',
+        'high_contrast': 'tool_high_contrast.svg',
+        'text_smaller': 'tool_text_smaller.svg',
+        'text_larger': 'tool_text_larger.svg',
+        'light_mode': 'tool_light_mode.svg',
+        'dark_mode': 'tool_dark_mode.svg',
+        'style_inspector': 'tool_style_inspector.svg',
     }
 
     TAB_ICON_FILES = {

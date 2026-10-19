@@ -35,7 +35,7 @@ shell.switch_to_dark_mode_ctrl_d:
   text: "切换到深色模式 (Ctrl+D)"
   context: Tooltip in the main application window.
 shell.dev_tools_active_hot_reload_on:
-  text: "开发工具已启用：热重载开启 | 按 Ctrl+Shift+I 或单击角落的 I 按钮打开样式检查器"
+  text: "开发工具已启用：热重载开启 | 按 Ctrl+Shift+I 或单击衣服图标打开样式检查器"
   context: Status message in the main application window.
 shell.clear_session_cache:
   text: "清除会话缓存"

@@ -132,9 +132,14 @@ class SciAnaApp(QMainWindow):
         self.refresh_button.setFixedSize(corner_button_size)
         self.refresh_button.clicked.connect(self._refresh_current_tab)
 
-        self.style_inspector_button = QPushButton(tr('shell.i'))
+        self.style_inspector_button = QPushButton()
         self.style_inspector_button.setProperty("sciview_compact_button", True)
         self.style_inspector_button.setToolTip(tr('shell.open_style_inspector_dev_ctrl_shift'))
+        self.style_inspector_button.setAccessibleName(tr('shell.open_style_inspector_dev_ctrl_shift'))
+        self.style_inspector_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['style_inspector'])
+        )
+        self.style_inspector_button.setIconSize(AppStyle.corner_button_icon_size())
         self.style_inspector_button.setFixedSize(corner_button_size)
         self.style_inspector_button.clicked.connect(self._show_style_inspector)
 
@@ -144,16 +149,18 @@ class SciAnaApp(QMainWindow):
         self.theme_toggle_button.clicked.connect(self._toggle_dark_light_theme)
         self._update_theme_toggle_icon()
 
-        self.text_smaller_button = QPushButton("A-")
-        self.text_larger_button = QPushButton("A+")
-        for button, message_id in (
-            (self.text_smaller_button, 'shell.text_smaller'),
-            (self.text_larger_button, 'shell.text_larger'),
+        self.text_smaller_button = QPushButton()
+        self.text_larger_button = QPushButton()
+        for button, message_id, icon_key in (
+            (self.text_smaller_button, 'shell.text_smaller', 'text_smaller'),
+            (self.text_larger_button, 'shell.text_larger', 'text_larger'),
         ):
             button.setProperty("sciview_compact_button", True)
             button.setFixedSize(corner_button_size)
             button.setAccessibleName(tr(message_id))
             button.setToolTip(tr(message_id))
+            button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES[icon_key]))
+            button.setIconSize(AppStyle.corner_button_icon_size())
         self.text_smaller_button.clicked.connect(lambda: self._step_text_scale(False))
         self.text_larger_button.clicked.connect(lambda: self._step_text_scale(True))
 
@@ -269,11 +276,16 @@ class SciAnaApp(QMainWindow):
 
     def _update_theme_toggle_icon(self):
         if AppStyle.theme_is_dark():
-            self.theme_toggle_button.setText(tr('shell.settext'))  # sun = click to go light
+            icon_key = 'light_mode'
             self.theme_toggle_button.setToolTip(tr('shell.switch_to_light_mode_ctrl_d'))
         else:
-            self.theme_toggle_button.setText(tr('shell.settext_2'))  # moon = click to go dark
+            icon_key = 'dark_mode'
             self.theme_toggle_button.setToolTip(tr('shell.switch_to_dark_mode_ctrl_d'))
+        self.theme_toggle_button.setAccessibleName(self.theme_toggle_button.toolTip())
+        self.theme_toggle_button.setIcon(
+            AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES[icon_key])
+        )
+        self.theme_toggle_button.setIconSize(AppStyle.corner_button_icon_size())
 
     def _show_style_inspector(self):
         """Open the shared style inspector on demand."""
@@ -457,6 +469,13 @@ class SciAnaApp(QMainWindow):
         self.theme_toggle_button.setFixedSize(corner_button_size)
         self.text_smaller_button.setFixedSize(corner_button_size)
         self.text_larger_button.setFixedSize(corner_button_size)
+        for button, icon_key in (
+            (self.text_smaller_button, 'text_smaller'),
+            (self.text_larger_button, 'text_larger'),
+            (self.style_inspector_button, 'style_inspector'),
+        ):
+            button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES[icon_key]))
+            button.setIconSize(corner_icon_size)
         scale = int(AppStyle.FONTS['scale_pct'])
         self.text_smaller_button.setEnabled(scale > min(AppStyle.TEXT_SCALE_OPTIONS))
         self.text_larger_button.setEnabled(scale < max(AppStyle.TEXT_SCALE_OPTIONS))

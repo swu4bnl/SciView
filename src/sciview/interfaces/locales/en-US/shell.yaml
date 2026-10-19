@@ -35,7 +35,7 @@ shell.switch_to_dark_mode_ctrl_d:
   text: Switch to dark mode (Ctrl+D)
   context: Tooltip in the main application window.
 shell.dev_tools_active_hot_reload_on:
-  text: 'Dev tools active: hot-reload ON  |  Ctrl+Shift+I or corner I button = Style Inspector'
+  text: 'Dev tools active: hot-reload ON | Ctrl+Shift+I or the shirt button opens Style Inspector'
   context: Status message in the main application window.
 shell.clear_session_cache:
   text: Clear Session Cache
