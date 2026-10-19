@@ -163,6 +163,7 @@ class SciAnaApp(QMainWindow):
             button.setIconSize(AppStyle.corner_button_icon_size())
         self.text_smaller_button.clicked.connect(lambda: self._step_text_scale(False))
         self.text_larger_button.clicked.connect(lambda: self._step_text_scale(True))
+        self._update_text_scale_tooltips()
 
         self.high_contrast_button = QPushButton()
         self.high_contrast_button.setProperty("sciview_compact_button", True)
@@ -261,14 +262,34 @@ class SciAnaApp(QMainWindow):
         AppStyle.update_font_tokens({'scale_pct': percent})
         AppStyle.apply_global_style(QApplication.instance(), preserve_existing=True)
 
-    def _step_text_scale(self, increase: bool) -> None:
+    def _next_text_scale(self, increase: bool) -> int | None:
         current = int(AppStyle.FONTS['scale_pct'])
         options = AppStyle.TEXT_SCALE_OPTIONS
         candidates = [scale for scale in options if scale > current] if increase else [
             scale for scale in options if scale < current
         ]
-        if candidates:
-            self._set_text_scale(min(candidates) if increase else max(candidates))
+        return (min(candidates) if increase else max(candidates)) if candidates else None
+
+    def _step_text_scale(self, increase: bool) -> None:
+        target = self._next_text_scale(increase)
+        if target is not None:
+            self._set_text_scale(target)
+
+    def _update_text_scale_tooltips(self) -> None:
+        current = int(AppStyle.FONTS['scale_pct'])
+        for button, message_id, increase in (
+            (self.text_smaller_button, 'shell.text_smaller', False),
+            (self.text_larger_button, 'shell.text_larger', True),
+        ):
+            target = self._next_text_scale(increase)
+            detail = (
+                tr('shell.text_scale_next', current=current, target=target)
+                if target is not None else tr('shell.text_scale_current', current=current)
+            )
+            tooltip = f"{tr(message_id)}\n{detail}"
+            button.setToolTip(tooltip)
+            button.setAccessibleDescription(detail)
+            button.setEnabled(target is not None)
 
     def _update_theme_toggle_icon(self):
         if AppStyle.theme_is_dark():
@@ -476,9 +497,7 @@ class SciAnaApp(QMainWindow):
         ):
             button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES[icon_key]))
             button.setIconSize(corner_icon_size)
-        scale = int(AppStyle.FONTS['scale_pct'])
-        self.text_smaller_button.setEnabled(scale > min(AppStyle.TEXT_SCALE_OPTIONS))
-        self.text_larger_button.setEnabled(scale < max(AppStyle.TEXT_SCALE_OPTIONS))
+        self._update_text_scale_tooltips()
         self.high_contrast_button.setFixedSize(corner_button_size)
         self.high_contrast_button.setIcon(
             AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['high_contrast'])

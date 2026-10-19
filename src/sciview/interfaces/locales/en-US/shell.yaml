@@ -291,6 +291,17 @@ shell.text_smaller:
 shell.text_larger:
   text: Larger text (Ctrl++)
   context: Button and keyboard action to increase interface text size.
+shell.text_scale_next:
+  text: "Current: {current}% — next: {target}%"
+  context: Text-size button tooltip showing the current interface scale and the scale after clicking.
+  placeholders:
+    current: Current interface scale as an integer percentage.
+    target: Interface scale after clicking as an integer percentage.
+shell.text_scale_current:
+  text: "Current: {current}%"
+  context: Text-size button tooltip at the scale limit, when no further step is available.
+  placeholders:
+    current: Current interface scale as an integer percentage.
 shell.high_contrast:
   text: High contrast
   context: Toggle for a high-contrast interface palette using the current light or dark mode.
