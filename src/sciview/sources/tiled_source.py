@@ -119,7 +119,7 @@ def tiled_auth_state(profile_name: str | None = None) -> TiledAuthState:
             return TiledAuthState(profile_name, False)
 
     if client is None:
-        return TiledAuthState(profile_name, False)
+        return TiledAuthState(profile_name, False, error=tiled_import_error())
 
     username = None
     try:
@@ -160,7 +160,10 @@ def tiled_authenticate(
         interactive_fallback=interactive_fallback,
     )
     if client is None:
-        return TiledAuthState(profile_name, False, error=f"Could not connect to {profile_name}")
+        return TiledAuthState(
+            profile_name, False,
+            error=tiled_import_error() or f"Could not connect to {profile_name}",
+        )
     return tiled_auth_state(profile_name)
 
 

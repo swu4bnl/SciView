@@ -7,22 +7,30 @@ This module provides consistent styling across all tabs and components.
 
 from pathlib import Path
 from copy import deepcopy
+from hashlib import sha256
+import logging
 from typing import TYPE_CHECKING
 import xml.etree.ElementTree as ET
 
 from PyQt5.QtWidgets import QApplication, QPushButton, QToolButton
-from PyQt5.QtCore import Qt, QSize, QTimer
-from PyQt5.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap
+from PyQt5.QtCore import Qt, QSize, QTimer, QDataStream, QFile, QIODevice, QSaveFile, QStandardPaths, QT_VERSION_STR
+from PyQt5.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap, QPixmapCache
 from PyQt5.QtSvg import QSvgRenderer
 
 if TYPE_CHECKING:
     from pyqtgraph import PlotItem
+
+logger = logging.getLogger(__name__)
 
 
 class AppStyle:
     """Global application styling configuration"""
 
     ASSETS_RELATIVE_DIR = Path("src/sciview/interfaces/theme/assets")
+    _ICON_CACHE_LIMIT = 256
+    _ICON_CACHE_HEADER = b'SciView icon v1\n'
+    _ICON_SIZES = (16, 18, 20, 22, 24, 28, 32)
+    _ICON_STATES = ((QIcon.Normal, QIcon.Off), (QIcon.Normal, QIcon.On), (QIcon.Disabled, QIcon.Off))
 
     TAB_UI = {
         'icon_size': 24,
@@ -587,12 +595,7 @@ class AppStyle:
         return style_template.format(**variables)
 
     @classmethod
-    def apply_global_style(cls, app, preserve_existing=False):
-        """Apply SciView's global rules, optionally over an external theme."""
-        base = app.styleSheet() if preserve_existing else ""
-        previous_rules = app.property(cls._GLOBAL_STYLE_PROPERTY) or ""
-        if previous_rules and base.endswith(previous_rules):
-            base = base[:-len(previous_rules)].rstrip()
+    def _global_style_rules(cls, app):
         base_styles = [
             "QWidget {"
             f'font-family: "{cls.effective_font_family(app)}", "Noto Sans CJK SC";'
@@ -601,9 +604,22 @@ class AppStyle:
             cls.tab_widget_stylesheet(),
             *(cls.format_style(style_key) for style_key in cls.GLOBAL_STYLE_KEYS),
         ]
-        rules = "\n".join(style for style in base_styles if style.strip())
+        return "\n".join(style for style in base_styles if style.strip())
+
+    @classmethod
+    def apply_global_style(cls, app, preserve_existing=False, *, base_stylesheet=None):
+        """Compose the final stylesheet before applying it to live widgets."""
+        base = base_stylesheet if base_stylesheet is not None else (
+            app.styleSheet() if preserve_existing else ""
+        )
+        previous_rules = app.property(cls._GLOBAL_STYLE_PROPERTY) or ""
+        if previous_rules and base.endswith(previous_rules):
+            base = base[:-len(previous_rules)].rstrip()
+        rules = cls._global_style_rules(app)
         app.setProperty(cls._GLOBAL_STYLE_PROPERTY, rules)
-        app.setStyleSheet("\n".join(style for style in (base, rules) if style.strip()))
+        stylesheet = "\n".join(style for style in (base, rules) if style.strip())
+        if app.styleSheet() != stylesheet:
+            app.setStyleSheet(stylesheet)
         cls.refresh_runtime_theme(app, clear_widget_styles=False)
 
     @classmethod
@@ -616,10 +632,9 @@ class AppStyle:
             previous = app.property(cls._STANDARD_APPEARANCE_PROPERTY)
             app.setProperty(cls.THEME_KEY_PROPERTY, previous['theme'])
             app.setPalette(previous['palette'])
-            app.setStyleSheet(previous['stylesheet'])
             app.setProperty(cls._GLOBAL_STYLE_PROPERTY, previous['rules'])
             app.setProperty(cls._STANDARD_APPEARANCE_PROPERTY, None)
-            cls.apply_global_style(app, preserve_existing=True)
+            cls.apply_global_style(app, base_stylesheet=previous['stylesheet'])
             return
 
         app.setProperty(cls._STANDARD_APPEARANCE_PROPERTY, {
@@ -630,6 +645,11 @@ class AppStyle:
         })
         variant = 'dark' if cls.theme_is_dark(app) else 'light'
         app.setProperty(cls.THEME_KEY_PROPERTY, f'high-contrast:{variant}')
+        cls._apply_high_contrast_palette(app)
+        cls.apply_global_style(app)
+
+    @classmethod
+    def _apply_high_contrast_palette(cls, app):
         colors = cls.theme_colors(app)
         palette = QPalette(app.palette())
         for role, key in (
@@ -644,7 +664,6 @@ class AppStyle:
         for role in (QPalette.WindowText, QPalette.Text, QPalette.ButtonText):
             palette.setColor(QPalette.Disabled, role, colors['muted'])
         app.setPalette(palette)
-        cls.apply_global_style(app)
 
     @classmethod
     def high_contrast_enabled(cls, app: QApplication | None = None) -> bool:
@@ -763,11 +782,31 @@ class AppStyle:
             if variant == 'auto':
                 darkdetect = __import__('darkdetect')
                 actual = str(darkdetect.theme() or 'dark').lower()
-            qdarktheme.setup_theme(actual)
+            contrast = cls.high_contrast_enabled(app)
+            # Install qdarktheme's proxy style once, before widgets exist.
+            if not app.property('sciview_qdarktheme_initialized'):
+                qdarktheme.setup_theme(actual)
+                app.setProperty('sciview_qdarktheme_initialized', True)
+            else:
+                qdarktheme.stop_sync()
+            base = qdarktheme.load_stylesheet(actual)
+            app.setPalette(qdarktheme.load_palette(actual, for_stylesheet=True))
             app.setProperty(cls.THEME_KEY_PROPERTY, f'qdarktheme:{actual}')
-            cls.apply_global_style(app, preserve_existing=True)
+            if contrast:
+                rules = cls._global_style_rules(app)
+                app.setProperty(cls._STANDARD_APPEARANCE_PROPERTY, {
+                    'theme': cls.current_theme_key(app),
+                    'palette': app.palette(),
+                    'stylesheet': base + "\n" + rules,
+                    'rules': rules,
+                })
+                app.setProperty(cls.THEME_KEY_PROPERTY, f'high-contrast:{actual}')
+                cls._apply_high_contrast_palette(app)
+                base = ""
+            cls.apply_global_style(app, base_stylesheet=base)
             return True
         except Exception:
+            logger.exception("Could not apply qdarktheme appearance")
             return False
 
     @classmethod
@@ -920,16 +959,81 @@ class AppStyle:
         if path.suffix.lower() != '.svg':
             return QIcon(str(path))
 
-        icon = QIcon()
         colors = cls.theme_colors()
-        for size in (16, 18, 20, 22, 24, 28, 32):
+        identity = cls._ICON_CACHE_HEADER + path.read_bytes() + repr((
+            QT_VERSION_STR, cls._ICON_SIZES, colors['icon'].rgba(), colors['checked_fg'].rgba(),
+            colors['muted'].rgba(),
+        )).encode('ascii')
+        key = sha256(identity).hexdigest()
+        cached = QIcon()
+        for size in cls._ICON_SIZES:
+            for mode, state in cls._ICON_STATES:
+                pixmap = QPixmapCache.find(f'sciview:{key}:{size}:{mode}:{state}')
+                if pixmap is None:
+                    break
+                cached.addPixmap(pixmap, mode, state)
+            else:
+                continue
+            break
+        else:
+            return cached
+        cache_root = QStandardPaths.writableLocation(QStandardPaths.GenericCacheLocation)
+        cache_path = Path(cache_root) / 'sciview' / 'icons-v1' / f'{key}.icon' if cache_root else None
+        icon = QIcon()
+        if cache_path is not None and cache_path.is_file():
+            source = QFile(str(cache_path))
+            if source.open(QIODevice.ReadOnly):
+                stream = QDataStream(source)
+                stream.setVersion(QDataStream.Qt_5_15)
+                header = stream.readRawData(len(cls._ICON_CACHE_HEADER))
+                if header == cls._ICON_CACHE_HEADER and source.size() <= 1024 * 1024:
+                    stream >> icon
+                valid = stream.status() == QDataStream.Ok and not icon.isNull()
+                source.close()
+                if valid:
+                    cls._remember_icon(key, icon)
+                    return QIcon(icon)
+            logger.warning("Could not read icon cache %s; regenerating", cache_path)
+            icon = QIcon()
+        for size in cls._ICON_SIZES:
             icon.addPixmap(cls._render_svg_pixmap(path, size, colors['icon']))
             icon.addPixmap(
                 cls._render_svg_pixmap(path, size, colors['checked_fg']),
                 QIcon.Normal, QIcon.On,
             )
             icon.addPixmap(cls._render_svg_pixmap(path, size, colors['muted']), QIcon.Disabled)
-        return icon
+        if cache_path is not None:
+            try:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                target = QSaveFile(str(cache_path))
+                if not target.open(QIODevice.WriteOnly):
+                    raise OSError(target.errorString())
+                stream = QDataStream(target)
+                stream.setVersion(QDataStream.Qt_5_15)
+                stream.writeRawData(cls._ICON_CACHE_HEADER)
+                stream << icon
+                if stream.status() != QDataStream.Ok:
+                    target.cancelWriting()
+                    raise OSError("Could not serialize icon")
+                if not target.commit():
+                    raise OSError(target.errorString())
+                entries = sorted(cache_path.parent.glob('*.icon'), key=lambda p: p.stat().st_mtime)
+                for obsolete in entries[:-cls._ICON_CACHE_LIMIT]:
+                    obsolete.unlink()
+            except OSError:
+                logger.warning("Could not persist icon cache %s", cache_path, exc_info=True)
+        cls._remember_icon(key, icon)
+        return QIcon(icon)
+
+    @classmethod
+    def _remember_icon(cls, key: str, icon: QIcon) -> None:
+        # Qt owns this bounded cache and clears pixmaps before GUI teardown.
+        for size in cls._ICON_SIZES:
+            for mode, state in cls._ICON_STATES:
+                QPixmapCache.insert(
+                    f'sciview:{key}:{size}:{mode}:{state}',
+                    icon.pixmap(size, size, mode, state),
+                )
 
     @classmethod 
     def get_layout_ratios(cls):
@@ -1364,30 +1468,35 @@ class AppStyle:
             widget.setProperty(cls.STYLE_KEY_PROPERTY, style_key)
 
         if style_key == 'compact_button':
-            widget.setStyleSheet(cls.compact_button_stylesheet())
+            cls._set_widget_stylesheet(widget, cls.compact_button_stylesheet())
             return
         if style_key == 'emphasis_button':
             # Native Qt themes: let the platform render the default-button highlight.
             # External themes (qdarkstyle, qt-material, etc.): use our custom accent QSS.
             theme_key = str(cls.current_theme_key() or '')
             if theme_key.startswith('qt:'):
-                widget.setStyleSheet('')
+                cls._set_widget_stylesheet(widget, '')
                 if isinstance(widget, QPushButton):
                     widget.setDefault(True)
             else:
                 if isinstance(widget, QPushButton):
                     widget.setDefault(False)
-                widget.setStyleSheet(cls.emphasis_button_stylesheet())
+                cls._set_widget_stylesheet(widget, cls.emphasis_button_stylesheet())
             return
 
         # Content-button styles pass through to native rendering on native Qt themes.
         if style_key in ('primary_button', 'secondary_button', 'toolbar_text_button'):
             theme_key = str(cls.current_theme_key() or '')
             if theme_key.startswith('qt:'):
-                widget.setStyleSheet('')
+                cls._set_widget_stylesheet(widget, '')
                 return
 
-        widget.setStyleSheet(cls.format_style(style_key))
+        cls._set_widget_stylesheet(widget, cls.format_style(style_key))
+
+    @staticmethod
+    def _set_widget_stylesheet(widget, stylesheet):
+        if widget.styleSheet() != stylesheet:
+            widget.setStyleSheet(stylesheet)
 
     @classmethod
     def set_font_role(cls, widget, role_name):

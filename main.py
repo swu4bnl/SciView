@@ -253,13 +253,8 @@ class SciAnaApp(QMainWindow):
     def _toggle_dark_light_theme(self):
         """Switch between qdarktheme dark and light."""
         variant = 'light' if AppStyle.theme_is_dark() else 'dark'
-        high_contrast = AppStyle.high_contrast_enabled()
-        if high_contrast:
-            AppStyle.set_high_contrast(False)
         if not AppStyle.apply_qdarktheme(variant):
             self.show_status(tr('shell.theme_unavailable'))
-        if high_contrast:
-            AppStyle.set_high_contrast(True)
 
     def _set_text_scale(self, percent):
         AppStyle.update_font_tokens({'scale_pct': percent})

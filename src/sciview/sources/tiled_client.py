@@ -7,9 +7,11 @@ tiled servers in a beamline-agnostic way.
 """
 
 import itertools
+import importlib.util
+import logging
 import os
-import sys
 import time
+from functools import cache
 import numpy as np
 from dataclasses import dataclass
 from typing import Callable, Optional, Dict, Any, Tuple, List
@@ -31,18 +33,29 @@ if _typing_extensions is not None and not hasattr(_typing_extensions, "Sentinel"
 
     _typing_extensions.Sentinel = _CompatSentinel
 
-# Try to import tiled for beamline data access
-try:
-    from tiled.client import from_context, from_uri
-    from tiled.client.context import Context
-    from tiled.queries import Key
-    import httpx
+TILED_AVAILABLE = importlib.util.find_spec("tiled") is not None
+TILED_IMPORT_ERROR = None if TILED_AVAILABLE else "Tiled is not installed"
+logger = logging.getLogger(__name__)
+
+
+@cache
+def _load_tiled() -> bool:
+    """Import optional dependencies only when a data operation needs them."""
+    global TILED_AVAILABLE, TILED_IMPORT_ERROR
+    global from_context, from_uri, Context, Key, httpx
+    try:
+        from tiled.client import from_context, from_uri
+        from tiled.client.context import Context
+        from tiled.queries import Key
+        import httpx
+    except ImportError as exc:
+        TILED_AVAILABLE = False
+        TILED_IMPORT_ERROR = f"Tiled import failed: {exc}"
+        logger.warning("%s", TILED_IMPORT_ERROR)
+        return False
     TILED_AVAILABLE = True
     TILED_IMPORT_ERROR = None
-except ImportError as exc:
-    TILED_AVAILABLE = False
-    Key = None
-    TILED_IMPORT_ERROR = f"Tiled import failed: {exc}"
+    return True
 
 # Import configuration
 from sciview.profiles.cms_profile import TILED_PROFILES, get_default_tiled_settings
@@ -109,7 +122,9 @@ class TiledClientManager:
         Returns:
             Authenticated tiled client or None if failed
         """
-        if not TILED_AVAILABLE:
+        if not _load_tiled():
+            if authorization_callback is not None:
+                raise RuntimeError(TILED_IMPORT_ERROR)
             return None
         
         # Use default profile if none specified
@@ -165,7 +180,7 @@ class TiledClientManager:
             # read timeout so failed services do not make the GUI look frozen.
             timeout_config = profile.get("timeout", {})
             timeout = None
-            if timeout_config and "httpx" in sys.modules:
+            if timeout_config:
                 timeout = httpx.Timeout(
                     float(timeout_config.get("connect_s", 5.0)),
                     read=float(timeout_config.get("read_s", 120.0)),
@@ -406,7 +421,7 @@ class TiledClientManager:
         Returns:
             UID string or None if not found
         """
-        if not TILED_AVAILABLE or Key is None:
+        if not _load_tiled():
             return None
         
         # Get catalog
@@ -475,8 +490,8 @@ class TiledClientManager:
         Returns:
             Tuple of (image_array, metadata) or (None, error_info)
         """
-        if not TILED_AVAILABLE:
-            return None, {'error': 'Tiled client not available'}
+        if not _load_tiled():
+            return None, {'error': TILED_IMPORT_ERROR}
         
         # Get defaults from configuration
         if profile_name is None:
@@ -493,7 +508,7 @@ class TiledClientManager:
         
         try:
             # Strategy 1: Try UID-based lookup (optimized path)
-            if use_uid_lookup and TILED_AVAILABLE and Key is not None:
+            if use_uid_lookup:
                 uid = self.scanid_to_uid(scan_id, profile_name)
                 if uid:
                     return self._load_image_by_uid(

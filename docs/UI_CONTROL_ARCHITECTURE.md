@@ -131,6 +131,40 @@ Controls:
 
 This prevents style drift after theme changes and live token updates.
 
+## Runtime Performance
+
+- Appearance changes compose the final stylesheet before applying it. A
+  light/dark switch keeps high contrast enabled without rendering intermediate
+  appearances. The global traversal refreshes each viewer; tabs refresh only
+  visuals they own.
+- Identical widget stylesheets are not reassigned. Themed SVGs use Qt's bounded
+  pixmap cache and a persistent cache under the platform's generic cache directory,
+  in `sciview/icons-v1`. SVG content, tint colors, render sizes, and Qt version
+  identify entries. Writes are atomic, disk storage is capped at 256 entries,
+  and invalid entries are logged and regenerated. The cache can be removed
+  without affecting user data.
+- Startup checks for the installed Tiled package without importing its client.
+  Client dependencies load at the first data task; streaming plugins load only
+  when live monitoring starts. These imports use the existing background-task
+  path, including authentication refresh, so loading and error feedback remain
+  visible. The initial availability check is not a full dependency health check.
+- Status-bar CPU sampling is nonblocking and reports usage since the preceding
+  sample rather than pausing the UI for a measurement interval.
+
+### Measuring startup and appearance changes
+
+Run `pixi run benchmark-ui` on a desktop session. Optional arguments include
+`--runs 3 --samples 4 --json measurements.json`. The benchmark starts fresh
+processes, reports startup phases and appearance-handler/settled timings, and
+compares an empty icon cache with subsequent launches using the populated cache.
+It uses all eight tabs, an empty session, and a disposable cache; it neither
+loads detector files nor connects to Tiled. Saved user state is not modified.
+
+Results include queued layout and paint work, not an OS-compositor latency
+measurement. They exclude launcher overhead and session restoration. Keep the
+window visible, use the same machine/theme/locale, and avoid concurrent workloads
+when comparing runs. Timing results are diagnostic, not pytest thresholds.
+
 ## Stylesheet vs Token vs Runtime Theme: Practical Difference
 
 1. Stylesheet templates

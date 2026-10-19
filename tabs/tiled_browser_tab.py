@@ -54,7 +54,7 @@ from sciview.interfaces.theme.app_style import (
 from sciview.interfaces.text import tr
 from sciview.interfaces.services.image_service import ImageService
 from sciview.settings.app_settings import IMAGE_BROWSER_SETTINGS
-from sciview.sources.tiled_source import TiledScanSummary
+from sciview.sources.tiled_source import TiledAuthState, TiledScanSummary
 from sciview.sources.tiled_stream import TiledLiveEvent, TiledLiveMonitor
 from tabs.base_image_tab import BaseImageTab
 
@@ -765,10 +765,19 @@ class TiledBrowserTab(BaseImageTab):
         return self.image_service.tiled_default_profile()
 
     def _refresh_auth_state(self) -> None:
+        if self._active_thread is not None:
+            self.parent_app.show_status(tr("tiled_browser.status.operation_in_progress"))
+            return
         profile = self._active_profile()
         if profile is None:
             return
-        state = self.image_service.tiled_auth_state(profile)
+        self._run_background(
+            tr("tiled_browser.status.connecting_profile", profile=profile),
+            lambda: self.image_service.tiled_auth_state(profile),
+            self._display_auth_state,
+        )
+
+    def _display_auth_state(self, state: TiledAuthState) -> None:
         if state.authenticated:
             user = state.username or tr("tiled_browser.auth.status.cached_session")
             self.auth_status_label.setText(
@@ -807,7 +816,7 @@ class TiledBrowserTab(BaseImageTab):
             )
 
         def done(auth):
-            self._refresh_auth_state()
+            self._display_auth_state(auth)
             if self._auth_dialog is not None:
                 self._auth_dialog.accept()
                 self._auth_dialog = None

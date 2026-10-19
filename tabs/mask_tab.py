@@ -971,8 +971,6 @@ class MaskApp(BaseImageTab):
 
     def refresh_theme(self):
         """Refresh all Mask-owned icons, styles, and plot colors."""
-        if hasattr(self, 'image_viewer'):
-            self.image_viewer.refresh_theme()
         if hasattr(self, 'navigation_buttons'):
             for mode, button in self.navigation_buttons.items():
                 AppStyle.apply_widget_style(button, 'compact_button')
