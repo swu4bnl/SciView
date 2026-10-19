@@ -91,6 +91,19 @@ def test_numpy_image_uses_row_column_coordinates(viewer):
     assert viewer.get_raw_value_at(0.0, np.nan) is None
 
 
+@pytest.mark.parametrize("channels", [3, 4])
+def test_colormap_restored_after_color_image(viewer, channels):
+    scalar = np.arange(6, dtype=float).reshape(2, 3)
+    viewer.set_image(scalar)
+    viewer.set_colormap("viridis")
+    expected_image = viewer._image_item.getPixmap().toImage()
+    viewer.set_color_image(np.zeros((2, 3, channels), dtype=np.uint8))
+    viewer.set_image(scalar)
+    viewer.set_colormap("viridis")
+    assert viewer._image_item.getPixmap().toImage() == expected_image
+    assert viewer.source_array is scalar
+
+
 def test_same_shape_replacement_preserves_view_range(viewer):
     image = np.arange(3 * 5, dtype=float).reshape(3, 5)
     replacement = image + 100.0

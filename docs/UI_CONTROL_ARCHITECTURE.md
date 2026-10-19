@@ -23,6 +23,8 @@ toggle use the existing `FONTS.scale_pct` and `AppStyle` palette and shared
 refresh path; settings apply to the current session. Contrast mode restores the
 preceding theme when disabled, and follows the light/dark toggle while enabled.
 Text scaling changes interface typography, not scientific export style settings.
+The default scale is 100%.
+rendered sizes: H1 30 px, H2/tabs 24 px, H3 20 px, body 18 px, caption 16 px, and small text 14 px.
 
 ## Layer Map
 
@@ -80,6 +82,8 @@ Owner: AppStyle constants in app_style.py
 Token groups:
 - COLORS: semantic fallback palette.
 - FONTS: scale and type roles.
+- Font roles use native Qt Normal/Bold weights; styles use normal/bold.
+  Intermediate numeric weight tuning is not exposed.
 - CSS_TOKENS: live stylesheet token values such as paddings, radius, height hints.
 - LAYOUT: construction-time spacings, splitter ratios, panel constraints.
 - BUTTON_FORM and FORM_UI: reusable control dimensions.

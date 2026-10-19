@@ -52,7 +52,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 
 # Import configuration from package modules.
-from sciview.interfaces.text import developer_locale, tr
+from sciview.interfaces.text import tr
 from sciview.interfaces.theme.app_style import AppStyle, apply_info_style
 from sciview.profiles.cms_profile import BEAMLINE_NAME, DEFAULT_CALIBRATION, get_calibration_class
 from sciview.settings.app_settings import (
@@ -1102,6 +1102,7 @@ def create_application():
     """Create and configure the main application"""
     print("[SciView] Starting up...")
     app = QApplication(sys.argv)
+    AppStyle.apply_bundled_fonts(app)
 
     # Load layout/sizing ratios from runtime configuration before creating widgets.
     AppStyle.apply_gui_settings(GUI_SETTINGS)
@@ -1109,7 +1110,6 @@ def create_application():
     # Resolve the system theme before widgets create palette-derived styles and icons.
     if not AppStyle.apply_qdarktheme('auto', app):
         AppStyle.apply_global_style(app)
-    AppStyle.apply_locale_font(developer_locale(), app)
     
     with (Path(__file__).resolve().parent / "pyproject.toml").open("rb") as handle:
         metadata = tomllib.load(handle)

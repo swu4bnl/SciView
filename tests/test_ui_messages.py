@@ -10,7 +10,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 from PyQt5.QtCore import QTranslator
-from PyQt5.QtGui import QFont, QFontDatabase
+from PyQt5.QtGui import QFont, QFontDatabase, QFontMetrics
 from PyQt5.QtWidgets import QApplication
 
 from sciview.interfaces.export_translations import export_ts
@@ -68,7 +68,7 @@ def test_developer_locale_override_rejects_unavailable_catalog(monkeypatch):
         tr("viewer.pan.label")
 
 
-def test_simplified_chinese_selects_an_installed_sans_font(qapp, caplog):
+def test_bundled_fonts_render_chinese_and_scientific_labels(qapp, caplog, monkeypatch):
     from matplotlib import font_manager, rcParams
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
@@ -77,49 +77,53 @@ def test_simplified_chinese_selects_an_installed_sans_font(qapp, caplog):
     original_family = list(rcParams["font.family"])
     original_sans_serif = list(rcParams["font.sans-serif"])
     try:
-        selected = AppStyle.apply_locale_font("zh-CN", qapp)
+        monkeypatch.setattr(font_manager.fontManager, "ttflist", [])
+        font_manager.fontManager._findfont_cached.cache_clear()
+        AppStyle.apply_bundled_fonts(qapp)
         installed = {family.casefold() for family in QFontDatabase().families()}
-        assert selected
-        if installed:
-            assert selected.casefold() in installed
-        assert AppStyle.effective_font_family(qapp) == selected
-        assert qapp.font().family() == selected
+        assert {"source sans 3", "noto sans cjk sc"} <= installed
+        assert AppStyle.effective_font_family(qapp) == "Source Sans 3"
+        assert qapp.font().families() == ["Source Sans 3", "Noto Sans CJK SC"]
         assert qapp.font().styleHint() == QFont.SansSerif
-        assert rcParams["font.family"][0] == selected
-
-        matplotlib_families = {
-            font.name.casefold() for font in font_manager.fontManager.ttflist
-        }
-        assert all(
-            family.casefold() in matplotlib_families
-            for family in rcParams["font.family"]
-        )
-        if selected.casefold() in matplotlib_families:
-            figure = Figure()
-            FigureCanvasAgg(figure)
-            figure.subplots().set_xlabel("Q (Å⁻¹) 水平垂直")
-            with caplog.at_level("WARNING", logger="matplotlib.font_manager"):
-                with warnings.catch_warnings(record=True) as caught:
-                    warnings.simplefilter("always")
-                    figure.canvas.draw()
-            assert not [
-                warning
-                for warning in caught
-                if "Glyph" in str(warning.message)
-                or "findfont" in str(warning.message)
-            ]
-            assert not [
-                record
-                for record in caplog.records
-                if record.name == "matplotlib.font_manager"
-                and "Font family" in record.message
-                and "not found" in record.message
-            ]
+        metrics = QFontMetrics(qapp.font())
+        assert all(metrics.inFontUcs4(ord(char)) for char in "Q (Å⁻¹) 水平垂直 αβγ ± × −")
+        assert rcParams["font.family"] == ["Source Sans 3", "Noto Sans CJK SC"]
+        font_root = Path(str(files("sciview.interfaces").joinpath("fonts"))).resolve()
+        for family in ("Source Sans 3", "Noto Sans CJK SC"):
+            for weight in ("normal", "bold"):
+                path = Path(font_manager.findfont(
+                    font_manager.FontProperties(family=family, weight=weight),
+                    fallback_to_default=False,
+                )).resolve()
+                assert path.is_relative_to(font_root)
+                assert (path.parent / "LICENSE.txt").is_file()
+        figure = Figure()
+        FigureCanvasAgg(figure)
+        axis = figure.subplots()
+        axis.set_xlabel("Q (Å⁻¹) 水平垂直 αβγ ± × −")
+        axis.set_title("科学图像", fontweight="bold")
+        with caplog.at_level("WARNING", logger="matplotlib.font_manager"):
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                figure.canvas.draw()
+        assert not [
+            warning
+            for warning in caught
+            if "Glyph" in str(warning.message) or "findfont" in str(warning.message)
+        ]
+        assert not [
+            record
+            for record in caplog.records
+            if record.name == "matplotlib.font_manager"
+            and "Font family" in record.message and "not found" in record.message
+        ]
+        registered = len(font_manager.fontManager.ttflist)
+        AppStyle.apply_bundled_fonts(qapp)
+        assert len(font_manager.fontManager.ttflist) == registered
     finally:
-        AppStyle.apply_locale_font(SOURCE_LOCALE, qapp)
         qapp.setFont(original_font)
-        assert rcParams["font.family"] == original_family
-        assert rcParams["font.sans-serif"] == original_sans_serif
+        rcParams["font.family"] = original_family
+        rcParams["font.sans-serif"] = original_sans_serif
 
 
 def test_literal_message_references_resolve_with_declared_placeholders():

@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 from PyQt5.QtCore import QEvent, QPointF, Qt, pyqtSignal
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtWidgets import QApplication, QFileDialog, QGridLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 import pyqtgraph as pg
@@ -239,6 +239,7 @@ class ImageViewer(QWidget):
         self._display_levels = None
         self._message_item.setVisible(False)
         self._image_item.setLookupTable(None)
+        self._colormap_applied = False
         self._image_item.setVisible(True)
         self._image_item.setImage(array, autoLevels=False)
 
@@ -753,7 +754,7 @@ class ImageViewer(QWidget):
         AppStyle.apply_widget_style(button, 'compact_button')
         if icon.isNull():
             button.setText(tr(action.label_id))
-            button.setFont(AppStyle.make_font('h3', weight=600))
+            button.setFont(AppStyle.make_font('h3', weight=QFont.Bold))
         else:
             button.setIcon(icon)
             button.setIconSize(AppStyle.viewer_toolbar_icon_size())

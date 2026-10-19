@@ -73,8 +73,22 @@ Unset the variable to launch with the English source catalogs. This override
 is intended for development checks, is not a user setting, and does not add a
 language selector to the application. The selected locale catalog must match
 the English catalog IDs, translator context, and placeholder definitions.
-For `zh-CN`, SciView prefers an installed system sans-serif such as Microsoft
-YaHei UI, PingFang SC, or Noto Sans CJK SC.
+SciView bundles Source Sans 3 (3.052) and Noto Sans CJK SC (regular and bold) for consistent
+sans-serif rendering across platforms. Startup registers these files with Qt
+and Matplotlib before creating views; Chinese preview does not require
+host-installed CJK fonts. Source Sans 3 is the primary family, with Noto Sans CJK SC
+providing Chinese glyphs. The Style Inspector can still override the UI family.
+
+Both fonts use the SIL Open Font License 1.1. Their copyright/license notices
+ship alongside the font files under `src/sciview/interfaces/fonts/`.
+Redistribution does not require SciView or exported figures to adopt that
+license. Unmodified upstream font files are used:
+
+- [Source Sans 3 release](https://github.com/adobe-fonts/source-sans/releases/tag/3.052R).
+- [Noto Sans CJK SC source](https://github.com/notofonts/noto-cjk/tree/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese).
+
+The four font files add approximately 33 MiB before wheel compression. Keep
+their license notices when updating or redistributing the package.
 
 This migration preserves existing English number/count wording. It does not
 introduce language-specific plural forms or locale-aware number/date

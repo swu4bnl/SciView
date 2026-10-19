@@ -166,7 +166,10 @@ def _apply_theme(theme_key: str | None, app_style_cls: type | None = None) -> bo
         qt_material = importlib.import_module("qt_material")
 
         theme_name = theme_key.split(":", 1)[1]
-        qt_material.apply_stylesheet(qapp, theme=theme_name, extra={"font_family": "Consolas"})
+        qt_material.apply_stylesheet(
+            qapp, theme=theme_name,
+            extra={"font_family": app_style_cls.effective_font_family(qapp)},
+        )
         readability_qss = app_style_cls.qt_material_readability_stylesheet(qapp)
         if readability_qss:
             qapp.setStyleSheet(qapp.styleSheet() + readability_qss)
@@ -293,7 +296,7 @@ class StyleInspector(QWidget):
         css_group = QGroupBox(tr('style_inspector.live_stylesheet_re_applies_instantly'))
         css_heading_color = AppStyle.COLORS.get("primary", "#0078D4")
         css_group.setStyleSheet(
-            f"QGroupBox {{ font-weight: 600; color: {css_heading_color}; margin-top: 8px; "
+            f"QGroupBox {{ font-weight: bold; color: {css_heading_color}; margin-top: 8px; "
             "padding-top: 12px; } QGroupBox::title { left: 8px; }"
         )
         css_form = QFormLayout(css_group)
@@ -314,7 +317,7 @@ class StyleInspector(QWidget):
         font_group = QGroupBox(tr('style_inspector.live_typography_applies_instantly'))
         font_heading_color = AppStyle.COLORS.get("success", "#0E8A16")
         font_group.setStyleSheet(
-            f"QGroupBox {{ font-weight: 600; color: {font_heading_color}; margin-top: 8px; "
+            f"QGroupBox {{ font-weight: bold; color: {font_heading_color}; margin-top: 8px; "
             "padding-top: 12px; } QGroupBox::title { left: 8px; }"
         )
         font_form = QFormLayout(font_group)
@@ -347,7 +350,7 @@ class StyleInspector(QWidget):
         layout_group = QGroupBox(tr('style_inspector.construction_time_ctrl_r_to_apply'))
         layout_heading_color = AppStyle.COLORS.get("text_secondary", "#6C757D")
         layout_group.setStyleSheet(
-            f"QGroupBox {{ font-weight: 600; color: {layout_heading_color}; margin-top: 8px; "
+            f"QGroupBox {{ font-weight: bold; color: {layout_heading_color}; margin-top: 8px; "
             "padding-top: 12px; } QGroupBox::title { left: 8px; }"
         )
         layout_form = QFormLayout(layout_group)

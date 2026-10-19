@@ -120,50 +120,40 @@ class AppStyle:
     
     # Typography
     FONTS = {
-        'family': "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-        'scale_pct': 125,
-        'h1': '18px',
-        'h2': '15px',
-        'h3': '13px',
-        'body': '11px',
-        'caption': '10px',
-        'small': '9px'
+        'family': 'Source Sans 3',
+        'scale_pct': 100,
+        'h1': '30px',
+        'h2': '24px',
+        'h3': '20px',
+        'body': '18px',
+        'caption': '16px',
+        'small': '14px'
     }
-    LOCALE_FONT_FAMILIES = {
-        'zh-CN': {
-            'win32': ('Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans CJK SC'),
-            'darwin': ('PingFang SC', 'Heiti SC', 'Noto Sans CJK SC'),
-            'default': (
-                'Noto Sans CJK SC',
-                'Source Han Sans SC',
-                'WenQuanYi Micro Hei',
-                'Microsoft YaHei',
-                'PingFang SC',
-                'Heiti SC',
-            ),
-        },
-    }
-    _locale_font_family = None
-    _base_matplotlib_fonts = None
+    BUNDLED_FONT_FILES = (
+        'source-sans-3/SourceSans3-Regular.ttf',
+        'source-sans-3/SourceSans3-Bold.ttf',
+        'noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf',
+        'noto-sans-cjk-sc/NotoSansCJKsc-Bold.otf',
+    )
 
     FONT_ROLE_PROPERTY = "sciview_font_role"
     THEME_KEY_PROPERTY = "sciview_theme_key"
     STYLE_KEY_PROPERTY = "sciview_style_key"
 
     FONT_ROLE_MAP = {
-        'title': ('h1', 600),
-        'subtitle': ('h2', 500),
-        'section': ('h3', 500),
-        'body': ('body', 400),
-        'info': ('body', 400),
-        'status': ('caption', 400),
-        'button': ('body', 500),
-        'button_emphasis': ('body', 600),  # distinct role so refresh restores the heavier weight
-        'protocol_selector': ('h3', 600),
-        'toolbar_symbol': ('h3', 600),
-        'toolbar_text': ('small', 400),
-        'input': ('body', 400),
-        'group_box': ('h3', 500),
+        'title': ('h1', QFont.Bold),
+        'subtitle': ('h2', QFont.Bold),
+        'section': ('h3', QFont.Bold),
+        'body': ('body', QFont.Normal),
+        'info': ('body', QFont.Normal),
+        'status': ('caption', QFont.Normal),
+        'button': ('body', QFont.Normal),
+        'button_emphasis': ('body', QFont.Bold),
+        'protocol_selector': ('h3', QFont.Bold),
+        'toolbar_symbol': ('h3', QFont.Bold),
+        'toolbar_text': ('small', QFont.Normal),
+        'input': ('body', QFont.Normal),
+        'group_box': ('h3', QFont.Bold),
     }
     
     # ---------------------------------------------------------------------------
@@ -192,7 +182,6 @@ class AppStyle:
         'input_height': 22,
         'tab_padding_h': 10,    # horizontal padding inside tab bar tabs
         # Toolbar button internals — hot-editable in style inspector
-        'toolbar_font_weight': 400,
         'toolbar_padding_horizontal': 8,
     }
 
@@ -251,7 +240,7 @@ class AppStyle:
     WIDGET_STYLES = {
         # ── Text atoms ────────────────────────────────────────────────────────
         'title_label': """
-            font-weight: 600;
+            font-weight: bold;
             font-size: {title_font};
             color: {text_primary};
             padding: {label_padding_v}px {label_padding_h}px;
@@ -260,7 +249,7 @@ class AppStyle:
         """,
         
         'subtitle_label': """
-            font-weight: 500;
+            font-weight: bold;
             font-size: {subtitle_font};
             color: {text_primary};
             padding: {label_padding_v}px {label_padding_h}px;
@@ -301,7 +290,7 @@ class AppStyle:
             QPushButton {{
                 background-color: {primary};
                 color: {checked_fg};
-                font-weight: 500;
+                font-weight: normal;
                 font-size: {body_font};
                 border: none;
                 padding: {btn_padding_v}px {btn_padding_h}px;
@@ -344,7 +333,7 @@ class AppStyle:
                 background-color: {surface};
                 color: {text_primary};
                 font-size: {subtitle_font};
-                font-weight: 500;
+                font-weight: bold;
                 border: 2px solid {border};
                 border-radius: 4px;
                 padding: 7px 12px;
@@ -363,7 +352,7 @@ class AppStyle:
                 background-color: {border_active};
                 color: {checked_fg};
                 border: 2px solid {border_active};
-                font-weight: 600;
+                font-weight: bold;
             }}
         """,
 
@@ -420,7 +409,7 @@ class AppStyle:
 
         'group_box': """
             QGroupBox {{
-                font-weight: 500;
+                font-weight: bold;
                 font-size: {subtitle_font};
                 color: {text_primary};
                 border: 1px solid {border};
@@ -483,7 +472,7 @@ class AppStyle:
                 background-color: {surface};
                 color: {text_primary};
                 font-size: {toolbar_symbol_font_size};
-                font-weight: {toolbar_font_weight};
+                font-weight: bold;
                 padding: 0;
                 border: 1px solid {border};
                 border-radius: {border_radius}px;
@@ -512,7 +501,7 @@ class AppStyle:
                 background-color: {surface};
                 color: {text_primary};
                 font-size: {toolbar_text_font_size};
-                font-weight: {toolbar_font_weight};
+                font-weight: normal;
                 padding: 0 {toolbar_padding_horizontal}px;
                 border: 1px solid {border};
                 border-radius: {border_radius}px;
@@ -600,7 +589,10 @@ class AppStyle:
         if previous_rules and base.endswith(previous_rules):
             base = base[:-len(previous_rules)].rstrip()
         base_styles = [
-            f"QWidget {{ font-size: {cls.font_px('body')}px; }}",
+            "QWidget {"
+            f'font-family: "{cls.effective_font_family(app)}", "Noto Sans CJK SC";'
+            f"font-size: {cls.font_px('body')}px;"
+            "}",
             cls.tab_widget_stylesheet(),
             *(cls.format_style(style_key) for style_key in cls.GLOBAL_STYLE_KEYS),
         ]
@@ -658,6 +650,10 @@ class AppStyle:
         """Return stylesheet for top-level tab sizing and typography."""
         colors = cls.theme_colors()
         return (
+            "QTabBar {"
+            f"font-size: {cls.font_px('h2')}px;"
+            "font-weight: normal;"
+            "}"
             "QTabWidget::pane {"
             f"border: 1px solid {colors['border'].name()};"
             "border-top: none;"
@@ -678,7 +674,7 @@ class AppStyle:
             f"background: {colors['accent'].name()};"
             f"color: {colors['checked_fg'].name()};"
             f"border-color: {colors['accent'].name()};"
-            "font-weight: 600;"
+            "font-weight: bold;"
             "border-bottom: none;"
             "}"
             "QTabBar::tab:hover:!selected {"
@@ -772,7 +768,7 @@ class AppStyle:
     @classmethod
     def tab_font(cls):
         """Return the native tab-bar font, aligned with H2 section headings."""
-        return cls.make_font('h2', weight=500)
+        return cls.make_font('h2')
 
     @classmethod
     def tab_min_height(cls):
@@ -1207,104 +1203,47 @@ class AppStyle:
         return scale_pct / 100.0
 
     @classmethod
-    def make_font(cls, token_name, weight=400):
-        """Build a QFont from the configured token and optional weight."""
+    def make_font(cls, token_name, weight=QFont.Normal):
+        """Build a QFont from a size token and native regular/bold weight."""
         font = QFont()
         family = cls.effective_font_family()
-        if family:
-            font.setFamily(family.split(',')[0].strip().strip("'\""))
+        font.setFamilies([family, 'Noto Sans CJK SC'])
+        font.setStyleHint(QFont.SansSerif)
         font.setPixelSize(cls.font_px(token_name))
-        font.setWeight({
-            400: QFont.Normal, 500: QFont.Medium,
-            600: QFont.DemiBold, 700: QFont.Bold,
-        }.get(weight, min(99, max(0, weight))))
+        font.setWeight(weight)
         return font
 
     @classmethod
     def effective_font_family(cls, app=None):
-        """Return the active font family with theme-specific overrides."""
-        if cls._locale_font_family:
-            return cls._locale_font_family
-        theme_key = str(cls.current_theme_key(app) or '')
-        if theme_key.startswith('qt-material:'):
-            return 'Consolas'
-        return str(cls.FONTS.get('family', '')).strip()
+        """Return the configured UI family, independent of theme and locale."""
+        return str(cls.FONTS.get('family', 'Source Sans 3')).split(',')[0].strip().strip("'\"") or 'Source Sans 3'
 
     @classmethod
-    def apply_locale_font(cls, locale, app=None):
-        """Apply the first installed locale-specific sans-serif font, if configured."""
-        cls._locale_font_family = None
-        families_by_platform = cls.LOCALE_FONT_FAMILIES.get(locale)
+    def apply_bundled_fonts(cls, app: QApplication | None = None) -> None:
+        """Register package fonts with Qt and Matplotlib before creating views."""
         app = app or QApplication.instance()
-        if not families_by_platform:
-            if cls._base_matplotlib_fonts is not None:
-                from matplotlib import rcParams
-
-                rcParams['font.family'] = cls._base_matplotlib_fonts[0]
-                rcParams['font.sans-serif'] = cls._base_matplotlib_fonts[1]
-            if app is not None:
-                app.setFont(cls.make_font('body'))
-            return None
         if app is None:
-            return None
-
-        from sys import platform
-
-        candidates = families_by_platform.get(platform, families_by_platform['default'])
-        installed = {
-            family.casefold(): family for family in QFontDatabase().families()
-        }
+            raise RuntimeError("A QApplication is required to register bundled fonts.")
         from matplotlib import font_manager, rcParams
 
-        matplotlib_installed = {
-            font.name.casefold(): font.name for font in font_manager.fontManager.ttflist
-        }
-        family = next(
-            (
-                installed[candidate.casefold()]
-                for candidate in candidates
-                if candidate.casefold() in installed
-            ),
-            None,
-        )
-        if family is None:
-            family = next(
-                (
-                    matplotlib_installed[candidate.casefold()]
-                    for candidate in candidates
-                    if candidate.casefold() in matplotlib_installed
-                ),
-                candidates[0],
-            )
-
-        if cls._base_matplotlib_fonts is None:
-            cls._base_matplotlib_fonts = (
-                list(rcParams['font.family']),
-                list(rcParams['font.sans-serif']),
-            )
-        matplotlib_families = {
-            font.name.casefold(): font.name
-            for font in font_manager.fontManager.ttflist
-        }
-        fallback_families = [
-            matplotlib_families[fallback.casefold()]
-            for fallback in cls._base_matplotlib_fonts[1]
-            if fallback.casefold() in matplotlib_families
-            and fallback.casefold() != family.casefold()
-        ]
-        dejavu = matplotlib_families.get('dejavu sans')
-        if dejavu and all(name.casefold() != dejavu.casefold() for name in fallback_families):
-            fallback_families.append(dejavu)
-        rcParams['font.family'] = [
-            family,
-            *fallback_families,
-        ]
-
-        cls._locale_font_family = family
-        font = QFont(family)
-        font.setStyleHint(QFont.SansSerif)
-        app.setFont(font)
-        return family
+        font_root = Path(__file__).resolve().parents[1] / 'fonts'
+        registered_qt = set(app.property('sciview_registered_fonts') or [])
+        registered_mpl = {Path(font.fname).resolve() for font in font_manager.fontManager.ttflist}
+        for relative_path in cls.BUNDLED_FONT_FILES:
+            path = font_root / relative_path
+            if not path.is_file():
+                raise FileNotFoundError(f"Bundled font is missing: {path}")
+            if str(path) not in registered_qt:
+                font_id = QFontDatabase.addApplicationFont(str(path))
+                if font_id < 0:
+                    raise RuntimeError(f"Qt could not register bundled font: {path}")
+                registered_qt.add(str(path))
+                app.setProperty('sciview_registered_fonts', sorted(registered_qt))
+            if path.resolve() not in registered_mpl:
+                font_manager.fontManager.addfont(str(path))
+        rcParams['font.family'] = ['Source Sans 3', 'Noto Sans CJK SC']
+        rcParams['font.sans-serif'] = ['Source Sans 3', 'Noto Sans CJK SC']
+        app.setFont(cls.make_font('body'))
 
     @classmethod
     def matplotlib_font_size(cls, token_name, fallback=None):
@@ -1458,7 +1397,7 @@ class AppStyle:
         if not role_name:
             return
 
-        token_name, weight = cls.FONT_ROLE_MAP.get(role_name, ('body', 400))
+        token_name, weight = cls.FONT_ROLE_MAP.get(role_name, ('body', QFont.Normal))
         widget.setFont(cls.make_font(token_name, weight=weight))
 
     @classmethod
@@ -1543,7 +1482,7 @@ def apply_toolbar_symbol_button_style(widget):
     widget.setFixedSize(AppStyle.toolbar_symbol_button_size())
     AppStyle.apply_widget_style(widget, 'compact_button')
     widget.setMinimumSize(AppStyle.toolbar_symbol_button_size())
-    widget.setFont(AppStyle.make_font('h3', weight=600))
+    widget.setFont(AppStyle.make_font('h3', weight=QFont.Bold))
     widget.setProperty(AppStyle.FONT_ROLE_PROPERTY, 'toolbar_symbol')
 
 def apply_toolbar_text_button_style(widget):

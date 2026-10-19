@@ -30,7 +30,6 @@ from sciview.interfaces.theme.app_style import (
     apply_info_style,
     apply_status_led_style,
     apply_subtitle_style,
-    apply_title_style,
     setup_splitter_layout,
 )
 from sciview.interfaces.text import tr
@@ -203,7 +202,7 @@ class CalibrationApp(BaseImageTab):
         
         # Title
         title = QLabel(tr("calibration.parameters.title"))
-        apply_title_style(title)
+        apply_subtitle_style(title)
         layout.addWidget(title)
         
         # Parameter spinboxes using config defaults
@@ -271,7 +270,7 @@ class CalibrationApp(BaseImageTab):
         
         # Title
         title = QLabel(tr("calibration.ring.title"))
-        apply_title_style(title)
+        apply_subtitle_style(title)
         layout.addWidget(title)
         
         # Instructions
@@ -360,7 +359,7 @@ class CalibrationApp(BaseImageTab):
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_inner_margin']] * 4))
 
         title = QLabel(tr("calibration.standard.title"))
-        apply_title_style(title)
+        apply_subtitle_style(title)
         layout.addWidget(title)
 
         # Dropdown menu
