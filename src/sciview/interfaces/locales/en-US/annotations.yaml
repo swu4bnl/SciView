@@ -1,0 +1,94 @@
+annotations.toolbar:
+  text: Mark
+  context: Caption for the image-viewer annotation toolbar toggle.
+annotations.tools:
+  text: Annotation tools
+  context: Accessible name of the horizontal contextual drawing toolbar.
+annotations.active_tool:
+  text: "Mark: {tool}"
+  context: Accessible name identifying the current annotation tool.
+  placeholders:
+    tool: Localized drawing tool name.
+annotations.toolbar_help:
+  text: "Click to expand or collapse drawing tools. Current tool: {tool}. {gesture}\nEscape or Pan exits. Display only; shared across browsed images, not saved."
+  context: Annotation toolbar toggle usage, scope, and lifetime.
+  placeholders:
+    tool: Localized drawing tool name.
+    gesture: Instructions for using the current annotation tool.
+annotations.gesture.drag:
+  text: Drag on the image to draw.
+  context: Usage hint for freehand strokes, lines, and rectangles.
+annotations.gesture.circle:
+  text: Drag from the center to set the radius.
+  context: Usage hint for circular annotation outlines.
+annotations.gesture.polygon:
+  text: Click vertices; double-click to finish.
+  context: Usage hint for finishing a polygon annotation.
+annotations.gesture.text:
+  text: Click the image, type, and press Enter.
+  context: Usage hint for inline text annotations.
+annotations.tool_help:
+  text: "{tool}: {gesture}"
+  context: Tooltip for an annotation tool in the horizontal toolbar.
+  placeholders:
+    tool: Localized drawing tool name.
+    gesture: Instructions for using the current annotation tool.
+annotations.width_short:
+  text: Width
+  context: Compact stroke-width caption in the annotation toolbar.
+annotations.opacity_short:
+  text: Opacity
+  context: Compact layer-opacity caption in the annotation toolbar.
+annotations.show:
+  text: Show marks
+  context: Show or hide the annotation layer without deleting it.
+annotations.tool.brush:
+  text: Brush
+  context: Freehand annotation stroke.
+annotations.tool.line:
+  text: Line
+  context: Straight line annotation.
+annotations.tool.rectangle:
+  text: Rectangle
+  context: Rectangular outline annotation.
+annotations.tool.circle:
+  text: Circle
+  context: Circular outline drawn from its center to its radius.
+annotations.tool.polygon:
+  text: Polygon
+  context: Closed outline annotation with clicked vertices.
+annotations.tool.text:
+  text: Text
+  context: Place a text label at the clicked image position.
+annotations.text:
+  text: Label
+  context: Text to place using the annotation text tool.
+annotations.text_hint:
+  text: "Type a label, Enter to place"
+  context: Placeholder for text entry at the clicked image position.
+annotations.width:
+  text: Stroke width
+  context: Width of new annotation strokes.
+annotations.opacity:
+  text: Layer opacity
+  context: Opacity of the entire display-only annotation layer.
+annotations.color:
+  text: Choose color
+  context: Open the color picker for new annotations.
+annotations.selected_color:
+  text: "Color: {color}"
+  context: Tooltip displaying the selected color for new annotations.
+  placeholders:
+    color: Hexadecimal annotation color.
+annotations.undo:
+  text: Undo
+  context: Undo an annotation edit without changing image or mask data.
+annotations.redo:
+  text: Redo
+  context: Redo an annotation edit.
+annotations.clear:
+  text: Clear marks
+  context: Clear the annotation layer as an undoable action.
+annotations.edit:
+  text: Annotation edit
+  context: Undo history entry for adding or clearing annotations.

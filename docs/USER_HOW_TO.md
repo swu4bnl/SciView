@@ -44,6 +44,35 @@ The buttons beside the tabs switch the theme, refresh the current tab, and clear
 
 The selected image is shared with the analysis tabs when you switch tabs.
 
+### Image Annotations (Experimental)
+
+Use **Mark** beside Pan/Zoom in the Image Browser viewer toolbar:
+
+- Click **Mark** to expand a horizontal drawing toolbar directly above the
+  main viewer toolbar and draw with the last-used tool (initially Brush).
+  Choose Brush, Line, Rectangle, Circle, Polygon, or Text directly in this strip.
+  It stays open while drawing so switching tools takes one click.
+- Drag to draw strokes and shapes. Circles start at their center.
+  For polygons, click vertices and double-click to finish.
+  For text, click the image, type the label in place, and press Enter.
+  Escape or clicking elsewhere discards unfinished text.
+- Choose Pan or Zoom, press Escape, right-click, or click **Mark**
+  again to leave drawing and collapse the strip. Existing marks stay visible.
+- The strip groups drawing tools, a color swatch, **Width**, **Opacity**,
+  and compact **Undo**, **Redo**, **Show marks**, and **Clear marks** controls.
+  Hover over an icon for its purpose or keyboard shortcut. On narrow windows,
+  scroll the strip horizontally to reach the remaining controls.
+  Ctrl+Z and Ctrl+Y undo/redo annotations while the viewer has focus.
+  Clearing is undoable. **Show marks** temporarily hides the layer without closing
+  the strip; turn it back on or select a drawing tool to reveal the marks.
+
+One shared layer stays in the same detector pixel coordinates while browsing images,
+including during playback. Marks outside a smaller image are hidden, not deleted.
+Starting to draw pauses playback. The layer is local to Image Browser and lasts
+until the tab is rebuilt or the application closes; annotations are not saved in
+session files. Viewer copy/save includes visible marks, but raw image exports,
+masks, calibration, reductions, transforms, and batch processing do not use them.
+
 ### Tiled Data (In development)
 
 1. Open **Tiled Browser** and choose a catalog.

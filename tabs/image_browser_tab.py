@@ -33,6 +33,7 @@ from sciview.interfaces.theme.app_style import (
     setup_splitter_layout,
 )
 from sciview.interfaces.text import tr
+from sciview.interfaces.stable_qt.widgets.image_annotations import ImageAnnotations
 from sciview.settings.app_settings import SUPPORTED_FORMATS, IMAGE_BROWSER_SETTINGS
 
 # Import centralized tiled client manager
@@ -798,6 +799,11 @@ class ImageBrowserApp(BaseImageTab):
 
         # Use base image panel without the redundant 'Raw Image' title and filename label.
         base_image_panel = self._create_image_panel(show_header=False)
+        self.annotations = ImageAnnotations(self.image_viewer)
+        self.post_display_hooks.append(lambda _viewer: self.annotations.refresh_image())
+        self.annotations.drawing_changed.connect(
+            lambda enabled: self._stop_folder_playback() if enabled else None
+        )
         layout.addWidget(base_image_panel, 1)
 
         return panel
@@ -888,6 +894,7 @@ class ImageBrowserApp(BaseImageTab):
         
         if current_image is None:
             self.image_viewer.clear_image(tr("image_browser.image.empty.viewer"))
+            self.annotations.refresh_image()
             self.filename_label.setText(tr("image_browser.image.empty"))
             return
         
@@ -898,6 +905,7 @@ class ImageBrowserApp(BaseImageTab):
                 filename=current_image["filename"],
             )
             self.image_viewer.clear_image(loading_message)
+            self.annotations.refresh_image()
             self.filename_label.setText(loading_message)
             return
         

@@ -1,0 +1,94 @@
+annotations.toolbar:
+  text: 标注
+  context: Caption for the image-viewer annotation toolbar toggle.
+annotations.tools:
+  text: 标注工具
+  context: Accessible name of the horizontal contextual drawing toolbar.
+annotations.active_tool:
+  text: "标注：{tool}"
+  context: Accessible name identifying the current annotation tool.
+  placeholders:
+    tool: Localized drawing tool name.
+annotations.toolbar_help:
+  text: "单击展开或收起绘图工具。当前工具：{tool}。{gesture}\n按 Escape 或选择平移退出。仅供显示，浏览图像时共享，不会保存。"
+  context: Annotation toolbar toggle usage, scope, and lifetime.
+  placeholders:
+    tool: Localized drawing tool name.
+    gesture: Instructions for using the current annotation tool.
+annotations.gesture.drag:
+  text: 在图像上拖动绘制。
+  context: Usage hint for freehand strokes, lines, and rectangles.
+annotations.gesture.circle:
+  text: 从圆心拖动以设置半径。
+  context: Usage hint for circular annotation outlines.
+annotations.gesture.polygon:
+  text: 单击添加顶点，双击完成。
+  context: Usage hint for finishing a polygon annotation.
+annotations.gesture.text:
+  text: 单击图像，输入文字并按 Enter。
+  context: Usage hint for inline text annotations.
+annotations.tool_help:
+  text: "{tool}：{gesture}"
+  context: Tooltip for an annotation tool in the horizontal toolbar.
+  placeholders:
+    tool: Localized drawing tool name.
+    gesture: Instructions for using the current annotation tool.
+annotations.width_short:
+  text: 线宽
+  context: Compact stroke-width caption in the annotation toolbar.
+annotations.opacity_short:
+  text: 不透明度
+  context: Compact layer-opacity caption in the annotation toolbar.
+annotations.show:
+  text: 显示标注
+  context: Show or hide the annotation layer without deleting it.
+annotations.tool.brush:
+  text: 画笔
+  context: Freehand annotation stroke.
+annotations.tool.line:
+  text: 直线
+  context: Straight line annotation.
+annotations.tool.rectangle:
+  text: 矩形
+  context: Rectangular outline annotation.
+annotations.tool.circle:
+  text: 圆形
+  context: Circular outline drawn from its center to its radius.
+annotations.tool.polygon:
+  text: 多边形
+  context: Closed outline annotation with clicked vertices.
+annotations.tool.text:
+  text: 文字
+  context: Place a text label at the clicked image position.
+annotations.text:
+  text: 标签
+  context: Text to place using the annotation text tool.
+annotations.text_hint:
+  text: "输入标签，按 Enter 放置"
+  context: Placeholder for text entry at the clicked image position.
+annotations.width:
+  text: 线宽
+  context: Width of new annotation strokes.
+annotations.opacity:
+  text: 标注层不透明度
+  context: Opacity of the entire display-only annotation layer.
+annotations.color:
+  text: 选择颜色
+  context: Open the color picker for new annotations.
+annotations.selected_color:
+  text: "颜色：{color}"
+  context: Tooltip displaying the selected color for new annotations.
+  placeholders:
+    color: Hexadecimal annotation color.
+annotations.undo:
+  text: 撤销
+  context: Undo an annotation edit without changing image or mask data.
+annotations.redo:
+  text: 重做
+  context: Redo an annotation edit.
+annotations.clear:
+  text: 清除标注
+  context: Clear the annotation layer as an undoable action.
+annotations.edit:
+  text: 标注编辑
+  context: Undo history entry for adding or clearing annotations.
