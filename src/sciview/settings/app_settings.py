@@ -7,6 +7,7 @@ import sys
 import importlib
 from pathlib import Path
 
+from .plot_style import AppearanceSettings, ImageDisplaySettings
 from .scianalysis_source import (
     SciAnalysisSourceConfig,
     prepare_scianalysis_source,
@@ -120,14 +121,7 @@ IMAGE_BROWSER_SETTINGS = {
     "tiled_live_auto_load_max_attempts": 5,
 }
 
-DEFAULT_DISPLAY_SETTINGS = {
-    "vmin": -2,
-    "vmax": 1000,
-    "cmap": "gray",
-    "scale": "linear",
-    "show_beam_center": True,
-    "show_mask": True,
-}
+DEFAULT_DISPLAY_SETTINGS = ImageDisplaySettings.snapshot(AppearanceSettings())
 
 # Spin-box configuration for tabs that share similar controls.
 # Each entry: (min, max, default, step, decimals)

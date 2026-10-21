@@ -30,6 +30,19 @@ Side panels allow scrolling when their contents exceed the available space.
 At 100%, rendered sizes are H1 30 px, H2/tabs 24 px, H3 20 px, body 18 px,
 caption 16 px, and small text 14 px.
 
+## Shared Image Colors
+
+The Image Browser and Transform plot controls share the color map and linear/log
+intensity scale through the main application's `AppearanceSettings` model.
+It owns image-display and plot-appearance values together. Changes in either
+place update the other controls. The existing image-control/session dictionary
+interface is a mapping view of that model, not a second settings store.
+The application's read-only `plot_style` property derives a `PlotStyle` snapshot
+at the preview/export boundary. Loading a saved plot style updates the model.
+Batch jobs retain their own snapshots, independent of later interface changes.
+Transform intensity limits and automatic range remain independent of the
+raw-image limits.
+
 ## Layer Map
 
 The UI stack is intentionally layered. Think of each layer as owning a different class of decision.
