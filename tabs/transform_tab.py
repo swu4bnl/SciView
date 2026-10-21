@@ -439,7 +439,12 @@ class TransformTab(BaseImageTab):
         except ValueError as exc:
             self.parent_app.show_status(tr("transform.status.invalid_plot_style", error=exc))
             return
+        self.update_display_settings(
+            cmap=style.colormap,
+            scale=self.plot_scale_combo.currentText(),
+        )
         self.parent_app.publish_shared_plot_style(style, source_tab=self)
+        self.sync_display_controls()
         self._update_transform_plot(self._current_result)
         self._refresh_payload_view()
 
@@ -451,6 +456,7 @@ class TransformTab(BaseImageTab):
             self.plot_label_size_spin.setValue(style.label_size)
             self.plot_tick_size_spin.setValue(style.tick_size)
             self.plot_cmap_combo.setCurrentText(style.colormap)
+            self.plot_scale_combo.setCurrentText(self.display_settings["scale"])
             self.plot_dpi_spin.setValue(style.dpi)
         finally:
             self._updating_plot_style_controls = False

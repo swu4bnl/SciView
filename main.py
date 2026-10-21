@@ -12,6 +12,7 @@ import shutil
 import tempfile
 import tomllib
 import logging
+from dataclasses import replace
 from pathlib import Path
 import numpy as np
 
@@ -56,13 +57,12 @@ from sciview.interfaces.text import tr
 from sciview.interfaces.theme.app_style import AppStyle, apply_info_style
 from sciview.profiles.cms_profile import BEAMLINE_NAME, DEFAULT_CALIBRATION, get_calibration_class
 from sciview.settings.app_settings import (
-    DEFAULT_DISPLAY_SETTINGS,
     GUI_SETTINGS,
     SCIANALYSIS_AVAILABLE,
     SCIANALYSIS_SOURCE_MODE,
     SCIANALYSIS_SOURCE_ROOT,
 )
-from sciview.settings.plot_style import DEFAULT_PLOT_STYLE, PlotStyle
+from sciview.settings.plot_style import AppearanceSettings, ImageDisplaySettings, PlotStyle
 
 from sciview.interfaces.stable_qt.utils.resource_monitor import get_resource_monitor
 from sciview.session.session_cache import choose_path
@@ -94,8 +94,8 @@ class SciAnaApp(QMainWindow):
         self.calibration = None
         self.mask = None
         self.shared_info_text = None
-        self.display_settings = DEFAULT_DISPLAY_SETTINGS.copy()
-        self.plot_style = DEFAULT_PLOT_STYLE
+        self.appearance_settings = AppearanceSettings()
+        self.display_settings = ImageDisplaySettings(self)
         self._shared_image_revision = 0
         self._batch_recipe_bus: dict = {}
         self.shared_file_list: list[str] = []
@@ -531,6 +531,11 @@ class SciAnaApp(QMainWindow):
         if propagate:
             self.sync_tabs_from_shared(source_tab=source_tab)
 
+    @property
+    def plot_style(self) -> PlotStyle:
+        """Build a plot/export snapshot using the canonical display color map."""
+        return self.appearance_settings.plot_snapshot()
+
     def publish_shared_display_settings(self, settings, source_tab=None):
         """Publish image display settings so image tabs share rendering and overlay state."""
         self.display_settings.update(settings)
@@ -540,16 +545,17 @@ class SciAnaApp(QMainWindow):
                 current_tab.apply_shared_display_settings(self.display_settings)
             except Exception as e:
                 print(f"DEBUG: Error applying display settings to current tab: {e}")
+        if "cmap" in settings or "scale" in settings:
+            for i in range(self.tab_widget.count()):
+                tab = self.tab_widget.widget(i)
+                if hasattr(tab, "on_plot_style_changed"):
+                    tab.on_plot_style_changed()
 
     def publish_shared_plot_style(self, style, source_tab=None):
         """Publish one plot style to previews and future batch recipes."""
-        self.plot_style = style if isinstance(style, PlotStyle) else PlotStyle.from_dict(style)
-        for i in range(self.tab_widget.count()):
-            tab = self.tab_widget.widget(i)
-            if tab == source_tab:
-                continue
-            if hasattr(tab, "on_plot_style_changed"):
-                tab.on_plot_style_changed()
+        style = style if isinstance(style, PlotStyle) else PlotStyle.from_dict(style)
+        self.appearance_settings = replace(self.appearance_settings, **style.to_dict())
+        self.publish_shared_display_settings({"cmap": style.colormap}, source_tab=source_tab)
 
     def publish_shared_info_text(self, info_text, source_tab=None):
         """Publish image information text to dedicated info consumers."""

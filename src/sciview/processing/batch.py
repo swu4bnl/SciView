@@ -605,7 +605,15 @@ def _build_qr_qz_image(p: dict) -> Any:
 
 @_reg("thumbnails")
 def _build_thumbnails(p: dict) -> Any:
+    from matplotlib import colormaps
     from SciAnalysis.XSAnalysis import Protocols
+
+    from sciview.settings.viewer_config import resolve_matplotlib_colormap
+
+    if isinstance(p.get("cmap"), str):
+        # SciAnalysis's PIL exporter calls the colormap directly.
+        cmap = resolve_matplotlib_colormap(p["cmap"])
+        p = {**p, "cmap": colormaps[cmap] if isinstance(cmap, str) else cmap}
     return Protocols.thumbnails(**p)
 
 
@@ -1198,4 +1206,3 @@ class BatchRunner(QThread):
             self._process = None
             self._stop_event = None
         self.finished_batch.emit(ok, err)
-

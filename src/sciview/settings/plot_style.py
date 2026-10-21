@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from collections.abc import Iterator, MutableMapping
+from dataclasses import asdict, dataclass, fields, replace
 from typing import Any
 
 
@@ -85,6 +86,65 @@ class PlotStyle:
 
 
 DEFAULT_PLOT_STYLE = PlotStyle()
+
+
+@dataclass(frozen=True, slots=True)
+class AppearanceSettings(PlotStyle):
+    """Canonical live image and plot settings; exports use PlotStyle snapshots."""
+
+    colormap: str = "gray"
+    scale: str = "linear"
+    vmin: float | None = -2
+    vmax: float | None = 1000
+    show_beam_center: bool = True
+    show_mask: bool = True
+
+    def plot_snapshot(self) -> PlotStyle:
+        return PlotStyle(**{
+            item.name: getattr(self, item.name) for item in fields(PlotStyle)
+        })
+
+
+class ImageDisplaySettings(MutableMapping[str, Any]):
+    """Legacy image-control/session mapping backed by the shared settings owner."""
+
+    _fields = {
+        "cmap": "colormap",
+        "scale": "scale",
+        "vmin": "vmin",
+        "vmax": "vmax",
+        "show_beam_center": "show_beam_center",
+        "show_mask": "show_mask",
+    }
+
+    def __init__(self, owner: Any) -> None:
+        self._owner = owner
+
+    @classmethod
+    def snapshot(cls, settings: AppearanceSettings) -> dict[str, Any]:
+        return {key: getattr(settings, field) for key, field in cls._fields.items()}
+
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self._owner.appearance_settings, self._fields[key])
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self.update({key: value})
+
+    def __delitem__(self, key: str) -> None:
+        raise TypeError("Shared display settings cannot be deleted")
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._fields)
+
+    def __len__(self) -> int:
+        return len(self._fields)
+
+    def update(self, *args: Any, **kwargs: Any) -> None:
+        values = dict(*args, **kwargs)
+        self._owner.appearance_settings = replace(
+            self._owner.appearance_settings,
+            **{self._fields[key]: value for key, value in values.items()},
+        )
 
 
 def resolve_plot_style(owner: Any) -> PlotStyle:
