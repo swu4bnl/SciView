@@ -22,16 +22,17 @@ annotations.gesture.circle:
   text: 从圆心拖动以设置半径。
   context: Usage hint for circular annotation outlines.
 annotations.gesture.polygon:
-  text: 单击添加顶点，双击完成。
+  text: 单击添加顶点，按 Enter 或双击完成。
   context: Usage hint for finishing a polygon annotation.
 annotations.gesture.text:
   text: 单击图像，输入文字并按 Enter。
   context: Usage hint for inline text annotations.
 annotations.tool_help:
-  text: "{tool}：{gesture}"
+  text: "{tool}（{shortcut}）：{gesture}"
   context: Tooltip for an annotation tool in the horizontal toolbar.
   placeholders:
     tool: Localized drawing tool name.
+    shortcut: Native keyboard shortcut for this drawing tool.
     gesture: Instructions for using the current annotation tool.
 annotations.width_short:
   text: 线宽

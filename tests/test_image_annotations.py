@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest
-from PyQt5.QtCore import QPoint, Qt
+from PyQt5.QtCore import QEvent, QPoint, Qt
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QHBoxLayout, QToolButton, QWidget
 
@@ -37,7 +37,10 @@ def canvas(qapp):
     qapp.processEvents()
     marks.button.click()
     yield viewer, marks
+    marks.undo_stack.clear()
     host.close()
+    host.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 def pointer(x, y, button=Qt.LeftButton, *, inside=True):
@@ -286,4 +289,7 @@ def test_browser_shares_marks_but_publishes_only_original_data(qapp, monkeypatch
     finally:
         browser.folder_refresh_timer.stop()
         browser.folder_play_timer.stop()
+        marks.undo_stack.clear()
         browser.close()
+        browser.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)

@@ -36,6 +36,7 @@ from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
     RectangleDrawingTool,
     WatershedFillTool,
 )
+from sciview.interfaces.stable_qt.tools.drawing_interaction import DrawingCommands, tool_key_label
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
@@ -43,10 +44,10 @@ from PyQt5.QtWidgets import (
     QGroupBox, QSlider, QDoubleSpinBox, QGridLayout,
     QScrollArea, QSplitter, QButtonGroup, QFrame, QMenu, QToolButton,
     QSizePolicy, QProgressBar, QUndoCommand, QUndoStack, QApplication,
-    QShortcut, QInputDialog, QColorDialog, QMessageBox
+    QInputDialog, QColorDialog, QMessageBox
 )
 from PyQt5.QtCore import QEvent, Qt
-from PyQt5.QtGui import QIcon, QCursor, QColor, QKeySequence
+from PyQt5.QtGui import QIcon, QCursor, QColor
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
@@ -185,6 +186,7 @@ class MaskApp(BaseImageTab):
             self._update_layer_list,
         )
         self.undo_stack.push(command)
+        self._update_combined_mask()
     
     def __init__(self, parent_app):
         super().__init__(parent_app)
@@ -192,7 +194,6 @@ class MaskApp(BaseImageTab):
         # Layer-based mask system
         self.mask_layers: List[MaskLayer] = []
         self.combined_mask: Optional[np.ndarray] = None
-        self._preview_mask: Optional[np.ndarray] = None  # For temporary preview display
         self.overlay_color = VIEWER_COLORS.default_mask
         self.overlay_opacity = 50
         self.undo_stack = QUndoStack(self)
@@ -231,16 +232,17 @@ class MaskApp(BaseImageTab):
             is_enabled=lambda: self.drawing_mode,
             get_tool=lambda: self.drawing_tool,
             get_active_layer=self._get_active_layer,
-            get_active_layer_index=self._get_active_layer_index,
             get_layers=lambda: self.mask_layers,
-            set_combined_mask=self._set_combined_mask_preview,
-            update_combined_mask=self._update_combined_mask,
-            update_plot=self._refresh_mask_overlay,
+            get_viewer=lambda: self.image_viewer,
+            get_image_data=lambda: self.image_data,
             set_drawing_enabled=self._set_drawing_enabled_from_session,
             should_auto_disable=lambda: self.auto_disable_drawing_mode,
             get_brush_size=lambda: self.brush_size,
             get_draw_value=self._effective_draw_value,
             on_edit_finished=self._record_drawing_edit,
+            on_error=lambda error: self.parent_app.show_status(
+                tr("mask.error.drawing", error=str(error))
+            ),
         )
         
         # Developer control: auto-disable drawing mode after each stroke
@@ -257,6 +259,10 @@ class MaskApp(BaseImageTab):
     def eventFilter(self, watched, event):
         """Reflect Alt inversion without replacing standard viewer shortcuts."""
         if event.type() == QEvent.KeyPress and event.key() == Qt.Key_Alt:
+            focus = QApplication.focusWidget()
+            if (not self.isVisible() or focus is None
+                    or not (focus is self or self.isAncestorOf(focus))):
+                return super().eventFilter(watched, event)
             if event.isAutoRepeat():
                 return super().eventFilter(watched, event)
             if not self._alt_inversion_active:
@@ -305,14 +311,12 @@ class MaskApp(BaseImageTab):
         setup_splitter_layout(main_splitter, AppStyle.get_layout_ratios()['main_splitter_ratio'])
         main_layout.addWidget(main_splitter)
 
-        for tool in self.drawing_tools.values():
-            tool.set_image_data_getter(lambda: self.image_data)
         self.image_viewer.mouse_moved.connect(self.drawing_session.handle_motion)
         self.image_viewer.mouse_pressed.connect(self.drawing_session.handle_press)
         self.image_viewer.mouse_released.connect(self.drawing_session.handle_release)
         self.image_viewer.mouse_moved.connect(self._refresh_polygon_feedback)
         self.image_viewer.mouse_pressed.connect(self._refresh_polygon_feedback)
-        self.image_viewer.mouse_double_clicked.connect(lambda _event: self._finish_polygon())
+        self.image_viewer.mouse_double_clicked.connect(self._double_click_polygon)
         self.image_viewer.interaction_mode_changed.connect(self._on_viewer_mode_changed)
         self._install_shortcuts()
 
@@ -396,7 +400,7 @@ class MaskApp(BaseImageTab):
         )
         self._register_asset_icon(self.undo_button, "tool_undo.svg")
         self.undo_button.setEnabled(False)
-        self.undo_button.clicked.connect(self.undo_stack.undo)
+        self.undo_button.clicked.connect(self._undo_drawing)
 
         self.redo_button = self._make_square_tool_button(
             tooltip=tr("mask.action.redo_tooltip"),
@@ -404,7 +408,7 @@ class MaskApp(BaseImageTab):
         )
         self._register_asset_icon(self.redo_button, "tool_redo.svg")
         self.redo_button.setEnabled(False)
-        self.redo_button.clicked.connect(self.undo_stack.redo)
+        self.redo_button.clicked.connect(self._redo_drawing)
         history_tools = [
             (tr("mask.action.undo"), self.undo_button),
             (tr("mask.action.redo"), self.redo_button),
@@ -943,6 +947,8 @@ class MaskApp(BaseImageTab):
             self.image_viewer.remove_overlay('threshold-preview')
 
     def update_plot(self, image_data=None):
+        self.drawing_session.cancel_current_edit()
+        self._clear_polygon_feedback()
         super().update_plot(image_data)
         source = image_data if image_data is not None else self.image_data
         if source is not None and id(source) != self._threshold_image_token:
@@ -1185,6 +1191,8 @@ class MaskApp(BaseImageTab):
     
     def _on_layer_selected(self, row):
         """Handle layer selection"""
+        self.drawing_session.cancel_current_edit()
+        self._clear_polygon_feedback()
         item = self.layer_list.item(row) if row >= 0 else None
         layer_index = item.data(Qt.UserRole) if item is not None else None
         has_active_layer = isinstance(layer_index, int) and (0 <= layer_index < len(self.mask_layers))
@@ -1474,7 +1482,8 @@ class MaskApp(BaseImageTab):
     
     def _update_combined_mask(self):
         """Compose visible layers in list order using each incoming operator."""
-        self._preview_mask = None
+        self.drawing_session.cancel_current_edit()
+        self._clear_polygon_feedback()
         self.combined_mask = compose_mask_layers(self.mask_layers)
         self.export_combined_button.setEnabled(self.combined_mask is not None)
         if self.combined_mask is None:
@@ -1502,10 +1511,6 @@ class MaskApp(BaseImageTab):
             tr("mask.coverage.pixel_count", masked=masked_pixels, total=total_pixels)
         )
         self._refresh_mask_overlay()
-
-    def _set_combined_mask_preview(self, mask: np.ndarray) -> None:
-        """Set a temporary combined mask generated by the drawing session."""
-        self._preview_mask = mask
 
     def _set_drawing_enabled_from_session(self, enabled: bool) -> None:
         """Set drawing state and keep tool buttons/canvas lock in sync."""
@@ -1651,6 +1656,11 @@ class MaskApp(BaseImageTab):
             self._clear_polygon_feedback()
             self.parent_app.show_status(tr("mask.status.polygon_applied"))
 
+    def _double_click_polygon(self, event) -> None:
+        if self.drawing_session.handle_double_click(event):
+            self._clear_polygon_feedback()
+            self.parent_app.show_status(tr("mask.status.polygon_applied"))
+
     def _cancel_current_edit(self) -> None:
         self.drawing_session.cancel_current_edit()
         self._clear_polygon_feedback()
@@ -1683,21 +1693,34 @@ class MaskApp(BaseImageTab):
         self.image_viewer.remove_overlay("mask-polygon-vertices")
 
     def _install_shortcuts(self) -> None:
-        self._mask_shortcuts = []
-        for key, tool_name in (("B", "Brush"), ("E", "Eraser"), ("L", "Line"), ("R", "Rectangle"), ("C", "Circle"), ("P", "Polygon"), ("F", "Smart Fill")):
-            shortcut = QShortcut(QKeySequence(key), self)
-            shortcut.activated.connect(lambda name=tool_name: self.tool_buttons[name].click())
-            self._mask_shortcuts.append(shortcut)
-        for sequence, callback in (
-            (QKeySequence.Undo, self.undo_stack.undo),
-            (QKeySequence.Redo, self.undo_stack.redo),
-            (QKeySequence("Ctrl+Shift+Z"), self.undo_stack.redo),
-            (QKeySequence(Qt.Key_Return), self._finish_polygon),
-            (QKeySequence(Qt.Key_Escape), self._cancel_current_edit),
-        ):
-            shortcut = QShortcut(sequence, self)
-            shortcut.activated.connect(callback)
-            self._mask_shortcuts.append(shortcut)
+        for name, button in self.tool_buttons.items():
+            kind = name.lower().replace(" ", "_")
+            button.setToolTip(f"{button.toolTip()} ({tool_key_label(kind)})")
+        self.drawing_commands = DrawingCommands(
+            self,
+            select_tools={
+                name.lower().replace(" ", "_"): lambda name=name: self._select_tool_command(name)
+                for name in self.tool_buttons
+            },
+            finish=self._finish_polygon, cancel=self._cancel_current_edit,
+            undo=self._undo_drawing, redo=self._redo_drawing,
+            enabled=lambda: self.image_viewer.source_array is not None,
+        )
+
+    def _select_tool_command(self, name: str) -> None:
+        button = self.tool_buttons[name]
+        if button.isEnabled() and not button.isChecked():
+            button.click()
+
+    def _undo_drawing(self) -> None:
+        self.drawing_session.cancel_current_edit()
+        self._clear_polygon_feedback()
+        self.undo_stack.undo()
+
+    def _redo_drawing(self) -> None:
+        self.drawing_session.cancel_current_edit()
+        self._clear_polygon_feedback()
+        self.undo_stack.redo()
 
     def _refine_active_layer(self, operation: str) -> None:
         layer = self._get_active_layer()
@@ -1974,19 +1997,9 @@ class MaskApp(BaseImageTab):
         self._refresh_mask_overlay()
     
     def _add_mask_overlay(self, viewer):
-        """Render the composed mask, or the temporary in-progress edit."""
+        """Render committed mask pixels; gestures have a separate native Qt layer."""
         viewer.clear_overlays(group='mask-layers')
-        viewer.remove_overlay('edit-preview')
         if not hasattr(self, 'show_mask_check') or not self.show_mask_check.isChecked():
-            return
-        if self._preview_mask is not None:
-            viewer.add_mask_overlay(
-                'edit-preview',
-                self._preview_mask,
-                group='mask-layers',
-                color=self.overlay_color,
-                alpha=self.overlay_opacity / 100.0,
-            )
             return
         if self.combined_mask is not None:
             viewer.add_mask_overlay(

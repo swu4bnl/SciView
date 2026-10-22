@@ -6,16 +6,17 @@ import math
 from pathlib import Path
 
 import pyqtgraph as pg
-from PyQt5.QtCore import QEvent, QObject, QPointF, QRectF, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QIcon, QKeySequence, QPainterPath, QPixmap
+from PyQt5.QtCore import QEvent, QObject, QPointF, Qt, pyqtSignal
+from PyQt5.QtGui import QColor, QIcon, QPixmap
 from PyQt5.QtWidgets import (
     QAction, QActionGroup, QColorDialog, QFrame, QGraphicsItem, QHBoxLayout,
     QGraphicsPathItem, QGraphicsRectItem, QLabel, QLayout, QLineEdit,
-    QScrollArea, QShortcut, QSizePolicy, QSpinBox, QToolButton,
+    QScrollArea, QSizePolicy, QSpinBox, QToolButton,
     QUndoCommand, QUndoStack, QWidget,
 )
 
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImagePointerEvent, ImageViewer
+from sciview.interfaces.stable_qt.tools.drawing_interaction import DrawingCommands, DrawingGesture, tool_key_label
 from sciview.interfaces.text import tr
 from sciview.interfaces.theme.app_style import AppStyle
 from sciview.settings.viewer_config import MASK_TOOL_ICON_FILES, VIEWER_BEHAVIOR, VIEWER_COLORS
@@ -62,9 +63,9 @@ class ImageAnnotations(QObject):
         self.layer.setFlag(QGraphicsItem.ItemClipsChildrenToShape, True)
         self.layer.setAcceptedMouseButtons(Qt.NoButton)
         self.layer.setZValue(30)
-        self._points: list[QPointF] = []
+        self.gesture = DrawingGesture()
         self._preview: QGraphicsPathItem | None = None
-        self._color = QColor(VIEWER_COLORS.default_mask)
+        self._color = QColor(VIEWER_COLORS.default_annotation)
         self._tool = "brush"
         self._text_editor: QLineEdit | None = None
         self._text_position = QPointF()
@@ -97,7 +98,8 @@ class ImageAnnotations(QObject):
             action.setData(tool)
             gesture_key = tool if tool in ("circle", "polygon", "text") else "drag"
             action.setToolTip(tr("annotations.tool_help",
-                                 tool=action.text(), gesture=tr(f"annotations.gesture.{gesture_key}")))
+                                 tool=action.text(), shortcut=tool_key_label(tool),
+                                 gesture=tr(f"annotations.gesture.{gesture_key}")))
             self._tool_group.addAction(action)
             action.triggered.connect(lambda _checked, tool=tool: self.select_tool(tool))
             self.tool_actions[tool] = action
@@ -110,7 +112,7 @@ class ImageAnnotations(QObject):
         self._add_strip_button(self.color_action)
         self.stroke_width = QSpinBox()
         self.stroke_width.setRange(1, 50)
-        self.stroke_width.setValue(math.ceil(VIEWER_BEHAVIOR.default_line_width))
+        self.stroke_width.setValue(VIEWER_BEHAVIOR.default_annotation_width)
         self.stroke_width.setAccessibleName(tr("annotations.width"))
         self.stroke_width.setToolTip(tr("annotations.width"))
         width_label = QLabel(tr("annotations.width_short"))
@@ -153,10 +155,13 @@ class ImageAnnotations(QObject):
         undo.setEnabled(False)
         redo.setEnabled(False)
         clear.setEnabled(False)
-        for action, key in ((undo, QKeySequence.Undo), (redo, QKeySequence.Redo)):
-            action.setShortcuts(key)
-            action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
-            viewer.addAction(action)
+        self.commands = DrawingCommands(
+            viewer,
+            select_tools={tool: lambda tool=tool: self.select_tool(tool) for tool in self.TOOLS},
+            finish=self.finish_polygon, cancel=self._leave_drawing,
+            undo=self._undo, redo=self._redo,
+            enabled=lambda: self.viewer.source_array is not None,
+        )
 
         self.button.toggled.connect(self._set_drawing)
         self.show_marks.toggled.connect(self._set_visible)
@@ -167,9 +172,6 @@ class ImageAnnotations(QObject):
         viewer.interaction_mode_changed.connect(lambda _mode: self._leave_drawing())
         viewer.theme_changed.connect(self.refresh_theme)
         viewer.view_changed.connect(self.cancel)
-        self._escape = QShortcut(QKeySequence(Qt.Key_Escape), viewer)
-        self._escape.setContext(Qt.WidgetWithChildrenShortcut)
-        self._escape.activated.connect(self._leave_drawing)
         viewer.set_annotation_tool(self.button, self.tools)
         self.refresh_theme()
         self.refresh_image()
@@ -302,7 +304,7 @@ class ImageAnnotations(QObject):
     def cancel(self) -> None:
         """Discard only the unfinished gesture."""
         self._close_text_editor()
-        self._points.clear()
+        self.gesture.cancel()
         if self._preview is not None:
             self._preview.setParentItem(None)
             if self._preview.scene() is not None:
@@ -334,56 +336,45 @@ class ImageAnnotations(QObject):
         tool = self._tool
         if tool == "text":
             self._start_text_editor(point)
-        elif tool == "polygon":
-            self._points.append(point)
-            self._update_preview(point)
         else:
-            self.cancel()
-            self._points = [point]
-            self._update_preview(point)
+            if tool != "polygon":
+                self.cancel()
+            self.gesture.press(tool, point)
+            self._update_preview()
 
     def handle_move(self, event: ImagePointerEvent) -> None:
-        if not self._points or not (math.isfinite(event.x) and math.isfinite(event.y)):
+        if (not self.gesture.active or not event.inside_canvas
+                or not (math.isfinite(event.x) and math.isfinite(event.y))):
             return
         point = self._point(event)
-        if self._tool == "brush":
-            self._points.append(point)
-        self._update_preview(point)
+        self.gesture.move(point)
+        self._update_preview()
 
     def handle_release(self, event: ImagePointerEvent) -> None:
-        if event.button != Qt.LeftButton or not self._points or self._tool == "polygon":
+        if event.button != Qt.LeftButton or not self.gesture.active or self._tool == "polygon":
             return
         if not (math.isfinite(event.x) and math.isfinite(event.y)):
             self.cancel()
             return
-        self._update_preview(self._point(event))
-        self._finish_path()
+        point = self._point(event) if event.inside_canvas else None
+        if self.gesture.release(point):
+            self._update_preview()
+            self._finish_path()
 
     def handle_double_click(self, event: ImagePointerEvent) -> None:
         if event.button == Qt.LeftButton and self._can_draw(event) and self._tool == "polygon":
-            point = self._point(event)
-            if not self._points or self._points[-1] != point:
-                self._points.append(point)
-            if len(self._points) >= 3:
-                self._update_preview(point, close=True)
-                self._finish_path()
+            if self.gesture.finish_polygon(self._point(event)):
+                self.finish_polygon()
 
-    def _update_preview(self, point: QPointF, *, close: bool = False) -> None:
-        path = QPainterPath(self._points[0])
-        tool = self._tool
-        if tool == "rectangle":
-            path.addRect(QRectF(self._points[0], point).normalized())
-        elif tool == "circle":
-            radius = math.hypot(point.x() - self._points[0].x(), point.y() - self._points[0].y())
-            path.addEllipse(self._points[0], radius, radius)
-        else:
-            for vertex in self._points[1:]:
-                path.lineTo(vertex)
-            path.lineTo(point)
-            if close:
-                path.closeSubpath()
-            if tool == "brush" and path.boundingRect().isNull():
-                path.addEllipse(point, self.stroke_width.value() / 2, self.stroke_width.value() / 2)
+    def finish_polygon(self) -> bool:
+        if not self.gesture.finish_polygon():
+            return False
+        self._update_preview(close=True)
+        self._finish_path()
+        return True
+
+    def _update_preview(self, *, close: bool = False) -> None:
+        path = self.gesture.path(self.stroke_width.value(), close_polygon=close)
         if self._preview is None:
             self._preview = QGraphicsPathItem(self.layer)
             self._preview.setAcceptedMouseButtons(Qt.NoButton)
@@ -396,7 +387,7 @@ class ImageAnnotations(QObject):
     def _finish_path(self) -> None:
         item = self._preview
         self._preview = None
-        self._points.clear()
+        self.gesture.cancel()
         if item is not None:
             self._commit(item)
 

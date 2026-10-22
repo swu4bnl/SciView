@@ -14,6 +14,7 @@ class ViewerColors:
     default_circle: str = "#ff0000"
     default_crosshair: str = "#ff0000"
     default_mask: str = "#ef4444"
+    default_annotation: str = "#16C60C"
     mask_preview: str = "#facc15"
 
 
@@ -23,6 +24,7 @@ class ViewerBehavior:
     circle_sample_points: int = 240
     default_point_size: float = 8.0
     default_line_width: float = 1.5
+    default_annotation_width: int = 5
     auto_level_percentiles: tuple[float, float] = (1.0, 99.5)
 
 

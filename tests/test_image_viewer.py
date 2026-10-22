@@ -4,7 +4,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QEvent, QPointF, Qt
+from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import (
     QApplication,
     QListWidgetItem,
@@ -13,7 +14,7 @@ from PyQt5.QtWidgets import (
 
 import pyqtgraph as pg
 
-from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
+from sciview.interfaces.stable_qt.widgets.image_viewer import ImagePointerEvent, ImageViewer
 from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
     BrushDrawingTool,
     MaskDrawingSession,
@@ -452,7 +453,7 @@ def test_clear_layers_undo_restores_order_combined_mask_and_export(qapp):
         tab.close()
 
 
-def test_mask_drawing_session_composes_preview_for_visible_layers():
+def test_mask_layer_composition_replaces_only_visible_target():
     layers = [
         MaskLayer([[False, True], [False, False]]),
         MaskLayer([[False, False], [True, False]]),
@@ -466,36 +467,31 @@ def test_mask_drawing_session_composes_preview_for_visible_layers():
     np.testing.assert_array_equal(combined, expected)
 
 
-class DummyPointerEvent:
-    def __init__(self, x, y, inside_image=True, inside_canvas=True):
-        self.x = x
-        self.y = y
-        self.inside_image = inside_image
-        self.inside_canvas = inside_canvas
+def DummyPointerEvent(x, y, inside_image=True, inside_canvas=True):
+    return ImagePointerEvent(x, y, Qt.LeftButton, Qt.NoModifier, inside_image, inside_canvas)
 
 
-def _drawing_session(tool, layer):
+def _drawing_session(tool, layer, viewer):
     return MaskDrawingSession(
         is_enabled=lambda: True,
         get_tool=lambda: tool,
         get_active_layer=lambda: layer,
-        get_active_layer_index=lambda: 0,
         get_layers=lambda: [layer],
-        set_combined_mask=lambda mask: None,
-        update_combined_mask=lambda: None,
-        update_plot=lambda: None,
+        get_viewer=lambda: viewer,
+        get_image_data=lambda: viewer.source_array,
         set_drawing_enabled=lambda enabled: None,
         should_auto_disable=lambda: False,
         get_brush_size=lambda: 1,
         get_draw_value=lambda: True,
         on_edit_finished=lambda *_args: None,
+        on_error=lambda error: pytest.fail(str(error)),
     )
 
 
-def test_rectangle_clamps_plot_points_to_image_corners():
+def test_rectangle_clamps_plot_points_to_image_corners(viewer):
     layer = MaskLayer(np.zeros((4, 6), dtype=bool))
     tool = RectangleDrawingTool()
-    session = _drawing_session(tool, layer)
+    session = _drawing_session(tool, layer, viewer)
 
     session.handle_press(DummyPointerEvent(-10, -10, inside_image=False))
     session.handle_motion(DummyPointerEvent(20, 20, inside_image=False))
@@ -504,19 +500,21 @@ def test_rectangle_clamps_plot_points_to_image_corners():
     assert layer.data.all()
 
 
-def test_drawing_ignores_press_outside_plot_canvas():
+def test_drawing_ignores_press_outside_plot_canvas(viewer):
     layer = MaskLayer(np.zeros((4, 6), dtype=bool))
     tool = RectangleDrawingTool()
-    session = _drawing_session(tool, layer)
+    session = _drawing_session(tool, layer, viewer)
 
     session.handle_press(DummyPointerEvent(-10, -10, inside_image=False, inside_canvas=False))
 
     assert not tool.is_active
     assert not layer.data.any()
-def test_brush_clamps_active_stroke_to_image_edge():
+
+
+def test_brush_clamps_active_stroke_to_image_edge(viewer):
     layer = MaskLayer(np.zeros((4, 6), dtype=bool))
     tool = BrushDrawingTool()
-    session = _drawing_session(tool, layer)
+    session = _drawing_session(tool, layer, viewer)
 
     session.handle_press(DummyPointerEvent(1, 1))
     session.handle_motion(DummyPointerEvent(20, 1, inside_image=False))
@@ -525,12 +523,237 @@ def test_brush_clamps_active_stroke_to_image_edge():
     assert layer.data[1, -1]
 
 
-def test_smart_fill_rejects_seed_outside_image():
+def test_smart_fill_rejects_seed_outside_image(viewer):
     layer = MaskLayer(np.zeros((4, 6), dtype=bool))
     tool = WatershedFillTool()
-    session = _drawing_session(tool, layer)
+    session = _drawing_session(tool, layer, viewer)
 
     session.handle_press(DummyPointerEvent(-1, -1, inside_image=False))
 
     assert not tool.is_active
     assert not layer.data.any()
+
+
+@pytest.mark.parametrize("tool_name", ["Brush", "Eraser", "Line", "Rectangle", "Circle", "Polygon", "Smart Fill"])
+def test_mask_gestures_defer_pixels_publication_and_history_until_commit(qapp, monkeypatch, tool_name):
+    from tabs.mask_tab import MaskApp
+    import sciview.interfaces.stable_qt.tools.mask_drawing_tools as drawing
+
+    published = []
+    fill_calls = []
+    parent = DummyParentApp()
+    parent.publish_shared_mask = lambda mask, **_kwargs: published.append(mask.copy())
+    tab = MaskApp(parent)
+    tab.image_data = np.arange(16 * 18, dtype=float).reshape(16, 18)
+    tab.update_plot()
+    initial = np.full((16, 18), tool_name == "Eraser", dtype=bool)
+    layer = MaskLayer(initial.copy())
+    tab.mask_layers.append(layer)
+    tab._update_layer_list()
+    tab._update_tool_brush_size(1)
+    tab.tool_buttons[tool_name].click()
+    published.clear()
+    coverage = tab.mask_coverage_bar.value()
+    rgba_calls = []
+    original_rgba = tab.image_viewer._rgba_mask
+
+    def rgba(*args, **kwargs):
+        rgba_calls.append(True)
+        return original_rgba(*args, **kwargs)
+
+    def fill(image, **kwargs):
+        fill_calls.append(kwargs)
+        result = np.zeros(image.shape, dtype=bool)
+        result[2:5, 2:5] = True
+        return result
+
+    monkeypatch.setattr(tab.image_viewer, "_rgba_mask", rgba)
+    monkeypatch.setattr(drawing, "watershed_fill_mask", fill)
+    monkeypatch.setattr(tab.image_viewer, "set_image", lambda *_a, **_kw: pytest.fail("Gesture redrew the detector"))
+    session = tab.drawing_session
+    try:
+        session.handle_press(DummyPointerEvent(2, 3))
+        for point in [(4, 4), (6, 6), (9, 8)]:
+            session.handle_motion(DummyPointerEvent(*point))
+        if tool_name == "Polygon":
+            session.handle_release(DummyPointerEvent(9, 8))
+            session.handle_press(DummyPointerEvent(9, 8))
+            session.handle_press(DummyPointerEvent(9, 3))
+        np.testing.assert_array_equal(layer.data, initial)
+        np.testing.assert_array_equal(tab.combined_mask, initial)
+        preview = tab.image_viewer._overlays["mask-drawing-preview"][0]
+        assert preview.childItems()
+        assert published == []
+        assert rgba_calls == []
+        assert tab.mask_coverage_bar.value() == coverage
+        assert tab.undo_stack.count() == 0
+        assert fill_calls == []
+        if tool_name == "Polygon":
+            assert session.finish_polygon()
+        else:
+            session.handle_release(DummyPointerEvent(9, 8))
+        assert len(published) == len(rgba_calls) == tab.undo_stack.count() == 1
+        after = layer.data.copy()
+        assert np.any(after != initial)
+        tab.undo_stack.undo()
+        np.testing.assert_array_equal(layer.data, initial)
+        tab.undo_stack.redo()
+        np.testing.assert_array_equal(layer.data, after)
+        assert "mask-drawing-preview" not in tab.image_viewer._overlays
+        assert len(fill_calls) == (1 if tool_name == "Smart Fill" else 0)
+    finally:
+        tab.close()
+
+
+def test_mask_brush_keeps_alt_effect_per_segment_and_commits_release_endpoint(viewer):
+    from sciview.masking.drawing import paint_brush_segment
+
+    layer = MaskLayer(np.zeros((16, 16), dtype=bool))
+    session = _drawing_session(BrushDrawingTool(), layer, viewer)
+    session.handle_press(DummyPointerEvent(2, 3))
+    session.handle_motion(DummyPointerEvent(8, 3))
+    session.get_draw_value = lambda: False
+    session.handle_motion(DummyPointerEvent(8, 7))
+    session.handle_release(DummyPointerEvent(12, 7))
+    expected = np.zeros_like(layer.data)
+    paint_brush_segment(expected, (3, 2), (3, 2), 1, True)
+    paint_brush_segment(expected, (3, 2), (3, 8), 1, True)
+    paint_brush_segment(expected, (3, 8), (7, 8), 1, False)
+    paint_brush_segment(expected, (7, 8), (7, 12), 1, False)
+    np.testing.assert_array_equal(layer.data, expected)
+
+
+def test_release_outside_canvas_commits_last_accepted_point_and_ignores_right_click(viewer):
+    layer = MaskLayer(np.zeros((16, 16), dtype=bool))
+    session = _drawing_session(RectangleDrawingTool(), layer, viewer)
+    right_click = ImagePointerEvent(1, 1, Qt.RightButton, Qt.NoModifier, True, True)
+    session.handle_press(right_click)
+    assert session._edit_layer is None
+    session.handle_press(DummyPointerEvent(2, 3))
+    session.handle_motion(DummyPointerEvent(6, 7))
+    session.handle_motion(DummyPointerEvent(99, 99, False, False))
+    session.handle_release(DummyPointerEvent(99, 99, False, False))
+    expected = np.zeros_like(layer.data)
+    expected[3:8, 2:7] = True
+    np.testing.assert_array_equal(layer.data, expected)
+
+
+@pytest.mark.parametrize("change", ["hidden", "removed", "selected", "tool"])
+def test_pending_mask_edit_cannot_mutate_an_invalid_target(viewer, change):
+    layer = MaskLayer(np.zeros((16, 16), dtype=bool))
+    session = _drawing_session(BrushDrawingTool(), layer, viewer)
+    session.handle_press(DummyPointerEvent(2, 3))
+    session.handle_motion(DummyPointerEvent(6, 7))
+    if change == "hidden":
+        layer.visible = False
+    elif change == "removed":
+        session.get_layers = lambda: []
+    elif change == "selected":
+        session.get_active_layer = lambda: MaskLayer(np.ones((16, 16), dtype=bool))
+    else:
+        session.get_tool = lambda: RectangleDrawingTool()
+    session.handle_release(DummyPointerEvent(8, 8))
+    assert not layer.data.any()
+    assert "mask-drawing-preview" not in viewer._overlays
+
+
+@pytest.mark.parametrize("mode", ["OR", "AND"])
+def test_mask_commit_publishes_only_the_completed_layer_composition(qapp, mode):
+    from tabs.mask_tab import MaskApp
+
+    parent = DummyParentApp()
+    published = []
+    parent.publish_shared_mask = lambda mask, **_kwargs: published.append(mask.copy())
+    tab = MaskApp(parent)
+    first = np.zeros((10, 12), dtype=bool)
+    first[2:9, 3:10] = True
+    layer = MaskLayer(np.zeros_like(first), combine_mode=mode)
+    tab.mask_layers.extend([MaskLayer(first), layer, MaskLayer(np.ones_like(first), visible=False)])
+    tab._update_layer_list()
+    tab.layer_list.setCurrentRow(tab._list_row_for_layer(1))
+    tab.tool_buttons["Rectangle"].click()
+    published.clear()
+    try:
+        tab.drawing_session.handle_press(DummyPointerEvent(2, 1))
+        tab.drawing_session.handle_motion(DummyPointerEvent(6, 5))
+        assert published == []
+        tab.drawing_session.handle_release(DummyPointerEvent(6, 5))
+        expected_layer = np.zeros_like(first)
+        expected_layer[1:6, 2:7] = True
+        expected = (first | expected_layer) if mode == "OR" else (first & expected_layer)
+        np.testing.assert_array_equal(layer.data, expected_layer)
+        np.testing.assert_array_equal(tab.combined_mask, expected)
+        assert len(published) == 1
+        np.testing.assert_array_equal(published[0], expected)
+    finally:
+        tab.close()
+
+
+def test_failed_fill_keeps_original_mask_and_reports_the_error(viewer, monkeypatch):
+    import sciview.interfaces.stable_qt.tools.mask_drawing_tools as drawing
+
+    viewer.set_image(np.ones((8, 8)))
+    layer = MaskLayer(np.zeros((8, 8), dtype=bool))
+    errors = []
+    session = _drawing_session(WatershedFillTool(), layer, viewer)
+    session.on_error = errors.append
+
+    def failed_fill(*_args, **_kwargs):
+        raise ValueError("Invalid fill input")
+
+    monkeypatch.setattr(drawing, "watershed_fill_mask", failed_fill)
+    session.handle_press(DummyPointerEvent(3, 3))
+    session.handle_release(DummyPointerEvent(3, 3))
+    assert not layer.data.any()
+    assert len(errors) == 1
+    assert "Invalid fill input" in str(errors[0])
+    assert "mask-drawing-preview" not in viewer._overlays
+
+
+@pytest.mark.parametrize("cancel", [None, "escape", "image", "layer", "tool"])
+def test_real_mask_pointer_gesture_commit_and_cancellation(qapp, cancel):
+    from tabs.mask_tab import MaskApp
+
+    tab = MaskApp(DummyParentApp())
+    tab.resize(1280, 800)
+    tab.image_data = np.ones((20, 30))
+    tab.update_plot()
+    layer = MaskLayer(np.zeros((20, 30), dtype=bool))
+    tab.mask_layers.append(layer)
+    tab._update_layer_list()
+    tab.tool_buttons["Rectangle"].click()
+    tab.show()
+    qapp.processEvents()
+    viewer = tab.image_viewer
+    viewport = viewer._graphics.viewport()
+
+    def position(x, y):
+        return viewer._graphics.mapFromScene(viewer._view_box.mapViewToScene(QPointF(x, y)))
+
+    try:
+        QTest.mousePress(viewport, Qt.LeftButton, pos=position(3, 4))
+        QTest.mouseMove(viewport, position(9, 10))
+        assert not layer.data.any()
+        assert "mask-drawing-preview" in viewer._overlays
+        if cancel == "escape":
+            QTest.keyClick(viewport, Qt.Key_Escape)
+        elif cancel == "image":
+            tab.image_data = np.full((20, 30), 2.0)
+            tab.update_plot()
+        elif cancel == "layer":
+            tab._set_layer_visibility(0, False)
+        elif cancel == "tool":
+            tab.tool_buttons["Brush"].click()
+        QTest.mouseRelease(viewport, Qt.LeftButton, pos=position(9, 10))
+        if cancel is None:
+            assert layer.data[6, 6]
+            assert tab.undo_stack.count() == 1
+        else:
+            assert not layer.data.any()
+            assert tab.undo_stack.count() == 0
+        assert not viewer._pointer_captured
+        assert "mask-drawing-preview" not in viewer._overlays
+    finally:
+        tab.close()
+        tab.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)

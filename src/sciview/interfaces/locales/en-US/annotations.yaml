@@ -22,16 +22,17 @@ annotations.gesture.circle:
   text: Drag from the center to set the radius.
   context: Usage hint for circular annotation outlines.
 annotations.gesture.polygon:
-  text: Click vertices; double-click to finish.
+  text: Click vertices; press Enter or double-click to finish.
   context: Usage hint for finishing a polygon annotation.
 annotations.gesture.text:
   text: Click the image, type, and press Enter.
   context: Usage hint for inline text annotations.
 annotations.tool_help:
-  text: "{tool}: {gesture}"
+  text: "{tool} ({shortcut}): {gesture}"
   context: Tooltip for an annotation tool in the horizontal toolbar.
   placeholders:
     tool: Localized drawing tool name.
+    shortcut: Native keyboard shortcut for this drawing tool.
     gesture: Instructions for using the current annotation tool.
 annotations.width_short:
   text: Width
