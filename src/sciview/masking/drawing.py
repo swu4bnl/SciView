@@ -10,7 +10,7 @@ Pixel = tuple[int, int]
 def paint_disk(mask: np.ndarray, center: Pixel, radius: int, value: bool) -> None:
     """Paint a clipped integer-radius disk at a (row, column) pixel."""
     row, col = center
-    radius = max(1, int(radius))
+    radius = max(0, int(radius))
     height, width = mask.shape
     y_min, y_max = max(0, row - radius), min(height, row + radius + 1)
     x_min, x_max = max(0, col - radius), min(width, col + radius + 1)

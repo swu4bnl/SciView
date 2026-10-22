@@ -57,15 +57,15 @@ class DrawingGesture:
             self._brush_path.lineTo(point)
         self.current = QPointF(point)
 
-    def release(self, point: QPointF | None) -> bool:
+    def release(self, point: QPointF | None, *, pixel_mask: bool = False) -> bool:
         if not self.active or self.tool == "polygon":
             return False
         if point is not None:
             self.move(point)
         start, end = self.points[0], self.current
-        if self.tool in ("line", "circle") and start == end:
+        if not pixel_mask and self.tool in ("line", "circle") and start == end:
             return False
-        if self.tool == "rectangle" and (start.x() == end.x() or start.y() == end.y()):
+        if not pixel_mask and self.tool == "rectangle" and (start.x() == end.x() or start.y() == end.y()):
             return False
         return True
 
@@ -88,11 +88,11 @@ class DrawingGesture:
             return QPainterPath()
         start, end = self.points[0], self.current
         path = QPainterPath()
-        if self.tool in ("line", "circle") and start == end:
+        if not pixel_mask and self.tool in ("line", "circle") and start == end:
             return path
         if self.tool == "rectangle":
             rect = QRectF(start, end).normalized()
-            if rect.isEmpty():
+            if not pixel_mask and rect.isEmpty():
                 return path
             if pixel_mask:
                 rect.adjust(-0.5, -0.5, 0.5, 0.5)
@@ -102,7 +102,10 @@ class DrawingGesture:
                 end.x() - start.x(), end.y() - start.y(),
             )
             if pixel_mask:
-                radius = max(1, round(radius))
+                radius = max(1 if self.tool == "smart_fill" else 0, round(radius))
+                if radius == 0:
+                    path.addRect(QRectF(start.x() - 0.5, start.y() - 0.5, 1, 1))
+                    return path
             path.addEllipse(start, radius, radius)
         else:
             if self.tool in ("brush", "eraser"):
@@ -116,8 +119,11 @@ class DrawingGesture:
             if self.tool == "polygon" and (filled or close_polygon):
                 path.closeSubpath()
             elif self.tool in ("brush", "eraser", "line"):
-                if self.tool in ("brush", "eraser") and path.boundingRect().isNull():
-                    path.addEllipse(end, width / 2, width / 2)
+                if (self.tool in ("brush", "eraser") or pixel_mask) and path.boundingRect().isNull():
+                    if pixel_mask and width == 1:
+                        path.addRect(QRectF(end.x() - 0.5, end.y() - 0.5, 1, 1))
+                    else:
+                        path.addEllipse(end, width / 2, width / 2)
                 elif filled:
                     stroker = QPainterPathStroker()
                     stroker.setWidth(width)

@@ -482,10 +482,10 @@ def test_mask_brush_keeps_alt_effect_per_segment_and_commits_release_endpoint(vi
     session.handle_motion(DummyPointerEvent(8, 7))
     session.handle_release(DummyPointerEvent(12, 7))
     expected = np.zeros_like(layer.data)
-    paint_brush_segment(expected, (3, 2), (3, 2), 1, True)
-    paint_brush_segment(expected, (3, 2), (3, 8), 1, True)
-    paint_brush_segment(expected, (3, 8), (7, 8), 1, False)
-    paint_brush_segment(expected, (7, 8), (7, 12), 1, False)
+    paint_brush_segment(expected, (3, 2), (3, 2), 0, True)
+    paint_brush_segment(expected, (3, 2), (3, 8), 0, True)
+    paint_brush_segment(expected, (3, 8), (7, 8), 0, False)
+    paint_brush_segment(expected, (7, 8), (7, 12), 0, False)
     np.testing.assert_array_equal(layer.data, expected)
 
 

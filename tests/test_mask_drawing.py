@@ -15,6 +15,10 @@ def test_disk_circle_and_rectangle_preserve_integer_pixel_footprints(value):
     rows, cols = np.indices((9, 12))
     initial = np.full(rows.shape, not value, dtype=bool)
     for painter, arguments, footprint in [
+        (paint_disk, ((3, 4), 0), (rows == 3) & (cols == 4)),
+        (paint_circle, ((3, 4), (3, 4)), (rows == 3) & (cols == 4)),
+        (paint_brush_segment, ((3, 4), (3, 4), 0), (rows == 3) & (cols == 4)),
+        (paint_line, ((3, 4), (3, 4), 0), (rows == 3) & (cols == 4)),
         (paint_disk, ((0, 1), 3), rows ** 2 + (cols - 1) ** 2 <= 9),
         (paint_circle, ((3, 4), (5, 6)), (rows - 3) ** 2 + (cols - 4) ** 2 <= 9),
         (paint_rectangle, ((5, 6), (2, 3)), (rows >= 2) & (rows <= 5) & (cols >= 3) & (cols <= 6)),

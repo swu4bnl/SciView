@@ -243,7 +243,7 @@ class MaskDrawingSession:
             self.cancel_current_edit()
             return
         self._sync_tool(tool)
-        if not tool.gesture.release(self._qt_point(point)):
+        if not tool.gesture.release(self._qt_point(point), pixel_mask=True):
             self.cancel_current_edit()
             return
         if isinstance(tool, BrushDrawingTool):
@@ -266,7 +266,8 @@ class MaskDrawingSession:
         return False
 
     def _append_brush_sample(self, point: Pixel, tool: DrawingTool) -> None:
-        sample = _BrushSample(point, tool.brush_size, tool.draw_value)
+        radius = 0 if tool.brush_size == 1 else tool.brush_size
+        sample = _BrushSample(point, radius, tool.draw_value)
         if self._samples and sample == self._samples[-1]:
             return
         previous = self._samples[-1].point if self._samples else point
@@ -276,7 +277,7 @@ class MaskDrawingSession:
             self._stroke_gesture.press("brush", self._qt_point(previous))
             self._stroke_item = QGraphicsPathItem(self._preview)
             self._stroke_item.setAcceptedMouseButtons(Qt.NoButton)
-            pen = pg.mkPen(self._preview_color(sample.value), width=sample.radius * 2, cosmetic=False)
+            pen = pg.mkPen(self._preview_color(sample.value), width=max(1, sample.radius * 2), cosmetic=False)
             pen.setCapStyle(Qt.RoundCap)
             pen.setJoinStyle(Qt.RoundJoin)
             self._stroke_item.setPen(pen)
@@ -284,19 +285,20 @@ class MaskDrawingSession:
         self._stroke_gesture.move(self._qt_point(point))
         if previous == point:
             dot = QGraphicsPathItem(self._preview)
-            dot.setPath(self._stroke_gesture.path(sample.radius * 2, filled=True))
+            dot.setPath(self._stroke_gesture.path(max(1, sample.radius * 2), filled=True, pixel_mask=True))
             dot.setPen(pg.mkPen(None))
             dot.setBrush(pg.mkBrush(self._preview_color(sample.value)))
             dot.setAcceptedMouseButtons(Qt.NoButton)
         if len(self._stroke_gesture.points) > 1:
-            self._stroke_item.setPath(self._stroke_gesture.path(sample.radius * 2))
+            self._stroke_item.setPath(self._stroke_gesture.path(max(1, sample.radius * 2)))
 
     @staticmethod
     def _preview_color(value: bool) -> str:
         return VIEWER_COLORS.mask_preview if value else VIEWER_COLORS.default_point
 
     def _show_shape(self, tool: DrawingTool) -> None:
-        path = tool.gesture.path(tool.brush_size * 2, filled=True, pixel_mask=True)
+        width = 1 if tool.brush_size == 1 else tool.brush_size * 2
+        path = tool.gesture.path(width, filled=True, pixel_mask=True)
         if self._shape_item is None:
             self._shape_item = QGraphicsPathItem(self._preview)
             self._shape_item.setAcceptedMouseButtons(Qt.NoButton)
@@ -338,7 +340,8 @@ class MaskDrawingSession:
                 elif isinstance(tool, CircleDrawingTool):
                     paint_circle(after, start, point, tool.draw_value)
                 elif isinstance(tool, LineDrawingTool):
-                    paint_line(after, start, point, tool.brush_size, tool.draw_value)
+                    radius = 0 if tool.brush_size == 1 else tool.brush_size
+                    paint_line(after, start, point, radius, tool.draw_value)
                 elif isinstance(tool, WatershedFillTool):
                     image, valid, error = validate_and_prepare_image_array(self.get_image_data())
                     if not valid:
