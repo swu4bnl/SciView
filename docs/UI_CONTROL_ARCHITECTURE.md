@@ -18,17 +18,9 @@ The main goal is a single-source, predictable UI system that stays maintainable 
 - Focus guidance on the main workflow and meaningful decisions, not self-explanatory secondary controls.
 - Preserve precision where it affects scientific interpretation, reproducibility, or results.
 
-The upper-right text-size buttons (Ctrl+- / Ctrl++) and separate high-contrast
-toggle use the existing `FONTS.scale_pct` and `AppStyle` palette and shared
-refresh path; settings apply to the current session. Contrast mode restores the
-preceding theme when disabled, and follows the light/dark toggle while enabled.
-Text scaling changes interface typography, not scientific export style settings.
-Below 100%, shared control dimensions and padding also shrink, including live
-viewer controls. Manual settings extend down to 50% for smaller screens; startup
-remains at 100%, without automatic screen-dependent scaling.
-Side panels allow scrolling when their contents exceed the available space.
-At 100%, rendered sizes are H1 30 px, H2/tabs 24 px, H3 20 px, body 18 px,
-caption 16 px, and small text 14 px.
+Text scaling and high contrast use `FONTS.scale_pct`, the `AppStyle` palette,
+and the shared runtime refresh path. These session-only UI settings do not
+change scientific export styles.
 
 ## Shared Image Colors
 
@@ -67,7 +59,7 @@ translated.
 - Module: src/sciview/interfaces/theme/app_style.py
 - Responsibility: token definitions, style templates, style helper APIs, runtime theme refresh.
 - Key point: this is the primary source of truth for styling decisions.
-- The viewer toolbar uses one `QGridLayout` row containing icon-over-caption cells and the tab-owned, two-row display-controls widget. Stretchable gap columns separate tool groups while display controls stay compact. `AppStyle.viewer_toolbar_button_size()` derives tool dimensions from shared control and typography tokens; `viewer_toolbar_icon_size()` selects a pre-rendered icon size. Layout does not require runtime widget measurement or resize-event synchronization, and buttons reuse the shared `compact_button` style.
+- Viewer toolbar dimensions derive from shared control and typography tokens; native layouts own alignment and overflow.
 
 1. Theme tooling layer (development-time)
 - Module: src/sciview/dev/style_inspector.py
@@ -150,37 +142,24 @@ This prevents style drift after theme changes and live token updates.
 
 ## Runtime Performance
 
-- Appearance changes compose the final stylesheet before applying it. A
-  light/dark switch keeps high contrast enabled without rendering intermediate
-  appearances. The global traversal refreshes each viewer; tabs refresh only
-  visuals they own.
-- Identical widget stylesheets are not reassigned. Themed SVGs use Qt's bounded
-  pixmap cache and a persistent cache under the platform's generic cache directory,
-  in `sciview/icons-v1`. SVG content, tint colors, render sizes, and Qt version
-  identify entries. Writes are atomic, disk storage is capped at 256 entries,
-  and invalid entries are logged and regenerated. The cache can be removed
-  without affecting user data.
-- Startup checks for the installed Tiled package without importing its client.
-  Client dependencies load at the first data task; streaming plugins load only
-  when live monitoring starts. These imports use the existing background-task
-  path, including authentication refresh, so loading and error feedback remain
-  visible. The initial availability check is not a full dependency health check.
-- Status-bar CPU sampling is nonblocking and reports usage since the preceding
-  sample rather than pausing the UI for a measurement interval.
+- Global appearance refresh updates each viewer; tabs refresh only visuals
+  they own. Avoid redundant stylesheet assignments and intermediate themes.
+- Themed SVGs use Qt's bounded pixmap cache and a disposable disk cache at
+  `<platform generic cache>/sciview/icons-v1`. Invalid entries are logged and
+  regenerated; removing this cache does not affect user data.
+- Tiled client and streaming dependencies load only when needed, through
+  background tasks. Startup availability checks do not verify dependency health.
+- Status-bar resource sampling must remain nonblocking.
 
 ### Measuring startup and appearance changes
 
-Run `pixi run benchmark-ui` on a desktop session. Optional arguments include
-`--runs 3 --samples 4 --json measurements.json`. The benchmark starts fresh
-processes, reports startup phases and appearance-handler/settled timings, and
-compares an empty icon cache with subsequent launches using the populated cache.
-It uses all eight tabs, an empty session, and a disposable cache; it neither
-loads detector files nor connects to Tiled. Saved user state is not modified.
-
-Results include queued layout and paint work, not an OS-compositor latency
-measurement. They exclude launcher overhead and session restoration. Keep the
-window visible, use the same machine/theme/locale, and avoid concurrent workloads
-when comparing runs. Timing results are diagnostic, not pytest thresholds.
+Run `pixi run benchmark-ui --runs 3 --samples 4 --json measurements.json` on a
+desktop session to compare startup and appearance changes with cold and warm icon
+caches. It uses fresh processes, an empty session, and a disposable cache without
+changing saved user state or connecting to Tiled. Results include queued layouts
+and paints, not compositor latency, launcher overhead, or session restoration.
+Compare runs on the same machine/theme/locale; timings are diagnostic, not test
+thresholds.
 
 ## Stylesheet vs Token vs Runtime Theme: Practical Difference
 

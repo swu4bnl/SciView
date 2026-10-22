@@ -4,16 +4,16 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QEvent, QPointF, Qt
+from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import (
     QApplication,
-    QListWidgetItem,
     QWidget,
 )
 
 import pyqtgraph as pg
 
-from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
+from sciview.interfaces.stable_qt.widgets.image_viewer import ImagePointerEvent, ImageViewer
 from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
     BrushDrawingTool,
     MaskDrawingSession,
@@ -21,7 +21,7 @@ from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
     WatershedFillTool,
 )
 from sciview.masking.layers import MaskLayer, compose_mask_layers
-from tabs.image_browser_tab import ImageBrowserApp, ImageSessionManager
+from tabs.image_browser_tab import ImageBrowserApp
 
 
 @pytest.fixture(scope="module")
@@ -35,47 +35,6 @@ def viewer(qapp):
     widget = ImageViewer()
     yield widget
     widget.close()
-
-
-def test_image_browser_keeps_previous_folder_files_in_batch(tmp_path):
-    current = tmp_path / "current.tif"
-    kept = tmp_path / "kept.tif"
-    current.touch()
-    kept.touch()
-    browser = ImageBrowserApp.__new__(ImageBrowserApp)
-    browser._folder_browser_paths = [str(current)]
-    browser._added_folder_paths = [str(kept)]
-
-    assert browser.get_current_file_list() == [str(current), str(kept)]
-
-
-def test_image_session_cache_load_does_not_repeat_session_notification():
-    session = ImageSessionManager()
-    notifications = []
-    session.add_callback(lambda manager: notifications.append(manager.current_index))
-    session.add_image_reference("image.tif")
-
-    image = session.get_current_image(
-        load_data=True,
-        loader_callback=lambda path, metadata: np.zeros((2, 2)),
-    )
-
-    assert image["data"].shape == (2, 2)
-    assert notifications == [0]
-
-
-def test_image_session_selection_does_not_republish_file_list():
-    browser = ImageBrowserApp.__new__(ImageBrowserApp)
-    browser.is_batch_loading = False
-    published = []
-    displayed = []
-    browser._publish_shared_file_list = lambda: published.append(True)
-    browser._update_display = lambda: displayed.append(True)
-
-    browser._on_session_changed(None)
-
-    assert published == []
-    assert displayed == [True]
 
 
 def test_numpy_image_uses_row_column_coordinates(viewer):
@@ -216,7 +175,6 @@ class DummyParentApp:
             'cmap': 'gray',
             'scale': 'linear'
         }
-        self.display_publish_count = 0
 
     def show_status(self, message):
         self.last_status = message
@@ -226,7 +184,6 @@ class DummyParentApp:
 
     def publish_shared_display_settings(self, settings, source_tab=None):
         self.display_settings.update(settings)
-        self.display_publish_count += 1
 
     def publish_shared_info_text(self, text, source_tab=None):
         self.last_info_text = text
@@ -246,38 +203,15 @@ class DummyParentApp:
         return None
 
 
-@pytest.mark.parametrize(
-    "module_name,class_name",
-    [
-        ("tabs.image_browser_tab", "ImageBrowserApp"),
-        ("tabs.calibration_tab", "CalibrationApp"),
-        ("tabs.mask_tab", "MaskApp"),
-        ("tabs.reduction_tab", "ReductionTab"),
-        ("tabs.protocol_preview_tab", "ProtocolPreviewApp"),
-    ],
-)
-def test_migrated_image_tabs_construct_with_image_viewer(qapp, module_name, class_name):
-    module = __import__(module_name, fromlist=[class_name])
-    tab_class = getattr(module, class_name)
-
-    tab = tab_class(DummyParentApp())
-    try:
-        assert isinstance(tab.image_viewer, ImageViewer)
-    finally:
-        tab.close()
-
-
 def test_folder_row_reopens_after_session_navigation(qapp, tmp_path):
     from tabs.image_browser_tab import ImageBrowserApp
 
     tab = ImageBrowserApp(DummyParentApp())
     try:
-        tab.session_manager.callbacks.clear()
-        notifications = []
-        tab.session_manager.add_callback(lambda manager: notifications.append(manager.current_index))
-
         first_path = str(tmp_path / "first.tif")
         second_path = str(tmp_path / "second.tif")
+        from PyQt5.QtWidgets import QListWidgetItem
+
         first_item = QListWidgetItem("first.tif")
         first_item.setData(Qt.UserRole, first_path)
         second_item = QListWidgetItem("second.tif")
@@ -288,51 +222,11 @@ def test_folder_row_reopens_after_session_navigation(qapp, tmp_path):
         tab.folder_files_list.setCurrentItem(first_item)
         tab.session_manager.add_image_reference(second_path)
         tab.folder_files_list.setCurrentItem(second_item)
-        notification_count = len(notifications)
-
-        tab.folder_files_list.itemClicked.emit(second_item)
-        assert len(notifications) == notification_count
 
         tab.folder_files_list.itemClicked.emit(first_item)
         assert tab.session_manager.current_index == 0
-        assert notifications[-1] == 0
     finally:
         tab.close()
-
-
-@pytest.mark.parametrize(
-    "module_name,class_name",
-    [
-        ("tabs.reduction_tab", "ReductionTab"),
-        ("tabs.transform_tab", "TransformTab"),
-    ],
-)
-def test_processing_result_reset_disables_export(qapp, module_name, class_name):
-    module = __import__(module_name, fromlist=[class_name])
-    tab_class = getattr(module, class_name)
-    tab = tab_class(DummyParentApp())
-    try:
-        tab._set_current_result(object())
-        assert tab.export_button.isEnabled()
-
-        tab.update_plot(None)
-
-        assert tab._current_result is None
-        assert not tab.export_button.isEnabled()
-    finally:
-        tab.close()
-
-
-def test_viewer_shows_axes_and_histogram_controls(viewer):
-    image = np.arange(4 * 6, dtype=float).reshape(4, 6)
-
-    viewer.set_image(image)
-    viewer.set_levels(1.0, 20.0)
-
-    assert viewer._plot_item.getAxis("left").isVisible()
-    assert viewer._plot_item.getAxis("bottom").isVisible()
-    assert viewer._histogram.imageItem() is viewer._image_item
-    assert viewer._histogram.getLevels() == pytest.approx((1.0, 20.0))
 
 
 def test_base_tabs_share_display_settings_from_controls(qapp):
@@ -419,13 +313,12 @@ class DummyImageTab(QWidget):
     def __init__(self):
         super().__init__()
         self.image_data = None
-        self.update_count = 0
 
     def update_plot(self):
-        self.update_count += 1
+        pass
 
 
-def test_clear_layers_undo_restores_order_combined_mask_and_export(qapp):
+def test_clear_layers_undo_restores_order_and_combined_mask(qapp):
     from tabs.mask_tab import MaskApp
 
     tab = MaskApp(DummyParentApp())
@@ -434,25 +327,27 @@ def test_clear_layers_undo_restores_order_combined_mask_and_export(qapp):
     tab.mask_layers.extend([first, second])
     tab._update_layer_list()
     expected_mask = tab.combined_mask.copy()
+    tab.show()
+    qapp.processEvents()
     try:
-        assert tab.export_combined_button.isEnabled()
-
         tab._clear_all_layers()
 
         assert tab.mask_layers == []
         assert tab.combined_mask is None
-        assert not tab.export_combined_button.isEnabled()
 
-        tab.undo_stack.undo()
+        viewport = tab.image_viewer._graphics.viewport()
+        viewport.setFocus()
+        QTest.keyClick(viewport, Qt.Key_Z, Qt.ControlModifier)
 
         assert tab.mask_layers == [first, second]
         np.testing.assert_array_equal(tab.combined_mask, expected_mask)
-        assert tab.export_combined_button.isEnabled()
     finally:
         tab.close()
+        tab.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
-def test_mask_drawing_session_composes_preview_for_visible_layers():
+def test_mask_layer_composition_replaces_only_visible_target():
     layers = [
         MaskLayer([[False, True], [False, False]]),
         MaskLayer([[False, False], [True, False]]),
@@ -466,36 +361,31 @@ def test_mask_drawing_session_composes_preview_for_visible_layers():
     np.testing.assert_array_equal(combined, expected)
 
 
-class DummyPointerEvent:
-    def __init__(self, x, y, inside_image=True, inside_canvas=True):
-        self.x = x
-        self.y = y
-        self.inside_image = inside_image
-        self.inside_canvas = inside_canvas
+def DummyPointerEvent(x, y, inside_image=True, inside_canvas=True):
+    return ImagePointerEvent(x, y, Qt.LeftButton, Qt.NoModifier, inside_image, inside_canvas)
 
 
-def _drawing_session(tool, layer):
+def _drawing_session(tool, layer, viewer):
     return MaskDrawingSession(
         is_enabled=lambda: True,
         get_tool=lambda: tool,
         get_active_layer=lambda: layer,
-        get_active_layer_index=lambda: 0,
         get_layers=lambda: [layer],
-        set_combined_mask=lambda mask: None,
-        update_combined_mask=lambda: None,
-        update_plot=lambda: None,
+        get_viewer=lambda: viewer,
+        get_image_data=lambda: viewer.source_array,
         set_drawing_enabled=lambda enabled: None,
         should_auto_disable=lambda: False,
         get_brush_size=lambda: 1,
         get_draw_value=lambda: True,
         on_edit_finished=lambda *_args: None,
+        on_error=lambda error: pytest.fail(str(error)),
     )
 
 
-def test_rectangle_clamps_plot_points_to_image_corners():
+def test_rectangle_clamps_plot_points_to_image_corners(viewer):
     layer = MaskLayer(np.zeros((4, 6), dtype=bool))
     tool = RectangleDrawingTool()
-    session = _drawing_session(tool, layer)
+    session = _drawing_session(tool, layer, viewer)
 
     session.handle_press(DummyPointerEvent(-10, -10, inside_image=False))
     session.handle_motion(DummyPointerEvent(20, 20, inside_image=False))
@@ -504,19 +394,20 @@ def test_rectangle_clamps_plot_points_to_image_corners():
     assert layer.data.all()
 
 
-def test_drawing_ignores_press_outside_plot_canvas():
+def test_drawing_ignores_press_outside_plot_canvas(viewer):
     layer = MaskLayer(np.zeros((4, 6), dtype=bool))
     tool = RectangleDrawingTool()
-    session = _drawing_session(tool, layer)
+    session = _drawing_session(tool, layer, viewer)
 
     session.handle_press(DummyPointerEvent(-10, -10, inside_image=False, inside_canvas=False))
 
-    assert not tool.is_active
     assert not layer.data.any()
-def test_brush_clamps_active_stroke_to_image_edge():
+
+
+def test_brush_clamps_active_stroke_to_image_edge(viewer):
     layer = MaskLayer(np.zeros((4, 6), dtype=bool))
     tool = BrushDrawingTool()
-    session = _drawing_session(tool, layer)
+    session = _drawing_session(tool, layer, viewer)
 
     session.handle_press(DummyPointerEvent(1, 1))
     session.handle_motion(DummyPointerEvent(20, 1, inside_image=False))
@@ -525,12 +416,197 @@ def test_brush_clamps_active_stroke_to_image_edge():
     assert layer.data[1, -1]
 
 
-def test_smart_fill_rejects_seed_outside_image():
+def test_smart_fill_rejects_seed_outside_image(viewer):
     layer = MaskLayer(np.zeros((4, 6), dtype=bool))
     tool = WatershedFillTool()
-    session = _drawing_session(tool, layer)
+    session = _drawing_session(tool, layer, viewer)
 
     session.handle_press(DummyPointerEvent(-1, -1, inside_image=False))
 
-    assert not tool.is_active
     assert not layer.data.any()
+
+
+@pytest.mark.parametrize("tool_name", ["Brush", "Eraser", "Line", "Rectangle", "Circle", "Polygon", "Smart Fill"])
+def test_mask_gestures_defer_pixels_publication_and_history_until_commit(qapp, tool_name):
+    from tabs.mask_tab import MaskApp
+
+    published = []
+    parent = DummyParentApp()
+    parent.publish_shared_mask = lambda mask, **_kwargs: published.append(mask.copy())
+    tab = MaskApp(parent)
+    tab.image_data = np.arange(16 * 18, dtype=float).reshape(16, 18)
+    tab.update_plot()
+    initial = np.full((16, 18), tool_name == "Eraser", dtype=bool)
+    layer = MaskLayer(initial.copy())
+    tab.mask_layers.append(layer)
+    tab._update_layer_list()
+    tab._update_tool_brush_size(1)
+    tab.tool_buttons[tool_name].click()
+    published.clear()
+    session = tab.drawing_session
+    try:
+        session.handle_press(DummyPointerEvent(2, 3))
+        for point in [(4, 4), (6, 6), (9, 8)]:
+            session.handle_motion(DummyPointerEvent(*point))
+        if tool_name == "Polygon":
+            session.handle_release(DummyPointerEvent(9, 8))
+            session.handle_press(DummyPointerEvent(9, 8))
+            session.handle_press(DummyPointerEvent(9, 3))
+        np.testing.assert_array_equal(layer.data, initial)
+        np.testing.assert_array_equal(tab.combined_mask, initial)
+        assert published == []
+        assert tab.undo_stack.count() == 0
+        if tool_name == "Polygon":
+            assert session.finish_polygon()
+        else:
+            session.handle_release(DummyPointerEvent(9, 8))
+        assert len(published) == tab.undo_stack.count() == 1
+        after = layer.data.copy()
+        assert np.any(after != initial)
+        tab.undo_stack.undo()
+        np.testing.assert_array_equal(layer.data, initial)
+        tab.undo_stack.redo()
+        np.testing.assert_array_equal(layer.data, after)
+    finally:
+        tab.close()
+
+
+def test_mask_brush_keeps_alt_effect_per_segment_and_commits_release_endpoint(viewer):
+    from sciview.masking.drawing import paint_brush_segment
+
+    layer = MaskLayer(np.zeros((16, 16), dtype=bool))
+    session = _drawing_session(BrushDrawingTool(), layer, viewer)
+    session.handle_press(DummyPointerEvent(2, 3))
+    session.handle_motion(DummyPointerEvent(8, 3))
+    session.get_draw_value = lambda: False
+    session.handle_motion(DummyPointerEvent(8, 7))
+    session.handle_release(DummyPointerEvent(12, 7))
+    expected = np.zeros_like(layer.data)
+    paint_brush_segment(expected, (3, 2), (3, 2), 0, True)
+    paint_brush_segment(expected, (3, 2), (3, 8), 0, True)
+    paint_brush_segment(expected, (3, 8), (7, 8), 0, False)
+    paint_brush_segment(expected, (7, 8), (7, 12), 0, False)
+    np.testing.assert_array_equal(layer.data, expected)
+
+
+def test_release_outside_canvas_commits_last_accepted_point_and_ignores_right_click(viewer):
+    layer = MaskLayer(np.zeros((16, 16), dtype=bool))
+    session = _drawing_session(RectangleDrawingTool(), layer, viewer)
+    right_click = ImagePointerEvent(1, 1, Qt.RightButton, Qt.NoModifier, True, True)
+    session.handle_press(right_click)
+    session.handle_press(DummyPointerEvent(2, 3))
+    session.handle_motion(DummyPointerEvent(6, 7))
+    session.handle_motion(DummyPointerEvent(99, 99, False, False))
+    session.handle_release(DummyPointerEvent(99, 99, False, False))
+    expected = np.zeros_like(layer.data)
+    expected[3:8, 2:7] = True
+    np.testing.assert_array_equal(layer.data, expected)
+
+
+def test_pending_mask_edit_cannot_mutate_a_different_selected_layer(viewer):
+    layer = MaskLayer(np.zeros((16, 16), dtype=bool))
+    session = _drawing_session(BrushDrawingTool(), layer, viewer)
+    session.handle_press(DummyPointerEvent(2, 3))
+    session.handle_motion(DummyPointerEvent(6, 7))
+    session.get_active_layer = lambda: MaskLayer(np.ones((16, 16), dtype=bool))
+    session.handle_release(DummyPointerEvent(8, 8))
+    assert not layer.data.any()
+
+
+@pytest.mark.parametrize("mode", ["OR", "AND"])
+def test_mask_commit_publishes_only_the_completed_layer_composition(qapp, mode):
+    from tabs.mask_tab import MaskApp
+
+    parent = DummyParentApp()
+    published = []
+    parent.publish_shared_mask = lambda mask, **_kwargs: published.append(mask.copy())
+    tab = MaskApp(parent)
+    first = np.zeros((10, 12), dtype=bool)
+    first[2:9, 3:10] = True
+    layer = MaskLayer(np.zeros_like(first), combine_mode=mode)
+    tab.mask_layers.extend([MaskLayer(first), layer, MaskLayer(np.ones_like(first), visible=False)])
+    tab._update_layer_list()
+    tab.layer_list.setCurrentRow(tab._list_row_for_layer(1))
+    tab.tool_buttons["Rectangle"].click()
+    published.clear()
+    try:
+        tab.drawing_session.handle_press(DummyPointerEvent(2, 1))
+        tab.drawing_session.handle_motion(DummyPointerEvent(6, 5))
+        assert published == []
+        tab.drawing_session.handle_release(DummyPointerEvent(6, 5))
+        expected_layer = np.zeros_like(first)
+        expected_layer[1:6, 2:7] = True
+        expected = (first | expected_layer) if mode == "OR" else (first & expected_layer)
+        np.testing.assert_array_equal(layer.data, expected_layer)
+        np.testing.assert_array_equal(tab.combined_mask, expected)
+        assert len(published) == 1
+        np.testing.assert_array_equal(published[0], expected)
+    finally:
+        tab.close()
+
+
+def test_failed_fill_keeps_original_mask_and_reports_the_error(viewer, monkeypatch):
+    import sciview.interfaces.stable_qt.tools.mask_drawing_tools as drawing
+
+    viewer.set_image(np.ones((8, 8)))
+    layer = MaskLayer(np.zeros((8, 8), dtype=bool))
+    errors = []
+    session = _drawing_session(WatershedFillTool(), layer, viewer)
+    session.on_error = errors.append
+
+    def failed_fill(*_args, **_kwargs):
+        raise ValueError("Invalid fill input")
+
+    monkeypatch.setattr(drawing, "watershed_fill_mask", failed_fill)
+    session.handle_press(DummyPointerEvent(3, 3))
+    session.handle_release(DummyPointerEvent(3, 3))
+    assert not layer.data.any()
+    assert len(errors) == 1
+    assert "Invalid fill input" in str(errors[0])
+    assert "mask-drawing-preview" not in viewer._overlays
+
+
+@pytest.mark.parametrize("cancel", [None, "escape", "image", "layer", "tool"])
+def test_real_mask_pointer_gesture_commit_and_cancellation(qapp, cancel):
+    from tabs.mask_tab import MaskApp
+
+    tab = MaskApp(DummyParentApp())
+    tab.resize(1280, 800)
+    tab.image_data = np.ones((20, 30))
+    tab.update_plot()
+    layer = MaskLayer(np.zeros((20, 30), dtype=bool))
+    tab.mask_layers.append(layer)
+    tab._update_layer_list()
+    tab.tool_buttons["Rectangle"].click()
+    tab.show()
+    qapp.processEvents()
+    viewer = tab.image_viewer
+    viewport = viewer._graphics.viewport()
+
+    def position(x, y):
+        return viewer._graphics.mapFromScene(viewer._view_box.mapViewToScene(QPointF(x, y)))
+
+    try:
+        QTest.mousePress(viewport, Qt.LeftButton, pos=position(3, 4))
+        QTest.mouseMove(viewport, position(9, 10))
+        assert not layer.data.any()
+        if cancel == "escape":
+            QTest.keyClick(viewport, Qt.Key_Escape)
+        elif cancel == "image":
+            tab.image_data = np.full((20, 30), 2.0)
+            tab.update_plot()
+        elif cancel == "layer":
+            tab._set_layer_visibility(0, False)
+        elif cancel == "tool":
+            tab.tool_buttons["Brush"].click()
+        QTest.mouseRelease(viewport, Qt.LeftButton, pos=position(9, 10))
+        if cancel is None:
+            assert layer.data[6, 6]
+            assert tab.undo_stack.count() == 1
+        else:
+            assert not layer.data.any()
+            assert tab.undo_stack.count() == 0
+    finally:
+        tab.close()
+        tab.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)

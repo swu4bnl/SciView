@@ -555,3 +555,8 @@ mask.error.export:
   context: "Status shown when mask export fails."
   placeholders:
     error: "Raw error detail from the export operation."
+mask.error.drawing:
+  text: "无法应用掩膜绘制：{error}"
+  context: "Status shown when committing a mask gesture fails; existing mask pixels remain unchanged."
+  placeholders:
+    error: "Raw error detail from the drawing operation."

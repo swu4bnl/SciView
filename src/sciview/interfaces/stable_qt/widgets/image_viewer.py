@@ -10,9 +10,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PyQt5.QtCore import QEvent, QPointF, Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, QPointF, QSize, Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon
-from PyQt5.QtWidgets import QApplication, QFileDialog, QGridLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import (
+    QApplication, QFileDialog, QFrame, QGridLayout, QLabel, QLayout,
+    QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
+)
 
 import pyqtgraph as pg
 import pyqtgraph.exporters
@@ -34,6 +37,22 @@ from sciview.settings.viewer_config import (
 
 
 pg.setConfigOptions(imageAxisOrder="row-major")
+
+
+class _ToolbarScrollArea(QScrollArea):
+    """Keep native toolbar sizing without imposing its width on the viewer."""
+
+    def sizeHint(self) -> QSize:
+        content = self.widget().sizeHint()
+        margins = self.contentsMargins()
+        height = (
+            content.height() + margins.top() + margins.bottom()
+            + self.horizontalScrollBar().sizeHint().height()
+        )
+        return QSize(content.width(), height)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(0, self.sizeHint().height())
 
 
 @dataclass(frozen=True)
@@ -67,6 +86,7 @@ class ImageViewer(QWidget):
     mouse_double_clicked = pyqtSignal(object)
     interaction_mode_changed = pyqtSignal(str)
     overlay_visibility_changed = pyqtSignal()
+    theme_changed = pyqtSignal()
 
     _SUPPORTED_COLORMAPS = set(SUPPORTED_IMAGE_COLORMAPS) | set(ARTIST_IMAGE_COLORMAPS)
 
@@ -150,6 +170,7 @@ class ImageViewer(QWidget):
         self._toolbar.setObjectName("imageViewerToolbar")
         self._toolbar.setAttribute(Qt.WA_StyledBackground, True)
         self._toolbar_layout = QGridLayout(self._toolbar)
+        self._toolbar_layout.setSizeConstraint(QLayout.SetMinAndMaxSize)
         self._toolbar_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
         self._toolbar_layout.setHorizontalSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         self._overlay_tool_cells: list[QWidget] = []
@@ -165,6 +186,9 @@ class ImageViewer(QWidget):
                 cell = self._make_labeled_tool_cell(tr(action.label_id), self._toolbar_buttons[key])
                 self._toolbar_layout.addWidget(cell, 0, column, Qt.AlignHCenter)
                 group_cells.append(cell)
+                column += 1
+            if specification.key == "navigation":
+                self._annotation_tool_column = column
                 column += 1
             if specification.key == "overlays":
                 self._overlay_tool_cells = group_cells
@@ -182,11 +206,19 @@ class ImageViewer(QWidget):
         column += 1
         self._toolbar_layout.addWidget(self._palette_info_label, 0, column)
 
+        self._toolbar_scroll = _ToolbarScrollArea()
+        self._toolbar_scroll.setFrameShape(QFrame.NoFrame)
+        self._toolbar_scroll.setWidgetResizable(True)
+        self._toolbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._toolbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._toolbar_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._toolbar_scroll.setWidget(self._toolbar)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
         layout.addWidget(self._graphics)
-        layout.addWidget(self._toolbar)
+        layout.addWidget(self._toolbar_scroll)
 
         self.refresh_theme()
         self.set_colormap(self._colormap_name)
@@ -335,14 +367,14 @@ class ImageViewer(QWidget):
     def set_title(self, title: str) -> None:
         self._plot_item.setTitle(title)
 
-    def set_interaction_locked(self, locked: bool) -> None:
+    def set_interaction_locked(self, locked: bool, *, navigation_enabled: bool = False) -> None:
         """Lock pan/zoom handling while preserving pointer signals for tools."""
         self._interaction_locked = bool(locked)
         if not locked:
             self._release_pointer_capture()
         self._view_box.setMouseEnabled(x=not locked, y=not locked)
-        self._pan_button.setEnabled(not locked)
-        self._zoom_button.setEnabled(not locked)
+        self._pan_button.setEnabled(not locked or navigation_enabled)
+        self._zoom_button.setEnabled(not locked or navigation_enabled)
         if locked:
             self._pan_button.setChecked(False)
             self._zoom_button.setChecked(False)
@@ -357,13 +389,26 @@ class ImageViewer(QWidget):
             raise ValueError(f"Unsupported viewer toolbar action: {action}")
         return self._load_toolbar_icon(action)
 
+    def set_annotation_tool(self, button: QToolButton, tools: QWidget) -> None:
+        """Place Mark beside navigation and its contextual strip above the toolbar."""
+        cell = self._make_labeled_tool_cell(tr("annotations.toolbar"), button)
+        self._toolbar_layout.addWidget(cell, 0, self._annotation_tool_column, Qt.AlignHCenter)
+        self.layout().insertWidget(self.layout().indexOf(self._toolbar_scroll), tools)
+
+    def image_to_widget(self, point: QPointF) -> QPointF:
+        """Map an image position to this widget for contextual editors."""
+        scene_point = self._view_box.mapViewToScene(point)
+        viewport_point = self._graphics.mapFromScene(scene_point)
+        return QPointF(self._graphics.viewport().mapTo(self, viewport_point))
+
     def enable_overlay_tools(self) -> None:
         """Show the beam-center and mask toolbar controls."""
         for cell in self._overlay_tool_cells:
             cell.setVisible(True)
 
     def set_display_controls(self, controls: QWidget) -> None:
-        """Place tab-owned display controls beside the viewer tools, in the same toolbar row."""
+        """Keep display controls alongside the main viewer tools."""
+        self._toolbar_layout.removeWidget(controls)
         self._toolbar_layout.addWidget(controls, 0, self._display_controls_column)
 
     def activate_navigation_mode(self, mode: str) -> None:
@@ -434,9 +479,9 @@ class ImageViewer(QWidget):
             return self._source_array[row, column]
         return None
 
-    def set_overlay_item(self, overlay_id: str, item: Any, *, group: str | None = None, visible: bool = True) -> None:
+    def set_overlay_item(self, overlay_id: str, item: Any, *, group: str | None = None, visible: bool = True, ignore_bounds: bool = False) -> None:
         self.remove_overlay(overlay_id)
-        self._plot_item.addItem(item)
+        self._plot_item.addItem(item, ignoreBounds=ignore_bounds)
         item.setVisible(visible)
         self._overlays[overlay_id] = (item, group)
 
@@ -738,6 +783,7 @@ class ImageViewer(QWidget):
         self._palette_info_label.setStyleSheet(f"color: {muted_color.name()};")
         self._graphics.update()
         self.update()
+        self.theme_changed.emit()
 
     def _load_toolbar_icon(self, key: str) -> QIcon:
         icon_filename = VIEWER_TOOL_ICON_FILES.get(key)

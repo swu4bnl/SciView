@@ -1,705 +1,387 @@
-"""
-Mask Drawing Tools
+"""Native Qt mask gesture previews with a single pixel-mask commit per edit."""
 
-Provides interactive drawing tools for mask creation and editing.
-MaskDrawingSession coordinates PyQtGraph pointer events while tools focus on
-previewing or mutating boolean mask arrays.
-"""
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+import logging
+import math
 
 import numpy as np
-from abc import ABC, abstractmethod
-from typing import Optional, Tuple, Callable
+import pyqtgraph as pg
+from PyQt5.QtCore import QPointF, Qt
+from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsRectItem
 
-from sciview.masking.layers import compose_mask_layers
-from sciview.masking.operations import watershed_fill_mask
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
-from sciview.settings.viewer_config import MASK_DRAWING_DEFAULTS
+from sciview.interfaces.stable_qt.widgets.image_viewer import ImagePointerEvent, ImageViewer
+from sciview.interfaces.stable_qt.tools.drawing_interaction import DrawingGesture
+from sciview.masking.drawing import (
+    Pixel, paint_brush_segment, paint_circle,
+    paint_line, paint_polygon, paint_rectangle,
+)
+from sciview.masking.layers import MaskLayer
+from sciview.masking.operations import watershed_fill_mask
+from sciview.settings.viewer_config import MASK_DRAWING_DEFAULTS, VIEWER_COLORS
+
+logger = logging.getLogger(__name__)
 
 
-def _draw_disk(mask_layer: np.ndarray, center_row: int, center_col: int, radius: int, draw_value: bool) -> None:
-    """Draw a filled disk into a boolean mask layer."""
-    height, width = mask_layer.shape
-    safe_radius = max(1, int(radius))
-    y_coords, x_coords = np.ogrid[-safe_radius : safe_radius + 1, -safe_radius : safe_radius + 1]
-    mask_circle = (x_coords**2 + y_coords**2 <= safe_radius**2)
+class DrawingTool:
+    """Gesture state; pixel painting is delegated to the neutral masking backend."""
 
-    y_min = max(0, center_row - safe_radius)
-    y_max = min(height, center_row + safe_radius + 1)
-    x_min = max(0, center_col - safe_radius)
-    x_max = min(width, center_col + safe_radius + 1)
-
-    circle_y_min = y_min - (center_row - safe_radius)
-    circle_y_max = circle_y_min + (y_max - y_min)
-    circle_x_min = x_min - (center_col - safe_radius)
-    circle_x_max = circle_x_min + (x_max - x_min)
-
-    valid_circle = mask_circle[circle_y_min:circle_y_max, circle_x_min:circle_x_max]
-    if draw_value:
-        mask_layer[y_min:y_max, x_min:x_max][valid_circle] = 1
-    else:
-        mask_layer[y_min:y_max, x_min:x_max][valid_circle] = 0
-
-
-class DrawingTool(ABC):
-    """Base class for PyQtGraph-driven mask drawing tools.
-
-    The viewer/session owns mouse events. Tools only maintain the minimum drawing
-    state needed to preview or mutate a boolean mask layer.
-    """
-    
     def __init__(self, name: str):
         self.name = name
         self.brush_size = int(MASK_DRAWING_DEFAULTS["brush_size"])
-        self.draw_value = True  # True = add (mask), False = remove (unmask)
-        self.is_active = False  # Track if tool is in drawing state
-        
-        # Drawing state (inherited by all tools)
-        self.is_dragging = False
-        self.last_draw_point = None
-        self.get_image_data = None
-    
-    def set_image_data_getter(self, getter: Callable):
-        """Set function to retrieve current image data"""
-        self.get_image_data = getter
+        self.draw_value = True
+        self.gesture = DrawingGesture()
 
-    def begin(self, point: Tuple[int, int]) -> None:
-        self.is_dragging = True
-        self.is_active = True
-        self.last_draw_point = point
-        self.start(point)
+    @property
+    def kind(self) -> str:
+        return self.name.lower().replace(" ", "_")
 
-    def move(self, point: Tuple[int, int]) -> None:
-        self.last_draw_point = point
+    @staticmethod
+    def qt_point(point: Pixel) -> QPointF:
+        return QPointF(point[1] + 0.5, point[0] + 0.5)
 
-    def end(self) -> None:
-        self.is_dragging = False
-    
-    @abstractmethod
-    def start(self, point: Tuple[int, int]):
-        """Called when mouse is pressed - starts the drawing action"""
-        pass
-    
-    @abstractmethod
-    def preview(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        """Generate a preview of what would be drawn without modifying original"""
-        pass
-    
-    @abstractmethod
-    def finalize(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        """
-        Finalize the drawing action.
-        
-        Args:
-            mask_layer: Current mask layer
-            current_point: Final mouse position
-        
-        Returns:
-            Updated mask layer with drawing applied
-        """
-        pass
-    
-    def reset(self):
-        """Reset tool state between drawings"""
-        self.is_active = False
-        self.is_dragging = False
-        self.last_draw_point = None
+    @staticmethod
+    def pixel(point: QPointF) -> Pixel:
+        return int(point.y()), int(point.x())
+
+    @property
+    def is_active(self) -> bool:
+        return self.gesture.active
+
+    @property
+    def start_point(self) -> Pixel | None:
+        return self.pixel(self.gesture.points[0]) if self.gesture.active else None
+
+    @property
+    def last_draw_point(self) -> Pixel | None:
+        return self.pixel(self.gesture.current) if self.gesture.current is not None else None
+
+    def begin(self, point: Pixel) -> None:
+        self.gesture.press(self.kind, self.qt_point(point))
+
+    def reset(self) -> None:
+        self.gesture.cancel()
+
+
+class BrushDrawingTool(DrawingTool):
+    def __init__(self):
+        super().__init__("Brush")
+
+
+class LineDrawingTool(DrawingTool):
+    def __init__(self):
+        super().__init__("Line")
+
+
+class RectangleDrawingTool(DrawingTool):
+    def __init__(self):
+        super().__init__("Rectangle")
+
+
+class CircleDrawingTool(DrawingTool):
+    def __init__(self):
+        super().__init__("Circle")
+
+
+class PolygonDrawingTool(DrawingTool):
+    def __init__(self):
+        super().__init__("Polygon")
+
+    @property
+    def vertices(self) -> list[Pixel]:
+        return [self.pixel(point) for point in self.gesture.points]
+
+    def add_vertex(self, point: Pixel) -> None:
+        self.gesture.press("polygon", self.qt_point(point))
+
+
+class WatershedFillTool(DrawingTool):
+    def __init__(self):
+        super().__init__("Smart Fill")
+
+
+@dataclass(frozen=True)
+class _BrushSample:
+    point: Pixel
+    radius: int
+    value: bool
 
 
 class MaskDrawingSession:
-    """Coordinate mask drawing events, previews, and layer mutation."""
+    """Keep pointer motion in Qt; compose and publish masks only after a commit."""
 
     def __init__(
         self,
         *,
         is_enabled: Callable[[], bool],
         get_tool: Callable[[], DrawingTool | None],
-        get_active_layer: Callable[[], object | None],
-        get_active_layer_index: Callable[[], int | None],
-        get_layers: Callable[[], list],
-        set_combined_mask: Callable[[np.ndarray], None],
-        update_combined_mask: Callable[[], None],
-        update_plot: Callable[[], None],
+        get_active_layer: Callable[[], MaskLayer | None],
+        get_layers: Callable[[], list[MaskLayer]],
+        get_viewer: Callable[[], ImageViewer],
+        get_image_data: Callable[[], np.ndarray | None],
         set_drawing_enabled: Callable[[bool], None],
         should_auto_disable: Callable[[], bool],
         get_brush_size: Callable[[], int],
         get_draw_value: Callable[[], bool],
         on_edit_finished: Callable[[int, np.ndarray, np.ndarray], None],
+        on_error: Callable[[Exception], None],
     ) -> None:
         self.is_enabled = is_enabled
         self.get_tool = get_tool
         self.get_active_layer = get_active_layer
-        self.get_active_layer_index = get_active_layer_index
         self.get_layers = get_layers
-        self.set_combined_mask = set_combined_mask
-        self.update_combined_mask = update_combined_mask
-        self.update_plot = update_plot
+        self.get_viewer = get_viewer
+        self.get_image_data = get_image_data
         self.set_drawing_enabled = set_drawing_enabled
         self.should_auto_disable = should_auto_disable
         self.get_brush_size = get_brush_size
         self.get_draw_value = get_draw_value
         self.on_edit_finished = on_edit_finished
-        self._edit_layer: object | None = None
-        self._edit_before: np.ndarray | None = None
+        self.on_error = on_error
+        self._edit_layer: MaskLayer | None = None
+        self._edit_tool: DrawingTool | None = None
+        self._samples: list[_BrushSample] = []
+        self._preview: QGraphicsRectItem | None = None
+        self._shape_item: QGraphicsPathItem | None = None
+        self._stroke_item: QGraphicsPathItem | None = None
+        self._stroke_gesture = DrawingGesture()
+        self._stroke_style: tuple[int, bool] | None = None
 
-    def handle_press(self, event) -> None:
-        tool = self.get_tool()
-        if not self.is_enabled() or tool is None:
-            return
-        self._sync_tool(tool)
-        if isinstance(tool, PolygonDrawingTool):
-            if not tool.vertices:
-                current_layer = self.get_active_layer()
-                if current_layer is None or not current_layer.visible:
-                    return
-            else:
-                target = self._edit_target()
-                if target is None:
-                    self.cancel_current_edit()
-                    return
-                _, current_layer = target
-            point = self._event_point_for_tool(event, tool, current_layer.data)
-            if point is None:
-                return
-            if not tool.vertices:
-                self._begin_edit(current_layer)
-            tool.add_vertex(point)
-            self._show_preview(point, tool)
-            return
-        layer_index = self.get_active_layer_index()
-        current_layer = self.get_active_layer()
-        if layer_index is None or current_layer is None or not current_layer.visible:
-            return
-        point = self._event_point_for_tool(event, tool, current_layer.data)
-        if point is None:
-            return
-        self._begin_edit(current_layer)
-        tool.begin(point)
-        if isinstance(tool, BrushDrawingTool):
-            self._draw_brush_stroke(point, tool)
-        else:
-            self._show_preview(point, tool)
-
-    def handle_motion(self, event) -> None:
-        tool = self.get_tool()
-        if not self.is_enabled() or tool is None:
-            return
-        self._sync_tool(tool)
-        if isinstance(tool, PolygonDrawingTool) and tool.vertices:
-            target = self._edit_target()
-            if target is not None:
-                _, current_layer = target
-                point = self._event_point_for_tool(event, tool, current_layer.data)
-                if point is not None:
-                    self._show_preview(point, tool)
-            return
-        if not (tool.is_dragging and tool.is_active):
-            return
-        if isinstance(tool, BrushDrawingTool):
-            current_layer = self.get_active_layer()
-            if current_layer is None:
-                return
-            point = self._event_point_for_tool(event, tool, current_layer.data)
-            if point is None:
-                return
-            self._draw_brush_stroke(point, tool)
-        else:
-            current_layer = self.get_active_layer()
-            if current_layer is None:
-                return
-            point = self._event_point_for_tool(event, tool, current_layer.data)
-            if point is None:
-                return
-            tool.move(point)
-            self._show_preview(point, tool)
-
-    def handle_release(self, event) -> None:
-        tool = self.get_tool()
-        if isinstance(tool, PolygonDrawingTool):
-            return
-        if tool is None or not tool.is_dragging:
-            return
-
-        if tool.is_active:
-            try:
-                if isinstance(tool, BrushDrawingTool):
-                    target = self._edit_target()
-                    if target is None:
-                        return
-                    _, current_layer = target
-                    point = self._event_point_for_tool(event, tool, current_layer.data) or tool.last_draw_point
-                    if point is None:
-                        return
-                else:
-                    target = self._edit_target()
-                    if target is None:
-                        return
-                    _, current_layer = target
-                    point = self._event_point_for_tool(event, tool, current_layer.data) or tool.last_draw_point
-                    if point is None:
-                        return
-                    current_layer.data = tool.finalize(current_layer.data, point)
-                self.update_combined_mask()
-                self.update_plot()
-                self._finish_edit()
-            finally:
-                tool.end()
-                tool.reset()
-
-        if self.should_auto_disable():
-            self.set_drawing_enabled(False)
+    @staticmethod
+    def _qt_point(point: Pixel) -> QPointF:
+        return DrawingTool.qt_point(point)
 
     def _sync_tool(self, tool: DrawingTool) -> None:
-        tool.brush_size = self.get_brush_size()
+        tool.brush_size = max(1, self.get_brush_size())
         tool.draw_value = self.get_draw_value()
 
-    def _draw_brush_stroke(self, point: tuple[int, int], tool: DrawingTool) -> None:
-        target = self._edit_target()
-        if target is None:
-            return
-        layer_index, current_layer = target
-        current_layer.data = tool.finalize(current_layer.data, point)
-        tool.move(point)
-        self._show_layer_preview(layer_index, current_layer.data)
-
-    def _show_preview(self, point: tuple[int, int], tool: DrawingTool) -> None:
-        target = self._edit_target()
-        if target is None:
-            return
-        layer_index, current_layer = target
-        preview_data = tool.preview(current_layer.data, point)
-        self._show_layer_preview(layer_index, preview_data)
-
-    def _show_layer_preview(self, layer_index: int, preview_data: np.ndarray) -> None:
-        preview_mask = compose_mask_layers(
-            self.get_layers(),
-            replacement=(layer_index, preview_data),
+    def _begin_edit(self, layer: MaskLayer, tool: DrawingTool) -> None:
+        self._edit_layer = layer
+        self._edit_tool = tool
+        height, width = layer.data.shape
+        self._preview = QGraphicsRectItem(0, 0, width, height)
+        self._preview.setPen(pg.mkPen(None))
+        self._preview.setBrush(pg.mkBrush(None))
+        self._preview.setFlag(QGraphicsRectItem.ItemClipsChildrenToShape, True)
+        self._preview.setAcceptedMouseButtons(Qt.NoButton)
+        self._preview.setZValue(30)
+        self._preview.setOpacity(0.5)
+        self.get_viewer().set_overlay_item(
+            "mask-drawing-preview", self._preview,
+            group="mask-drawing-preview", ignore_bounds=True,
         )
-        if preview_mask is None:
+
+    def _edit_target(self) -> tuple[int, MaskLayer] | None:
+        layer = self._edit_layer
+        if layer is None or not layer.visible or self.get_active_layer() is not layer:
+            return None
+        if self.get_tool() is not self._edit_tool:
+            return None
+        for index, candidate in enumerate(self.get_layers()):
+            if candidate is layer:
+                return index, layer
+        return None
+
+    def handle_press(self, event: ImagePointerEvent) -> None:
+        if event.button != Qt.LeftButton or not self.is_enabled():
             return
-        preview_mask = preview_mask.astype(bool, copy=False)
-        self.set_combined_mask(preview_mask)
-        self.update_plot()
+        tool = self.get_tool()
+        if tool is None:
+            return
+        if self._edit_layer is not None and self._edit_target() is None:
+            self.cancel_current_edit()
+        layer = self.get_active_layer()
+        if layer is None or not layer.visible:
+            return
+        point = self._event_point(event, tool, layer.data.shape)
+        if point is None:
+            return
+        self._sync_tool(tool)
+        if not isinstance(tool, PolygonDrawingTool) or not tool.vertices:
+            self.cancel_current_edit()
+            self._begin_edit(layer, tool)
+        if isinstance(tool, PolygonDrawingTool):
+            tool.add_vertex(point)
+        else:
+            tool.begin(point)
+        if isinstance(tool, BrushDrawingTool):
+            self._append_brush_sample(point, tool)
+        else:
+            self._show_shape(tool)
+
+    def handle_motion(self, event: ImagePointerEvent) -> None:
+        tool = self._edit_tool
+        if not self.is_enabled() or tool is None:
+            return
+        target = self._edit_target()
+        if target is None:
+            self.cancel_current_edit()
+            return
+        point = self._event_point(event, tool, target[1].data.shape)
+        if point is None:
+            return
+        self._sync_tool(tool)
+        tool.gesture.move(self._qt_point(point))
+        if isinstance(tool, BrushDrawingTool):
+            self._append_brush_sample(point, tool)
+        else:
+            self._show_shape(tool)
+
+    def handle_release(self, event: ImagePointerEvent) -> None:
+        tool = self._edit_tool
+        if event.button != Qt.LeftButton or tool is None or isinstance(tool, PolygonDrawingTool):
+            return
+        target = self._edit_target()
+        if target is None or not self.is_enabled():
+            self.cancel_current_edit()
+            return
+        point = self._event_point(event, tool, target[1].data.shape) or tool.last_draw_point
+        if point is None:
+            self.cancel_current_edit()
+            return
+        self._sync_tool(tool)
+        if not tool.gesture.release(self._qt_point(point), pixel_mask=True):
+            self.cancel_current_edit()
+            return
+        if isinstance(tool, BrushDrawingTool):
+            self._append_brush_sample(point, tool)
+        self._commit(point)
+
+    def handle_double_click(self, event: ImagePointerEvent) -> bool:
+        tool = self._edit_tool
+        if event.button != Qt.LeftButton or not isinstance(tool, PolygonDrawingTool):
+            return False
+        target = self._edit_target()
+        if target is None or not self.is_enabled():
+            self.cancel_current_edit()
+            return False
+        point = self._event_point(event, tool, target[1].data.shape)
+        if point is None:
+            return False
+        if tool.gesture.finish_polygon(self._qt_point(point)):
+            return self.finish_polygon()
+        return False
+
+    def _append_brush_sample(self, point: Pixel, tool: DrawingTool) -> None:
+        radius = 0 if tool.brush_size == 1 else tool.brush_size
+        sample = _BrushSample(point, radius, tool.draw_value)
+        if self._samples and sample == self._samples[-1]:
+            return
+        previous = self._samples[-1].point if self._samples else point
+        self._samples.append(sample)
+        style = (sample.radius, sample.value)
+        if self._stroke_item is None or style != self._stroke_style:
+            self._stroke_gesture.press("brush", self._qt_point(previous))
+            self._stroke_item = QGraphicsPathItem(self._preview)
+            self._stroke_item.setAcceptedMouseButtons(Qt.NoButton)
+            pen = pg.mkPen(self._preview_color(sample.value), width=max(1, sample.radius * 2), cosmetic=False)
+            pen.setCapStyle(Qt.RoundCap)
+            pen.setJoinStyle(Qt.RoundJoin)
+            self._stroke_item.setPen(pen)
+            self._stroke_style = style
+        self._stroke_gesture.move(self._qt_point(point))
+        if previous == point:
+            dot = QGraphicsPathItem(self._preview)
+            dot.setPath(self._stroke_gesture.path(max(1, sample.radius * 2), filled=True, pixel_mask=True))
+            dot.setPen(pg.mkPen(None))
+            dot.setBrush(pg.mkBrush(self._preview_color(sample.value)))
+            dot.setAcceptedMouseButtons(Qt.NoButton)
+        if len(self._stroke_gesture.points) > 1:
+            self._stroke_item.setPath(self._stroke_gesture.path(max(1, sample.radius * 2)))
+
+    @staticmethod
+    def _preview_color(value: bool) -> str:
+        return VIEWER_COLORS.mask_preview if value else VIEWER_COLORS.default_point
+
+    def _show_shape(self, tool: DrawingTool) -> None:
+        width = 1 if tool.brush_size == 1 else tool.brush_size * 2
+        path = tool.gesture.path(width, filled=True, pixel_mask=True)
+        if self._shape_item is None:
+            self._shape_item = QGraphicsPathItem(self._preview)
+            self._shape_item.setAcceptedMouseButtons(Qt.NoButton)
+            self._shape_item.setPen(pg.mkPen(None))
+        self._shape_item.setBrush(pg.mkBrush(self._preview_color(tool.draw_value)))
+        self._shape_item.setPath(path)
 
     def finish_polygon(self) -> bool:
-        tool = self.get_tool()
-        if not isinstance(tool, PolygonDrawingTool) or len(tool.vertices) < 3:
+        tool = self._edit_tool
+        if not isinstance(tool, PolygonDrawingTool) or not tool.gesture.finish_polygon():
             return False
+        if not self.is_enabled() or self._edit_target() is None:
+            self.cancel_current_edit()
+            return False
+        self._sync_tool(tool)
+        return self._commit(tool.vertices[-1])
+
+    def _commit(self, point: Pixel) -> bool:
         target = self._edit_target()
-        if target is None:
+        tool = self._edit_tool
+        if target is None or tool is None:
+            self.cancel_current_edit()
             return False
-        _, current_layer = target
-        current_layer.data = tool.finish(current_layer.data)
-        self.update_combined_mask()
-        self.update_plot()
-        self._finish_edit()
+        index, layer = target
+        before = layer.data
+        after = before.copy()
+        try:
+            if isinstance(tool, BrushDrawingTool):
+                previous = self._samples[0].point
+                for sample in self._samples:
+                    paint_brush_segment(after, previous, sample.point, sample.radius, sample.value)
+                    previous = sample.point
+            elif isinstance(tool, PolygonDrawingTool):
+                paint_polygon(after, tool.vertices, tool.draw_value)
+            elif tool.start_point is not None:
+                start = tool.start_point
+                if isinstance(tool, RectangleDrawingTool):
+                    paint_rectangle(after, start, point, tool.draw_value)
+                elif isinstance(tool, CircleDrawingTool):
+                    paint_circle(after, start, point, tool.draw_value)
+                elif isinstance(tool, LineDrawingTool):
+                    radius = 0 if tool.brush_size == 1 else tool.brush_size
+                    paint_line(after, start, point, radius, tool.draw_value)
+                elif isinstance(tool, WatershedFillTool):
+                    image, valid, error = validate_and_prepare_image_array(self.get_image_data())
+                    if not valid:
+                        raise ValueError(error)
+                    fill = watershed_fill_mask(
+                        image, seed_point=start, seed_radius=max(1, tool.brush_size // 2),
+                    )
+                    after[fill] = tool.draw_value
+        except (ValueError, TypeError, RuntimeError) as error:
+            logger.exception("Could not commit mask drawing")
+            self.on_error(error)
+            return False
+        finally:
+            self.cancel_current_edit()
+        if not np.array_equal(before, after):
+            layer.data = after
+            self.on_edit_finished(index, before, after)
+        if self.should_auto_disable():
+            self.set_drawing_enabled(False)
         return True
 
     def cancel_current_edit(self) -> None:
-        tool = self.get_tool()
-        target = self._edit_target()
-        if target is not None and self._edit_before is not None:
-            _, current_layer = target
-            current_layer.data = self._edit_before.copy()
-        if tool is not None:
-            tool.reset()
+        if self._edit_tool is not None:
+            self._edit_tool.reset()
+        if self._preview is not None:
+            self.get_viewer().remove_overlay("mask-drawing-preview")
+        self._edit_tool = None
         self._edit_layer = None
-        self._edit_before = None
-        self.update_combined_mask()
-        self.update_plot()
-
-    def _begin_edit(self, layer: object) -> None:
-        if self._edit_layer is None:
-            self._edit_layer = layer
-            self._edit_before = np.asarray(layer.data, dtype=bool).copy()
-
-    def _finish_edit(self) -> None:
-        target = self._edit_target()
-        before = self._edit_before
-        self._edit_layer = None
-        self._edit_before = None
-        if target is None or before is None:
-            return
-        layer_index, current_layer = target
-        after = np.asarray(current_layer.data, dtype=bool).copy()
-        if not np.array_equal(before, after):
-            self.on_edit_finished(layer_index, before, after)
-
-    def _edit_target(self) -> tuple[int, object] | None:
-        if self._edit_layer is None:
-            return None
-        for layer_index, layer in enumerate(self.get_layers()):
-            if layer is self._edit_layer:
-                return layer_index, layer
-        return None
+        self._preview = None
+        self._shape_item = None
+        self._stroke_item = None
+        self._stroke_gesture.cancel()
+        self._stroke_style = None
+        self._samples.clear()
 
     @staticmethod
-    def _event_point(event, *, require_inside: bool) -> tuple[int, int] | None:
-        if require_inside and hasattr(event, 'inside_image') and not bool(event.inside_image):
+    def _event_point(event: ImagePointerEvent, tool: DrawingTool, shape: tuple[int, ...]) -> Pixel | None:
+        if not event.inside_canvas or not (math.isfinite(event.x) and math.isfinite(event.y)):
             return None
-        x = getattr(event, 'x', getattr(event, 'xdata', None))
-        y = getattr(event, 'y', getattr(event, 'ydata', None))
-        if x is None or y is None:
+        if isinstance(tool, WatershedFillTool) and not event.inside_image:
             return None
-        try:
-            return int(y), int(x)
-        except (TypeError, ValueError):
-            return None
-
-    @classmethod
-    def _event_point_for_tool(
-        cls,
-        event,
-        tool: DrawingTool,
-        mask_layer: np.ndarray,
-    ) -> tuple[int, int] | None:
-        if not getattr(event, 'inside_canvas', True):
-            return None
-        point = cls._event_point(event, require_inside=False)
-        if point is None:
-            return None
-        if not getattr(event, 'inside_image', True) and isinstance(tool, WatershedFillTool):
-            return None
-        return cls._clamp_point_to_mask(point, mask_layer)
-
-    @staticmethod
-    def _clamp_point_to_mask(point: tuple[int, int], mask_layer: np.ndarray) -> tuple[int, int]:
-        height, width = mask_layer.shape[:2]
-        row, col = point
-        return int(np.clip(row, 0, height - 1)), int(np.clip(col, 0, width - 1))
-
-
-class BrushDrawingTool(DrawingTool):
-    """Freehand brush drawing tool - draws immediately on mouse move"""
-    
-    def __init__(self):
-        super().__init__("Brush")
-        self.last_point = None
-    
-    def start(self, point: Tuple[int, int]):
-        """Start brush drawing"""
-        self.is_active = True
-        self.last_point = point
-    
-    def preview(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        """For brush, preview is the same as finalize - show immediate feedback"""
-        return self.finalize(mask_layer.copy(), current_point)
-    
-    def finalize(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        """Draw brush stroke with line interpolation"""
-        if current_point is None:
-            return mask_layer
-        
-        row, col = current_point
-        brush_size = self.brush_size
-        height, width = mask_layer.shape
-        
-        # Draw circle at current point
-        y_coords, x_coords = np.ogrid[-brush_size:brush_size+1, -brush_size:brush_size+1]
-        mask_circle = (x_coords**2 + y_coords**2 <= brush_size**2)
-        
-        # Line interpolation if previous point exists
-        if self.last_point:
-            prev_row, prev_col = self.last_point
-            # Simple line interpolation
-            steps = max(abs(row - prev_row), abs(col - prev_col))
-            if steps > 0:
-                for i in range(steps + 1):
-                    t = i / max(steps, 1)
-                    interp_row = int(prev_row + t * (row - prev_row))
-                    interp_col = int(prev_col + t * (col - prev_col))
-                    self._draw_circle(mask_layer, interp_row, interp_col, brush_size)
-                self.last_point = current_point
-                return mask_layer
-        
-        # Draw at current point
-        self._draw_circle(mask_layer, row, col, brush_size)
-        self.last_point = current_point
-        return mask_layer
-    
-    def _draw_circle(self, mask_layer: np.ndarray, center_row: int, center_col: int, radius: int):
-        """Draw a circle on the mask layer"""
-        _draw_disk(mask_layer, center_row, center_col, radius, self.draw_value)
-    
-    def reset(self):
-        """Reset brush state"""
-        super().reset()
-        self.last_point = None
-
-
-class LineDrawingTool(DrawingTool):
-    """Straight line drawing tool - click to start, drag to preview, release to finalize"""
-    
-    def __init__(self):
-        super().__init__("Line")
-        self.start_point = None
-    
-    def start(self, point: Tuple[int, int]):
-        """Set the starting point for the line"""
-        self.is_active = True
-        self.start_point = point
-    
-    def preview(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        """Show preview of line without modifying original"""
-        if self.start_point is None or current_point is None:
-            return mask_layer
-        
-        # Create a copy to show preview
-        preview = mask_layer.copy()
-        return self._draw_line(preview, self.start_point, current_point)
-    
-    def finalize(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        """Apply the final line to the mask"""
-        if self.start_point is None or current_point is None:
-            return mask_layer
-        
-        result = self._draw_line(mask_layer, self.start_point, current_point)
-        self.reset()
-        return result
-    
-    def _draw_line(self, mask_layer: np.ndarray, start: Tuple[int, int], 
-                   end: Tuple[int, int]) -> np.ndarray:
-        """Draw a line from start to end point"""
-        start_row, start_col = start
-        end_row, end_col = end
-        
-        # Bresenham's line algorithm
-        points = self._bresenham_line(start_row, start_col, end_row, end_col)
-        
-        for row, col in points:
-            self._draw_circle(mask_layer, row, col, self.brush_size)
-        
-        return mask_layer
-    
-    def _draw_circle(self, mask_layer: np.ndarray, center_row: int, center_col: int, radius: int):
-        """Draw a circle on the mask layer"""
-        _draw_disk(mask_layer, center_row, center_col, radius, self.draw_value)
-    
-    @staticmethod
-    def _bresenham_line(x0: int, y0: int, x1: int, y1: int):
-        """Generate points along a line using Bresenham's algorithm"""
-        points = []
-        dx = abs(x1 - x0)
-        dy = abs(y1 - y0)
-        sx = 1 if x0 < x1 else -1
-        sy = 1 if y0 < y1 else -1
-        err = dx - dy
-        
-        x, y = x0, y0
-        while True:
-            points.append((x, y))
-            if x == x1 and y == y1:
-                break
-            e2 = 2 * err
-            if e2 > -dy:
-                err -= dy
-                x += sx
-            if e2 < dx:
-                err += dx
-                y += sy
-        
-        return points
-    
-    def reset(self):
-        """Reset line state"""
-        super().reset()
-        self.start_point = None
-
-
-class RectangleDrawingTool(DrawingTool):
-    """Rectangular box drawing tool - click to start, drag to preview, release to finalize"""
-    
-    def __init__(self):
-        super().__init__("Rectangle")
-        self.start_point = None
-    
-    def start(self, point: Tuple[int, int]):
-        """Set the starting corner for the rectangle"""
-        self.is_active = True
-        self.start_point = point
-    
-    def preview(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        """Show preview of rectangle without modifying original"""
-        if self.start_point is None or current_point is None:
-            return mask_layer
-        
-        # Create a copy to show preview
-        preview = mask_layer.copy()
-        return self._draw_rectangle(preview, self.start_point, current_point)
-    
-    def finalize(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        """Apply the final rectangle to the mask"""
-        if self.start_point is None or current_point is None:
-            return mask_layer
-        
-        result = self._draw_rectangle(mask_layer, self.start_point, current_point)
-        self.reset()
-        return result
-    
-    def _draw_rectangle(self, mask_layer: np.ndarray, start: Tuple[int, int], 
-                       end: Tuple[int, int]) -> np.ndarray:
-        """Draw a filled rectangle from start to end point"""
-        start_row, start_col = start
-        end_row, end_col = end
-        
-        # Calculate rectangle bounds
-        row_min = min(start_row, end_row)
-        row_max = max(start_row, end_row)
-        col_min = min(start_col, end_col)
-        col_max = max(start_col, end_col)
-        
-        height, width = mask_layer.shape
-        row_min = max(0, row_min)
-        row_max = min(height, row_max + 1)
-        col_min = max(0, col_min)
-        col_max = min(width, col_max + 1)
-        
-        if self.draw_value:
-            mask_layer[row_min:row_max, col_min:col_max] = 1
-        else:
-            mask_layer[row_min:row_max, col_min:col_max] = 0
-        
-        return mask_layer
-    
-    def reset(self):
-        """Reset rectangle state"""
-        super().reset()
-        self.start_point = None
-
-
-class CircleDrawingTool(DrawingTool):
-    """Filled circle drawing tool using press as center and drag as radius."""
-
-    def __init__(self):
-        super().__init__("Circle")
-        self.start_point = None
-
-    def start(self, point: Tuple[int, int]):
-        self.is_active = True
-        self.start_point = point
-
-    def preview(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        if self.start_point is None or current_point is None:
-            return mask_layer
-        preview = mask_layer.copy()
-        return self._draw_circle(preview, self.start_point, current_point)
-
-    def finalize(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        if self.start_point is None or current_point is None:
-            return mask_layer
-        result = self._draw_circle(mask_layer, self.start_point, current_point)
-        self.reset()
-        return result
-
-    def _draw_circle(self, mask_layer: np.ndarray, start: Tuple[int, int], end: Tuple[int, int]) -> np.ndarray:
-        center_row, center_col = start
-        end_row, end_col = end
-        radius = int(round(np.hypot(end_row - center_row, end_col - center_col)))
-        _draw_disk(mask_layer, center_row, center_col, max(1, radius), self.draw_value)
-        return mask_layer
-
-    def reset(self):
-        super().reset()
-        self.start_point = None
-
-
-class PolygonDrawingTool(DrawingTool):
-    """Filled polygon built from click-added vertices and committed explicitly."""
-
-    def __init__(self):
-        super().__init__("Polygon")
-        self.vertices: list[tuple[int, int]] = []
-
-    def start(self, point: Tuple[int, int]):
-        self.add_vertex(point)
-
-    def add_vertex(self, point: tuple[int, int]) -> None:
-        self.vertices.append(point)
-        self.is_active = True
-
-    def preview(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        points = [*self.vertices, current_point]
-        if len(points) < 3:
-            return mask_layer
-        return self._draw_polygon(mask_layer.copy(), points)
-
-    def finalize(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        return self.preview(mask_layer, current_point)
-
-    def finish(self, mask_layer: np.ndarray) -> np.ndarray:
-        if len(self.vertices) < 3:
-            return mask_layer
-        result = self._draw_polygon(mask_layer, self.vertices)
-        self.reset()
-        return result
-
-    def remove_last_vertex(self) -> None:
-        if self.vertices:
-            self.vertices.pop()
-        if not self.vertices:
-            self.reset()
-
-    def _draw_polygon(self, mask_layer: np.ndarray, points: list[tuple[int, int]]) -> np.ndarray:
-        from matplotlib.path import Path
-
-        rows, columns = np.indices(mask_layer.shape)
-        vertices = np.asarray([(column, row) for row, column in points], dtype=float)
-        vertices = np.vstack((vertices, vertices[0]))
-        inside = Path(vertices, closed=True).contains_points(
-            np.column_stack((columns.ravel(), rows.ravel())),
-            radius=0.5,
-        ).reshape(mask_layer.shape)
-        mask_layer[inside] = self.draw_value
-        return mask_layer
-
-    def reset(self):
-        super().reset()
-        self.vertices = []
-
-
-class WatershedFillTool(DrawingTool):
-    """Seeded fill tool that grows a region until image edges stop it."""
-
-    def __init__(self):
-        super().__init__("Watershed Fill")
-        self.seed_point = None
-
-    def start(self, point: Tuple[int, int]):
-        self.is_active = True
-        self.seed_point = point
-
-    def preview(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        if self.seed_point is None:
-            return mask_layer
-        preview = mask_layer.copy()
-        return self._apply_fill(preview, self.seed_point)
-
-    def finalize(self, mask_layer: np.ndarray, current_point: Tuple[int, int]) -> np.ndarray:
-        if self.seed_point is None:
-            return mask_layer
-        result = self._apply_fill(mask_layer, self.seed_point)
-        self.reset()
-        return result
-
-    def _apply_fill(self, mask_layer: np.ndarray, seed_point: Tuple[int, int]) -> np.ndarray:
-        if not self.get_image_data:
-            return mask_layer
-
-        image_data = self.get_image_data()
-        image_2d, is_valid, _ = validate_and_prepare_image_array(image_data)
-        if not is_valid:
-            return mask_layer
-
-        fill_mask = watershed_fill_mask(
-            image_2d,
-            seed_point=seed_point,
-            seed_radius=max(1, int(self.brush_size // 2)),
-        )
-        if self.draw_value:
-            mask_layer[fill_mask] = 1
-        else:
-            mask_layer[fill_mask] = 0
-        return mask_layer
-
-    def reset(self):
-        super().reset()
-        self.seed_point = None
+        height, width = shape
+        return max(0, min(height - 1, int(event.y))), max(0, min(width - 1, int(event.x)))
