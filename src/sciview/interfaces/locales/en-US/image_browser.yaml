@@ -258,6 +258,159 @@ image_browser.folder.status.selected_file:
   context: "Status message shown after selecting an image from the folder list."
   placeholders:
     filename: "Name of the selected image file."
+image_browser.compare.pin:
+  text: "Pin reference"
+  context: "Action that keeps the current browser image as comparison image A."
+image_browser.compare.pin.tooltip:
+  text: "Keep the current image as reference A while browsing."
+  context: "Tooltip for pinning the current browser image as a comparison reference."
+image_browser.compare.unpin:
+  text: "Unpin A"
+  context: "Action that removes the currently pinned comparison reference."
+image_browser.compare.pinned.tooltip:
+  text: "Reference A: {filename}"
+  context: "Tooltip identifying the image pinned as comparison reference A."
+  placeholders:
+    filename: "Name of the pinned reference image."
+image_browser.compare.hold.hint:
+  text: "Hold a file to show it"
+  context: "Compact hint shown while the pinned image rests on the canvas and no comparison operation is active."
+image_browser.compare.hold.tooltip:
+  text: "The canvas shows the pinned image. Press and hold the mouse on a file, or hold Space in the list, to show it; release to return to the pinned image. The file stays selected for Split, A → B, A + B, or A − B. Click an active operation again to turn it off."
+  context: "Tooltip explaining hold-to-flicker in the file list and how to leave comparison operations."
+image_browser.compare.mode.opacity:
+  text: "Fade pinned to selected"
+  context: "Accessible name for fading from the pinned image to the selected image."
+image_browser.compare.mode.opacity.short:
+  text: "A → B"
+  context: "Compact label for fading from pinned image A to selected image B."
+image_browser.compare.mode.opacity.tooltip:
+  text: "Blend the pinned image (A) into the selected image (B); the A and B percentages add to 100%. Uses the toolbox color settings. Shift-scroll over the image to adjust."
+  context: "Tooltip explaining the A-to-B fade and canvas interaction."
+image_browser.compare.mode.add:
+  text: "Add B to pinned"
+  context: "Accessible name for adding a percentage of the selected image to the pinned image."
+image_browser.compare.mode.add.short:
+  text: "A + B"
+  context: "Compact label for pixel-wise addition of pinned and selected image intensities."
+image_browser.compare.mode.add.tooltip:
+  text: "Show pinned image + (selected image × percentage). Images must have matching pixel coordinates; no registration or resampling is applied."
+  context: "Tooltip explaining the weighted pixel-wise sum and coordinate assumption."
+image_browser.compare.mode.split:
+  text: "Split"
+  context: "Accessible name for the draggable split comparison control."
+image_browser.compare.mode.split.short:
+  text: "Split"
+  context: "Compact text label for the draggable split comparison control."
+image_browser.compare.mode.split.tooltip:
+  text: "Drag the divider on the image to compare reference A and image B."
+  context: "Tooltip for the draggable split comparison control."
+image_browser.compare.mode.difference:
+  text: "A − B"
+  context: "Accessible name for the pixel-wise reference-minus-current difference control."
+image_browser.compare.mode.difference.short:
+  text: "A − B"
+  context: "Compact text label for the pixel-wise reference-minus-current difference control."
+image_browser.compare.mode.difference.tooltip:
+  text: "Show Pinned A − Selected B × percentage at matching pixel indices. Auto chooses a diverging colormap with limits centered on zero. No registration or resampling is applied."
+  context: "Tooltip stating the subtraction direction, automatic display, and coordinate assumptions."
+image_browser.compare.parameter:
+  text: "Selected image blend percentage"
+  context: "Accessible name for the A-to-B fade slider."
+image_browser.compare.opacity:
+  text: "A {reference_percent}% · B {percent}%"
+  context: "Label for the slider that fades from pinned image A to selected image B."
+  placeholders:
+    reference_percent: "Percentage of the pinned image A in the blend."
+    percent: "Percentage of the selected image B in the blend; the two add to 100."
+image_browser.compare.add.label:
+  text: "B added to pinned: {percent}%"
+  context: "Label showing the selected image's contribution percentage in the pixel-wise sum."
+  placeholders:
+    percent: "Percentage of selected image B added to pinned image A."
+image_browser.compare.add.parameter:
+  text: "Selected image contribution percentage"
+  context: "Accessible name for the slider controlling the selected image's contribution to the sum."
+image_browser.compare.difference.label:
+  text: "B subtracted from pinned: {percent}%"
+  context: "Label showing the percentage of the selected image subtracted from the pinned image."
+  placeholders:
+    percent: "Percentage of selected image B subtracted from pinned image A."
+image_browser.compare.difference.parameter:
+  text: "Selected image subtraction percentage"
+  context: "Accessible name for the slider controlling how much of the selected image is subtracted."
+image_browser.compare.pin_failed:
+  text: "Could not load the selected image to pin it."
+  context: "Status message shown when the selected image cannot be loaded as a reference."
+image_browser.compare.incompatible:
+  text: "Cannot compare images: {error}. Showing image B."
+  context: "Status message explaining why images cannot be compared and that image B remains displayed."
+  placeholders:
+    error: "Reason the reference and current images cannot be compared."
+image_browser.compare.reference_row.tooltip:
+  text: "Pinned reference A. Click the pin to unpin; Ctrl-click a filename or click the icon before it to pin or unpin."
+  context: "Tooltip for the pinned file row and its pinning gestures."
+image_browser.compare.pin.hint:
+  text: "Click the icon before a filename, or Ctrl-click the filename, to pin or unpin reference A. While an image is pinned, hold a file to show it."
+  context: "File-list guidance for pinning and unpinning images."
+image_browser.compare.reference_short:
+  text: "Pinned"
+  context: "Short label identifying the pinned image in comparison settings and colorbar."
+image_browser.compare.current_short:
+  text: "Selected"
+  context: "Short label identifying the selected image in comparison settings and colorbar."
+image_browser.compare.opacity.tooltip:
+  text: "Drag from the pinned image (B 0%) to the selected image (B 100%). Shift-scroll over the image for direct adjustment."
+  context: "Tooltip for the A-to-B fade controls."
+image_browser.compare.invalid_display:
+  text: "Cannot apply display setting: {error}"
+  context: "Status message shown when a comparison color setting is rejected."
+  placeholders:
+    error: "Reason the display setting was rejected."
+image_browser.compare.reference_marker:
+  text: "Pinned"
+  context: "In-image marker identifying the pinned comparison reference."
+image_browser.compare.current_marker:
+  text: "Selected"
+  context: "In-image marker identifying the active comparison image."
+image_browser.compare.reference_label:
+  text: "Pinned: {filename}"
+  context: "Viewer title while the canvas rests on the pinned reference image."
+  placeholders:
+    filename: "Name of the pinned image."
+image_browser.compare.current_label:
+  text: "Selected: {filename}"
+  context: "Viewer title identifying the active current image."
+  placeholders:
+    filename: "Name of the selected image."
+image_browser.compare.split_title:
+  text: "Split · Pinned: {reference}\nSelected: {current}"
+  context: "Viewer title identifying both sides of the split comparison."
+  placeholders:
+    reference: "Name of the pinned image."
+    current: "Name of the selected image."
+image_browser.compare.overlay_title:
+  text: "{reference} · {reference_percent}%\n→ {current} · {percent}%"
+  context: "Two-row viewer title for the fade: pinned image and its share, then selected image and its share."
+  placeholders:
+    reference: "Name of the pinned image."
+    current: "Name of the selected image."
+    reference_percent: "Percentage of the pinned image A in the blend."
+    percent: "Percentage of the selected image B in the blend; the two add to 100."
+image_browser.compare.difference_title:
+  text: "{reference}\n− {current} × {coefficient}"
+  context: "Two-row viewer title for the signed difference: pinned image minus the weighted selected image."
+  placeholders:
+    reference: "Name of the pinned image."
+    current: "Name of the selected image."
+    coefficient: "Weight applied to the selected image, from 0.00 to 1.00."
+image_browser.compare.add_title:
+  text: "{reference}\n+ {current} × {coefficient}"
+  context: "Two-row viewer title for the weighted sum: pinned image, then selected image and its weight."
+  placeholders:
+    reference: "Name of the pinned image."
+    current: "Name of the selected image."
+    coefficient: "Weight applied to the selected image, from 0.00 to 1.00."
 image_browser.export.empty.title:
   text: "No Data"
   context: "Title of the information dialog shown when there is no session list to export."

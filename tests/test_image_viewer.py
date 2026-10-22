@@ -4,7 +4,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest
-from PyQt5.QtCore import QEvent, QPointF, Qt
+from PyQt5.QtCore import QEvent, QPoint, QPointF, Qt
+from PyQt5.QtGui import QWheelEvent
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import (
     QApplication,
@@ -21,6 +22,7 @@ from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
     WatershedFillTool,
 )
 from sciview.masking.layers import MaskLayer, compose_mask_layers
+from sciview.core.image_collection import ComparisonMode
 from tabs.image_browser_tab import ImageBrowserApp
 
 
@@ -105,6 +107,39 @@ def test_linear_levels_and_colormap_do_not_change_source_or_view(viewer):
     assert viewer.display_levels == (-2.0, 10.0)
     assert viewer.get_view_range()[0] == pytest.approx(preserved_range[0])
     assert viewer.get_view_range()[1] == pytest.approx(preserved_range[1])
+
+
+def test_viewer_elides_middle_of_long_title(viewer):
+    viewer.resize(360, 240)
+    viewer.show()
+    QApplication.processEvents()
+    viewer.set_title(
+        "This is a very long viewer title with a middle section to hide."
+    )
+
+    title = viewer._plot_item.titleLabel.text
+
+    assert title.startswith("This")
+    assert title.endswith("hide.")
+    assert len(title) < len(viewer._title_text)
+
+
+def test_viewer_shows_explicit_title_rows_with_room_for_each(viewer):
+    viewer.resize(900, 240)
+    viewer.show()
+    QApplication.processEvents()
+    viewer.set_title("pinned <scan>.tif\n+ selected.tif × 0.50")
+
+    title_label = viewer._plot_item.titleLabel
+
+    assert title_label.text.split("<br>") == [
+        "pinned &lt;scan&gt;.tif",
+        "+ selected.tif × 0.50",
+    ]
+    assert title_label.maximumHeight() > 30
+
+    viewer.set_title("Selected: one.tif")
+    assert title_label.maximumHeight() == 30
 
 
 def test_log_display_is_display_only_and_handles_non_positive_values(viewer):
@@ -225,6 +260,300 @@ def test_folder_row_reopens_after_session_navigation(qapp, tmp_path):
 
         tab.folder_files_list.itemClicked.emit(first_item)
         assert tab.session_manager.current_index == 0
+    finally:
+        tab.close()
+
+
+def test_image_browser_pin_compare_modes_preserve_view_and_validate(qapp, tmp_path):
+    tab = ImageBrowserApp(DummyParentApp())
+    tab.show()
+    reference = np.arange(16, dtype=float).reshape(4, 4)
+    current = reference + 4.0
+    reference_path = str(tmp_path / "a-reference.tif")
+    current_path = str(tmp_path / "b-current.tif")
+    (tmp_path / "a-reference.tif").touch()
+    (tmp_path / "b-current.tif").touch()
+    try:
+        tab.session_manager.add_image(reference, reference_path)
+        tab.session_manager.add_image(current, current_path)
+        tab.folder_path_input.setText(str(tmp_path))
+        tab.pattern_input.setText("*.tif")
+        tab._refresh_folder_browser(force=True)
+        qapp.processEvents()
+        assert tab.image_viewer._title_text == "Selected: b-current.tif"
+        assert "B" not in tab.image_viewer._title_text
+        item = tab.folder_files_list.item(0)
+        item_rect = tab.folder_files_list.visualItemRect(item)
+        QTest.mouseClick(
+            tab.folder_files_list.viewport(),
+            Qt.LeftButton,
+            Qt.ControlModifier,
+            pos=QPoint(item_rect.left() + 100, item_rect.center().y()),
+        )
+        assert tab.session_manager.collection.pinned_path == reference_path
+        tab.folder_files_list.setCurrentRow(1)
+        assert not tab.comparison_buttons["difference"].isHidden()
+        tab.image_viewer.set_view_range(((0.5, 2.5), (0.5, 2.5)))
+        preserved_range = tab.image_viewer.get_view_range()
+
+        tab.comparison_buttons["difference"].click()
+        assert np.array_equal(tab.image_viewer.source_array, reference - current)
+        assert tab.image_viewer._title_text == "a-reference.tif\n− b-current.tif × 1.00"
+        assert tab.comparison_parameter_slider.isVisible()
+        assert "comparison-label-a" not in tab.image_viewer._overlays
+        # Auto runs on mode entry: diverging map and symmetric robust limits.
+        assert tab.image_viewer.display_levels == pytest.approx((-5.0, 5.0))
+        assert tab.image_viewer._colormap_name == "coolwarm"
+        assert tab.cmap_selector.currentText() == "coolwarm"
+        assert tab.vmin_input.text() == "-5"
+        assert not tab.img_scale_combo.isEnabled()
+        shared_cmap = tab.display_settings["cmap"]
+        current_range = tab.image_viewer.get_view_range()
+        assert current_range[0] == pytest.approx(preserved_range[0])
+        assert current_range[1] == pytest.approx(preserved_range[1])
+
+        tab.comparison_buttons["opacity"].click()
+        tab.comparison_parameter_slider.setValue(25)
+        assert tab.image_viewer.source_array is current
+        assert tab.image_viewer._comparison_reference_item.opacity() == pytest.approx(0.75)
+        assert tab.comparison_parameter_label.text() == "A 75% · B 25%"
+        assert (
+            tab.image_viewer._title_text
+            == "a-reference.tif · 75%\n→ b-current.tif · 25%"
+        )
+        assert "→" in tab.comparison_buttons["opacity"].text()
+        assert not hasattr(tab.image_viewer, "_comparison_reference_histogram")
+        assert tab.img_scale_combo.isEnabled()
+        viewport = tab.image_viewer._graphics.viewport()
+        image_position = tab.image_viewer.image_to_widget(QPointF(1.0, 1.0)).toPoint()
+        wheel_position = viewport.mapFrom(tab.image_viewer, image_position)
+        wheel_event = QWheelEvent(
+            QPointF(wheel_position),
+            QPointF(viewport.mapToGlobal(wheel_position)),
+            QPoint(),
+            QPoint(0, 120),
+            120,
+            Qt.Vertical,
+            Qt.NoButton,
+            Qt.ShiftModifier,
+        )
+        QApplication.sendEvent(viewport, wheel_event)
+        assert tab.comparison_parameter_slider.value() == 30
+        tab.cmap_selector.setCurrentText("magma")
+        overlay_display = tab.session_manager.collection.comparison_displays[
+            ComparisonMode.OPACITY
+        ]
+        assert overlay_display.colormap == "magma"
+        assert tab.image_viewer._colormap_name == "magma"
+        assert tab.display_settings["cmap"] == shared_cmap
+        tab.image_viewer._histogram.setLevels(5.0, 18.0)
+        assert tab.session_manager.collection.comparison_displays[
+            ComparisonMode.OPACITY
+        ].levels == pytest.approx((5.0, 18.0))
+        assert tuple(tab.image_viewer._comparison_reference_item.getLevels()) == pytest.approx(
+            (5.0, 18.0)
+        )
+        assert tab.display_settings["vmin"] == -2
+
+        tab.comparison_buttons["add"].click()
+        assert tab.comparison_parameter_slider.isVisible()
+        assert tab.session_manager.collection.add_b_percentage == 100
+        np.testing.assert_array_equal(tab.image_viewer.source_array, reference + current)
+        tab.comparison_parameter_slider.setValue(25)
+        np.testing.assert_array_equal(
+            tab.image_viewer.source_array,
+            reference + current * 0.25,
+        )
+        assert "25%" in tab.comparison_parameter_label.text()
+        assert (
+            tab.image_viewer._title_text
+            == "a-reference.tif\n+ b-current.tif × 0.25"
+        )
+        assert tab.image_viewer._plot_item.titleLabel.text.count("<br>") == 1
+        assert tab.display_settings["vmin"] == -2
+
+        tab.comparison_buttons["split"].click()
+        assert np.array_equal(
+            tab.image_viewer.source_array,
+            np.concatenate((reference[:, :2], current[:, 2:]), axis=1),
+        )
+        assert "comparison-label-a" in tab.image_viewer._overlays
+        assert "comparison-label-b" in tab.image_viewer._overlays
+        divider = tab.image_viewer._overlays["comparison-divider"][0]
+        divider.setValue(1.0)
+        assert tab.session_manager.collection.split_fraction == pytest.approx(0.25)
+        assert np.array_equal(
+            tab.image_viewer.source_array,
+            np.concatenate((reference[:, :1], current[:, 1:]), axis=1),
+        )
+        # Dragging must keep the same line item, or the mouse grab is lost.
+        assert tab.image_viewer._overlays["comparison-divider"][0] is divider
+        assert divider.scene() is not None
+        divider.setValue(3.0)
+        assert tab.session_manager.collection.split_fraction == pytest.approx(0.75)
+        assert tab.image_viewer._overlays["comparison-divider"][0] is divider
+
+        tab.comparison_buttons["difference"].click()
+        tab.cmap_selector.setCurrentText("RdYlBu")
+        tab.vmin_input.setText("-2")
+        tab.vmin_input.editingFinished.emit()
+        assert tab.image_viewer.source_array is not current
+        assert tab.image_viewer.display_levels == pytest.approx((-2.0, 2.0))
+        assert tab.vmax_input.text() == "2"
+        tab.image_viewer._histogram.setLevels(-1.0, 3.0)
+        difference_display = tab.session_manager.collection.comparison_displays[
+            ComparisonMode.DIFFERENCE
+        ]
+        assert difference_display.levels == pytest.approx((-3.0, 3.0))
+        assert tab.image_viewer.display_levels == pytest.approx((-3.0, 3.0))
+        tab.image_viewer._auto_levels_button.click()
+        assert tab.image_viewer.display_levels == pytest.approx((-5.0, 5.0))
+        assert tab.image_viewer._colormap_name == "RdYlBu"
+        assert tab.display_settings["vmin"] == -2
+        assert tab.display_settings["cmap"] == shared_cmap
+        tab.comparison_parameter_slider.setValue(50)
+        np.testing.assert_array_equal(
+            tab.image_viewer.source_array,
+            reference - current * 0.5,
+        )
+        assert "50%" in tab.comparison_parameter_label.text()
+        assert tab.image_viewer._title_text == "a-reference.tif\n− b-current.tif × 0.50"
+
+        assert "flicker" not in tab.comparison_buttons
+        # Clicking the active operation again returns to hold-to-compare.
+        tab.comparison_buttons["difference"].click()
+        assert not tab.comparison_buttons["difference"].isChecked()
+        assert tab.image_viewer.source_array is reference
+        assert tab.image_viewer._title_text == "Pinned: a-reference.tif"
+        assert tab.comparison_parameter_label.text() == "Hold a file to show it"
+        assert tab.comparison_parameter_slider.isHidden()
+        assert "comparison-label-a" not in tab.image_viewer._overlays
+
+        list_viewport = tab.folder_files_list.viewport()
+        current_rect = tab.folder_files_list.visualItemRect(
+            tab.folder_files_list.item(1)
+        )
+        row_position = QPoint(current_rect.left() + 100, current_rect.center().y())
+        QTest.mousePress(list_viewport, Qt.LeftButton, pos=row_position)
+        assert tab.image_viewer.source_array is current
+        assert tab.image_viewer._title_text == "Selected: b-current.tif"
+        QTest.mouseRelease(list_viewport, Qt.LeftButton, pos=row_position)
+        assert tab.image_viewer.source_array is reference
+        assert tab.folder_files_list.currentRow() == 1
+        assert tab.session_manager.collection.current_reference.path == current_path
+
+        QTest.keyPress(tab.folder_files_list, Qt.Key_Space)
+        assert tab.image_viewer.source_array is current
+        QTest.keyRelease(tab.folder_files_list, Qt.Key_Space)
+        assert tab.image_viewer.source_array is reference
+
+        # The held file stays selected, so operations apply to it after release.
+        tab.comparison_buttons["split"].click()
+        assert np.array_equal(
+            tab.image_viewer.source_array,
+            np.concatenate((reference[:, :3], current[:, 3:]), axis=1),
+        )
+        tab.comparison_buttons["split"].click()
+        assert tab.image_viewer.source_array is reference
+
+        tab.folder_play_button.click()
+        assert tab.folder_play_timer.isActive()
+        tab._update_display()
+        assert tab.image_viewer.source_array is current
+        tab.folder_play_button.click()
+        assert tab.image_viewer.source_array is reference
+
+        incompatible = np.ones((3, 4), dtype=float)
+        incompatible_path = str(tmp_path / "c-incompatible.tif")
+        (tmp_path / "c-incompatible.tif").touch()
+        tab.session_manager.add_image(incompatible, incompatible_path)
+        tab._refresh_folder_browser(force=True)
+        tab.folder_files_list.setCurrentRow(2)
+        tab.comparison_buttons["difference"].click()
+        assert tab.image_viewer.source_array is incompatible
+        assert "matching two-dimensional shapes" in tab.parent_app.last_status
+        assert tab.cmap_selector.currentText() == shared_cmap
+        assert tab.image_viewer._colormap_name == shared_cmap
+        assert tab.img_scale_combo.isEnabled()
+
+        for index in range(6):
+            tab.session_manager.add_image(
+                np.full((4, 4), index, dtype=float),
+                f"extra-{index}.tif",
+            )
+        assert tab.session_manager.get_pinned_image()["data"] is reference
+    finally:
+        tab.close()
+
+
+def test_image_browser_pin_marker_survives_folder_navigation(qapp, tmp_path):
+    tab = ImageBrowserApp(DummyParentApp())
+    tab.show()
+    folder_a = tmp_path / "first"
+    folder_b = tmp_path / "second"
+    folder_a.mkdir()
+    folder_b.mkdir()
+    reference_path = folder_a / "reference.tif"
+    current_path = folder_b / "current.tif"
+    reference_path.touch()
+    current_path.touch()
+    try:
+        tab.session_manager.add_image(
+            np.ones((4, 4)),
+            str(reference_path),
+        )
+        tab.folder_path_input.setText(str(folder_a))
+        tab.pattern_input.setText("*.tif")
+        tab._refresh_folder_browser(force=True)
+        qapp.processEvents()
+        item = tab.folder_files_list.item(0)
+        item_rect = tab.folder_files_list.visualItemRect(item)
+        QTest.mouseClick(
+            tab.folder_files_list.viewport(),
+            Qt.LeftButton,
+            pos=QPoint(item_rect.left() + 10, item_rect.center().y()),
+        )
+
+        tab.folder_path_input.setText(str(folder_b))
+        tab._refresh_folder_browser(force=True)
+
+        pinned_row = next(
+            row
+            for row in range(tab.folder_files_list.count())
+            if tab.folder_files_list.item(row).data(Qt.UserRole) == str(reference_path)
+        )
+        pinned_item = tab.folder_files_list.item(pinned_row)
+        assert pinned_item.text() == "reference.tif"
+        assert pinned_item.icon().cacheKey() == tab._pin_icon.cacheKey()
+        current_item = next(
+            tab.folder_files_list.item(row)
+            for row in range(tab.folder_files_list.count())
+            if tab.folder_files_list.item(row).data(Qt.UserRole) == str(current_path)
+        )
+        assert current_item.icon().cacheKey() == tab._file_icon.cacheKey()
+        current_rect = tab.folder_files_list.visualItemRect(current_item)
+        QTest.mouseMove(
+            tab.folder_files_list.viewport(),
+            QPoint(current_rect.left() + 10, current_rect.center().y()),
+        )
+        assert current_item.icon().cacheKey() == tab._pin_preview_icon.cacheKey()
+        assert tab.folder_files_list.viewport().cursor().shape() == Qt.PointingHandCursor
+        QTest.mouseMove(
+            tab.folder_files_list.viewport(),
+            QPoint(current_rect.right() - 5, current_rect.center().y()),
+        )
+        assert current_item.icon().cacheKey() == tab._file_icon.cacheKey()
+        assert "Pinned reference A" in pinned_item.toolTip()
+        assert "Ctrl-click" in pinned_item.toolTip()
+        assert tab.session_manager.collection.pinned_path == str(reference_path)
+
+        rect = tab.folder_files_list.visualItemRect(pinned_item)
+        QTest.mouseClick(
+            tab.folder_files_list.viewport(),
+            Qt.LeftButton,
+            pos=rect.topLeft() + QPointF(10, rect.height() / 2).toPoint(),
+        )
+        assert tab.session_manager.collection.pinned_path is None
     finally:
         tab.close()
 
@@ -610,3 +939,17 @@ def test_real_mask_pointer_gesture_commit_and_cancellation(qapp, cancel):
         tab.close()
         tab.deleteLater()
         QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+
+
+def test_colormap_selector_items_preview_gradients(qapp):
+    from PyQt5.QtGui import QLinearGradient
+
+    tab = ImageBrowserApp(DummyParentApp())
+    try:
+        index = tab.cmap_selector.findText("viridis")
+        brush = tab.cmap_selector.itemData(index, Qt.BackgroundRole)
+        assert isinstance(brush.gradient(), QLinearGradient)
+        assert len(brush.gradient().stops()) > 2
+        assert tab.cmap_selector.itemData(index, Qt.ForegroundRole) is not None
+    finally:
+        tab.close()

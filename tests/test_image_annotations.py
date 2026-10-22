@@ -87,6 +87,7 @@ def test_browser_keeps_drawing_across_playback_frames_without_publishing_marks(q
             row = QListWidgetItem(filename)
             row.setData(Qt.UserRole, filename)
             browser.folder_files_list.addItem(row)
+        browser._folder_browser_paths = ["first.tif", "second.tif"]
         browser.folder_files_list.setCurrentRow(0)
         marks = browser.annotations
         browser.folder_play_button.click()

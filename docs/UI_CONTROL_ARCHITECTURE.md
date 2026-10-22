@@ -35,6 +35,29 @@ Batch jobs retain their own snapshots, independent of later interface changes.
 Transform intensity limits and automatic range remain independent of the
 raw-image limits.
 
+The backend `ImageCollection` model owns ordered image references, the active
+reference, the pinned comparison reference, and comparison parameters. The
+Image Browser's session manager owns image loading and its bounded cache; it
+retains the pinned array so cache eviction cannot invalidate a comparison.
+Comparison operations are pure backend functions, and the browser only maps
+their results into the existing viewer. This keeps the collection and
+comparison state reusable by later playback and cross-tab workflows.
+
+While an image is pinned and no operation is active, the canvas rests on the
+pinned image. Holding the mouse on a file (or Space in the file list) shows
+that file; releasing returns to the pinned image while the file stays
+selected. Playback shows each file. Split, A → B, A + B, and A − B are
+toggles; clicking the active one returns to this hold-to-compare state.
+
+Calculated comparison views (A → B, A + B, A − B) keep their own colormap,
+scale, and limits in `ImageCollection.comparison_displays`. While one is
+active, the toolbox Color/Scale/Min/Max controls and the viewer Auto button
+edit that view instead of the shared display settings, so a signed difference
+never changes the colors used by other tabs. Auto runs when a calculated view
+is entered; for A − B it keeps or selects a diverging colormap and sets
+zero-centered limits. A → B, A + B, and A − B each have one slider for the
+selected image's percentage (A → B shows A and B shares that sum to 100%).
+
 ## Layer Map
 
 The UI stack is intentionally layered. Think of each layer as owning a different class of decision.

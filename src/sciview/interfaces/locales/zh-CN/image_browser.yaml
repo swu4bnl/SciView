@@ -258,6 +258,159 @@ image_browser.folder.status.selected_file:
   context: "Status message shown after selecting an image from the folder list."
   placeholders:
     filename: "Name of the selected image file."
+image_browser.compare.pin:
+  text: "固定参考图像"
+  context: "Action that keeps the current browser image as comparison image A."
+image_browser.compare.pin.tooltip:
+  text: "浏览其他图像时保留当前图像作为参考图像 A。"
+  context: "Tooltip for pinning the current browser image as a comparison reference."
+image_browser.compare.unpin:
+  text: "取消固定 A"
+  context: "Action that removes the currently pinned comparison reference."
+image_browser.compare.pinned.tooltip:
+  text: "参考图像 A：{filename}"
+  context: "Tooltip identifying the image pinned as comparison reference A."
+  placeholders:
+    filename: "Name of the pinned reference image."
+image_browser.compare.hold.hint:
+  text: "按住文件以显示"
+  context: "Compact hint shown while the pinned image rests on the canvas and no comparison operation is active."
+image_browser.compare.hold.tooltip:
+  text: "画布显示已固定的图像。在文件上按住鼠标，或在列表中按住空格键，可显示该文件；松开后返回已固定的图像。该文件保持选中，可用于分屏、A → B、A + B 或 A − B。再次点击已启用的操作可将其关闭。"
+  context: "Tooltip explaining hold-to-flicker in the file list and how to leave comparison operations."
+image_browser.compare.mode.opacity:
+  text: "从已固定图像渐变到已选择图像"
+  context: "Accessible name for fading from the pinned image to the selected image."
+image_browser.compare.mode.opacity.short:
+  text: "A → B"
+  context: "Compact label for fading from pinned image A to selected image B."
+image_browser.compare.mode.opacity.tooltip:
+  text: "将已固定图像（A）渐变为已选择图像（B）；A 与 B 的百分比之和为 100%。使用工具箱颜色设置。在图像上按住 Shift 滚动可调整。"
+  context: "Tooltip explaining the A-to-B fade and canvas interaction."
+image_browser.compare.mode.add:
+  text: "将已选择图像加到已固定图像"
+  context: "Accessible name for adding a percentage of the selected image to the pinned image."
+image_browser.compare.mode.add.short:
+  text: "A + B"
+  context: "Compact label for pixel-wise addition of pinned and selected image intensities."
+image_browser.compare.mode.add.tooltip:
+  text: "显示已固定图像 +（已选择图像 × 百分比）。图像必须具有匹配的像素坐标；不会进行配准或重采样。"
+  context: "Tooltip explaining the weighted pixel-wise sum and coordinate assumption."
+image_browser.compare.mode.split:
+  text: "分屏"
+  context: "Accessible name for the draggable split comparison control."
+image_browser.compare.mode.split.short:
+  text: "分屏"
+  context: "Compact text label for the draggable split comparison control."
+image_browser.compare.mode.split.tooltip:
+  text: "在图像上拖动分隔线以比较参考图像 A 和当前图像 B。"
+  context: "Tooltip for the draggable split comparison control."
+image_browser.compare.mode.difference:
+  text: "A − B"
+  context: "Accessible name for the pixel-wise reference-minus-current difference control."
+image_browser.compare.mode.difference.short:
+  text: "A − B"
+  context: "Compact text label for the pixel-wise reference-minus-current difference control."
+image_browser.compare.mode.difference.tooltip:
+  text: "在匹配的像素索引处显示 已固定 A − 已选择 B × 百分比。自动按钮会选择发散色图，并使范围以零为中心。不会进行配准或重采样。"
+  context: "Tooltip stating the subtraction direction, automatic display, and coordinate assumptions."
+image_browser.compare.parameter:
+  text: "已选择图像的混合百分比"
+  context: "Accessible name for the A-to-B fade slider."
+image_browser.compare.opacity:
+  text: "A {reference_percent}% · B {percent}%"
+  context: "Label for the slider that fades from pinned image A to selected image B."
+  placeholders:
+    reference_percent: "Percentage of the pinned image A in the blend."
+    percent: "Percentage of the selected image B in the blend; the two add to 100."
+image_browser.compare.add.label:
+  text: "加到已固定图像的已选择图像：{percent}%"
+  context: "Label showing the selected image's contribution percentage in the pixel-wise sum."
+  placeholders:
+    percent: "Percentage of selected image B added to pinned image A."
+image_browser.compare.add.parameter:
+  text: "已选择图像的贡献百分比"
+  context: "Accessible name for the slider controlling the selected image's contribution to the sum."
+image_browser.compare.difference.label:
+  text: "从已固定图像减去的已选择图像：{percent}%"
+  context: "Label showing the percentage of the selected image subtracted from the pinned image."
+  placeholders:
+    percent: "Percentage of selected image B subtracted from pinned image A."
+image_browser.compare.difference.parameter:
+  text: "已选择图像的扣除百分比"
+  context: "Accessible name for the slider controlling how much of the selected image is subtracted."
+image_browser.compare.pin_failed:
+  text: "无法加载所选图像并将其固定为参考图像。"
+  context: "Status message shown when the selected image cannot be loaded as a reference."
+image_browser.compare.incompatible:
+  text: "无法比较图像：{error}。当前显示图像 B。"
+  context: "Status message explaining why images cannot be compared and that image B remains displayed."
+  placeholders:
+    error: "Reason the reference and current images cannot be compared."
+image_browser.compare.reference_row.tooltip:
+  text: "已固定为参考图像 A。点击图钉可取消固定；按住 Ctrl 点击文件名，或点击文件名前的图标，可固定或取消固定。"
+  context: "Tooltip for the pinned file row and its pinning gestures."
+image_browser.compare.pin.hint:
+  text: "点击文件名前的图标，或按住 Ctrl 点击文件名，可固定或取消固定参考图像 A。固定图像后，按住文件可显示该文件。"
+  context: "File-list guidance for pinning and unpinning images."
+image_browser.compare.reference_short:
+  text: "已固定"
+  context: "Short label identifying the pinned image in comparison settings and colorbar."
+image_browser.compare.current_short:
+  text: "已选择"
+  context: "Short label identifying the selected image in comparison settings and colorbar."
+image_browser.compare.opacity.tooltip:
+  text: "从已固定图像（B 0%）拖动到已选择图像（B 100%）。在图像上按住 Shift 滚动可直接调整。"
+  context: "Tooltip for the A-to-B fade controls."
+image_browser.compare.invalid_display:
+  text: "无法应用显示设置：{error}"
+  context: "Status message shown when a comparison color setting is rejected."
+  placeholders:
+    error: "Reason the display setting was rejected."
+image_browser.compare.reference_marker:
+  text: "已固定"
+  context: "In-image marker identifying the pinned comparison reference."
+image_browser.compare.current_marker:
+  text: "已选择"
+  context: "In-image marker identifying the active comparison image."
+image_browser.compare.reference_label:
+  text: "已固定：{filename}"
+  context: "Viewer title while the canvas rests on the pinned reference image."
+  placeholders:
+    filename: "Name of the pinned image."
+image_browser.compare.current_label:
+  text: "已选择：{filename}"
+  context: "Viewer title identifying the active current image."
+  placeholders:
+    filename: "Name of the selected image."
+image_browser.compare.split_title:
+  text: "分屏 · 已固定：{reference}\n已选择：{current}"
+  context: "Viewer title identifying both sides of the split comparison."
+  placeholders:
+    reference: "Name of the pinned image."
+    current: "Name of the selected image."
+image_browser.compare.overlay_title:
+  text: "{reference} · {reference_percent}%\n→ {current} · {percent}%"
+  context: "Two-row viewer title for the fade: pinned image and its share, then selected image and its share."
+  placeholders:
+    reference: "Name of the pinned image."
+    current: "Name of the selected image."
+    reference_percent: "Percentage of the pinned image A in the blend."
+    percent: "Percentage of the selected image B in the blend; the two add to 100."
+image_browser.compare.difference_title:
+  text: "{reference}\n− {current} × {coefficient}"
+  context: "Two-row viewer title for the signed difference: pinned image minus the weighted selected image."
+  placeholders:
+    reference: "Name of the pinned image."
+    current: "Name of the selected image."
+    coefficient: "Weight applied to the selected image, from 0.00 to 1.00."
+image_browser.compare.add_title:
+  text: "{reference}\n+ {current} × {coefficient}"
+  context: "Two-row viewer title for the weighted sum: pinned image, then selected image and its weight."
+  placeholders:
+    reference: "Name of the pinned image."
+    current: "Name of the selected image."
+    coefficient: "Weight applied to the selected image, from 0.00 to 1.00."
 image_browser.export.empty.title:
   text: "无数据"
   context: "Title of the information dialog shown when there is no session list to export."

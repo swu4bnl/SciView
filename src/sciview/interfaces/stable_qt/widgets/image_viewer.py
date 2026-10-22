@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from sciview.interfaces.text import tr
 
+import html
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from PyQt5.QtCore import QEvent, QPointF, QSize, Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtGui import QFont, QFontMetrics, QIcon
 from PyQt5.QtWidgets import (
     QApplication, QFileDialog, QFrame, QGridLayout, QLabel, QLayout,
     QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
@@ -87,6 +89,7 @@ class ImageViewer(QWidget):
     interaction_mode_changed = pyqtSignal(str)
     overlay_visibility_changed = pyqtSignal()
     theme_changed = pyqtSignal()
+    comparison_opacity_adjusted = pyqtSignal(int)
 
     _SUPPORTED_COLORMAPS = set(SUPPORTED_IMAGE_COLORMAPS) | set(ARTIST_IMAGE_COLORMAPS)
 
@@ -103,6 +106,11 @@ class ImageViewer(QWidget):
         self._interaction_locked = False
         self._pointer_captured = False
         self._updating_histogram = False
+        self._title_text = ""
+        self._comparison_reference_item: pg.ImageItem | None = None
+        self._comparison_reference_source: np.ndarray | None = None
+        self._lut: np.ndarray | None = None
+        self._auto_levels_handler: Callable[[], None] | None = None
 
         self._graphics = pg.GraphicsLayoutWidget()
         self._graphics.setBackground(VIEWER_COLORS.background)
@@ -236,6 +244,7 @@ class ImageViewer(QWidget):
         return self._display_levels
 
     def set_image(self, image: Any, *, preserve_view: bool = True) -> None:
+        self.clear_comparison_overlay()
         array, is_valid, error_msg = validate_and_prepare_image_array(image, use_converter=True)
         if not is_valid:
             self.clear_image(error_msg)
@@ -281,6 +290,7 @@ class ImageViewer(QWidget):
             self.reset_view()
 
     def clear_image(self, message: str | None = None) -> None:
+        self.clear_comparison_overlay()
         self._source_array = None
         self._display_array = None
         self._display_levels = None
@@ -303,27 +313,10 @@ class ImageViewer(QWidget):
         if self._source_array is None or self._source_array.ndim != 2:
             return None
 
-        image = np.asarray(self._source_array, dtype=float)
-        if self._scale == "log":
-            values = image[np.isfinite(image) & (image > 0)]
-        else:
-            values = image[np.isfinite(image)]
-        if values.size == 0:
+        levels = self.auto_levels_for_array(self._source_array, self._scale)
+        if levels is None:
             return None
-
-        low_pct, high_pct = VIEWER_BEHAVIOR.auto_level_percentiles
-        vmin, vmax = np.percentile(values, [low_pct, high_pct])
-        vmin = float(vmin)
-        vmax = float(vmax)
-        if not (np.isfinite(vmin) and np.isfinite(vmax)):
-            return None
-        if vmax <= vmin:
-            vmin = float(np.min(values))
-            vmax = float(np.max(values))
-        if vmax <= vmin:
-            delta = max(abs(vmin) * 0.01, 1.0)
-            vmin -= delta
-            vmax += delta
+        vmin, vmax = levels
 
         self._levels = (vmin, vmax)
         self._refresh_display_image(preserve_view=True)
@@ -347,8 +340,11 @@ class ImageViewer(QWidget):
         if name == self._colormap_name and self._colormap_applied:
             return
         self._colormap_name = name
-        lut = self._artist_palette_lut(name) if name in ARTIST_IMAGE_COLORMAPS else self._matplotlib_lut(name)
+        lut = self.colormap_lut(name)
+        self._lut = lut
         self._image_item.setLookupTable(lut)
+        if self._comparison_reference_item is not None:
+            self._comparison_reference_item.setLookupTable(lut)
         self._colormap_applied = True
         self._update_palette_info_label(name)
         try:
@@ -365,7 +361,106 @@ class ImageViewer(QWidget):
         self._refresh_display_image(preserve_view=True)
 
     def set_title(self, title: str) -> None:
-        self._plot_item.setTitle(title)
+        self._title_text = title
+        title_width = max(60, self.width() - 120)
+        metrics = QFontMetrics(self.font())
+        display_title = "<br>".join(
+            html.escape(metrics.elidedText(line, Qt.ElideMiddle, title_width))
+            for line in title.splitlines()
+        )
+        self._plot_item.setTitle(
+            display_title,
+            color=AppStyle.theme_colors()["text"].name(),
+        )
+        # pyqtgraph fixes the title row at 30 px; grow it for multi-row titles.
+        title_label = self._plot_item.titleLabel
+        title_height = max(30, int(np.ceil(title_label.item.boundingRect().height())))
+        title_label.setMaximumHeight(title_height)
+        self._plot_item.layout.setRowFixedHeight(0, title_height)
+
+    def resizeEvent(self, event: object) -> None:
+        super().resizeEvent(event)
+        if self._title_text:
+            self.set_title(self._title_text)
+
+    @staticmethod
+    def auto_levels_for_array(
+        image: Any,
+        scale: str = "linear",
+    ) -> tuple[float, float] | None:
+        """Return robust display limits for a finite numeric image."""
+        array = np.asarray(image, dtype=float)
+        valid = np.isfinite(array)
+        if scale == "log":
+            valid &= array > 0
+        elif scale != "linear":
+            raise ValueError(f"Unsupported image scale: {scale}")
+        values = array[valid]
+        if values.size == 0:
+            return None
+        low_pct, high_pct = VIEWER_BEHAVIOR.auto_level_percentiles
+        vmin, vmax = (float(value) for value in np.percentile(values, [low_pct, high_pct]))
+        if vmax <= vmin:
+            vmin = float(np.min(values))
+            vmax = float(np.max(values))
+        if vmax <= vmin:
+            delta = max(abs(vmin) * 0.01, 1.0)
+            vmin -= delta
+            vmax += delta
+        return vmin, vmax
+
+    def set_comparison_overlay(self, reference: Any, opacity: float) -> None:
+        """Draw the pinned image over the active image with the same color mapping."""
+        reference_array = np.asarray(reference)
+        if reference_array.ndim != 2:
+            raise ValueError("Comparison overlay images must be two-dimensional.")
+        if not 0.0 <= opacity <= 1.0:
+            raise ValueError("Comparison opacity must be between 0 and 1.")
+        if self._source_array is None or reference_array.shape != self._source_array.shape:
+            raise ValueError("Overlay images must have matching shapes.")
+
+        item = self._comparison_reference_item
+        if item is None:
+            item = pg.ImageItem(axisOrder="row-major")
+            item.setZValue(2)
+            self._plot_item.addItem(item)
+            self._comparison_reference_item = item
+        self._comparison_reference_source = reference_array
+        item.setLookupTable(self._lut)
+        item.setOpacity(float(opacity))
+        item.setVisible(True)
+        self._refresh_comparison_reference()
+
+    def clear_comparison_overlay(self) -> None:
+        """Remove the pinned-image layer, if present."""
+        if self._comparison_reference_item is not None:
+            self._plot_item.removeItem(self._comparison_reference_item)
+            self._comparison_reference_item = None
+        self._comparison_reference_source = None
+
+    def set_comparison_reference_opacity(self, opacity: float) -> None:
+        if not 0.0 <= opacity <= 1.0:
+            raise ValueError("Comparison opacity must be between 0 and 1.")
+        if self._comparison_reference_item is not None:
+            self._comparison_reference_item.setOpacity(float(opacity))
+
+    def _refresh_comparison_reference(self) -> None:
+        item = self._comparison_reference_item
+        reference = self._comparison_reference_source
+        if item is None or reference is None:
+            return
+        if self._scale == "log":
+            display, _levels = self._log_display_image(reference, *self._levels)
+        else:
+            display = reference
+        image_kwargs: dict[str, Any] = {"autoLevels": self._display_levels is None}
+        if self._display_levels is not None:
+            image_kwargs["levels"] = self._display_levels
+        item.setImage(display, **image_kwargs)
+
+    def set_auto_levels_handler(self, handler: Callable[[], None] | None) -> None:
+        """Let the owning view replace Auto while it shows derived data."""
+        self._auto_levels_handler = handler
 
     def set_interaction_locked(self, locked: bool, *, navigation_enabled: bool = False) -> None:
         """Lock pan/zoom handling while preserving pointer signals for tools."""
@@ -423,6 +518,9 @@ class ImageViewer(QWidget):
         activators[mode]()
 
     def _on_auto_levels_clicked(self) -> None:
+        if self._auto_levels_handler is not None:
+            self._auto_levels_handler()
+            return
         if QApplication.keyboardModifiers() & Qt.AltModifier:
             self.apply_next_artist_palette()
         self.auto_levels()
@@ -561,6 +659,74 @@ class ImageViewer(QWidget):
         self.set_overlay_item(overlay_id, item, group=group)
         return item
 
+    def set_text_overlay(
+        self,
+        overlay_id: str,
+        x: float,
+        y: float,
+        text: str,
+        *,
+        group: str | None = None,
+        color: str = VIEWER_COLORS.default_line,
+        anchor: tuple[float, float] = (0.5, 0.5),
+    ) -> Any:
+        """Create or update a text overlay without replacing its scene item."""
+        existing = self._overlays.get(overlay_id)
+        if existing is not None and isinstance(existing[0], pg.TextItem):
+            item = existing[0]
+            item.setText(text)
+            item.setColor(color)
+            item.setPos(float(x), float(y))
+            item.setVisible(True)
+            return item
+        return self.add_text(
+            overlay_id,
+            x,
+            y,
+            text,
+            group=group,
+            color=color,
+            anchor=anchor,
+        )
+
+    def set_vertical_divider(
+        self,
+        overlay_id: str,
+        x: float,
+        on_position_changed: Any,
+        *,
+        group: str | None = None,
+        color: str = VIEWER_COLORS.default_line,
+    ) -> Any:
+        """Create or reposition a draggable image-coordinate divider."""
+        existing = self._overlays.get(overlay_id)
+        if existing is not None and isinstance(existing[0], pg.InfiniteLine):
+            line = existing[0]
+            line.blockSignals(True)
+            line.setValue(float(x))
+            line.blockSignals(False)
+            return line
+
+        line = pg.InfiniteLine(
+            pos=float(x),
+            angle=90,
+            movable=True,
+            bounds=(0.0, float(self._source_array.shape[1]) if self._source_array is not None else 0.0),
+            pen=pg.mkPen(color, width=2),
+            hoverPen=pg.mkPen(color, width=3),
+        )
+        line.setZValue(30)
+        line.sigPositionChanged.connect(
+            lambda changed_line: on_position_changed(float(changed_line.value()))
+        )
+        self.set_overlay_item(
+            overlay_id,
+            line,
+            group=group,
+            ignore_bounds=True,
+        )
+        return line
+
     def add_crosshair(
         self,
         overlay_id: str,
@@ -637,6 +803,18 @@ class ImageViewer(QWidget):
         return True
 
     def eventFilter(self, watched: object, event: QEvent) -> bool:
+        if (
+            watched is self._graphics.viewport()
+            and event.type() == QEvent.Wheel
+            and event.modifiers() & Qt.ShiftModifier
+        ):
+            pointer = self._pointer_event_from_viewport_pos(
+                event.pos(), Qt.NoButton, event.modifiers()
+            )
+            if pointer.inside_image:
+                self.comparison_opacity_adjusted.emit(event.angleDelta().y())
+                event.accept()
+                return True
         if watched is self._graphics.viewport() and event.type() in {
             QEvent.MouseButtonPress,
             QEvent.MouseButtonDblClick,
@@ -681,6 +859,7 @@ class ImageViewer(QWidget):
                 self._histogram.setLevels(*self._display_levels)
             finally:
                 self._updating_histogram = False
+        self._refresh_comparison_reference()
         if old_range is not None:
             self.set_view_range(old_range)
 
@@ -702,6 +881,8 @@ class ImageViewer(QWidget):
             raw_max = float(display_max)
         self._levels = (raw_min, raw_max)
         self._display_levels = (float(display_min), float(display_max))
+        if self._comparison_reference_item is not None:
+            self._comparison_reference_item.setLevels(self._display_levels)
         self.levels_changed.emit(raw_min, raw_max)
 
     def _pointer_event_from_viewport_pos(self, pos: QPointF, button: object, modifiers: object) -> ImagePointerEvent:
@@ -860,6 +1041,15 @@ class ImageViewer(QWidget):
         valid = np.isfinite(image) & (image > 0)
         display[valid] = np.log10(image[valid])
         return display, (floor_value, np.log10(safe_vmax))
+
+    @classmethod
+    def colormap_lut(cls, name: str) -> np.ndarray:
+        """Return the 256-entry RGB lookup table used to draw a colormap."""
+        if name not in cls._SUPPORTED_COLORMAPS:
+            raise ValueError(f"Unsupported colormap: {name}")
+        if name in ARTIST_IMAGE_COLORMAPS:
+            return cls._artist_palette_lut(name)
+        return cls._matplotlib_lut(name)
 
     @staticmethod
     def _matplotlib_lut(name: str) -> np.ndarray:

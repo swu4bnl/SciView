@@ -74,6 +74,8 @@ SUPPORTED_IMAGE_COLORMAPS = (
     "nipy_spectral",
 )
 SUPPORTED_IMAGE_SCALES = ("linear", "log")
+# Zero-centered colormaps suitable for signed data such as image differences.
+DIVERGING_IMAGE_COLORMAPS = ("coolwarm", "RdYlBu", "Spectral")
 
 ARTIST_IMAGE_PALETTES = (
     ArtistPalette(

@@ -30,6 +30,7 @@ from sciview.interfaces.theme.app_style import (
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_detector_config, get_file_status as get_profile_file_status
 from sciview.settings.app_settings import DEFAULT_DISPLAY_SETTINGS, MASK_BASE_DIR, PHYSICAL_CONSTANTS, SCIANALYSIS_AVAILABLE
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array, get_image_info
+from sciview.interfaces.stable_qt.widgets.colormap_items import show_colormap_previews
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImageViewer
 from sciview.settings.viewer_config import SUPPORTED_IMAGE_COLORMAPS, SUPPORTED_IMAGE_SCALES
 
@@ -430,6 +431,7 @@ class BaseImageTab(QWidget):
         self.cmap_selector.setAccessibleName(tr('base_image.colormap'))
         self.cmap_selector.setToolTip(tr('base_image.colormap'))
         self.cmap_selector.addItems(list(SUPPORTED_IMAGE_COLORMAPS))
+        show_colormap_previews(self.cmap_selector)
         self.cmap_selector.setCurrentText(self.display_settings['cmap'])
         self.cmap_selector.currentTextChanged.connect(self._on_cmap_changed)
         display_layout.addWidget(self.cmap_selector, 0, 1)
