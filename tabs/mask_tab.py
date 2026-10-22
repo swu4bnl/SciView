@@ -1704,7 +1704,7 @@ class MaskApp(BaseImageTab):
             },
             finish=self._finish_polygon, cancel=self._cancel_current_edit,
             undo=self._undo_drawing, redo=self._redo_drawing,
-            enabled=lambda: self.image_viewer.source_array is not None,
+            enabled=lambda: True,
         )
 
     def _select_tool_command(self, name: str) -> None:

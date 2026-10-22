@@ -318,7 +318,7 @@ class DummyImageTab(QWidget):
         pass
 
 
-def test_clear_layers_undo_restores_order_combined_mask_and_export(qapp):
+def test_clear_layers_undo_restores_order_and_combined_mask(qapp):
     from tabs.mask_tab import MaskApp
 
     tab = MaskApp(DummyParentApp())
@@ -327,18 +327,24 @@ def test_clear_layers_undo_restores_order_combined_mask_and_export(qapp):
     tab.mask_layers.extend([first, second])
     tab._update_layer_list()
     expected_mask = tab.combined_mask.copy()
+    tab.show()
+    qapp.processEvents()
     try:
         tab._clear_all_layers()
 
         assert tab.mask_layers == []
         assert tab.combined_mask is None
 
-        tab.undo_stack.undo()
+        viewport = tab.image_viewer._graphics.viewport()
+        viewport.setFocus()
+        QTest.keyClick(viewport, Qt.Key_Z, Qt.ControlModifier)
 
         assert tab.mask_layers == [first, second]
         np.testing.assert_array_equal(tab.combined_mask, expected_mask)
     finally:
         tab.close()
+        tab.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 def test_mask_layer_composition_replaces_only_visible_target():

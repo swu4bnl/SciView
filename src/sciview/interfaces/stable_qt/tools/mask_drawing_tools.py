@@ -244,6 +244,7 @@ class MaskDrawingSession:
             return
         self._sync_tool(tool)
         if not tool.gesture.release(self._qt_point(point)):
+            self.cancel_current_edit()
             return
         if isinstance(tool, BrushDrawingTool):
             self._append_brush_sample(point, tool)

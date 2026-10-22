@@ -62,6 +62,11 @@ class DrawingGesture:
             return False
         if point is not None:
             self.move(point)
+        start, end = self.points[0], self.current
+        if self.tool in ("line", "circle") and start == end:
+            return False
+        if self.tool == "rectangle" and (start.x() == end.x() or start.y() == end.y()):
+            return False
         return True
 
     def finish_polygon(self, point: QPointF | None = None) -> bool:
@@ -83,8 +88,12 @@ class DrawingGesture:
             return QPainterPath()
         start, end = self.points[0], self.current
         path = QPainterPath()
+        if self.tool in ("line", "circle") and start == end:
+            return path
         if self.tool == "rectangle":
             rect = QRectF(start, end).normalized()
+            if rect.isEmpty():
+                return path
             if pixel_mask:
                 rect.adjust(-0.5, -0.5, 0.5, 0.5)
             path.addRect(rect)
@@ -107,7 +116,7 @@ class DrawingGesture:
             if self.tool == "polygon" and (filled or close_polygon):
                 path.closeSubpath()
             elif self.tool in ("brush", "eraser", "line"):
-                if path.boundingRect().isNull():
+                if self.tool in ("brush", "eraser") and path.boundingRect().isNull():
                     path.addEllipse(end, width / 2, width / 2)
                 elif filled:
                     stroker = QPainterPathStroker()

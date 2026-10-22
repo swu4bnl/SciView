@@ -50,8 +50,7 @@ Use **Mark** in Image Browser to add display-only strokes, shapes, or text.
 
 One shared layer stays in the same detector pixel coordinates while browsing images,
 including during playback. Marks outside a smaller image are hidden, not deleted.
-Starting to draw pauses playback. The layer is local to Image Browser and lasts
-until the tab is rebuilt or the application closes; annotations are not saved in
+The layer lasts until the tab is rebuilt or the application closes; annotations are not saved in
 session files. Viewer copy/save includes visible marks, but raw image exports,
 masks, calibration, reductions, transforms, and batch processing do not use them.
 
@@ -87,25 +86,19 @@ Masks identify pixels that should be excluded from processing.
 
 Useful mask controls:
 
-- **Brush**, shape tools, and **Smart Fill** add masked pixels.
-- **Eraser** removes masked pixels. Hold Alt to temporarily invert the active drawing effect.
+- Hold Alt to temporarily invert the active drawing effect.
 - **OR** adds a layer to the combined mask; **AND** keeps only its overlap with the preceding result.
 - Layers are combined from top to bottom. Hidden layers are not included.
-- **Remove** deletes the selected layer. **Clear Layers** deletes all layers.
-- Undo and Redo apply to drawing and layer refinement changes.
 
-Drawing does not change mask pixels or processing state until the gesture is
-committed. Release applies a stroke or shape as one undoable edit; polygons
-require **Finish Polygon**, Enter, or a double-click. Escape or switching tools,
-layers, or images cancels pending work. The preview shows the gesture, not the
-final OR/AND combination.
+Drawing changes mask pixels only when committed. The preview shows the gesture,
+not the final OR/AND combination. Switching tools, layers, or images discards
+unfinished mask edits.
 
 Points beyond the image but inside the plot snap to the nearest image edge or
 corner. Moving outside the plot pauses the gesture; releasing there commits at
 the last accepted point. Smart Fill requires a seed inside the image.
 
-Mask and annotation undo histories are separate. Undo/Redo first discards any
-unfinished gesture, then changes the focused editor's history.
+Undo/Redo discards any unfinished gesture before changing the editor's history.
 
 ## Reduction
 

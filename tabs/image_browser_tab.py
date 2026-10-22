@@ -801,9 +801,6 @@ class ImageBrowserApp(BaseImageTab):
         base_image_panel = self._create_image_panel(show_header=False)
         self.annotations = ImageAnnotations(self.image_viewer)
         self.post_display_hooks.append(lambda _viewer: self.annotations.refresh_image())
-        self.annotations.drawing_changed.connect(
-            lambda enabled: self._stop_folder_playback() if enabled else None
-        )
         layout.addWidget(base_image_panel, 1)
 
         return panel

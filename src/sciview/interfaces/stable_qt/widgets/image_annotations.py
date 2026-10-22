@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 
 import pyqtgraph as pg
-from PyQt5.QtCore import QEvent, QObject, QPointF, Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, QObject, QPointF, Qt
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtWidgets import (
     QAction, QActionGroup, QColorDialog, QFrame, QGraphicsItem, QHBoxLayout,
@@ -51,7 +51,6 @@ class ImageAnnotations(QObject):
     """Own annotation graphics and history, never image, mask, or processing state."""
 
     TOOLS = ("brush", "line", "rectangle", "circle", "polygon", "text")
-    drawing_changed = pyqtSignal(bool)
 
     def __init__(self, viewer: ImageViewer) -> None:
         super().__init__(viewer)
@@ -171,7 +170,7 @@ class ImageAnnotations(QObject):
         viewer.mouse_double_clicked.connect(self.handle_double_click)
         viewer.interaction_mode_changed.connect(lambda _mode: self._leave_drawing())
         viewer.theme_changed.connect(self.refresh_theme)
-        viewer.view_changed.connect(self.cancel)
+        viewer.view_changed.connect(self._position_text_editor)
         viewer.set_annotation_tool(self.button, self.tools)
         self.refresh_theme()
         self.refresh_image()
@@ -242,8 +241,7 @@ class ImageAnnotations(QObject):
         ))
 
     def refresh_image(self) -> None:
-        """Cancel unfinished gestures and reattach after a browser image refresh."""
-        self.cancel()
+        """Keep marks and unfinished gestures in detector coordinates across frames."""
         image = self.viewer.source_array
         if image is not None:
             height, width = image.shape[:2]
@@ -254,7 +252,10 @@ class ImageAnnotations(QObject):
         )
         self.button.setEnabled(image is not None)
         if image is None:
+            self.cancel()
             self.button.setChecked(False)
+        else:
+            self._position_text_editor()
 
     def _set_drawing(self, enabled: bool) -> None:
         self.cancel()
@@ -263,9 +264,10 @@ class ImageAnnotations(QObject):
             self.show_marks.setChecked(True)
         self.viewer.set_interaction_locked(enabled, navigation_enabled=True)
         self.viewer.setCursor(Qt.CrossCursor if enabled else Qt.ArrowCursor)
-        self.drawing_changed.emit(enabled)
 
     def _set_visible(self, visible: bool) -> None:
+        if not visible:
+            self.cancel()
         self.refresh_image()
         self.show_marks.setIcon(AppStyle.load_icon(
             Path(__file__).resolve().parents[5],
@@ -360,6 +362,8 @@ class ImageAnnotations(QObject):
         if self.gesture.release(point):
             self._update_preview()
             self._finish_path()
+        else:
+            self.cancel()
 
     def handle_double_click(self, event: ImagePointerEvent) -> None:
         if event.button == Qt.LeftButton and self._can_draw(event) and self._tool == "polygon":
@@ -374,14 +378,18 @@ class ImageAnnotations(QObject):
         return True
 
     def _update_preview(self, *, close: bool = False) -> None:
-        path = self.gesture.path(self.stroke_width.value(), close_polygon=close)
+        brush = self._tool == "brush"
+        path = self.gesture.path(
+            self.stroke_width.value(), filled=brush, close_polygon=close,
+        )
         if self._preview is None:
             self._preview = QGraphicsPathItem(self.layer)
             self._preview.setAcceptedMouseButtons(Qt.NoButton)
-        pen = pg.mkPen(self._color, width=self.stroke_width.value())
+        pen = pg.mkPen(self._color, width=self.stroke_width.value(), cosmetic=False)
         pen.setCapStyle(Qt.RoundCap)
         pen.setJoinStyle(Qt.RoundJoin)
-        self._preview.setPen(pen)
+        self._preview.setPen(pg.mkPen(None) if brush else pen)
+        self._preview.setBrush(pg.mkBrush(self._color) if brush else pg.mkBrush(None))
         self._preview.setPath(path)
 
     def _finish_path(self) -> None:
@@ -404,15 +412,21 @@ class ImageAnnotations(QObject):
         editor.setFont(AppStyle.make_font("body"))
         editor.setMinimumWidth(AppStyle.wide_input_min_width())
         editor.resize(editor.sizeHint())
-        position = self.viewer.image_to_widget(point).toPoint()
+        self._text_editor = editor
+        self._position_text_editor()
+        editor.installEventFilter(self)
+        editor.show()
+        editor.setFocus()
+
+    def _position_text_editor(self) -> None:
+        editor = self._text_editor
+        if editor is None:
+            return
+        position = self.viewer.image_to_widget(self._text_position).toPoint()
         editor.move(
             max(0, min(position.x(), self.viewer.width() - editor.width())),
             max(0, min(position.y(), self.viewer.height() - editor.height())),
         )
-        self._text_editor = editor
-        editor.installEventFilter(self)
-        editor.show()
-        editor.setFocus()
 
     def _close_text_editor(self) -> None:
         editor = self._text_editor
