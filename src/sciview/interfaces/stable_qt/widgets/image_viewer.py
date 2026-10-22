@@ -10,9 +10,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PyQt5.QtCore import QEvent, QPointF, Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, QPointF, QSize, Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon
-from PyQt5.QtWidgets import QApplication, QFileDialog, QGridLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import (
+    QApplication, QFileDialog, QFrame, QGridLayout, QLabel, QLayout,
+    QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
+)
 
 import pyqtgraph as pg
 import pyqtgraph.exporters
@@ -34,6 +37,22 @@ from sciview.settings.viewer_config import (
 
 
 pg.setConfigOptions(imageAxisOrder="row-major")
+
+
+class _ToolbarScrollArea(QScrollArea):
+    """Keep native toolbar sizing without imposing its width on the viewer."""
+
+    def sizeHint(self) -> QSize:
+        content = self.widget().sizeHint()
+        margins = self.contentsMargins()
+        height = (
+            content.height() + margins.top() + margins.bottom()
+            + self.horizontalScrollBar().sizeHint().height()
+        )
+        return QSize(content.width(), height)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(0, self.sizeHint().height())
 
 
 @dataclass(frozen=True)
@@ -84,8 +103,6 @@ class ImageViewer(QWidget):
         self._interaction_locked = False
         self._pointer_captured = False
         self._updating_histogram = False
-        self._annotation_tool: QToolButton | None = None
-        self._display_controls: QWidget | None = None
 
         self._graphics = pg.GraphicsLayoutWidget()
         self._graphics.setBackground(VIEWER_COLORS.background)
@@ -153,6 +170,7 @@ class ImageViewer(QWidget):
         self._toolbar.setObjectName("imageViewerToolbar")
         self._toolbar.setAttribute(Qt.WA_StyledBackground, True)
         self._toolbar_layout = QGridLayout(self._toolbar)
+        self._toolbar_layout.setSizeConstraint(QLayout.SetMinAndMaxSize)
         self._toolbar_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
         self._toolbar_layout.setHorizontalSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         self._overlay_tool_cells: list[QWidget] = []
@@ -188,11 +206,19 @@ class ImageViewer(QWidget):
         column += 1
         self._toolbar_layout.addWidget(self._palette_info_label, 0, column)
 
+        self._toolbar_scroll = _ToolbarScrollArea()
+        self._toolbar_scroll.setFrameShape(QFrame.NoFrame)
+        self._toolbar_scroll.setWidgetResizable(True)
+        self._toolbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._toolbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._toolbar_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._toolbar_scroll.setWidget(self._toolbar)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
         layout.addWidget(self._graphics)
-        layout.addWidget(self._toolbar)
+        layout.addWidget(self._toolbar_scroll)
 
         self.refresh_theme()
         self.set_colormap(self._colormap_name)
@@ -365,12 +391,9 @@ class ImageViewer(QWidget):
 
     def set_annotation_tool(self, button: QToolButton, tools: QWidget) -> None:
         """Place Mark beside navigation and its contextual strip above the toolbar."""
-        self._annotation_tool = button
         cell = self._make_labeled_tool_cell(tr("annotations.toolbar"), button)
         self._toolbar_layout.addWidget(cell, 0, self._annotation_tool_column, Qt.AlignHCenter)
-        self.layout().insertWidget(self.layout().indexOf(self._toolbar), tools)
-        if self._display_controls is not None:
-            self.set_display_controls(self._display_controls)
+        self.layout().insertWidget(self.layout().indexOf(self._toolbar_scroll), tools)
 
     def image_to_widget(self, point: QPointF) -> QPointF:
         """Map an image position to this widget for contextual editors."""
@@ -384,13 +407,9 @@ class ImageViewer(QWidget):
             cell.setVisible(True)
 
     def set_display_controls(self, controls: QWidget) -> None:
-        """Keep contrast controls below the tools when annotation tools need space."""
-        self._display_controls = controls
+        """Keep display controls alongside the main viewer tools."""
         self._toolbar_layout.removeWidget(controls)
-        if self._annotation_tool is None:
-            self._toolbar_layout.addWidget(controls, 0, self._display_controls_column)
-        else:
-            self._toolbar_layout.addWidget(controls, 1, 0, 1, self._toolbar_layout.columnCount(), Qt.AlignRight)
+        self._toolbar_layout.addWidget(controls, 0, self._display_controls_column)
 
     def activate_navigation_mode(self, mode: str) -> None:
         """Unlock drawing input and select a supported viewer navigation mode."""

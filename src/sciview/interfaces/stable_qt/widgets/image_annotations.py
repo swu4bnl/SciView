@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pyqtgraph as pg
 from PyQt5.QtCore import QEvent, QObject, QPointF, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QIcon, QPixmap
+from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtWidgets import (
     QAction, QActionGroup, QColorDialog, QFrame, QGraphicsItem, QHBoxLayout,
     QGraphicsPathItem, QGraphicsRectItem, QLabel, QLayout, QLineEdit,
@@ -279,9 +279,9 @@ class ImageAnnotations(QObject):
             self._update_color_swatch()
 
     def _update_color_swatch(self) -> None:
-        swatch = QPixmap(AppStyle.viewer_toolbar_icon_size())
-        swatch.fill(self._color)
-        self.color_action.setIcon(QIcon(swatch))
+        self.color_action.setIcon(AppStyle.color_swatch_icon(
+            self._color, AppStyle.viewer_toolbar_icon_size().width(),
+        ))
         self.color_action.setToolTip(tr("annotations.selected_color", color=self._color.name()))
 
     def _leave_drawing(self) -> None:
