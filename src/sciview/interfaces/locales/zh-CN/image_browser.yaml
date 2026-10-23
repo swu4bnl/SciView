@@ -339,6 +339,30 @@ image_browser.compare.difference.label:
 image_browser.compare.difference.parameter:
   text: "已选择图像的扣除百分比"
   context: "Accessible name for the slider controlling how much of the selected image is subtracted."
+image_browser.compare.save.accessible:
+  text: "保存计算图像"
+  context: "Accessible name for the button that saves the calculated comparison image."
+image_browser.compare.save.tooltip:
+  text: "将计算图像（{formula}）保存为 TIFF…"
+  context: "Tooltip for saving the calculated comparison image; the formula shows what is saved."
+  placeholders:
+    formula: "Plain-text formula of the calculation, e.g. A - B*0.80."
+image_browser.compare.save.title:
+  text: "保存计算图像"
+  context: "Title of the save dialog and error messages for calculated comparison images."
+image_browser.compare.save.filter:
+  text: "TIFF 图像 (*.tiff *.tif)"
+  context: "File-type filter in the calculated-image save dialog."
+image_browser.compare.save.complete:
+  text: "已将计算图像保存到 {path}"
+  context: "Status message after a calculated comparison image is saved."
+  placeholders:
+    path: "Full path of the saved TIFF file."
+image_browser.compare.save.failed:
+  text: "无法保存计算图像：{error}"
+  context: "Error message when the calculated comparison image cannot be computed or written."
+  placeholders:
+    error: "Reason the save failed."
 image_browser.compare.pin_failed:
   text: "无法加载所选图像并将其固定为参考图像。"
   context: "Status message shown when the selected image cannot be loaded as a reference."
@@ -348,10 +372,10 @@ image_browser.compare.incompatible:
   placeholders:
     error: "Reason the reference and current images cannot be compared."
 image_browser.compare.reference_row.tooltip:
-  text: "已固定为参考图像 A。点击图钉可取消固定；按住 Ctrl 点击文件名，或点击文件名前的图标，可固定或取消固定。"
+  text: "已固定为参考图像 A。点击图钉可取消固定。"
   context: "Tooltip for the pinned file row and its pinning gestures."
 image_browser.compare.pin.hint:
-  text: "点击文件名前的图标，或按住 Ctrl 点击文件名，可固定或取消固定参考图像 A。固定图像后，按住文件可显示该文件。"
+  text: "点击文件名前的图标可固定或取消固定参考图像 A。固定图像后，按住文件可显示该文件。"
   context: "File-list guidance for pinning and unpinning images."
 image_browser.compare.reference_short:
   text: "已固定"

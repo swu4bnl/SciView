@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
+from pathlib import PurePath
 from typing import Any
 
 import numpy as np
@@ -155,6 +156,79 @@ class ImageCollection:
             if display.levels is not None and display.levels[0] != -display.levels[1]:
                 raise ValueError("Difference limits must be centered on zero.")
         self.comparison_displays[mode] = display
+
+    def comparison_weight(self) -> float:
+        """Return the selected image's fractional contribution for the active mode."""
+        if self.comparison_mode == ComparisonMode.OPACITY:
+            return self.opacity
+        if self.comparison_mode == ComparisonMode.ADD:
+            return self.add_b_percentage / 100.0
+        if self.comparison_mode == ComparisonMode.DIFFERENCE:
+            return self.subtract_b_percentage / 100.0
+        raise ValueError(f"{self.comparison_mode!r} does not calculate a new image.")
+
+    def calculate_comparison(
+        self,
+        reference: np.ndarray,
+        current: np.ndarray,
+    ) -> np.ndarray:
+        """Return the calculated A → B, A + B, or A − B image for saving or display."""
+        weight = self.comparison_weight()
+        return compare_image_arrays(
+            reference,
+            current,
+            self.comparison_mode,
+            opacity=weight,
+            current_weight=weight,
+        )
+
+    def comparison_formula(self) -> str:
+        """Return a plain-ASCII formula describing the calculated image."""
+        weight = self.comparison_weight()
+        if self.comparison_mode == ComparisonMode.OPACITY:
+            return f"A*{1.0 - weight:.2f} + B*{weight:.2f}"
+        if self.comparison_mode == ComparisonMode.ADD:
+            return f"A + B*{weight:.2f}"
+        return f"A - B*{weight:.2f}"
+
+    def suggest_comparison_filename(
+        self,
+        reference_name: str,
+        current_name: str,
+        *,
+        stem_limit: int = 24,
+    ) -> str:
+        """Suggest a TIFF filename that mirrors the on-screen calculation.
+
+        Names are only shortened by length, never parsed for structure.
+        """
+        weight = self.comparison_weight()
+        reference_stem = _short_stem(reference_name, stem_limit)
+        current_stem = _short_stem(current_name, stem_limit)
+        if self.comparison_mode == ComparisonMode.OPACITY:
+            percent = round(weight * 100)
+            stem = (
+                f"{reference_stem}_{100 - percent}pct_to_"
+                f"{current_stem}_{percent}pct"
+            )
+        elif self.comparison_mode == ComparisonMode.ADD:
+            stem = f"{reference_stem}_plus_{current_stem}_x{weight:.2f}"
+        else:
+            stem = f"{reference_stem}_minus_{current_stem}_x{weight:.2f}"
+        return f"{stem}.tiff"
+
+
+_INVALID_FILENAME_CHARACTERS = str.maketrans({character: "_" for character in '<>:"/\\|?*'})
+
+
+def _short_stem(name: str, limit: int) -> str:
+    """Keep the start and end of a filename stem, marking any removed middle with ``~``."""
+    stem = PurePath(name.translate(_INVALID_FILENAME_CHARACTERS)).stem.strip() or "image"
+    if len(stem) <= limit:
+        return stem
+    kept = limit - 1
+    head = kept // 2
+    return f"{stem[:head]}~{stem[-(kept - head):]}"
 
 
 def _validated_percentage(value: int) -> int:

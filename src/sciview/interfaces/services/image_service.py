@@ -35,6 +35,27 @@ class ImageService:
 
         raise ValueError(f"Unsupported image format for array load: {suffix}")
 
+    def save_array(
+        self,
+        path: str | Path,
+        data: np.ndarray,
+        *,
+        description: str = "",
+    ) -> Path:
+        """Write a 2D array as a lossless 32-bit float TIFF.
+
+        Float storage keeps negative and fractional values from calculated images.
+        """
+        target = Path(path)
+        if target.suffix.lower() not in {".tif", ".tiff"}:
+            raise ValueError("Calculated images are saved as TIFF (.tif or .tiff).")
+        array = np.asarray(data, dtype=np.float32)
+        if array.ndim != 2:
+            raise ValueError("Only two-dimensional images can be saved.")
+        tiff_tags = {270: description} if description else {}
+        Image.fromarray(array).save(target, format="TIFF", tiffinfo=tiff_tags)
+        return target
+
     def tiled_is_available(self) -> bool:
         return tiled_source.tiled_is_available()
 

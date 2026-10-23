@@ -50,6 +50,7 @@ from sciview.settings.viewer_config import DIVERGING_IMAGE_COLORMAPS
 from sciview.sources.tiled_client import tiled_manager
 
 # Import shared utilities
+from sciview.interfaces.services.image_service import ImageService
 from sciview.interfaces.stable_qt.utils.image_utils import ImageShapeConverter, ImageCacheManager
 from sciview.session.session_cache import choose_path, load_dialog_state, save_dialog_state
 
@@ -1012,6 +1013,16 @@ class ImageBrowserApp(BaseImageTab):
         )
         controls_layout.addStretch()
 
+        self.save_calculated_button = QPushButton()
+        self.save_calculated_button.setAccessibleName(
+            tr("image_browser.compare.save.accessible")
+        )
+        apply_toolbar_symbol_button_style(self.save_calculated_button)
+        self._apply_tool_icon(self.save_calculated_button, 'viewer_save.svg')
+        self.save_calculated_button.clicked.connect(self._save_calculated_image)
+        self.save_calculated_button.hide()
+        controls_layout.addWidget(self.save_calculated_button)
+
         self.add_all_folder_button = QPushButton()
         self.add_all_folder_button.setToolTip(
             tr("image_browser.batch.add_all.tooltip")
@@ -1167,8 +1178,7 @@ class ImageBrowserApp(BaseImageTab):
             ):
                 item = self.folder_files_list.itemAt(event.pos())
                 if item is not None and item.data(Qt.UserRole + 1) != "dir":
-                    ctrl_click = bool(event.modifiers() & Qt.ControlModifier)
-                    if ctrl_click or self._pin_target_row(event.pos()) >= 0:
+                    if self._pin_target_row(event.pos()) >= 0:
                         self.folder_files_list.setCurrentItem(item)
                         self._toggle_selected_pinned_image()
                         event.accept()
@@ -1198,6 +1208,10 @@ class ImageBrowserApp(BaseImageTab):
         )
         for button in self.comparison_buttons.values():
             button.setVisible(comparison_available)
+        mode = self.session_manager.collection.comparison_mode
+        self.save_calculated_button.setVisible(
+            comparison_available and mode in COLOR_MANAGED_COMPARISON_MODES
+        )
         if not comparison_available:
             self.comparison_parameter_label.hide()
             self.comparison_parameter_slider.hide()
@@ -1206,7 +1220,6 @@ class ImageBrowserApp(BaseImageTab):
             return
 
         self.folder_play_button.setVisible(bool(self._folder_browser_paths))
-        mode = self.session_manager.collection.comparison_mode
         for mode_name, button in self.comparison_buttons.items():
             button.setChecked(mode.value == mode_name)
         if mode == ComparisonMode.FLICKER:
@@ -1249,6 +1262,69 @@ class ImageBrowserApp(BaseImageTab):
             self.comparison_parameter_slider.setValue(percent)
         self.comparison_parameter_slider.setAccessibleName(tr(accessible_name_id))
         self.comparison_parameter_slider.setToolTip(tr(tooltip_id))
+        self.save_calculated_button.setToolTip(
+            tr(
+                "image_browser.compare.save.tooltip",
+                formula=self.session_manager.collection.comparison_formula(),
+            )
+        )
+
+    def _save_calculated_image(self) -> None:
+        """Save the calculated comparison as a float TIFF in the browsed folder."""
+        collection = self.session_manager.collection
+        pinned = self.session_manager.get_pinned_image()
+        current = self.session_manager.get_current_image(
+            load_data=True,
+            loader_callback=self._lazy_load_callback,
+        )
+        if pinned is None or current is None or current["data"] is None:
+            return
+        try:
+            data = collection.calculate_comparison(pinned["data"], current["data"])
+        except ValueError as error:
+            QMessageBox.warning(
+                self,
+                tr("image_browser.compare.save.title"),
+                tr("image_browser.compare.save.failed", error=str(error)),
+            )
+            return
+
+        folder = self.folder_path_input.text().strip()
+        if not Path(folder).is_dir():
+            folder = str(Path(current["path"]).parent)
+        file_path, _ = choose_path(
+            self,
+            tr("image_browser.compare.save.title"),
+            mode="save",
+            default_name=collection.suggest_comparison_filename(
+                pinned["filename"], current["filename"]
+            ),
+            file_filter=tr("image_browser.compare.save.filter"),
+            key="calculated_image",
+            start_dir=folder,
+        )
+        if not file_path:
+            return
+        target = Path(file_path)
+        if not target.suffix:
+            target = target.with_suffix(".tiff")
+        description = (
+            f"SciView calculated image: {collection.comparison_formula()}; "
+            f"A={pinned['path']}; B={current['path']}"
+        )
+        try:
+            saved = ImageService().save_array(target, data, description=description)
+        except (OSError, ValueError) as error:
+            QMessageBox.warning(
+                self,
+                tr("image_browser.compare.save.title"),
+                tr("image_browser.compare.save.failed", error=str(error)),
+            )
+            return
+        self.parent_app.show_status(
+            tr("image_browser.compare.save.complete", path=str(saved))
+        )
+        self._refresh_folder_browser(stop_playback=False, force=True)
 
     def _comparison_b_percentage(self, mode: ComparisonMode) -> int:
         """Return the selected image's percentage contribution for ``mode``."""
@@ -1466,6 +1542,7 @@ class ImageBrowserApp(BaseImageTab):
                 comparison_available = False
 
         if not comparison_available:
+            self.save_calculated_button.hide()
             self.image_viewer.remove_overlay("comparison-divider")
             self.image_viewer.clear_comparison_overlay()
             self.image_viewer.clear_overlays(group="image-comparison")
@@ -1553,6 +1630,7 @@ class ImageBrowserApp(BaseImageTab):
                 self.image_viewer.remove_overlay("comparison-divider")
                 self.image_viewer.clear_comparison_overlay()
                 self.image_viewer.clear_overlays(group="image-comparison")
+                self.save_calculated_button.hide()
                 self.parent_app.show_status(
                     tr("image_browser.compare.incompatible", error=str(error))
                 )
@@ -2198,6 +2276,7 @@ class ImageBrowserApp(BaseImageTab):
             ),
             (getattr(self, 'folder_loop_button', None),    'tool_infinite.svg'),
             (getattr(self, 'add_all_folder_button', None), 'tool_add_all.svg'),
+            (getattr(self, 'save_calculated_button', None), 'viewer_save.svg'),
             (getattr(self, 'clear_collection_button', None), 'tool_delete.svg'),
         ]
         for button, filename in pairs:

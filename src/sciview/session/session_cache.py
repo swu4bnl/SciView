@@ -106,12 +106,17 @@ def save_dialog_state(state: dict[str, Any]) -> None:
 
 
 def choose_path(parent, title: str, *, mode: str = "open", file_filter: str = "",
-                default_name: str = "", key: str | None = None):
-    """Show one remembered file/directory dialog; return selection and filter."""
+                default_name: str = "", key: str | None = None,
+                start_dir: str | None = None):
+    """Show one remembered file/directory dialog; return selection and filter.
+
+    ``start_dir`` opens the dialog in a task-specific folder instead of the
+    remembered one.
+    """
     state = load_dialog_state()
     by_key = state.get("by_key") if isinstance(state.get("by_key"), dict) else {}
-    start_dir = by_key.get(key) if key else None
-    start_dir = start_dir or state.get("last_dir") or str(Path.home())
+    remembered_dir = by_key.get(key) if key else None
+    start_dir = start_dir or remembered_dir or state.get("last_dir") or str(Path.home())
     if not Path(start_dir).is_dir():
         start_dir = str(Path.home())
 

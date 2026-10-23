@@ -57,6 +57,11 @@ never changes the colors used by other tabs. Auto runs when a calculated view
 is entered; for A − B it keeps or selects a diverging colormap and sets
 zero-centered limits. A → B, A + B, and A − B each have one slider for the
 selected image's percentage (A → B shows A and B shares that sum to 100%).
+While a calculated view is shown, a Save button left of "Add all images to
+batch" writes the calculated array as a 32-bit float TIFF (negative values
+kept) to the browsed folder. The suggested name joins the two shortened
+filenames with the operation and weight; names are shortened by length only,
+never parsed. The TIFF description records the formula and both source paths.
 
 ## Layer Map
 
