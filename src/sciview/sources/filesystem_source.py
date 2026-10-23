@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import fnmatch
+import os
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
@@ -10,6 +16,89 @@ from sciview.data.models import Dataset, ImageRef
 
 
 DEFAULT_IMAGE_EXTENSIONS: tuple[str, ...] = (".tif", ".tiff", ".h5", ".hdf5", ".dat")
+
+
+@dataclass(frozen=True)
+class FolderListing:
+    """Immediate image files and subfolders of one directory, ready to display.
+
+    Names are kept as plain strings so callers can cheaply detect changes
+    between polls; full paths are built only when needed.
+    """
+
+    directory: Path
+    file_names: tuple[str, ...]
+    subfolder_names: tuple[str, ...]
+
+    @property
+    def files(self) -> tuple[Path, ...]:
+        return tuple(self.directory / name for name in self.file_names)
+
+    @property
+    def subfolders(self) -> tuple[Path, ...]:
+        return tuple(self.directory / name for name in self.subfolder_names)
+
+
+def list_folder(
+    directory: str | Path,
+    *,
+    patterns: Sequence[str] = ("*",),
+    name_filter: str = "",
+    sort_by: Literal["name", "mtime"] = "name",
+    descending: bool = False,
+) -> FolderListing:
+    """List a directory once for interactive browsing.
+
+    Uses one ``os.scandir`` pass so entry types come from the directory read
+    itself rather than one ``stat`` per entry, which matters for folders with
+    tens of thousands of files and on network file systems. Files are only
+    stat-ed when sorting by modification time. Matching is case-insensitive:
+    ``patterns`` are glob patterns for allowed files; ``name_filter`` is a glob
+    if it contains wildcard characters, otherwise a substring.
+
+    Paths are returned instead of ImageRef objects because building ImageRefs
+    resolves and stats every file, which is too slow for live browsing.
+    """
+    folder = Path(directory)
+    allowed = re.compile(
+        "|".join(fnmatch.translate(pattern.lower()) for pattern in patterns) or r"(?!)"
+    )
+    filter_text = name_filter.strip().lower()
+    filter_glob = (
+        re.compile(fnmatch.translate(filter_text))
+        if any(character in filter_text for character in "*?[")
+        else None
+    )
+
+    files: list[tuple[os.DirEntry, str]] = []
+    subfolders: list[str] = []
+    with os.scandir(folder) as entries:
+        for entry in entries:
+            if entry.is_dir():
+                subfolders.append(entry.name)
+                continue
+            if not entry.is_file():
+                continue
+            lowered = entry.name.lower()
+            if not allowed.match(lowered):
+                continue
+            if filter_glob is not None:
+                if not filter_glob.match(lowered):
+                    continue
+            elif filter_text and filter_text not in lowered:
+                continue
+            files.append((entry, lowered))
+
+    if sort_by == "mtime":
+        files.sort(key=lambda pair: pair[0].stat().st_mtime, reverse=descending)
+    else:
+        files.sort(key=lambda pair: pair[1], reverse=descending)
+    subfolders.sort(key=str.lower)
+    return FolderListing(
+        directory=folder,
+        file_names=tuple(entry.name for entry, _ in files),
+        subfolder_names=tuple(subfolders),
+    )
 
 
 def _normalize_directory(directory: str | Path) -> Path:

@@ -160,8 +160,7 @@ class BatchTab(QWidget):
 
         self._file_paths = paths
         self._file_list_widget.clear()
-        for p in paths:
-            self._file_list_widget.addItem(os.path.basename(p))
+        self._file_list_widget.addItems([os.path.basename(p) for p in paths])
 
         suffix = tr("batch.files.tiled_skipped", count=skipped) if skipped else ""
         if paths:
@@ -222,6 +221,7 @@ class BatchTab(QWidget):
 
         self._file_list_widget = QListWidget()
         self._file_list_widget.setSelectionMode(QAbstractItemView.NoSelection)
+        self._file_list_widget.setUniformItemSizes(True)
         self._file_list_widget.setMinimumHeight(80)
         form.addWidget(self._file_list_widget, 1)
 

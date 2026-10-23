@@ -10,7 +10,6 @@ import sys
 import time
 import numpy as np
 import glob
-import fnmatch
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
@@ -51,6 +50,7 @@ from sciview.sources.tiled_client import tiled_manager
 
 # Import shared utilities
 from sciview.interfaces.services.image_service import ImageService
+from sciview.sources.filesystem_source import FolderListing, list_folder
 from sciview.interfaces.stable_qt.utils.image_utils import ImageShapeConverter, ImageCacheManager
 from sciview.session.session_cache import choose_path, load_dialog_state, save_dialog_state
 
@@ -638,6 +638,7 @@ class ImageBrowserApp(BaseImageTab):
         self.folder_refresh_timer.setInterval(2000)
         self.folder_refresh_timer.timeout.connect(self._auto_refresh_folder_browser)
         self._folder_browser_paths = []
+        self._folder_listing_key: tuple | None = None
         self._folder_list_image_paths = []
         self._folder_browser_dirs: list[str] = []
         self._added_folder_paths: list[str] = []
@@ -929,6 +930,9 @@ class ImageBrowserApp(BaseImageTab):
         self.folder_files_list.itemDoubleClicked.connect(self._handle_folder_list_double_click)
         self.folder_files_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.folder_files_list.setTextElideMode(Qt.ElideMiddle)
+        # Every row is one line with one icon; uniform sizes avoid measuring
+        # each row, which keeps folders with many thousands of files responsive.
+        self.folder_files_list.setUniformItemSizes(True)
         self.folder_files_list.setIconSize(AppStyle.corner_button_icon_size())
         self._file_icon = self.style().standardIcon(QStyle.SP_FileIcon)
         self._pin_icon = self._emoji_icon("📌")
@@ -1082,7 +1086,8 @@ class ImageBrowserApp(BaseImageTab):
         if not file_path:
             return
 
-        if self.session_manager.collection.pinned_path == file_path:
+        previous_pinned_path = self.session_manager.collection.pinned_path
+        if previous_pinned_path == file_path:
             self.session_manager.unpin()
             self._hold_shows_selected = False
         else:
@@ -1101,8 +1106,10 @@ class ImageBrowserApp(BaseImageTab):
                     tr("image_browser.compare.pin_failed")
                 )
                 return
-        self._refresh_folder_browser(stop_playback=False, force=True)
-        self._refresh_pinned_file_marker()
+        # Not forced: pinning only rebuilds the list when the pinned file lives
+        # outside the folder; otherwise just the row markers change.
+        self._refresh_folder_browser(stop_playback=False)
+        self._refresh_file_row_markers((previous_pinned_path, file_path))
         self._update_comparison_controls()
         self._update_display()
 
@@ -1134,13 +1141,17 @@ class ImageBrowserApp(BaseImageTab):
     def _set_pin_hover_row(self, row: int) -> None:
         if row == self._pin_hover_row:
             return
+        previous_row = self._pin_hover_row
         self._pin_hover_row = row
         viewport = self.folder_files_list.viewport()
         if row >= 0:
             viewport.setCursor(Qt.PointingHandCursor)
         else:
             viewport.unsetCursor()
-        self._refresh_pinned_file_marker()
+        pinned_path = self.session_manager.collection.pinned_path
+        for changed_row in (previous_row, row):
+            if changed_row >= 0:
+                self._apply_file_row_marker(changed_row, pinned_path)
 
     def _set_hold_shows_selected(self, held: bool) -> None:
         """Show the selected file while held; otherwise rest on the pinned image."""
@@ -1347,27 +1358,35 @@ class ImageBrowserApp(BaseImageTab):
             return tr("image_browser.compare.add.label", percent=percent)
         return tr("image_browser.compare.difference.label", percent=percent)
 
-    def _refresh_pinned_file_marker(self) -> None:
+    def _folder_row_for_path(self, path: str | None) -> int:
+        if path is None:
+            return -1
+        try:
+            return self._folder_dir_count + self._folder_list_image_paths.index(path)
+        except ValueError:
+            return -1
+
+    def _refresh_file_row_markers(self, paths) -> None:
+        """Update only the rows for ``paths`` (e.g. the old and new pinned file)."""
         pinned_path = self.session_manager.collection.pinned_path
-        for row in range(self.folder_files_list.count()):
-            item = self.folder_files_list.item(row)
-            if item.data(Qt.UserRole + 1) == "dir":
-                continue
-            file_path = item.data(Qt.UserRole)
-            filename = Path(file_path).name
-            item.setText(filename)
-            if file_path == pinned_path:
-                item.setIcon(self._pin_icon)
-                item.setToolTip(
-                    tr("image_browser.compare.reference_row.tooltip")
-                )
-            else:
-                item.setIcon(
-                    self._pin_preview_icon
-                    if row == self._pin_hover_row
-                    else self._file_icon
-                )
-                item.setToolTip(filename)
+        for path in paths:
+            row = self._folder_row_for_path(path)
+            if row >= 0:
+                self._apply_file_row_marker(row, pinned_path)
+
+    def _apply_file_row_marker(self, row: int, pinned_path: str | None) -> None:
+        item = self.folder_files_list.item(row)
+        if item is None or item.data(Qt.UserRole + 1) == "dir":
+            return
+        file_path = item.data(Qt.UserRole)
+        if file_path == pinned_path:
+            item.setIcon(self._pin_icon)
+            item.setToolTip(tr("image_browser.compare.reference_row.tooltip"))
+        else:
+            item.setIcon(
+                self._pin_preview_icon if row == self._pin_hover_row else self._file_icon
+            )
+            item.setToolTip(item.text())
 
     def _set_comparison_mode(self, mode_name: str) -> None:
         mode = ComparisonMode(mode_name)
@@ -1426,9 +1445,11 @@ class ImageBrowserApp(BaseImageTab):
             )
             return
 
+        already_added = set(self._added_folder_paths)
         for file_path in file_paths:
             path_str = str(file_path)
-            if path_str not in self._added_folder_paths:
+            if path_str not in already_added:
+                already_added.add(path_str)
                 self._added_folder_paths.append(path_str)
 
         self._update_collection_status()
@@ -1875,15 +1896,15 @@ class ImageBrowserApp(BaseImageTab):
         seen: set[str] = set()
         result: list[str] = []
 
-        # The folder browser list — a full scan of the currently selected folder.
+        # The folder browser list was just read from disk, so its files exist.
         for p in self._folder_browser_paths:
-            if os.path.isfile(p) and p not in seen:
+            if p not in seen:
                 seen.add(p)
                 result.append(p)
 
         # Files explicitly added via "+ Add All", possibly from other folders.
         for p in self._added_folder_paths:
-            if os.path.isfile(p) and p not in seen:
+            if p not in seen and os.path.isfile(p):
                 seen.add(p)
                 result.append(p)
 
@@ -1969,62 +1990,31 @@ class ImageBrowserApp(BaseImageTab):
             self.folder_path_combo.addItems(recents)
             self.folder_path_combo.setEditText(current)
 
-    def _get_subfolder_paths(self, folder_path: str) -> list:
-        """Return immediate subdirectories of folder_path, sorted by name."""
-        if not folder_path:
-            return []
-        folder = Path(folder_path)
-        if not folder.is_dir():
-            return []
+    def _list_current_folder(self) -> FolderListing:
+        """Read the selected folder once, applying the filter and sort controls."""
+        folder_path = self.folder_path_input.text().strip()
+        empty = FolderListing(directory=Path(folder_path), file_names=(), subfolder_names=())
+        if not folder_path or not Path(folder_path).is_dir():
+            return empty
+        sort_mode = (
+            self.folder_sort_combo.currentData()
+            if hasattr(self, 'folder_sort_combo')
+            else "name_asc"
+        ) or "name_asc"
         try:
-            subdirs = [p for p in folder.iterdir() if p.is_dir()]
+            return list_folder(
+                folder_path,
+                patterns=SUPPORTED_FORMATS['image_files'].split(),
+                name_filter=self.pattern_input.text(),
+                sort_by="mtime" if sort_mode.startswith("mtime") else "name",
+                descending=sort_mode.endswith("_desc"),
+            )
         except OSError:
-            return []
-        subdirs.sort(key=lambda p: p.name.lower())
-        return subdirs
+            return empty
 
     def _get_folder_image_paths(self):
         """Return supported image paths from the selected folder after filter and sort."""
-        folder_path = self.folder_path_input.text()
-        if not folder_path:
-            return []
-
-        folder = Path(folder_path)
-        if not folder.is_dir():
-            return []
-
-        supported_patterns = SUPPORTED_FORMATS['image_files'].split()
-        filter_text = self.pattern_input.text().strip()
-
-        file_paths = []
-        for path in folder.iterdir():
-            if not path.is_file():
-                continue
-
-            name = path.name
-            if not any(fnmatch.fnmatch(name.lower(), pattern.lower()) for pattern in supported_patterns):
-                continue
-
-            if filter_text:
-                if any(char in filter_text for char in "*?["):
-                    if not fnmatch.fnmatch(name.lower(), filter_text.lower()):
-                        continue
-                elif filter_text.lower() not in name.lower():
-                    continue
-
-            file_paths.append(path)
-
-        sort_mode = self.folder_sort_combo.currentData() if hasattr(self, 'folder_sort_combo') else "name_asc"
-        if sort_mode == "name_desc":
-            file_paths.sort(key=lambda path: path.name.lower(), reverse=True)
-        elif sort_mode == "mtime_desc":
-            file_paths.sort(key=lambda path: path.stat().st_mtime, reverse=True)
-        elif sort_mode == "mtime_asc":
-            file_paths.sort(key=lambda path: path.stat().st_mtime)
-        else:
-            file_paths.sort(key=lambda path: path.name.lower())
-
-        return file_paths
+        return list(self._list_current_folder().files)
 
     def _refresh_folder_browser(self, *_args, stop_playback=True, force=False):
         """Refresh the folder image list without loading image data."""
@@ -2042,82 +2032,103 @@ class ImageBrowserApp(BaseImageTab):
             can_go_up = bool(folder_path) and parent is not None and str(parent) != folder_path
             self.folder_up_button.setEnabled(can_go_up)
 
-        file_paths = self._get_folder_image_paths()
-        path_strings = [str(path) for path in file_paths]
-        display_image_paths = list(path_strings)
+        listing = self._list_current_folder()
         pinned_reference = self.session_manager.collection.pinned_reference
-        if (
-            pinned_reference is not None
-            and pinned_reference.path not in display_image_paths
-        ):
-            display_image_paths.append(pinned_reference.path)
-        subfolders = self._get_subfolder_paths(folder_path)
-        subfolder_strings = [str(path) for path in subfolders]
-
-        if (
-            not force
-            and path_strings == self._folder_browser_paths
-            and display_image_paths == self._folder_list_image_paths
-            and subfolder_strings == self._folder_browser_dirs
-        ):
+        pinned_outside_folder = None
+        if pinned_reference is not None:
+            pinned_name = Path(pinned_reference.path).name
+            in_folder = (
+                pinned_name in listing.file_names
+                and str(listing.directory / pinned_name) == pinned_reference.path
+            )
+            if not in_folder:
+                pinned_outside_folder = pinned_reference.path
+        # Polling compares plain names first; building 10,000+ paths for an
+        # unchanged folder would otherwise dominate each auto-refresh.
+        listing_key = (
+            str(listing.directory),
+            listing.file_names,
+            listing.subfolder_names,
+            pinned_outside_folder,
+        )
+        if not force and listing_key == self._folder_listing_key:
             if self.folder_path_input.text() and hasattr(self, 'loading_status_label'):
                 self.loading_status_label.setText(
-                    tr("image_browser.folder.status.found_images", count=len(file_paths))
+                    tr(
+                        "image_browser.folder.status.found_images",
+                        count=len(listing.file_names),
+                    )
                 )
-            self._publish_shared_file_list()
+            # Nothing changed, so other tabs already hold this list.
             return
+        self._folder_listing_key = listing_key
+
+        directory_text = str(listing.directory)
+        path_strings = [
+            os.path.join(directory_text, name) for name in listing.file_names
+        ]
+        display_image_paths = list(path_strings)
+        if pinned_outside_folder is not None:
+            display_image_paths.append(pinned_outside_folder)
+        subfolder_strings = [
+            os.path.join(directory_text, name) for name in listing.subfolder_names
+        ]
 
         current_item = self.folder_files_list.currentItem()
         current_path = current_item.data(Qt.UserRole) if current_item is not None else None
 
+        folder_icon = self.style().standardIcon(QStyle.SP_DirIcon)
         with QSignalBlocker(self.folder_files_list):
             self.folder_files_list.clear()
-            for subfolder in subfolders:
-                item = QListWidgetItem(subfolder.name)
-                item.setIcon(self.style().standardIcon(QStyle.SP_DirIcon))
-                item.setData(Qt.UserRole, str(subfolder))
+            self._pin_hover_row = -1
+            for name, subfolder_path in zip(listing.subfolder_names, subfolder_strings):
+                item = QListWidgetItem(folder_icon, name)
+                item.setData(Qt.UserRole, subfolder_path)
                 item.setData(Qt.UserRole + 1, "dir")
                 self.folder_files_list.addItem(item)
-            for path in file_paths:
-                item = QListWidgetItem(path.name)
-                item.setData(Qt.UserRole, str(path))
+            for name, file_path in zip(listing.file_names, path_strings):
+                item = QListWidgetItem(self._file_icon, name)
+                item.setData(Qt.UserRole, file_path)
+                item.setToolTip(name)
                 self.folder_files_list.addItem(item)
-            if (
-                pinned_reference is not None
-                and pinned_reference.path not in path_strings
-            ):
+            if pinned_outside_folder is not None:
                 pinned_item = QListWidgetItem(pinned_reference.filename)
                 pinned_item.setData(Qt.UserRole, pinned_reference.path)
                 self.folder_files_list.addItem(pinned_item)
             if current_path in display_image_paths:
                 self.folder_files_list.setCurrentRow(
-                    len(subfolders) + display_image_paths.index(current_path)
+                    len(subfolder_strings) + display_image_paths.index(current_path)
                 )
 
-        self._folder_dir_count = len(subfolders)
+        self._folder_dir_count = len(subfolder_strings)
         self._folder_browser_dirs = subfolder_strings
         self._folder_browser_paths = path_strings
         self._folder_list_image_paths = display_image_paths
-        self._refresh_pinned_file_marker()
+        # New rows already show the plain file icon; only the pinned row differs.
+        self._refresh_file_row_markers(
+            (pinned_reference.path,) if pinned_reference is not None else ()
+        )
         self._update_comparison_controls()
+        file_count = len(path_strings)
+        folder_count = len(subfolder_strings)
         image_count_id = (
             "image_browser.folder.count.one_image"
-            if len(file_paths) == 1
+            if file_count == 1
             else "image_browser.folder.count.images"
         )
         folder_count_id = (
             "image_browser.folder.count.one_folder"
-            if len(subfolders) == 1
+            if folder_count == 1
             else "image_browser.folder.count.folders"
         )
-        count_parts = [tr(image_count_id, count=len(file_paths))]
-        if subfolders:
-            count_parts.append(tr(folder_count_id, count=len(subfolders)))
+        count_parts = [tr(image_count_id, count=file_count)]
+        if folder_count:
+            count_parts.append(tr(folder_count_id, count=folder_count))
         self.folder_contents_count_label.setText(" · ".join(count_parts))
 
         if self.folder_path_input.text() and hasattr(self, 'loading_status_label'):
             self.loading_status_label.setText(
-                tr("image_browser.folder.status.found_images", count=len(file_paths))
+                tr("image_browser.folder.status.found_images", count=file_count)
             )
 
         self._publish_shared_file_list()
