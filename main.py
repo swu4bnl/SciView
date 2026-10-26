@@ -50,7 +50,7 @@ from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QMainWindow, QMessageBox, QPushButton, QTabWidget, QLabel,
     QWidget, QAction
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QThread, QTimer
 
 # Import configuration from package modules.
 from sciview.interfaces.text import tr
@@ -87,6 +87,7 @@ class SciAnaApp(QMainWindow):
         self.setWindowTitle(tr('shell.qapplication_applicationname_beamline_name', qapplication_applicationname=QApplication.applicationName(), beamline_name=BEAMLINE_NAME))
         self.status = self.statusBar()
         self._workspace_root = Path(__file__).resolve().parent
+        self._closing_browser_workers = False
 
         # Shared application state
         self.image_data = None
@@ -451,9 +452,28 @@ class SciAnaApp(QMainWindow):
         self.show_status(tr('shell.session_cache_cleared'))
 
     def closeEvent(self, event):
+        for index, icon_key in self._tab_icon_keys.items():
+            if icon_key == "image_browser":
+                self.tab_widget.widget(index).close()
+        workers = [
+            worker for worker in QApplication.instance().findChildren(QThread, "image-browser-load")
+            if worker.isRunning()
+        ]
+        if workers:
+            if not self._closing_browser_workers:
+                self._closing_browser_workers = True
+                for worker in workers:
+                    worker.finished.connect(self._resume_browser_close)
+            event.ignore()
+            return
+        self._closing_browser_workers = False
         self.save_session_state()
         session_cache.clear_scratch()
         super().closeEvent(event)
+
+    def _resume_browser_close(self):
+        if self._closing_browser_workers:
+            self.close()
 
     def refresh_theme(self):
         """Refresh native sizing and theme-aware icons after a style change."""
@@ -925,6 +945,9 @@ class SciAnaApp(QMainWindow):
             self.tab_widget.removeTab(current_index)
             self.tab_widget.insertTab(current_index, new_tab, tab_name)
             self.tab_widget.setCurrentIndex(current_index)
+            if self._tab_icon_keys.get(current_index) == "image_browser":
+                current_tab.close()
+                current_tab.deleteLater()
             
             self.show_status(tr('shell.refreshed_tab_name_successfully', tab_name=tab_name))
             

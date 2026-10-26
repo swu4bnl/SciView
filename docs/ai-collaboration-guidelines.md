@@ -17,6 +17,7 @@ Reusable working preferences, not automatically loaded instructions. SciView's a
 ## Verification
 
 - Use focused existing tests or local checks. Retain tests for important behavior and component contracts, not every minor standalone feature or internal detail.
+- During iteration, select the affected workflow by file, test name, or pytest `-k`; do not repeatedly run unrelated GUI workflows. Run broader checks when shared behavior changes or focused results justify them.
 - Keep exploratory probes uncommitted and remove their temporary artifacts. Report what actually ran and what remains uncertain.
 
 ## Documentation

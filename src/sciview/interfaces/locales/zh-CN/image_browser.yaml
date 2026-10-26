@@ -142,8 +142,8 @@ image_browser.folder.auto_refresh.tooltip:
   text: "文件夹内容更改时自动刷新"
   context: "Tooltip explaining the automatic folder-list refresh option."
 image_browser.play.tooltip:
-  text: "播放此列表中的图像"
-  context: "Tooltip for starting sequential display of images in the folder list."
+  text: "播放所选图像或整个文件夹"
+  context: "Tooltip for starting the multi-selection sequence, or folder-wide playback when fewer than two images are selected."
 image_browser.play.pause.tooltip:
   text: "暂停播放"
   context: "Tooltip shown while sequential folder-image playback is active."
@@ -375,8 +375,8 @@ image_browser.compare.reference_row.tooltip:
   text: "已固定为参考图像 A。点击图钉可取消固定。"
   context: "Tooltip for the pinned file row and its pinning gestures."
 image_browser.compare.pin.hint:
-  text: "点击文件名前的图标可固定或取消固定参考图像 A。固定图像后，按住文件可显示该文件。"
-  context: "File-list guidance for pinning and unpinning images."
+  text: "按住 Ctrl/Shift 点击或拖动可选择多张图像。点击文件图标可固定或取消固定图像。固定图像后，按住文件可显示该文件。"
+  context: "File-list guidance for selecting a playback sequence and pinning a comparison reference."
 image_browser.compare.reference_short:
   text: "已固定"
   context: "Short label identifying the pinned image in comparison settings and colorbar."
@@ -435,6 +435,26 @@ image_browser.compare.add_title:
     reference: "Name of the pinned image."
     current: "Name of the selected image."
     coefficient: "Weight applied to the selected image, from 0.00 to 1.00."
+image_browser.compare.weight_label:
+  text: "{operation} · {percent}%"
+  context: "Label beside the comparison weight slider, distinct from the navigation timeline above."
+  placeholders:
+    operation: "Active sum or subtraction operation."
+    percent: "Selected image contribution as a percentage."
+image_browser.task.displayed_file:
+  text: "当前显示帧：{filename}"
+  context: "File-list tooltip identifying the bold frame with a play marker, distinct from the multi-selection."
+  placeholders:
+    filename: "Filename contributing the current displayed frame."
+image_browser.playback.timeline:
+  text: "图像时间轴"
+  context: "Slider for seeking within the ordered selection or folder; seeking pauses playback."
+image_browser.playback.position:
+  text: "{current} / {total}"
+  context: "One-based frame position in the active selection or folder sequence; zero means no active frame."
+  placeholders:
+    current: "Current frame number."
+    total: "Number of images in the sequence."
 image_browser.export.empty.title:
   text: "无数据"
   context: "Title of the information dialog shown when there is no session list to export."

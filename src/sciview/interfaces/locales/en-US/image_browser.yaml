@@ -142,8 +142,8 @@ image_browser.folder.auto_refresh.tooltip:
   text: "Refresh automatically when folder contents change"
   context: "Tooltip explaining the automatic folder-list refresh option."
 image_browser.play.tooltip:
-  text: "Play the images in this list"
-  context: "Tooltip for starting sequential display of images in the folder list."
+  text: "Play selected images, or the folder"
+  context: "Tooltip for starting the multi-selection sequence, or folder-wide playback when fewer than two images are selected."
 image_browser.play.pause.tooltip:
   text: "Pause playback"
   context: "Tooltip shown while sequential folder-image playback is active."
@@ -375,8 +375,8 @@ image_browser.compare.reference_row.tooltip:
   text: "Pinned reference A. Click the pin to unpin."
   context: "Tooltip for the pinned file row and its pinning gestures."
 image_browser.compare.pin.hint:
-  text: "Click the icon before a filename to pin or unpin reference A. While an image is pinned, hold a file to show it."
-  context: "File-list guidance for pinning and unpinning images."
+  text: "Ctrl/Shift-click or drag to select images. Click a file's icon to pin or unpin it. While an image is pinned, hold a file to show it."
+  context: "File-list guidance for selecting a playback sequence and pinning a comparison reference."
 image_browser.compare.reference_short:
   text: "Pinned"
   context: "Short label identifying the pinned image in comparison settings and colorbar."
@@ -435,6 +435,26 @@ image_browser.compare.add_title:
     reference: "Name of the pinned image."
     current: "Name of the selected image."
     coefficient: "Weight applied to the selected image, from 0.00 to 1.00."
+image_browser.compare.weight_label:
+  text: "{operation} · {percent}%"
+  context: "Label beside the comparison weight slider, distinct from the navigation timeline above."
+  placeholders:
+    operation: "Active sum or subtraction operation."
+    percent: "Selected image contribution as a percentage."
+image_browser.task.displayed_file:
+  text: "Displayed frame: {filename}"
+  context: "File-list tooltip identifying the bold frame with a play marker, distinct from the multi-selection."
+  placeholders:
+    filename: "Filename contributing the current displayed frame."
+image_browser.playback.timeline:
+  text: "Image timeline"
+  context: "Slider for seeking within the ordered selection or folder; seeking pauses playback."
+image_browser.playback.position:
+  text: "{current} / {total}"
+  context: "One-based frame position in the active selection or folder sequence; zero means no active frame."
+  placeholders:
+    current: "Current frame number."
+    total: "Number of images in the sequence."
 image_browser.export.empty.title:
   text: "No Data"
   context: "Title of the information dialog shown when there is no session list to export."

@@ -14,12 +14,13 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
 from PyQt5.QtWidgets import (
-    QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
+    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QListWidget, QListWidgetItem, QCheckBox, QComboBox, QLineEdit,
     QFileDialog, QMessageBox, QScrollArea, QSplitter,
-    QSizePolicy, QStyle, QSlider,
+    QSizePolicy, QStyle, QSlider, QAbstractItemView,
+    QStyledItemDelegate,
 )
-from PyQt5.QtCore import QEvent, QSignalBlocker, Qt, QThread, pyqtSignal, QTimer, QSize
+from PyQt5.QtCore import QEvent, QItemSelectionModel, QSignalBlocker, Qt, QThread, pyqtSignal, QTimer, QSize
 from PyQt5.QtGui import QIcon, QPainter, QPixmap
 
 # Import base class and configuration
@@ -53,6 +54,16 @@ from sciview.interfaces.services.image_service import ImageService
 from sciview.sources.filesystem_source import FolderListing, list_folder
 from sciview.interfaces.stable_qt.utils.image_utils import ImageShapeConverter, ImageCacheManager
 from sciview.session.session_cache import choose_path, load_dialog_state, save_dialog_state
+
+
+class DisplayedImageDelegate(QStyledItemDelegate):
+    """Distinguish the displayed frame from the native multi-selection."""
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if index.data(Qt.UserRole + 2):
+            option.font.setBold(True)
+            option.text = "▶ " + option.text
 
 
 class ImageLoadWorker(QThread):
@@ -644,6 +655,13 @@ class ImageBrowserApp(BaseImageTab):
         self._added_folder_paths: list[str] = []
         self._last_browsed_folder: str = ""
         self._folder_dir_count: int = 0
+        self._navigating_sequence = False
+        self._browser_load_worker: ImageLoadWorker | None = None
+        self._pending_browser_path: str | None = None
+        self._browser_closing = False
+        self._show_selected_frame = False
+        self._displayed_frame_path: str | None = None
+        QApplication.instance().aboutToQuit.connect(self._shutdown_browser_loading)
 
         # Build UI
         self._build_ui()
@@ -808,7 +826,7 @@ class ImageBrowserApp(BaseImageTab):
         # Right panel: Image loading options
         layout_ratios = AppStyle.get_layout_ratios()
         loading_panel = self._create_loading_panel()
-        main_splitter.addWidget(self.make_scrollable_panel(loading_panel))
+        main_splitter.addWidget(loading_panel)
         # Set main splitter to match other tabs: 3:1 visualization to controls
         setup_splitter_layout(main_splitter, layout_ratios['main_splitter_ratio'])
         
@@ -922,10 +940,11 @@ class ImageBrowserApp(BaseImageTab):
         layout.addLayout(contents_header)
 
         self.folder_files_list = QListWidget()
+        self.folder_files_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.folder_files_list.setItemDelegate(DisplayedImageDelegate(self.folder_files_list))
+        self.folder_files_list.setDragEnabled(False)
+        self.folder_files_list.itemSelectionChanged.connect(self._on_folder_selection_changed)
         self.folder_files_list.currentItemChanged.connect(self._open_folder_file)
-        self.folder_files_list.currentItemChanged.connect(
-            lambda _current, _previous: self._update_comparison_controls()
-        )
         self.folder_files_list.itemClicked.connect(self._reopen_folder_file)
         self.folder_files_list.itemDoubleClicked.connect(self._handle_folder_list_double_click)
         self.folder_files_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -946,58 +965,76 @@ class ImageBrowserApp(BaseImageTab):
 
         controls_layout = QHBoxLayout()
         controls_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
+        self.folder_playback_widget = QWidget()
+        self.folder_playback_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        playback_layout = QHBoxLayout(self.folder_playback_widget)
+        playback_layout.setContentsMargins(0, 0, 0, 0)
+        playback_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
 
         self.folder_play_button = QPushButton("▶")
         self.folder_play_button.setToolTip(tr("image_browser.play.tooltip"))
+        self.folder_play_button.setAccessibleName(tr("image_browser.play.tooltip"))
         apply_toolbar_symbol_button_style(self.folder_play_button)
         self._apply_tool_icon(self.folder_play_button, 'tool_play.svg')
         self.folder_play_button.setCheckable(True)
         self.folder_play_button.clicked.connect(self._toggle_folder_playback)
-        controls_layout.addWidget(self.folder_play_button)
+        playback_layout.addWidget(self.folder_play_button)
 
         self.folder_playback_speed_button = QPushButton()
         apply_toolbar_symbol_button_style(self.folder_playback_speed_button)
         self._update_folder_playback_speed_button()
         self.folder_playback_speed_button.clicked.connect(self._cycle_folder_playback_speed)
-        self.folder_playback_speed_button.hide()
-        controls_layout.addWidget(self.folder_playback_speed_button)
+        playback_layout.addWidget(self.folder_playback_speed_button)
 
-        self.folder_loop_button = QPushButton("∞")
+        self.folder_loop_button = QPushButton()
+        self.folder_loop_button.setAccessibleName(tr("image_browser.play.repeat.tooltip"))
         self.folder_loop_button.setToolTip(tr("image_browser.play.repeat.tooltip"))
         self.folder_loop_button.setCheckable(True)
         apply_toolbar_symbol_button_style(self.folder_loop_button)
         self._apply_tool_icon(self.folder_loop_button, 'tool_infinite.svg')
-        self.folder_loop_button.hide()
-        controls_layout.addWidget(self.folder_loop_button)
+        playback_layout.addWidget(self.folder_loop_button)
+        controls_layout.addWidget(self.folder_playback_widget)
 
+        self.comparison_controls_widget = QWidget()
+        comparison_controls_layout = QHBoxLayout(self.comparison_controls_widget)
+        comparison_controls_layout.setContentsMargins(0, 0, 0, 0)
+        comparison_controls_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         self.comparison_buttons = {}
-        for mode, text, tooltip_id in (
-            ("split", tr("image_browser.compare.mode.split.short"), "image_browser.compare.mode.split.tooltip"),
-            ("opacity", tr("image_browser.compare.mode.opacity.short"), "image_browser.compare.mode.opacity.tooltip"),
-            ("add", tr("image_browser.compare.mode.add.short"), "image_browser.compare.mode.add.tooltip"),
-            ("difference", tr("image_browser.compare.mode.difference.short"), "image_browser.compare.mode.difference.tooltip"),
+        for mode in (
+            ComparisonMode.SPLIT, ComparisonMode.OPACITY,
+            ComparisonMode.ADD, ComparisonMode.DIFFERENCE,
         ):
-            button = QPushButton(text)
+            button = QPushButton(tr(f"image_browser.compare.mode.{mode}.short"))
             button.setCheckable(True)
-            button.setAccessibleName(
-                tr(f"image_browser.compare.mode.{mode}")
-            )
-            button.setToolTip(tr(tooltip_id))
+            button.setAccessibleName(tr(f"image_browser.compare.mode.{mode}"))
+            button.setToolTip(tr(f"image_browser.compare.mode.{mode}.tooltip"))
             apply_toolbar_text_button_style(button)
-            button.hide()
-            controls_layout.addWidget(button)
-            self.comparison_buttons[mode] = button
-
-        for mode, button in self.comparison_buttons.items():
+            button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             button.clicked.connect(
-                lambda _checked=False, selected_mode=mode:
-                self._set_comparison_mode(selected_mode)
+                lambda _checked, task=mode.value: self._activate_exploration_task(task)
             )
+            self.comparison_buttons[mode.value] = button
+            comparison_controls_layout.addWidget(button)
+
+        self.folder_timeline_widget = QWidget()
+        timeline_layout = QHBoxLayout(self.folder_timeline_widget)
+        timeline_layout.setContentsMargins(0, 0, 0, 0)
+        timeline_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
+        self.folder_timeline = QSlider(Qt.Horizontal)
+        self.folder_timeline.setMinimumWidth(AppStyle.compact_input_min_width())
+        self.folder_timeline.setAccessibleName(tr("image_browser.playback.timeline"))
+        self.folder_timeline.setToolTip(tr("image_browser.playback.timeline"))
+        self.folder_timeline.valueChanged.connect(self._seek_folder_sequence)
+        self.folder_timeline.installEventFilter(self)
+        timeline_layout.addWidget(self.folder_timeline, 1)
+        self.folder_frame_label = QLabel()
+        apply_info_style(self.folder_frame_label)
+        timeline_layout.addWidget(self.folder_frame_label)
+        controls_layout.addWidget(self.folder_timeline_widget, 1)
 
         self.comparison_parameter_label = QLabel()
         apply_info_style(self.comparison_parameter_label)
         self.comparison_parameter_label.hide()
-        controls_layout.addWidget(self.comparison_parameter_label)
 
         self.comparison_parameter_slider = QSlider(Qt.Horizontal)
         self.comparison_parameter_slider.setRange(0, 100)
@@ -1011,11 +1048,20 @@ class ImageBrowserApp(BaseImageTab):
         self.comparison_parameter_slider.valueChanged.connect(
             self._on_comparison_parameter_changed
         )
+        self.comparison_parameter_slider.sliderPressed.connect(self._stop_folder_playback)
         self.comparison_parameter_slider.hide()
         self.comparison_parameter_slider.setToolTip(
             tr("image_browser.compare.opacity.tooltip")
         )
-        controls_layout.addStretch()
+        self.comparison_settings_widget = QWidget()
+        comparison_settings_layout = QHBoxLayout(self.comparison_settings_widget)
+        comparison_settings_layout.setContentsMargins(0, 0, 0, 0)
+        comparison_settings_layout.setSpacing(AppStyle.LAYOUT["toolbar_spacing"])
+        comparison_settings_layout.addWidget(self.comparison_parameter_label)
+        comparison_settings_layout.addWidget(self.comparison_parameter_slider, 1)
+        self.comparison_settings_widget.hide()
+        comparison_controls_layout.addWidget(self.comparison_settings_widget, 1)
+        comparison_controls_layout.addStretch()
 
         self.save_calculated_button = QPushButton()
         self.save_calculated_button.setAccessibleName(
@@ -1025,43 +1071,46 @@ class ImageBrowserApp(BaseImageTab):
         self._apply_tool_icon(self.save_calculated_button, 'viewer_save.svg')
         self.save_calculated_button.clicked.connect(self._save_calculated_image)
         self.save_calculated_button.hide()
-        controls_layout.addWidget(self.save_calculated_button)
+        comparison_controls_layout.addWidget(self.save_calculated_button)
 
         self.add_all_folder_button = QPushButton()
-        self.add_all_folder_button.setToolTip(
-            tr("image_browser.batch.add_all.tooltip")
-        )
+        self.add_all_folder_button.setAccessibleName(tr("image_browser.batch.add_all.tooltip"))
+        self.add_all_folder_button.setToolTip(tr("image_browser.batch.add_all.tooltip"))
         apply_toolbar_symbol_button_style(self.add_all_folder_button)
         self._apply_tool_icon(self.add_all_folder_button, 'tool_add_all.svg')
         self.add_all_folder_button.clicked.connect(self._load_from_folder)
         controls_layout.addWidget(self.add_all_folder_button)
-
-        self.collection_status_label = QLabel()
-        apply_info_style(self.collection_status_label)
-        self.collection_status_label.setVisible(False)
-        controls_layout.addWidget(self.collection_status_label)
-
         self.clear_collection_button = QPushButton()
-        self.clear_collection_button.setToolTip(
-            tr("image_browser.batch.clear.tooltip")
-        )
+        self.clear_collection_button.setAccessibleName(tr("image_browser.batch.clear.tooltip"))
+        self.clear_collection_button.setToolTip(tr("image_browser.batch.clear.tooltip"))
         apply_toolbar_symbol_button_style(self.clear_collection_button)
         self._apply_tool_icon(self.clear_collection_button, 'tool_delete.svg')
         self.clear_collection_button.clicked.connect(self._clear_collected_folders)
-        self.clear_collection_button.setEnabled(False)
-        self.clear_collection_button.setVisible(False)
+        self.clear_collection_button.hide()
         controls_layout.addWidget(self.clear_collection_button)
         layout.addLayout(controls_layout)
-
-        self.comparison_settings_widget = QWidget()
-        comparison_settings_layout = QHBoxLayout(self.comparison_settings_widget)
-        comparison_settings_layout.setContentsMargins(0, 0, 0, 0)
-        comparison_settings_layout.setSpacing(AppStyle.LAYOUT["toolbar_spacing"])
-        comparison_settings_layout.addWidget(self.comparison_parameter_label)
-        comparison_settings_layout.addWidget(self.comparison_parameter_slider, 1)
-        self.comparison_settings_widget.hide()
-        layout.addWidget(self.comparison_settings_widget)
-        self._update_comparison_controls()
+        layout.addWidget(self.comparison_controls_widget)
+        # Measure the complete row once; hidden controls still collapse afterward.
+        self.comparison_parameter_label.setText(
+            self._comparison_slider_label(ComparisonMode.OPACITY, 50)
+        )
+        reserved_width_widgets = (
+            self.comparison_parameter_label,
+            self.comparison_parameter_slider,
+            self.comparison_settings_widget,
+            self.save_calculated_button,
+            self.clear_collection_button,
+        )
+        for widget in reserved_width_widgets:
+            policy = widget.sizePolicy()
+            policy.setRetainSizeWhenHidden(True)
+            widget.setSizePolicy(policy)
+        tab.setMinimumWidth(layout.minimumSize().width())
+        for widget in reserved_width_widgets:
+            policy = widget.sizePolicy()
+            policy.setRetainSizeWhenHidden(False)
+            widget.setSizePolicy(policy)
+        self._update_browser_controls()
 
         return tab
 
@@ -1110,7 +1159,6 @@ class ImageBrowserApp(BaseImageTab):
         # outside the folder; otherwise just the row markers change.
         self._refresh_folder_browser(stop_playback=False)
         self._refresh_file_row_markers((previous_pinned_path, file_path))
-        self._update_comparison_controls()
         self._update_display()
 
     def _emoji_icon(self, text: str, opacity: float = 1.0) -> QIcon:
@@ -1157,15 +1205,43 @@ class ImageBrowserApp(BaseImageTab):
         """Show the selected file while held; otherwise rest on the pinned image."""
         if held == self._hold_shows_selected:
             return
+        if held and self.session_manager.collection.pinned_path is not None:
+            self._stop_folder_playback(refresh_display=False)
+            if self.session_manager.collection.comparison_mode == ComparisonMode.FLICKER:
+                self._show_selected_frame = False
         self._hold_shows_selected = held
         if self.session_manager.collection.pinned_path is not None:
             self._update_display()
 
     def eventFilter(self, watched, event):
+        if watched is getattr(self, "folder_timeline", None) and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Up, Qt.Key_Down) and not event.modifiers():
+                watched.triggerAction(
+                    QSlider.SliderSingleStepSub if event.key() == Qt.Key_Up
+                    else QSlider.SliderSingleStepAdd
+                )
+                event.accept()
+                return True
         if watched is self.folder_files_list and event.type() in (
             QEvent.KeyPress,
             QEvent.KeyRelease,
         ):
+            if (
+                event.type() == QEvent.KeyPress
+                and event.key() in (Qt.Key_Up, Qt.Key_Down)
+                and not event.modifiers()
+                and len(self.session_manager.collection.selected_paths) > 1
+            ):
+                paths = self._folder_sequence_paths()
+                current = self.session_manager.collection.current_reference
+                if current is not None and current.path in paths:
+                    step = -1 if event.key() == Qt.Key_Up else 1
+                    index = min(max(paths.index(current.path) + step, 0), len(paths) - 1)
+                else:
+                    index = len(paths) - 1 if event.key() == Qt.Key_Up else 0
+                self._seek_folder_sequence(index)
+                event.accept()
+                return True
             if event.key() == Qt.Key_Space and not event.modifiers():
                 if not event.isAutoRepeat():
                     self._set_hold_shows_selected(
@@ -1189,21 +1265,27 @@ class ImageBrowserApp(BaseImageTab):
             ):
                 item = self.folder_files_list.itemAt(event.pos())
                 if item is not None and item.data(Qt.UserRole + 1) != "dir":
-                    if self._pin_target_row(event.pos()) >= 0:
-                        self.folder_files_list.setCurrentItem(item)
+                    if not event.modifiers() and self._pin_target_row(event.pos()) >= 0:
+                        self.folder_files_list.setCurrentItem(item, QItemSelectionModel.NoUpdate)
                         self._toggle_selected_pinned_image()
                         event.accept()
                         return True
                     # Selecting the row on press renders it; release restores A.
-                    self._hold_shows_selected = True
+                    if not event.modifiers():
+                        self._set_hold_shows_selected(True)
                     if item is self.folder_files_list.currentItem():
                         self._update_display()
         return super().eventFilter(watched, event)
 
+    def _update_browser_controls(self) -> None:
+        self._update_folder_playback_controls()
+        self._update_comparison_controls()
+
     def _update_comparison_controls(self) -> None:
+        self._update_exploration_buttons()
         pinned = self.session_manager.get_pinned_image()
         current = self.session_manager.collection.current_reference
-        current_path = current.path if current is not None else None
+        mode = self.session_manager.collection.comparison_mode
         selected_item = self.folder_files_list.currentItem()
         has_selected_image = (
             selected_item is not None
@@ -1213,26 +1295,21 @@ class ImageBrowserApp(BaseImageTab):
         comparison_available = (
             pinned is not None
             and current is not None
-            and current.path != pinned["path"]
+            and self.session_manager.cache_manager.get(current.cache_key) is not None
+            and (current.path != pinned["path"] or mode != ComparisonMode.FLICKER)
             and has_selected_image
             and selected_item.data(Qt.UserRole) == current.path
         )
-        for button in self.comparison_buttons.values():
-            button.setVisible(comparison_available)
-        mode = self.session_manager.collection.comparison_mode
         self.save_calculated_button.setVisible(
-            comparison_available and mode in COLOR_MANAGED_COMPARISON_MODES
+            comparison_available
+            and mode in COLOR_MANAGED_COMPARISON_MODES
         )
         if not comparison_available:
             self.comparison_parameter_label.hide()
             self.comparison_parameter_slider.hide()
             self.comparison_settings_widget.hide()
-            self.folder_play_button.setVisible(bool(self._folder_browser_paths))
             return
 
-        self.folder_play_button.setVisible(bool(self._folder_browser_paths))
-        for mode_name, button in self.comparison_buttons.items():
-            button.setChecked(mode.value == mode_name)
         if mode == ComparisonMode.FLICKER:
             self.comparison_parameter_label.setText(
                 tr("image_browser.compare.hold.hint")
@@ -1240,7 +1317,7 @@ class ImageBrowserApp(BaseImageTab):
             self.comparison_parameter_label.setToolTip(
                 tr("image_browser.compare.hold.tooltip")
             )
-            self.comparison_parameter_label.show()
+            self.comparison_parameter_label.hide()
             self.comparison_parameter_slider.hide()
             self.comparison_settings_widget.hide()
             return
@@ -1266,9 +1343,8 @@ class ImageBrowserApp(BaseImageTab):
                 "image_browser.compare.mode.difference.tooltip",
             ),
         }[mode]
-        self.comparison_parameter_label.setText(
-            self._comparison_parameter_text(mode, percent)
-        )
+        self.comparison_parameter_label.setText(self._comparison_slider_label(mode, percent))
+        self.comparison_parameter_label.setToolTip(self._comparison_parameter_text(mode, percent))
         with QSignalBlocker(self.comparison_parameter_slider):
             self.comparison_parameter_slider.setValue(percent)
         self.comparison_parameter_slider.setAccessibleName(tr(accessible_name_id))
@@ -1387,17 +1463,34 @@ class ImageBrowserApp(BaseImageTab):
                 self._pin_preview_icon if row == self._pin_hover_row else self._file_icon
             )
             item.setToolTip(item.text())
+        if item.data(Qt.UserRole + 2):
+            item.setToolTip(
+                tr("image_browser.task.displayed_file", filename=item.text())
+                + "\n" + item.toolTip()
+            )
 
-    def _set_comparison_mode(self, mode_name: str) -> None:
-        mode = ComparisonMode(mode_name)
-        collection = self.session_manager.collection
-        if collection.comparison_mode == mode:
-            # Clicking the active operation again returns to hold-to-compare.
-            mode = ComparisonMode.FLICKER
-        collection.comparison_mode = mode
-        self._comparison_auto_pending = mode in COLOR_MANAGED_COMPARISON_MODES
-        self._update_comparison_controls()
+    def _activate_exploration_task(self, task: str) -> None:
+        self._stop_folder_playback()
+        if task == self.session_manager.collection.comparison_mode.value:
+            self.session_manager.collection.comparison_mode = ComparisonMode.FLICKER
+        else:
+            mode = ComparisonMode(task)
+            self.session_manager.collection.comparison_mode = mode
+            self._comparison_auto_pending = mode in COLOR_MANAGED_COMPARISON_MODES
+        self._show_selected_frame = False
         self._update_display()
+
+    def _update_exploration_buttons(self) -> None:
+        pinned = self.session_manager.collection.pinned_path is not None
+        mode = self.session_manager.collection.comparison_mode
+        self.comparison_controls_widget.setVisible(pinned)
+        for task, button in self.comparison_buttons.items():
+            active = pinned and task == mode.value
+            button.setVisible(pinned)
+            button.setChecked(active)
+            label = tr(f"image_browser.compare.mode.{task}.short")
+            button.setText(label)
+            button.setToolTip(tr(f"image_browser.compare.mode.{task}.tooltip"))
 
     def _adjust_overlay_opacity_from_canvas(self, wheel_delta: int) -> None:
         if self.session_manager.collection.comparison_mode != ComparisonMode.OPACITY:
@@ -1418,10 +1511,18 @@ class ImageBrowserApp(BaseImageTab):
             collection.set_subtract_b_percentage(value)
         else:
             return
-        self.comparison_parameter_label.setText(
-            self._comparison_parameter_text(mode, value)
-        )
+        self._stop_folder_playback(refresh_display=False)
+        self._show_selected_frame = False
         self._update_display()
+
+    def _comparison_slider_label(self, mode: ComparisonMode, percent: int) -> str:
+        if mode == ComparisonMode.OPACITY:
+            return self._comparison_parameter_text(mode, percent)
+        return tr(
+            "image_browser.compare.weight_label",
+            operation=tr(f"image_browser.compare.mode.{mode}.short"),
+            percent=percent,
+        )
 
     def _on_split_divider_changed(self, x: float) -> None:
         reference = self.session_manager.get_pinned_image()
@@ -1472,15 +1573,16 @@ class ImageBrowserApp(BaseImageTab):
 
     def _update_collection_status(self) -> None:
         count = len(self._added_folder_paths)
-        self.collection_status_label.setText(
-            tr("image_browser.batch.count", count=count)
-        )
-        self.collection_status_label.setVisible(count > 0)
-        self.clear_collection_button.setEnabled(count > 0)
         self.clear_collection_button.setVisible(count > 0)
+        self.add_all_folder_button.setToolTip(
+            tr("image_browser.batch.add_all.tooltip")
+            + ("\n" + tr("image_browser.batch.count", count=count) if count else "")
+        )
 
     def _on_session_changed(self, session_manager):
         """Handle session changes"""
+        if session_manager.collection.pinned_path is None:
+            session_manager.collection.comparison_mode = ComparisonMode.FLICKER
         # Only update display if we're not in the middle of batch loading
         # This prevents triggering data loads for every reference added
         if not self.is_batch_loading:
@@ -1499,26 +1601,29 @@ class ImageBrowserApp(BaseImageTab):
         )
 
     def _update_display(self):
-        """Update the image display with on-demand data loading.
-        
-        Retrieves the current image with deferred loading support. If the image
-        data hasn't been loaded yet, triggers the loader callback to fetch and
-        cache it. Displays placeholder while loading is in progress.
-        
-        MEMORY EFFICIENCY:
-        - Passes image data directly to update_plot() without storing in self.image_data
-        - This prevents holding unnecessary references and allows proper garbage collection
-        - Data is only kept in the session manager's LRU cache, which enforces memory limits
-        - Explicitly triggers garbage collection when switching between images
-        """
-        # Get current image, triggering on-demand loading if needed
-        current_image = self.session_manager.get_current_image(
-            load_data=True, 
-            loader_callback=self._lazy_load_callback
-        )
-        self._update_comparison_controls()
+        """Render a cached frame, requesting uncached local data in the background."""
+        self._update_browser_controls()
+        # Keep the previous view while an uncached local frame loads.
+        current_image = self.session_manager.get_current_image(load_data=True)
+        if current_image is not None and current_image['data'] is None:
+            if not current_image['path'].startswith('tiled://'):
+                self._request_browser_image(current_image['path'])
+                loading_message = tr(
+                    "image_browser.image.loading", filename=current_image['filename']
+                )
+                self.loading_status_label.setText(loading_message)
+                self.filename_label.setText(loading_message)
+                self.image_viewer.set_title(loading_message)
+                self.image_viewer.setEnabled(False)
+                self.save_calculated_button.hide()
+                return
+            current_image = self.session_manager.get_current_image(
+                load_data=True, loader_callback=self._lazy_load_callback
+            )
+        self.image_viewer.setEnabled(True)
         
         if current_image is None:
+            self._mark_displayed_frame(None)
             self._set_comparison_display_mode(None)
             self.image_viewer.clear_overlays(group="image-comparison")
             self.image_viewer.clear_image(tr("image_browser.image.empty.viewer"))
@@ -1549,7 +1654,8 @@ class ImageBrowserApp(BaseImageTab):
         pinned_image = self.session_manager.get_pinned_image()
         mode = self.session_manager.collection.comparison_mode
         comparison_available = (
-            pinned_image is not None and pinned_image["path"] != current_image["path"]
+            pinned_image is not None
+            and (pinned_image["path"] != current_image["path"] or mode != ComparisonMode.FLICKER)
         )
         if comparison_available:
             try:
@@ -1560,6 +1666,10 @@ class ImageBrowserApp(BaseImageTab):
                 self.parent_app.show_status(
                     tr("image_browser.compare.incompatible", error=str(error))
                 )
+                if self.folder_play_timer.isActive():
+                    self._stop_folder_playback(refresh_display=False)
+                    self.save_calculated_button.hide()
+                    return
                 comparison_available = False
 
         if not comparison_available:
@@ -1574,7 +1684,7 @@ class ImageBrowserApp(BaseImageTab):
                     # Rest on the pinned image; holding a file or playback shows it.
                     if not (
                         self._hold_shows_selected
-                        or self.folder_play_timer.isActive()
+                        or self._show_selected_frame
                     ):
                         displayed_data = pinned_image["data"]
                         title = tr(
@@ -1655,6 +1765,9 @@ class ImageBrowserApp(BaseImageTab):
                 self.parent_app.show_status(
                     tr("image_browser.compare.incompatible", error=str(error))
                 )
+                if self.folder_play_timer.isActive():
+                    self._stop_folder_playback(refresh_display=False)
+                    return
                 title = tr("image_browser.compare.current_label", filename=filename)
                 comparison_available = False
 
@@ -1718,6 +1831,13 @@ class ImageBrowserApp(BaseImageTab):
             )
 
         self.image_viewer.set_title(title)
+        displayed_path = (
+            pinned_image["path"]
+            if comparison_available and mode == ComparisonMode.FLICKER
+            and not self._hold_shows_selected and not self._show_selected_frame
+            else current_image["path"]
+        )
+        self._mark_displayed_frame(displayed_path)
         self.filename_label.setText(
             tr(
                 "image_browser.image.filename_source",
@@ -1725,6 +1845,16 @@ class ImageBrowserApp(BaseImageTab):
                 source=source,
             )
         )
+
+    def _mark_displayed_frame(self, path: str | None) -> None:
+        previous_path = self._displayed_frame_path
+        self._displayed_frame_path = path
+        for changed_path in dict.fromkeys((previous_path, path)):
+            row = self._folder_row_for_path(changed_path)
+            if row >= 0:
+                item = self.folder_files_list.item(row)
+                item.setData(Qt.UserRole + 2, changed_path == path)
+                self._apply_file_row_marker(row, self.session_manager.collection.pinned_path)
 
     @staticmethod
     def _validate_comparison_metadata(reference: dict, current: dict) -> None:
@@ -1740,6 +1870,79 @@ class ImageBrowserApp(BaseImageTab):
                         "Images have different or incomplete pixel-coordinate metadata."
                     )
     
+    def _request_browser_image(self, path: str) -> None:
+        """Coalesce uncached browser requests; only one disk read runs at a time."""
+        if self._browser_closing:
+            return
+        if self._browser_load_worker is not None:
+            self._pending_browser_path = (
+                path if path != self._browser_load_worker.kwargs['file_path'] else None
+            )
+            return
+        self._pending_browser_path = None
+        worker = ImageLoadWorker('file', file_path=path)
+        worker.setParent(QApplication.instance())
+        worker.setObjectName("image-browser-load")
+        worker.finished.connect(worker.deleteLater)
+        self._browser_load_worker = worker
+        worker.image_loaded.connect(self._browser_image_loaded)
+        worker.error_occurred.connect(self._browser_image_failed)
+        worker.finished.connect(self._finish_browser_image_load)
+        worker.start()
+
+    def _browser_image_loaded(self, data, path: str, _metadata: dict) -> None:
+        if self._browser_closing:
+            return
+        self.session_manager.cache_manager.put(path, data)
+        for reference in self.session_manager.images:
+            if reference.path == path:
+                reference.size = tuple(data.shape)
+        current = self.session_manager.collection.current_reference
+        if current is not None and current.path == path:
+            self._update_display()
+            self.loading_status_label.setText(
+                tr("image_browser.folder.status.selected_file", filename=current.filename)
+            )
+
+    def _browser_image_failed(self, message: str) -> None:
+        if self._browser_closing:
+            return
+        worker = self._browser_load_worker
+        current = self.session_manager.collection.current_reference
+        if worker is not None and current is not None and current.path == worker.kwargs['file_path']:
+            self._stop_folder_playback()
+            self.loading_status_label.setText(message)
+            self.parent_app.show_status(message)
+            self.image_viewer.setEnabled(True)
+            self.image_viewer.clear_image(message)
+            self._mark_displayed_frame(None)
+
+    def _finish_browser_image_load(self) -> None:
+        self._browser_load_worker = None
+        path = self._pending_browser_path
+        self._pending_browser_path = None
+        current = self.session_manager.collection.current_reference
+        if (
+            not self._browser_closing
+            and path is not None
+            and current is not None
+            and current.path == path
+            and self.session_manager.cache_manager.get(path) is None
+        ):
+            self._request_browser_image(path)
+
+    def _shutdown_browser_loading(self) -> None:
+        self._browser_closing = True
+        self.folder_play_timer.stop()
+        self.folder_refresh_timer.stop()
+        self._pending_browser_path = None
+        if self._browser_load_worker is not None:
+            self._browser_load_worker.cancel()
+
+    def closeEvent(self, event) -> None:
+        self._shutdown_browser_loading()
+        super().closeEvent(event)
+
     def _lazy_load_callback(self, path, metadata):
         """Load image data on-demand when accessed.
         
@@ -2076,6 +2279,10 @@ class ImageBrowserApp(BaseImageTab):
 
         current_item = self.folder_files_list.currentItem()
         current_path = current_item.data(Qt.UserRole) if current_item is not None else None
+        selected_paths = {
+            item.data(Qt.UserRole) for item in self.folder_files_list.selectedItems()
+            if item.data(Qt.UserRole + 1) != "dir"
+        }
 
         folder_icon = self.style().standardIcon(QStyle.SP_DirIcon)
         with QSignalBlocker(self.folder_files_list):
@@ -2091,24 +2298,34 @@ class ImageBrowserApp(BaseImageTab):
                 item.setData(Qt.UserRole, file_path)
                 item.setToolTip(name)
                 self.folder_files_list.addItem(item)
+                item.setSelected(file_path in selected_paths)
             if pinned_outside_folder is not None:
                 pinned_item = QListWidgetItem(pinned_reference.filename)
                 pinned_item.setData(Qt.UserRole, pinned_reference.path)
                 self.folder_files_list.addItem(pinned_item)
+                pinned_item.setSelected(pinned_reference.path in selected_paths)
             if current_path in display_image_paths:
                 self.folder_files_list.setCurrentRow(
-                    len(subfolder_strings) + display_image_paths.index(current_path)
+                    len(subfolder_strings) + display_image_paths.index(current_path),
+                    QItemSelectionModel.NoUpdate,
                 )
 
         self._folder_dir_count = len(subfolder_strings)
         self._folder_browser_dirs = subfolder_strings
         self._folder_browser_paths = path_strings
         self._folder_list_image_paths = display_image_paths
+        self._mark_displayed_frame(self._displayed_frame_path)
+        previous_selection = self.session_manager.collection.selected_paths
+        self._sync_folder_selection()
+        if previous_selection != self.session_manager.collection.selected_paths:
+            self._stop_folder_playback()
+        if len(self._folder_sequence_paths()) < 2:
+            self._stop_folder_playback()
         # New rows already show the plain file icon; only the pinned row differs.
         self._refresh_file_row_markers(
             (pinned_reference.path,) if pinned_reference is not None else ()
         )
-        self._update_comparison_controls()
+        self._update_browser_controls()
         file_count = len(path_strings)
         folder_count = len(subfolder_strings)
         image_count_id = (
@@ -2173,42 +2390,103 @@ class ImageBrowserApp(BaseImageTab):
         else:
             self.session_manager.set_current_index(existing_index)
 
-        self.loading_status_label.setText(
-            tr(
-                "image_browser.folder.status.selected_file",
-                filename=os.path.basename(file_path),
+        if self.session_manager.cache_manager.get(file_path) is not None:
+            self.loading_status_label.setText(
+                tr(
+                    "image_browser.folder.status.selected_file",
+                    filename=os.path.basename(file_path),
+                )
             )
-        )
-        self._update_comparison_controls()
-
     def _reopen_folder_file(self, item) -> None:
         """Reopen a selected folder row after session navigation."""
         if item is None or item.data(Qt.UserRole + 1) == "dir":
             return
         current_image = self.session_manager.get_current_image()
         file_path = item.data(Qt.UserRole)
-        if current_image is None or current_image['path'] != file_path:
+        if (
+            current_image is None
+            or current_image['path'] != file_path
+            or self.session_manager.cache_manager.get(file_path) is None
+        ):
             self._open_folder_file(item)
 
     def _toggle_folder_playback(self):
-        """Play through the visible folder image list."""
-        if not self._folder_browser_paths:
+        """Play the multi-selection, or the folder when a single file is selected."""
+        paths = self._folder_sequence_paths()
+        if len(paths) < 2:
             self.folder_play_button.setChecked(False)
             return
 
         if self.folder_play_button.isChecked():
-            folder_image_end = self._folder_dir_count + len(self._folder_browser_paths)
-            if not self._folder_dir_count <= self.folder_files_list.currentRow() < folder_image_end:
-                self._select_folder_browser_row(self._folder_dir_count)
-            self.folder_playback_speed_button.show()
-            self.folder_loop_button.show()
+            self._show_selected_frame = True
+            current = self.session_manager.collection.current_reference
+            if current is None or current.path not in paths:
+                self._seek_folder_sequence(0, pause=False)
             self._apply_tool_icon(self.folder_play_button, 'tool_pause.svg')
             self.folder_play_button.setToolTip(
                 tr("image_browser.play.pause.tooltip")
             )
+            self.folder_play_button.setAccessibleName(tr("image_browser.play.pause.tooltip"))
             self.folder_play_timer.start(self._folder_playback_interval_ms())
+            self._update_display()
         else:
             self._stop_folder_playback()
+
+    def _sync_folder_selection(self) -> None:
+        items = sorted(
+            self.folder_files_list.selectedItems(), key=self.folder_files_list.row
+        )
+        self.session_manager.collection.set_selection(
+            item.data(Qt.UserRole) for item in items
+            if item.data(Qt.UserRole + 1) != "dir" and item.data(Qt.UserRole)
+        )
+        if len(self._folder_sequence_paths()) < 2:
+            self._show_selected_frame = False
+
+    def _on_folder_selection_changed(self) -> None:
+        self._sync_folder_selection()
+        if not self._navigating_sequence:
+            self._stop_folder_playback()
+        self._update_browser_controls()
+
+    def _folder_sequence_paths(self) -> tuple[str, ...]:
+        selected = self.session_manager.collection.selected_paths
+        return selected if len(selected) > 1 else tuple(self._folder_browser_paths)
+
+    def _update_folder_playback_controls(self) -> None:
+        if not hasattr(self, 'folder_timeline'):
+            return
+        paths = self._folder_sequence_paths()
+        current = self.session_manager.collection.current_reference
+        index = paths.index(current.path) if current is not None and current.path in paths else -1
+        self.folder_playback_widget.show()
+        self.folder_play_button.setEnabled(len(paths) > 1)
+        self.folder_playback_speed_button.setEnabled(len(paths) > 1)
+        self.folder_loop_button.setEnabled(len(paths) > 1)
+        show_timeline = len(paths) > 1
+        self.folder_timeline_widget.show()
+        self.folder_timeline.setVisible(show_timeline)
+        self.folder_frame_label.setVisible(show_timeline)
+        with QSignalBlocker(self.folder_timeline):
+            self.folder_timeline.setRange(0, max(0, len(paths) - 1))
+            self.folder_timeline.setValue(max(0, index))
+        self.folder_frame_label.setText(
+            tr("image_browser.playback.position", current=index + 1, total=len(paths))
+        )
+
+    def _seek_folder_sequence(self, index: int, *, pause: bool = True) -> None:
+        paths = self._folder_sequence_paths()
+        if not 0 <= index < len(paths):
+            return
+        if pause:
+            self._stop_folder_playback()
+        self._show_selected_frame = True
+        current = self.session_manager.collection.current_reference
+        same_frame = current is not None and current.path == paths[index]
+        row = self._folder_row_for_path(paths[index])
+        self._select_folder_browser_row(row)
+        if same_frame:
+            self._update_display()
 
     def _folder_playback_interval_ms(self) -> int:
         rate = self._folder_playback_rates[self._folder_playback_rate_index]
@@ -2234,9 +2512,6 @@ class ImageBrowserApp(BaseImageTab):
                 "image_browser.playback.speed.fast",
             )[self._folder_playback_rate_index]
         )
-        self.folder_playback_speed_button.setAccessibleName(
-            tr("image_browser.playback.speed.accessible", speed=speed)
-        )
         self.folder_playback_speed_button.setToolTip(
             tr(
                 (
@@ -2246,12 +2521,15 @@ class ImageBrowserApp(BaseImageTab):
                 )[self._folder_playback_rate_index]
             )
         )
+        self.folder_playback_speed_button.setAccessibleName(
+            tr("image_browser.playback.speed.accessible", speed=speed)
+        )
         self._apply_tool_icon(
             self.folder_playback_speed_button,
             f'tool_speed_{self._folder_playback_rate_index + 1}.svg',
         )
 
-    def _stop_folder_playback(self):
+    def _stop_folder_playback(self, *, refresh_display: bool = True):
         """Stop folder-list playback and reset the play button."""
         was_playing = False
         if hasattr(self, 'folder_play_timer'):
@@ -2260,9 +2538,15 @@ class ImageBrowserApp(BaseImageTab):
         if hasattr(self, 'folder_play_button'):
             self.folder_play_button.setChecked(False)
             self.folder_play_button.setToolTip(tr("image_browser.play.tooltip"))
+            self.folder_play_button.setAccessibleName(tr("image_browser.play.tooltip"))
             self._apply_tool_icon(self.folder_play_button, 'tool_play.svg')
-        if was_playing and self.session_manager.collection.pinned_path is not None:
+        if refresh_display and was_playing and self.session_manager.collection.pinned_path is not None:
             self._update_display()
+
+    def hideEvent(self, event) -> None:
+        self._stop_folder_playback()
+        self._hold_shows_selected = False
+        super().hideEvent(event)
 
     def _load_browser_icon(self, filename: str):
         workspace_root = getattr(self.parent_app, '_workspace_root', Path(__file__).resolve().parent.parent.parent)
@@ -2285,9 +2569,9 @@ class ImageBrowserApp(BaseImageTab):
                 'tool_pause.svg' if getattr(self, 'folder_play_button', None) is not None
                 and self.folder_play_button.isChecked() else 'tool_play.svg',
             ),
-            (getattr(self, 'folder_loop_button', None),    'tool_infinite.svg'),
-            (getattr(self, 'add_all_folder_button', None), 'tool_add_all.svg'),
+            (getattr(self, 'folder_loop_button', None), 'tool_infinite.svg'),
             (getattr(self, 'save_calculated_button', None), 'viewer_save.svg'),
+            (getattr(self, 'add_all_folder_button', None), 'tool_add_all.svg'),
             (getattr(self, 'clear_collection_button', None), 'tool_delete.svg'),
         ]
         for button, filename in pairs:
@@ -2297,21 +2581,25 @@ class ImageBrowserApp(BaseImageTab):
             self._update_folder_playback_speed_button()
 
     def _advance_folder_playback(self):
-        """Advance to the next visible folder image during playback."""
+        """Advance only after the current lazy frame is ready."""
         started_at = time.perf_counter()
-        folder_image_end = self._folder_dir_count + len(self._folder_browser_paths)
-        if not self._folder_browser_paths:
+        paths = self._folder_sequence_paths()
+        if len(paths) < 2:
             self._stop_folder_playback()
             return
 
-        next_row = self.folder_files_list.currentRow() + 1
-        if next_row >= folder_image_end:
+        current = self.session_manager.get_current_image(load_data=True)
+        if current is not None and current['data'] is None:
+            return
+        index = paths.index(current['path']) if current is not None and current['path'] in paths else -1
+        next_index = index + 1
+        if next_index >= len(paths):
             if not self.folder_loop_button.isChecked():
                 self._stop_folder_playback()
                 return
-            next_row = self._folder_dir_count
+            next_index = 0
 
-        self._select_folder_browser_row(next_row)
+        self._seek_folder_sequence(next_index, pause=False)
         frame_elapsed_ms = (time.perf_counter() - started_at) * 1000
         self.folder_play_timer.setInterval(
             self._folder_playback_delay_ms(frame_elapsed_ms)
@@ -2322,7 +2610,19 @@ class ImageBrowserApp(BaseImageTab):
         if self.folder_files_list.item(row) is None:
             return
 
-        self.folder_files_list.setCurrentRow(row)
+        self._navigating_sequence = True
+        try:
+            command = (
+                QItemSelectionModel.NoUpdate
+                if len(self.session_manager.collection.selected_paths) > 1
+                else QItemSelectionModel.ClearAndSelect
+            )
+            self.folder_files_list.setCurrentRow(row, command)
+            item = self.folder_files_list.item(row)
+            self.folder_files_list.scrollToItem(item)
+            self._reopen_folder_file(item)
+        finally:
+            self._navigating_sequence = False
 
     def _export_session_list(self):
         """Export session file list"""

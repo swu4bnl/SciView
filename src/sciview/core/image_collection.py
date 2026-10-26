@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -70,6 +71,7 @@ class ImageCollection:
     comparison_displays: dict[ComparisonMode, ComparisonDisplay] = field(
         default_factory=dict
     )
+    selected_paths: tuple[str, ...] = ()
 
     @property
     def current_reference(self) -> ImageReference | None:
@@ -94,6 +96,10 @@ class ImageCollection:
         self.current_index = index
         return True
 
+    def set_selection(self, paths: Iterable[str]) -> None:
+        """Keep unique selected paths in browser order, without loading arrays."""
+        self.selected_paths = tuple(dict.fromkeys(paths))
+
     def pin_current(self) -> bool:
         reference = self.current_reference
         if reference is None:
@@ -108,6 +114,7 @@ class ImageCollection:
         if not 0 <= index < len(self.references):
             return None
         removed = self.references.pop(index)
+        self.selected_paths = tuple(path for path in self.selected_paths if path != removed.path)
         if removed.path == self.pinned_path:
             self.unpin()
         if self.current_index >= len(self.references):
@@ -119,6 +126,7 @@ class ImageCollection:
     def clear(self) -> None:
         self.references.clear()
         self.current_index = -1
+        self.selected_paths = ()
         self.unpin()
 
     def set_opacity(self, value: float) -> None:
