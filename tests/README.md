@@ -16,6 +16,18 @@ pixi run python -m pytest tests/test_image_viewer.py
 
 ## Test Scope
 
+Keep a flat, feature-based suite:
+
+| File | Retained coverage |
+| --- | --- |
+| [test_image_collection.py](test_image_collection.py) | Ordered selection, pin ownership, comparison arithmetic and input validation |
+| [test_image_io.py](test_image_io.py) | Local discovery, filtering/sorting, float-TIFF integrity and export rejection |
+| [test_image_viewer.py](test_image_viewer.py) | Display/data separation, comparison/export and cross-tab workflows |
+| [test_image_playback.py](test_image_playback.py) | Selection/navigation, asynchronous reads, shutdown and annotation isolation |
+| [test_mask_drawing.py](test_mask_drawing.py) | Pixel footprints, transactional edits, cancellation and undo/redo |
+| [test_tiled_workflow.py](test_tiled_workflow.py) | Mocked remote discovery/loading and local use without Tiled |
+| [test_ui_messages.py](test_ui_messages.py) | Catalog integrity, translation boundaries and scientific glyph support |
+
 Organize retained tests around user tasks and main workflows. Assert meaningful
 outputs and scientific correctness, not one test per feature or helper.
 Examples include:

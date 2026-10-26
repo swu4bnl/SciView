@@ -11,6 +11,7 @@ description: "Use when deciding which tests to retain or changing SciView pytest
 - Add a regression when failure would compromise those contracts, not for every isolated control, helper, or implementation branch.
 - Use one-off local checks for minor standalone UI behavior and cosmetics. Do not retain probes that lock down incidental wording, layout, assets, or internal call sequences.
 - When revising tests, remove redundant or low-value cases and their unused fixtures/imports without weakening meaningful coverage.
+- Prefer a few cohesive workflow tests with shared setup over a new GUI test for each control or fix. Assert scientific results and user-visible contracts, not incidental widget state; keep independent failure modes separate when combining them would obscure diagnosis.
 
 ## Execution
 

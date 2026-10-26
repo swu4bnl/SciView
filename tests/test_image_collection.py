@@ -10,20 +10,28 @@ from sciview.core.image_collection import (
 )
 
 
-def test_collection_keeps_order_and_pinned_reference_when_selection_changes():
+def test_collection_selection_is_ordered_lightweight_and_independent_of_active_image():
     collection = ImageCollection()
+    collection.set_selection(["c.tif", "a.tif", "c.tif"])
+    assert collection.selected_paths == ("c.tif", "a.tif")
+    assert collection.references == []
+
     first = ImageReference(path="a.tif", filename="a.tif")
     second = ImageReference(path="b.tif", filename="b.tif")
-
     collection.add(first)
-    collection.add(second)
-    assert collection.current_reference is second
     assert collection.pin_current()
-    assert collection.pinned_reference is second
-
+    collection.add(second)
+    assert collection.references == [first, second]
+    assert collection.current_reference is second
+    assert collection.pinned_reference is first
     assert collection.select(0)
     assert collection.current_reference is first
-    assert collection.pinned_reference is second
+    assert collection.selected_paths == ("c.tif", "a.tif")
+    assert collection.pinned_path == "a.tif"
+    collection.remove(0)
+    assert collection.selected_paths == ("c.tif",)
+    collection.clear()
+    assert collection.selected_paths == ()
 
 
 @pytest.mark.parametrize(
@@ -147,3 +155,34 @@ def test_add_percentage_is_bounded_integer():
             ComparisonMode.ADD,
             current_weight=1.1,
         )
+
+
+def test_calculated_comparison_filename_mirrors_operation_without_parsing():
+    collection = ImageCollection()
+    reference = np.full((2, 2), 10.0)
+    current = np.full((2, 2), 4.0)
+
+    collection.comparison_mode = ComparisonMode.DIFFERENCE
+    collection.set_subtract_b_percentage(80)
+    np.testing.assert_allclose(
+        collection.calculate_comparison(reference, current), 10.0 - 0.8 * 4.0
+    )
+    assert collection.comparison_formula() == "A - B*0.80"
+    assert "minus" in collection.suggest_comparison_filename("ref.tiff", "cur.tif")
+
+    collection.comparison_mode = ComparisonMode.OPACITY
+    collection.set_opacity(0.3)
+    np.testing.assert_allclose(
+        collection.calculate_comparison(reference, current), 10.0 * 0.7 + 4.0 * 0.3
+    )
+
+    collection.comparison_mode = ComparisonMode.ADD
+    long_name = "a" * 20 + "MIDDLE" + "z" * 20 + ".tiff"
+    suggestion = collection.suggest_comparison_filename(long_name, 'bad:name?.tif')
+    assert suggestion.endswith(".tiff")
+    assert len(suggestion) < len(long_name) + len('bad:name?.tif')
+    assert not any(character in suggestion for character in '<>:"/\\|?*')
+
+    collection.comparison_mode = ComparisonMode.SPLIT
+    with pytest.raises(ValueError):
+        collection.calculate_comparison(reference, current)
