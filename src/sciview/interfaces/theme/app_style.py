@@ -98,6 +98,8 @@ class AppStyle:
         'light_mode': 'tool_light_mode.svg',
         'dark_mode': 'tool_dark_mode.svg',
         'style_inspector': 'tool_style_inspector.svg',
+        'more_tabs': 'tool_more.svg',
+        'hide_tab': 'tool_close.svg',
     }
 
     TAB_ICON_FILES = {
@@ -694,6 +696,10 @@ class AppStyle:
             f"min-width: {cls.control_px(cls.TAB_UI['min_width'])}px;"
             "margin-right: 2px;"
             "margin-bottom: -1px;"
+            "}"
+            # The trailing icon-only More tab only needs room for its icon.
+            "QTabBar::tab:last {"
+            "min-width: 0px;"
             "}"
             "QTabBar::tab:selected {"
             f"background: {colors['accent'].name()};"

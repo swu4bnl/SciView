@@ -28,8 +28,11 @@ class Message:
     placeholders: Mapping[str, str]
 
 
-class _CatalogLoader(yaml.SafeLoader):
-    """Reject duplicate IDs instead of silently replacing source messages."""
+class _CatalogLoader(getattr(yaml, "CSafeLoader", yaml.SafeLoader)):
+    """Reject duplicate IDs instead of silently replacing source messages.
+
+    Uses the libyaml parser when installed; the catalogs are parsed at startup.
+    """
 
 
 def _unique_mapping(loader: _CatalogLoader, node: yaml.MappingNode) -> dict:

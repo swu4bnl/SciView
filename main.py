@@ -48,10 +48,11 @@ sys.path.insert(0, os.path.join(app_dir, 'src'))
 
 from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QMainWindow, QMessageBox, QPushButton, QTabWidget, QLabel,
-    QWidget, QAction
+    QWidget, QAction, QMenu, QTabBar, QToolButton
 )
-from PyQt5.QtCore import Qt, QThread, QTimer
+from PyQt5.QtCore import Qt, QEvent, QThread, QTimer
 from PyQt5 import QtWebEngineWidgets  # Initialize WebEngine before QApplication.
+from PyQt5 import sip
 
 # Import configuration from package modules.
 from sciview.interfaces.text import tr
@@ -113,6 +114,10 @@ class SciAnaApp(QMainWindow):
         self.setCentralWidget(self.tab_widget)
         self._last_tab_index = -1
         self._tab_icon_keys = {}
+        # Rarely used tabs stay hidden, and unbuilt until first opened from the More menu.
+        self._optional_tab_factories = {}
+        self._optional_tab_keys: list[str] = []
+        self._hide_tab_buttons = []
         self.tab_widget.currentChanged.connect(self._on_current_tab_changed)
         tab_bar = self.tab_widget.tabBar()
         tab_bar.setFont(AppStyle.tab_font())
@@ -193,6 +198,11 @@ class SciAnaApp(QMainWindow):
         )
         self.clear_session_button.setFixedSize(corner_button_size)
         self.clear_session_button.clicked.connect(self._clear_session_cache)
+
+        self.more_tabs_menu = QMenu(self)
+        # The More entry is itself the last tab, so it reads as part of the tab set.
+        self._more_tab_widget = None
+        self.tab_widget.tabBar().installEventFilter(self)
 
         corner_widget = QWidget()
         corner_layout = QHBoxLayout(corner_widget)
@@ -384,7 +394,11 @@ class SciAnaApp(QMainWindow):
 
     def add_tab(self, widget, name, icon_key=None):
         """Add a tab to the main interface"""
-        index = self.tab_widget.addTab(widget, name)
+        more_index = self._more_tab_index()
+        if more_index < 0:
+            index = self.tab_widget.addTab(widget, name)
+        else:
+            index = self.tab_widget.insertTab(more_index, widget, name)
         if icon_key:
             self._tab_icon_keys[index] = icon_key
             icon_filename = AppStyle.TAB_ICON_FILES.get(icon_key)
@@ -394,9 +408,105 @@ class SciAnaApp(QMainWindow):
                     AppStyle.load_icon(self._workspace_root, icon_filename),
                 )
 
+    def add_optional_tab(self, key, name, factory):
+        """Register a rarely used tab that is built and shown only on request."""
+        if self._more_tab_widget is None:
+            self._more_tab_widget = QWidget()
+            index = self.tab_widget.addTab(self._more_tab_widget, self._more_tab_icon(), "")
+            self.tab_widget.setTabToolTip(index, tr('shell.more_tabs'))
+            self.tab_widget.setTabWhatsThis(index, tr('shell.more_tabs'))
+        self.add_tab(QWidget(), name, icon_key=key)
+        index = self._tab_index(key)
+        self.tab_widget.setTabVisible(index, False)
+        self._optional_tab_factories[key] = factory
+        self._optional_tab_keys.append(key)
+        action = self.more_tabs_menu.addAction(self.tab_widget.tabIcon(index), name)
+        action.triggered.connect(lambda _checked=False, k=key: self.open_optional_tab(k))
+
+    def _more_tab_icon(self):
+        return AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['more_tabs'])
+
+    def _more_tab_index(self) -> int:
+        widget = getattr(self, '_more_tab_widget', None)
+        return -1 if widget is None else self.tab_widget.indexOf(widget)
+
+    def eventFilter(self, watched, event):
+        # Clicking the More tab opens its menu instead of selecting an empty page.
+        if (
+            watched is self.tab_widget.tabBar()
+            and event.type() in (QEvent.MouseButtonPress, QEvent.MouseButtonDblClick)
+            and event.button() == Qt.LeftButton
+            and self._more_tab_index() >= 0
+            and watched.tabAt(event.pos()) == self._more_tab_index()
+        ):
+            if event.type() == QEvent.MouseButtonPress:
+                self._show_more_tabs_menu()
+            return True
+        return super().eventFilter(watched, event)
+
+    def _tab_index(self, key: str) -> int:
+        for index, tab_key in self._tab_icon_keys.items():
+            if tab_key == key:
+                return index
+        raise ValueError(f"Unknown tab: {key}")
+
+    def _show_more_tabs_menu(self):
+        tab_bar = self.tab_widget.tabBar()
+        rect = tab_bar.tabRect(self._more_tab_index())
+        self.more_tabs_menu.exec_(tab_bar.mapToGlobal(rect.bottomLeft()))
+
+    def _install_hide_tab_button(self, index: int, key: str) -> None:
+        button = QToolButton(self.tab_widget.tabBar())
+        button.setAutoRaise(True)
+        button.setIcon(AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['hide_tab']))
+        button.setIconSize(AppStyle.corner_button_icon_size() * 0.75)
+        button.setToolTip(tr('shell.hide_tab'))
+        button.setAccessibleName(tr('shell.hide_tab'))
+        button.clicked.connect(lambda _checked=False, k=key: self.hide_optional_tab(k))
+        self.tab_widget.tabBar().setTabButton(index, QTabBar.RightSide, button)
+        # QTabBar deletes a tab's buttons when the tab is removed (e.g. Ctrl+R rebuild).
+        self._hide_tab_buttons = [b for b in self._hide_tab_buttons if not sip.isdeleted(b)]
+        self._hide_tab_buttons.append(button)
+
+    def open_optional_tab(self, key: str, *, select: bool = True):
+        """Build an optional tab on first use, show it, and optionally switch to it."""
+        index = self._tab_index(key)
+        factory = self._optional_tab_factories.pop(key, None)
+        if factory is not None:
+            name = self.tab_widget.tabText(index)
+            icon = self.tab_widget.tabIcon(index)
+            placeholder = self.tab_widget.widget(index)
+            widget = factory()
+            if hasattr(widget, 'set_shared_info_text') and self.shared_info_text:
+                widget.set_shared_info_text(self.shared_info_text)
+            # Same-index replacement keeps the current widget; avoid spurious tab-change handling.
+            self.tab_widget.blockSignals(True)
+            try:
+                self.tab_widget.removeTab(index)
+                self.tab_widget.insertTab(index, widget, icon, name)
+            finally:
+                self.tab_widget.blockSignals(False)
+            placeholder.deleteLater()
+            self._install_hide_tab_button(index, key)
+        self.tab_widget.setTabVisible(index, True)
+        if select:
+            self.tab_widget.setCurrentIndex(index)
+        return self.tab_widget.widget(index)
+
+    def hide_optional_tab(self, key: str) -> None:
+        """Fold an optional tab back into the More menu, keeping its state."""
+        index = self._tab_index(key)
+        if self.tab_widget.currentIndex() == index:
+            self.tab_widget.setCurrentIndex(self._tab_index("image_browser"))
+        self.tab_widget.setTabVisible(index, False)
+
     def _collect_session_state(self) -> dict:
         """Gather per-tab restart state, keyed by each tab's stable icon_key."""
         state = {"display_settings": dict(self.display_settings)}
+        state["open_optional_tabs"] = [
+            key for key in self._optional_tab_keys
+            if self.tab_widget.isTabVisible(self._tab_index(key))
+        ]
         for index in range(self.tab_widget.count()):
             key = self._tab_icon_keys.get(index)
             widget = self.tab_widget.widget(index)
@@ -429,6 +539,12 @@ class SciAnaApp(QMainWindow):
                 self.publish_shared_display_settings(display_settings)
             except Exception as exc:
                 print(f"[session] failed to restore display settings: {exc}")
+        for key in state.get("open_optional_tabs") or []:
+            if key in self._optional_tab_keys:
+                try:
+                    self.open_optional_tab(key, select=False)
+                except Exception as exc:
+                    print(f"[session] failed to reopen tab '{key}': {exc}")
         for index in range(self.tab_widget.count()):
             key = self._tab_icon_keys.get(index)
             widget = self.tab_widget.widget(index)
@@ -530,6 +646,17 @@ class SciAnaApp(QMainWindow):
         )
         self.high_contrast_button.setIconSize(corner_icon_size)
         self.high_contrast_button.setChecked(AppStyle.high_contrast_enabled())
+        more_index = self._more_tab_index()
+        if more_index >= 0:
+            self.tab_widget.setTabIcon(more_index, self._more_tab_icon())
+        for action, key in zip(self.more_tabs_menu.actions(), self._optional_tab_keys):
+            action.setIcon(self.tab_widget.tabIcon(self._tab_index(key)))
+        hide_icon = AppStyle.load_icon(self._workspace_root, AppStyle.CORNER_ICON_FILES['hide_tab'])
+        for button in self._hide_tab_buttons:
+            if sip.isdeleted(button):
+                continue
+            button.setIcon(hide_icon)
+            button.setIconSize(corner_icon_size * 0.75)
 
     def publish_shared_image(self, image_data, image_path=None, source_tab=None):
         """Publish active image into shared app state and propagate to tabs."""
@@ -774,6 +901,14 @@ class SciAnaApp(QMainWindow):
 
     def _on_current_tab_changed(self, index):
         """Publish outgoing tab state and render the newly active tab."""
+        if index >= 0 and index == self._more_tab_index():
+            # Keyboard or wheel navigation reached the menu tab; stay on the previous page.
+            self.tab_widget.blockSignals(True)
+            try:
+                self.tab_widget.setCurrentIndex(self._last_tab_index)
+            finally:
+                self.tab_widget.blockSignals(False)
+            return
         previous_index = self._last_tab_index
         self._last_tab_index = index
 
@@ -1003,6 +1138,8 @@ class SciAnaApp(QMainWindow):
             # Replace the tab
             self.tab_widget.removeTab(current_index)
             self.tab_widget.insertTab(current_index, new_tab, tab_name)
+            if self._tab_icon_keys.get(current_index) in self._optional_tab_keys:
+                self._install_hide_tab_button(current_index, self._tab_icon_keys[current_index])
             self.tab_widget.setCurrentIndex(current_index)
             if self._tab_icon_keys.get(current_index) in {"image_browser", "results"}:
                 current_tab.close()
@@ -1251,7 +1388,7 @@ def create_application():
     # Add tabs
     import time as _time
 
-    _TAB_TOTAL = 9
+    _TAB_TOTAL = 7
     _tab_idx = 0
 
     def _tab_start(name):
@@ -1276,18 +1413,6 @@ def create_application():
         _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(tr('shell.image_browser_tab_n_import_error', error=e))
         main_window.add_tab(placeholder, tr('shell.image_browser'), icon_key="image_browser")
-
-    # Tiled Browser
-    t0 = _tab_start("Tiled Browser")
-    try:
-        from tabs.tiled_browser_tab import TiledBrowserTab
-        tiled_browser_tab = TiledBrowserTab(main_window)
-        main_window.add_tab(tiled_browser_tab, tr('shell.tiled_browser'), icon_key="tiled_browser")
-        _tab_done(t0)
-    except ImportError as e:
-        _tab_done(t0, failed=True)
-        placeholder = _build_placeholder_tab(tr('shell.tiled_browser_tab_n_import_error', error=e))
-        main_window.add_tab(placeholder, tr('shell.tiled_browser'), icon_key="tiled_browser")
 
     # Calibration
     t0 = _tab_start("Calibration")
@@ -1354,23 +1479,29 @@ def create_application():
         placeholder = _build_placeholder_tab(tr('shell.batch_tab_n_import_error_error', error=e))
         main_window.add_tab(placeholder, tr('shell.batch'), icon_key="batch")
 
-    # Info
-    t0 = _tab_start("Info")
-    try:
-        from tabs.info_tab import InfoTab
-        info_tab = InfoTab(main_window)
-        main_window.add_tab(info_tab, tr('shell.info'), icon_key="info")
-        _tab_done(t0)
-    except ImportError as e:
-        _tab_done(t0, failed=True)
-        placeholder = _build_placeholder_tab(tr('shell.info_tab_n_import_error_error', error=e))
-        main_window.add_tab(placeholder, tr('shell.info'), icon_key="info")
-
     # Notebook (session key stays "results" so saved restart state still restores)
     t0 = _tab_start("Notebook")
     from tabs.results_tab import ResultsTab
     main_window.add_tab(ResultsTab(main_window), tr("shell.notebook"), icon_key="results")
     _tab_done(t0)
+
+    # Rarely used tabs: folded into the More menu and built on first use.
+    def _tiled_browser_tab():
+        try:
+            from tabs.tiled_browser_tab import TiledBrowserTab
+            return TiledBrowserTab(main_window)
+        except ImportError as e:
+            return _build_placeholder_tab(tr('shell.tiled_browser_tab_n_import_error', error=e))
+
+    def _info_tab():
+        try:
+            from tabs.info_tab import InfoTab
+            return InfoTab(main_window)
+        except ImportError as e:
+            return _build_placeholder_tab(tr('shell.info_tab_n_import_error_error', error=e))
+
+    main_window.add_optional_tab("tiled_browser", tr('shell.tiled_browser'), _tiled_browser_tab)
+    main_window.add_optional_tab("info", tr('shell.info'), _info_tab)
 
     print("[SciView] All tabs loaded. Launching window...")
     main_window.restore_session_state()

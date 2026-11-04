@@ -271,6 +271,12 @@ shell.info:
 shell.notebook:
   text: "笔记本"
   context: Tab for writing notes with embedded scientific results such as waterfalls.
+shell.more_tabs:
+  text: "更多标签页"
+  context: Tooltip of the tab-bar button listing rarely used tabs (Tiled Browser, Info) that open on demand.
+shell.hide_tab:
+  text: "隐藏标签页"
+  context: Tooltip of the button on an optional tab that folds it back into the More tabs menu.
 shell.info_tab_n_import_error_error:
   text: "信息选项卡\n（导入错误：{error}）"
   context: Fallback panel shown when an application tab cannot be imported.
