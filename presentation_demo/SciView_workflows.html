@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SciView | Four connected workflows</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#080e18;color:#f2f6ff;font-family:"Segoe UI",sans-serif;overflow:hidden}
+body{display:grid;place-items:center}.slide{width:1920px;height:1080px;position:absolute;transform:scale(var(--scale,1));transform-origin:center;background:linear-gradient(#0a111d,#0d1827);padding:30px 52px 25px}
+header{height:106px;position:relative;padding-left:26px}header:before{content:"";position:absolute;left:0;top:3px;width:7px;height:50px;border-radius:4px;background:#46d9ef}
+h1{font-size:52px;line-height:1.18;margin:0;font-weight:700;letter-spacing:-1px;display:inline}
+.tagline{font-size:30px;color:#b9c9df;margin-left:28px;vertical-align:7px;letter-spacing:0}
+.subtitle{font-size:20px;color:#91a5bd;margin:10px 0 0}.badge{position:absolute;right:0;top:18px;border:1px solid #2d495e;border-radius:22px;background:#1a2c3b;padding:9px 18px;font-size:15px;font-weight:600;color:#b6dce5}
+.badge:before{content:"";display:inline-block;width:11px;height:11px;background:#46d9ef;border-radius:50%;margin-right:11px}
+.grid{display:grid;grid-template-columns:repeat(2,896px);grid-template-rows:repeat(2,440px);gap:24px}
+.card{appearance:none;display:block;padding:0 11px 6px;border:1px solid #2c3a50;border-radius:17px;background:#142133;overflow:hidden;text-align:left;color:inherit;cursor:zoom-in;font:inherit;transition:border-color .15s,box-shadow .15s}
+.card:hover,.card:focus-visible{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent);outline:none}
+.card-heading{height:35px;display:flex;align-items:center;gap:12px;white-space:nowrap;padding-left:3px}
+.number{background:var(--accent);color:#102034;border-radius:6px;padding:1px 5px;font-size:16px;line-height:22px}
+.card strong{font-size:24px;line-height:32px}.workflow{font-size:14px;color:#9eb0c8;margin-left:auto;padding-right:3px}
+.card img{width:872px;height:auto;display:block;border-radius:4px}
+footer{display:flex;justify-content:space-between;font-size:15px;color:#91a5bd;margin-top:8px}
+.controls{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:8px;opacity:0;transition:opacity .15s;z-index:5}
+body:hover .controls,.controls:focus-within{opacity:1}.controls button,#close{font:13px "Segoe UI",sans-serif;border:1px solid #486279;border-radius:20px;background:#142133;color:#edf5ff;padding:8px 14px;cursor:pointer}
+dialog{max-width:96vw;max-height:95vh;width:min(1440px,96vw);padding:18px;border:1px solid #4f657f;border-radius:16px;background:#101a29;color:white;box-shadow:0 30px 100px #000b}
+dialog::backdrop{background:#050a14e8}dialog header{padding:0;height:40px;display:flex;align-items:center;justify-content:space-between}dialog header:before{display:none}
+dialog h2{margin:0;font-size:24px}dialog img{width:100%;height:auto;max-height:80vh;object-fit:contain;display:block}dialog p{margin:12px 0 0;color:#a8bbd2;font-size:14px}
+@media(prefers-reduced-motion:reduce){.card,.controls{transition:none}}
+</style></head><body>
+<main class="slide" aria-label="SciView presentation slide">
+<header><h1>SciView</h1><span class="tagline">From detector images to reproducible results</span><p class="subtitle">Four connected workflows. Direct interaction at every step.</p><span class="badge">REAL APP CAPTURE</span></header>
+<section class="grid"><button class="card" style="--accent:#46d9ef" data-index="0" aria-label="Enlarge Image browsing demonstration"><span class="card-heading"><b class="number">01</b><strong>Image browsing</strong><span class="workflow">Pin  /  Select  /  Split</span></span><img src="image_browsing.gif" alt="Image browsing: Pin  /  Select  /  Split" width="1200" height="550"></button><button class="card" style="--accent:#b99aff" data-index="1" aria-label="Enlarge Calibration demonstration"><span class="card-heading"><b class="number">02</b><strong>Calibration</strong><span class="workflow">Right-click  /  Calculate  /  Reference  /  Tweak</span></span><img src="calibration.gif" alt="Calibration: Right-click  /  Calculate  /  Reference  /  Tweak" width="1200" height="550"></button><button class="card" style="--accent:#ff8aa3" data-index="2" aria-label="Enlarge Mask making demonstration"><span class="card-heading"><b class="number">03</b><strong>Mask making</strong><span class="workflow">Rectangle  /  Brush  /  Circle  /  Eraser</span></span><img src="mask_making.gif" alt="Mask making: Rectangle  /  Brush  /  Circle  /  Eraser" width="1200" height="550"></button><button class="card" style="--accent:#f7c66c" data-index="3" aria-label="Enlarge Batch processing demonstration"><span class="card-heading"><b class="number">04</b><strong>Batch processing</strong><span class="workflow">Files  /  Protocols  /  Run  /  Results</span></span><img src="batch_processing.gif" alt="Batch processing: Files  /  Protocols  /  Run  /  Results" width="1200" height="550"></button></section>
+<footer><span>2D X-ray scattering &nbsp;|&nbsp; Browse &gt; Calibrate &gt; Mask &gt; Process</span><span>Recorded with the included MAXS test images</span></footer>
+</main>
+<nav class="controls" aria-label="Presentation controls"><button id="fullscreen">Fullscreen (F)</button><button id="replay">Replay all (Space)</button><button id="freeze">Freeze</button></nav>
+<dialog id="detail"><header><h2 id="detail-title"></h2><button id="close" aria-label="Close demonstration">Close (Esc)</button></header><img id="detail-image" alt=""><p>Actual SciView screenshots. Zoom/pan, cursor highlights, and pacing are presentation edits. Calibration settings are for demonstration, not a certified calibration.</p></dialog>
+<script>
+const cards=[...document.querySelectorAll('.card')],dialog=document.querySelector('#detail');
+function resize(){document.documentElement.style.setProperty('--scale',Math.min(innerWidth/1920,innerHeight/1080))}
+addEventListener('resize',resize);resize();
+cards.forEach(card=>card.addEventListener('click',()=>{document.querySelector('#detail-title').textContent=card.querySelector('strong').textContent;const img=document.querySelector('#detail-image');img.src=card.querySelector('img').dataset.original||card.querySelector('img').src;img.alt=card.querySelector('img').alt;dialog.showModal()}));
+document.querySelector('#close').onclick=()=>dialog.close();
+dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close()});
+function fullscreen(){if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen()}
+function replay(){cards.forEach(card=>{const img=card.querySelector('img');const src=img.dataset.original||img.getAttribute('src');img.src=src.split('?')[0]+'?replay='+Date.now();delete img.dataset.original});document.querySelector('#freeze').textContent='Freeze'}
+document.querySelector('#fullscreen').onclick=fullscreen;document.querySelector('#replay').onclick=replay;
+document.querySelector('#freeze').onclick=()=>{const frozen=document.querySelector('#freeze').textContent==='Resume';cards.forEach(card=>{const img=card.querySelector('img');if(frozen){img.src=img.dataset.original;delete img.dataset.original}else{const canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;canvas.getContext('2d').drawImage(img,0,0);img.dataset.original=img.src;img.src=canvas.toDataURL('image/png')}});document.querySelector('#freeze').textContent=frozen?'Freeze':'Resume'};
+addEventListener('keydown',event=>{if(dialog.open)return;if(event.key.toLowerCase()==='f'){event.preventDefault();fullscreen()}if(event.code==='Space'){event.preventDefault();replay()}});
+</script></body></html>
