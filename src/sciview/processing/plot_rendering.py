@@ -1,19 +1,131 @@
-"""Shared renderers for interactive previews and WYSIWYG batch plots."""
+"""Shared renderers for interactive previews, WYSIWYG batch plots and notebook figures."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from io import BytesIO
 from typing import Any
 
 import numpy as np
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.colors import LogNorm
+from matplotlib.figure import Figure
 
-from sciview.settings.plot_style import PlotStyle
-from sciview.settings.viewer_config import resolve_matplotlib_colormap
+from sciview.core.notebook import CurveFigure, ImageFigure, ScientificObject
+from sciview.settings.plot_style import DEFAULT_PLOT_STYLE, PlotStyle
+from sciview.settings.viewer_config import colormap_lut, resolve_matplotlib_colormap
 from sciview.processing.scientific_labels import INTENSITY, scientific_plot_title
 
 
 REDUCTION_FIGURE_SIZE = (6.0, 4.0)
 TRANSFORM_FIGURE_SIZE = (6.0, 8.0)
+DEFAULT_PREVIEW_SIZE = (960, 480)
+PREVIEW_DPI = 100
+LINE_DASHES = {"solid": "-", "dash": "--", "dot": ":", "dash_dot": "-."}
+
+
+@dataclass(frozen=True, slots=True)
+class CurveAppearance:
+    """Fully resolved presentation of one curve, shared by every renderer."""
+
+    index: int
+    color: str
+    line_style: str
+    line_width: float
+    gain: float
+    opacity: float
+
+
+def curve_appearances(plot: CurveFigure, fallback_width: float = DEFAULT_PLOT_STYLE.line_width) -> list[CurveAppearance]:
+    palette = colormap_lut(plot.state.palette)
+    appearances = []
+    for curve in plot.curves:
+        style = plot.state.resolved_curve_style(curve.index, fallback_width)
+        color = style.color
+        if color is None:
+            position = round(plot.state.palette_position(curve.index, len(plot.sources)) * 255)
+            color = "#" + "".join(f"{int(channel):02x}" for channel in palette[position])
+        appearances.append(CurveAppearance(
+            curve.index, color, style.line_style, float(style.line_width), style.gain, style.opacity,
+        ))
+    return appearances
+
+
+def render_curve_figure(figure, axis, plot: CurveFigure, *, fallback_width: float = DEFAULT_PLOT_STYLE.line_width) -> None:
+    axis.clear()
+    hidden = set(plot.state.hidden_sources)
+    looks = {look.index: look for look in curve_appearances(plot, fallback_width)}
+    curves = {curve.index: curve for curve in plot.curves}
+    for curve in plot.curves:
+        if curve.x is None or curve.source in hidden:
+            continue
+        look = looks[curve.index]
+        axis.plot(
+            curve.x, curve.y * look.gain + curve.index * plot.state.spacing,
+            color=look.color, linewidth=look.line_width, linestyle=LINE_DASHES[look.line_style],
+            alpha=look.opacity,
+            label=plot.figure.legend_names.get(curve.index, curve.source.replace("\\", "/").rsplit("/", 1)[-1]),
+        )
+    for index, point in plot.state.marks:
+        curve = curves.get(index)
+        if curve is None or curve.source in hidden:
+            continue
+        x, intensity = curve.x[point], curve.y[point]
+        y = intensity * looks[index].gain + index * plot.state.spacing
+        axis.plot([x], [y], marker="o", markersize=5, color=looks[index].color, markeredgecolor="black")
+        axis.annotate(
+            f"{plot.figure.x_label}={x:.6g} {plot.figure.x_units}, {plot.figure.y_label}={intensity:.6g}",
+            (x, y), textcoords="offset points", xytext=(4, 6), fontsize=8,
+        )
+    axis.set_xlabel(plot.figure.axis_title("x"))
+    axis.set_ylabel(plot.figure.axis_title("y"))
+    axis.set_title(plot.title)
+    axis.grid(True, alpha=0.2)
+    if plot.state.view_range is not None:
+        axis.set_xlim(*plot.state.view_range[0])
+        axis.set_ylim(*plot.state.view_range[1])
+    if plot.figure.show_legend and axis.get_legend_handles_labels()[0]:
+        axis.legend(fontsize=8)
+
+
+def render_image_figure(figure, axis, plot: ImageFigure) -> None:
+    axis.clear()
+    low, high = plot.intensity_limits()
+    extent = plot.extent()
+    kwargs: dict[str, Any] = {
+        "origin": "lower", "aspect": "auto", "interpolation": "nearest",
+        "cmap": resolve_matplotlib_colormap(plot.state.colormap),
+        "extent": [*extent[0], *extent[1]],
+    }
+    if plot.state.scale == "log":
+        kwargs["norm"] = LogNorm(vmin=low, vmax=high)
+    else:
+        kwargs.update(vmin=low, vmax=high)
+    artist = axis.imshow(plot.image, **kwargs)
+    axis.set_xlabel(plot.figure.axis_title("x"))
+    axis.set_ylabel(plot.figure.axis_title("y"))
+    axis.set_title(plot.title)
+    if plot.state.view_range is not None:
+        axis.set_xlim(*plot.state.view_range[0])
+        axis.set_ylim(*plot.state.view_range[1])
+    figure.colorbar(artist, ax=axis).set_label(INTENSITY)
+
+
+def figure_preview_png(plot: ScientificObject, size: tuple[int, int] | None = None) -> bytes:
+    """Render a portable PNG of a notebook object at an exact pixel size, without Qt."""
+    width, height = size or DEFAULT_PREVIEW_SIZE
+    figure = Figure(figsize=(width / PREVIEW_DPI, height / PREVIEW_DPI), dpi=PREVIEW_DPI, layout="constrained")
+    FigureCanvasAgg(figure)
+    axis = figure.add_subplot()
+    if isinstance(plot, CurveFigure):
+        render_curve_figure(figure, axis, plot)
+    elif isinstance(plot, ImageFigure):
+        render_image_figure(figure, axis, plot)
+    else:
+        raise TypeError(f"No preview renderer for {type(plot).__name__}.")
+    buffer = BytesIO()
+    figure.savefig(buffer, format="png", dpi=PREVIEW_DPI)
+    return buffer.getvalue()
 
 
 def create_transform_axes(figure):

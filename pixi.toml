@@ -19,6 +19,7 @@ pyyaml = ">=6.0.3,<7"
 pillow = ">=12.2.0,<13"
 numpy = ">=2.4.3,<3"
 pyqt = ">=5.15.11,<6"
+pyqtwebengine = ">=5.15.7,<5.16"
 matplotlib = ">=3.10.9,<4"
 scipy = ">=1.17.1,<2"
 pyqtgraph = ">=0.13,<0.14"
@@ -35,3 +36,9 @@ git = ">=2.40,<3"
 [pypi-dependencies]
 pyqtdarktheme = ">=2.1,<3"
 bluesky-tiled-plugins = ">=2.0.12,<3"
+
+[feature.notebook-build.dependencies]
+nodejs = ">=22,<23"
+
+[environments]
+notebook-build = ["notebook-build"]

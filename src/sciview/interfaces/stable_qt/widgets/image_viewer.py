@@ -13,16 +13,18 @@ from typing import Any
 
 import numpy as np
 from PyQt5.QtCore import QEvent, QPointF, QSize, Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QFontMetrics, QIcon
+from PyQt5.QtGui import QFontMetrics, QIcon
 from PyQt5.QtWidgets import (
     QApplication, QFileDialog, QFrame, QGridLayout, QLabel, QLayout,
     QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
 
 import pyqtgraph as pg
-import pyqtgraph.exporters
 
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
+from sciview.interfaces.stable_qt.widgets.viewer_tools import (
+    export_plot_view, load_toolbar_icon, make_labeled_tool_cell, make_tool_button,
+)
 from sciview.interfaces.theme.app_style import AppStyle
 from sciview.settings.viewer_config import (
     ARTIST_IMAGE_COLORMAPS,
@@ -34,7 +36,7 @@ from sciview.settings.viewer_config import (
     VIEWER_TOOL_ICON_FILES,
     VIEWER_TOOLBAR_ACTIONS,
     VIEWER_TOOLBAR_GROUPS,
-    resolve_matplotlib_colormap,
+    colormap_lut,
 )
 
 
@@ -145,7 +147,7 @@ class ImageViewer(QWidget):
 
         toolbar_actions = {action.key: action for action in VIEWER_TOOLBAR_ACTIONS}
         self._toolbar_buttons = {
-            action.key: self._make_tool_button(action, self._load_toolbar_icon(action.key))
+            action.key: make_tool_button(action, load_toolbar_icon(action.key))
             for action in VIEWER_TOOLBAR_ACTIONS
         }
         self._pan_button = self._toolbar_buttons["pan"]
@@ -191,7 +193,7 @@ class ImageViewer(QWidget):
             group_cells = []
             for key in specification.actions:
                 action = toolbar_actions[key]
-                cell = self._make_labeled_tool_cell(tr(action.label_id), self._toolbar_buttons[key])
+                cell = make_labeled_tool_cell(tr(action.label_id), self._toolbar_buttons[key])
                 self._toolbar_layout.addWidget(cell, 0, column, Qt.AlignHCenter)
                 group_cells.append(cell)
                 column += 1
@@ -482,11 +484,11 @@ class ImageViewer(QWidget):
         """Return the current themed icon for a viewer toolbar action."""
         if action not in VIEWER_TOOL_ICON_FILES:
             raise ValueError(f"Unsupported viewer toolbar action: {action}")
-        return self._load_toolbar_icon(action)
+        return load_toolbar_icon(action)
 
     def set_annotation_tool(self, button: QToolButton, tools: QWidget) -> None:
         """Place Mark beside navigation and its contextual strip above the toolbar."""
-        cell = self._make_labeled_tool_cell(tr("annotations.toolbar"), button)
+        cell = make_labeled_tool_cell(tr("annotations.toolbar"), button)
         self._toolbar_layout.addWidget(cell, 0, self._annotation_tool_column, Qt.AlignHCenter)
         self.layout().insertWidget(self.layout().indexOf(self._toolbar_scroll), tools)
 
@@ -792,8 +794,7 @@ class ImageViewer(QWidget):
             self.remove_overlay(overlay_id)
 
     def export_rendered_view(self, path: str | Path) -> None:
-        exporter = pg.exporters.ImageExporter(self._plot_item)
-        exporter.export(str(path))
+        export_plot_view(self._plot_item, path)
 
     def copy_rendered_view_to_clipboard(self) -> bool:
         pixmap = self._graphics.grab()
@@ -958,51 +959,13 @@ class ImageViewer(QWidget):
         for key, button in self._toolbar_buttons.items():
             AppStyle.apply_widget_style(button, 'compact_button')
             button.setFixedSize(AppStyle.viewer_toolbar_button_size())
-            button.setIcon(self._load_toolbar_icon(key))
+            button.setIcon(load_toolbar_icon(key))
             button.setIconSize(AppStyle.viewer_toolbar_icon_size())
 
         self._palette_info_label.setStyleSheet(f"color: {muted_color.name()};")
         self._graphics.update()
         self.update()
         self.theme_changed.emit()
-
-    def _load_toolbar_icon(self, key: str) -> QIcon:
-        icon_filename = VIEWER_TOOL_ICON_FILES.get(key)
-        if not icon_filename:
-            return QIcon()
-        workspace_root = Path(__file__).resolve().parents[5]
-        return AppStyle.load_icon(workspace_root, icon_filename)
-
-    @staticmethod
-    def _make_tool_button(action: Any, icon: QIcon) -> QToolButton:
-        button = QToolButton()
-        button.setProperty("sciview_viewer_tool_button", True)
-        button.setAccessibleName(tr(action.label_id))
-        button.setAutoRaise(False)
-        button.setFixedSize(AppStyle.viewer_toolbar_button_size())
-        AppStyle.apply_widget_style(button, 'compact_button')
-        if icon.isNull():
-            button.setText(tr(action.label_id))
-            button.setFont(AppStyle.make_font('h3', weight=QFont.Bold))
-        else:
-            button.setIcon(icon)
-            button.setIconSize(AppStyle.viewer_toolbar_icon_size())
-        button.setToolTip(tr(action.tooltip_id))
-        return button
-
-    @staticmethod
-    def _make_labeled_tool_cell(label_text: str, button: QToolButton) -> QWidget:
-        """Build a single icon-over-caption unit occupying one toolbar grid cell."""
-        cell = QWidget()
-        layout = QVBoxLayout(cell)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(AppStyle.LAYOUT['tool_label_spacing'])
-        layout.addWidget(button, 0, Qt.AlignHCenter)
-        label = QLabel(label_text)
-        label.setAlignment(Qt.AlignHCenter)
-        AppStyle.set_font_role(label, 'toolbar_text')
-        layout.addWidget(label, 0, Qt.AlignHCenter)
-        return cell
 
     @staticmethod
     def _finite_or_none(value: float | None) -> float | None:
@@ -1042,26 +1005,10 @@ class ImageViewer(QWidget):
         display[valid] = np.log10(image[valid])
         return display, (floor_value, np.log10(safe_vmax))
 
-    @classmethod
-    def colormap_lut(cls, name: str) -> np.ndarray:
+    @staticmethod
+    def colormap_lut(name: str) -> np.ndarray:
         """Return the 256-entry RGB lookup table used to draw a colormap."""
-        if name not in cls._SUPPORTED_COLORMAPS:
-            raise ValueError(f"Unsupported colormap: {name}")
-        if name in ARTIST_IMAGE_COLORMAPS:
-            return cls._artist_palette_lut(name)
-        return cls._matplotlib_lut(name)
-
-    @staticmethod
-    def _matplotlib_lut(name: str) -> np.ndarray:
-        import matplotlib as mpl
-
-        colormap = mpl.colormaps[name]
-        return (colormap(np.linspace(0.0, 1.0, 256))[:, :3] * 255).astype(np.ubyte)
-
-    @staticmethod
-    def _artist_palette_lut(name: str) -> np.ndarray:
-        colormap = resolve_matplotlib_colormap(name)
-        return (colormap(np.linspace(0.0, 1.0, 256))[:, :3] * 255).astype(np.ubyte)
+        return colormap_lut(name)
 
     @staticmethod
     def _rgba_mask(mask: np.ndarray, color: str, alpha: float) -> np.ndarray:

@@ -51,6 +51,7 @@ from PyQt5.QtWidgets import (
     QWidget, QAction
 )
 from PyQt5.QtCore import Qt, QThread, QTimer
+from PyQt5 import QtWebEngineWidgets  # Initialize WebEngine before QApplication.
 
 # Import configuration from package modules.
 from sciview.interfaces.text import tr
@@ -88,6 +89,7 @@ class SciAnaApp(QMainWindow):
         self.status = self.statusBar()
         self._workspace_root = Path(__file__).resolve().parent
         self._closing_browser_workers = False
+        self._switching_to_notebook = False
 
         # Shared application state
         self.image_data = None
@@ -452,12 +454,16 @@ class SciAnaApp(QMainWindow):
         self.show_status(tr('shell.session_cache_cleared'))
 
     def closeEvent(self, event):
+        for index, key in self._tab_icon_keys.items():
+            if key == "results" and not self.tab_widget.widget(index).confirm_close():
+                event.ignore()
+                return
         for index, icon_key in self._tab_icon_keys.items():
-            if icon_key == "image_browser":
+            if icon_key in {"image_browser", "results"}:
                 self.tab_widget.widget(index).close()
         workers = [
-            worker for worker in QApplication.instance().findChildren(QThread, "image-browser-load")
-            if worker.isRunning()
+            worker for worker in QApplication.instance().findChildren(QThread)
+            if worker.objectName() in {"image-browser-load", "waterfall-processing"} and worker.isRunning()
         ]
         if workers:
             if not self._closing_browser_workers:
@@ -535,6 +541,8 @@ class SciAnaApp(QMainWindow):
         # Prefer the image-attached calibration as canonical when available.
         image_calibration = getattr(image_data, "calibration", None)
         if image_calibration is not None:
+            if self.calibration is not image_calibration:
+                self.notify_processing_settings_changed("calibration")
             self.calibration = image_calibration
 
         self.sync_tabs_from_shared(source_tab=source_tab)
@@ -542,12 +550,14 @@ class SciAnaApp(QMainWindow):
     def publish_shared_calibration(self, calibration, source_tab=None, propagate=True):
         """Publish calibration so all tabs can consume a single shared object."""
         self.calibration = calibration
+        self.notify_processing_settings_changed("calibration")
         if propagate:
             self.sync_tabs_from_shared(source_tab=source_tab)
 
     def publish_shared_mask(self, mask, source_tab=None, propagate=True):
         """Publish mask so all tabs can consume a single shared object."""
         self.mask = mask
+        self.notify_processing_settings_changed("mask_editing")
         if propagate:
             self.sync_tabs_from_shared(source_tab=source_tab)
 
@@ -601,6 +611,53 @@ class SciAnaApp(QMainWindow):
             if hasattr(tab, "receive_recipe"):
                 tab.receive_recipe(key, recipe_payload)
                 break
+
+    def processing_tab(self, key: str):
+        """Resolve workflow destinations by the shell's stable tab identity."""
+        for index, tab_key in self._tab_icon_keys.items():
+            if tab_key == key:
+                return self.tab_widget.widget(index)
+        raise ValueError(f"Processing workspace is unavailable: {key}")
+
+    def show_processing_tab(self, key: str):
+        try:
+            tab = self.processing_tab(key)
+        except ValueError as exc:
+            self.report_error(str(exc), exc)
+        else:
+            self.tab_widget.setCurrentWidget(tab)
+
+    def _show_notebook(self):
+        results = self.processing_tab("results")
+        # A result handoff must not synchronously load/publish the active file.
+        self._switching_to_notebook = True
+        try:
+            self.tab_widget.setCurrentWidget(results)
+        finally:
+            self._switching_to_notebook = False
+        return results
+
+    def explore_waterfall(self, paths: tuple[str, ...]):
+        try:
+            results = self._show_notebook()
+        except ValueError as exc:
+            self.report_error(str(exc), exc)
+            return
+        results.explore(tuple(paths))
+
+    def add_to_notebook(self, scientific_object) -> None:
+        """Insert a processed result into the active notebook and show it."""
+        self.processing_tab("results").add_scientific_object(scientific_object)
+        self._show_notebook()
+
+    def show_waterfall_source(self, path: str):
+        self.show_processing_tab("image_browser")
+        self.processing_tab("image_browser").show_source_path(path)
+
+    def notify_processing_settings_changed(self, kind: str):
+        for index, key in self._tab_icon_keys.items():
+            if key == "results":
+                self.tab_widget.widget(index).mark_settings_changed(kind)
 
     def publish_shared_file_list(
         self,
@@ -727,7 +784,7 @@ class SciAnaApp(QMainWindow):
                     previous_tab.auto_publish_current_file_list()
                 except Exception as e:
                     print(f"DEBUG: Error auto-publishing file list from previous tab: {e}")
-            if hasattr(previous_tab, 'auto_publish_current_image'):
+            if not self._switching_to_notebook and hasattr(previous_tab, 'auto_publish_current_image'):
                 try:
                     if previous_tab.auto_publish_current_image():
                         return
@@ -897,6 +954,8 @@ class SciAnaApp(QMainWindow):
         
         current_tab = self.tab_widget.widget(current_index)
         tab_name = self.tab_widget.tabText(current_index)
+        if self._tab_icon_keys.get(current_index) == "results" and not current_tab.confirm_close():
+            return
         
         try:
             self.show_status(tr('shell.refreshing_tab_name', tab_name=tab_name))
@@ -945,7 +1004,7 @@ class SciAnaApp(QMainWindow):
             self.tab_widget.removeTab(current_index)
             self.tab_widget.insertTab(current_index, new_tab, tab_name)
             self.tab_widget.setCurrentIndex(current_index)
-            if self._tab_icon_keys.get(current_index) == "image_browser":
+            if self._tab_icon_keys.get(current_index) in {"image_browser", "results"}:
                 current_tab.close()
                 current_tab.deleteLater()
             
@@ -1192,7 +1251,7 @@ def create_application():
     # Add tabs
     import time as _time
 
-    _TAB_TOTAL = 8
+    _TAB_TOTAL = 9
     _tab_idx = 0
 
     def _tab_start(name):
@@ -1306,6 +1365,12 @@ def create_application():
         _tab_done(t0, failed=True)
         placeholder = _build_placeholder_tab(tr('shell.info_tab_n_import_error_error', error=e))
         main_window.add_tab(placeholder, tr('shell.info'), icon_key="info")
+
+    # Notebook (session key stays "results" so saved restart state still restores)
+    t0 = _tab_start("Notebook")
+    from tabs.results_tab import ResultsTab
+    main_window.add_tab(ResultsTab(main_window), tr("shell.notebook"), icon_key="results")
+    _tab_done(t0)
 
     print("[SciView] All tabs loaded. Launching window...")
     main_window.restore_session_state()

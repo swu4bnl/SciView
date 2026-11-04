@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' qrc:; style-src 'self' 'unsafe-inline'; font-src data:; img-src data:; connect-src 'none';">
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+  <div class="notebook-app">
+    <header class="app-bar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <div>
+          <div class="brand-name" id="app-name"></div>
+          <div class="document-name" id="document-name"></div>
+        </div>
+      </div>
+      <div class="document-actions">
+        <span class="save-state" id="save-state" aria-live="polite"></span>
+        <button id="insert-result" class="primary-button" type="button" hidden></button>
+        <details class="file-menu">
+          <summary id="file-menu-label"></summary>
+          <div class="file-menu-items">
+            <button type="button" data-action="new"></button>
+            <button type="button" data-action="open"></button>
+            <button type="button" data-action="save-as"></button>
+          </div>
+        </details>
+        <button id="save-button" class="save-button" type="button"></button>
+      </div>
+    </header>
+    <div class="work-area" id="work-area">
+      <aside class="outline-rail collapsed" id="outline-rail">
+        <button id="outline-toggle" type="button" aria-expanded="false" aria-controls="outline">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16M12 8h5M12 12h5M12 16h5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          <span id="outline-heading"></span>
+          <span class="outline-chevron" aria-hidden="true">›</span>
+        </button>
+        <nav id="outline" aria-label="Notebook outline"></nav>
+      </aside>
+      <main id="editor"></main>
+      <aside id="figure-settings" class="figure-settings" hidden aria-labelledby="figure-settings-heading">
+        <header class="figure-settings-header">
+          <h2 id="figure-settings-heading"></h2>
+          <button id="close-figure-settings" type="button">×</button>
+        </header>
+        <div id="figure-settings-body"></div>
+      </aside>
+    </div>
+  </div>
+  <div id="error" role="alert" hidden></div>
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+  <script src="editor.js"></script>
+</body>
+</html>

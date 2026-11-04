@@ -927,6 +927,11 @@ class ImageBrowserApp(BaseImageTab):
         )
         apply_info_style(self.folder_contents_count_label)
         contents_header.addWidget(self.folder_contents_count_label)
+        self.waterfall_button = QPushButton(tr("results.waterfall"))
+        apply_toolbar_text_button_style(self.waterfall_button)
+        self.waterfall_button.clicked.connect(self._explore_waterfall)
+        self.waterfall_button.hide()
+        contents_header.addWidget(self.waterfall_button)
 
         self.folder_auto_refresh_button = QCheckBox(
             tr("image_browser.folder.auto_refresh.label")
@@ -2442,6 +2447,33 @@ class ImageBrowserApp(BaseImageTab):
         )
         if len(self._folder_sequence_paths()) < 2:
             self._show_selected_frame = False
+        count = len(self.session_manager.collection.selected_paths)
+        self.waterfall_button.setVisible(count > 1)
+        self.waterfall_button.setText(tr("results.waterfall_selection", count=count))
+
+    def _explore_waterfall(self):
+        self._stop_folder_playback()
+        self.parent_app.explore_waterfall(self.session_manager.collection.selected_paths)
+
+    def show_source_path(self, path: str):
+        """Reveal a result's raw source without changing collection membership."""
+        self._stop_folder_playback()
+        self.session_manager.collection.comparison_mode = ComparisonMode.FLICKER
+        self._show_selected_frame = True
+        row = self._folder_row_for_path(path)
+        if row >= 0:
+            self._select_folder_browser_row(row, preserve_selection=True)
+        else:
+            index = next(
+                (index for index, image in enumerate(self.session_manager.images) if image.path == path),
+                None,
+            )
+            if index is None:
+                self.session_manager.add_image_reference(path)
+            else:
+                self.session_manager.set_current_index(index)
+        self._show_selected_frame = True
+        self._update_display()
 
     def _on_folder_selection_changed(self) -> None:
         self._sync_folder_selection()
@@ -2605,7 +2637,7 @@ class ImageBrowserApp(BaseImageTab):
             self._folder_playback_delay_ms(frame_elapsed_ms)
         )
 
-    def _select_folder_browser_row(self, row):
+    def _select_folder_browser_row(self, row, *, preserve_selection=False):
         """Select and display a row from the visible folder browser list."""
         if self.folder_files_list.item(row) is None:
             return
@@ -2614,7 +2646,7 @@ class ImageBrowserApp(BaseImageTab):
         try:
             command = (
                 QItemSelectionModel.NoUpdate
-                if len(self.session_manager.collection.selected_paths) > 1
+                if preserve_selection or len(self.session_manager.collection.selected_paths) > 1
                 else QItemSelectionModel.ClearAndSelect
             )
             self.folder_files_list.setCurrentRow(row, command)

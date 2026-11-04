@@ -1,0 +1,356 @@
+notebook.untitled:
+  text: "Untitled notebook"
+  context: "Document without a saved filename."
+notebook.figure_section:
+  text: "Figure"
+  context: "Inspector section for global figure elements, independent of plot type."
+notebook.curves_section:
+  text: "Curves"
+  context: "Inspector section for measurement visibility and default curve appearance."
+notebook.waterfall_section:
+  text: "Waterfall"
+  context: "Replaceable plot-type-specific inspector section."
+notebook.default_appearance:
+  text: "Default appearance"
+  context: "Collapsed disclosure for default curve line style and thickness."
+notebook.visible_curves:
+  text: "{count} visible"
+  context: "Number of visible measurements in the current figure."
+  placeholders:
+    count: "Number of visible processed measurement curves."
+notebook.line:
+  text: "Line"
+  context: "Shared heading for a curve's color, style, width and opacity controls."
+notebook.style:
+  text: "Style"
+  context: "Line pattern within a shared line appearance group."
+notebook.width:
+  text: "Width"
+  context: "Thickness within a shared line appearance group."
+notebook.edit_title_hint:
+  text: "Click to edit figure title"
+  context: "Tooltip on the editable title itself."
+notebook.edit_axis_hint:
+  text: "Click to edit axis label and units"
+  context: "Tooltip on an editable axis title itself."
+notebook.edit_legend_hint:
+  text: "Click to rename measurement"
+  context: "Tooltip on an editable legend name; followed by the source path."
+notebook.scaling_hint:
+  text: "Scale displayed intensity; source data stays unchanged."
+  context: "Tooltip clarifying that curve scaling only changes presentation."
+notebook.figure_title:
+  text: "Figure title"
+  context: "Editable title directly above a scientific figure."
+notebook.x_label:
+  text: "X label"
+  context: "Presentation label; editing does not convert scientific coordinates."
+notebook.x_units:
+  text: "X units"
+  context: "Presentation units, not a data conversion."
+notebook.y_label:
+  text: "Y label"
+  context: "Presentation label; editing does not alter scientific intensities."
+notebook.y_units:
+  text: "Y units"
+  context: "Presentation units, not a data conversion."
+notebook.legend:
+  text: "Legend"
+  context: "Show measurement names on selected and unselected figures."
+notebook.legend_name:
+  text: "Measurement name"
+  context: "Editable figure legend name, preserving the original source reference."
+notebook.curve_visible:
+  text: "Visible"
+  context: "Visibility of the selected curve; its legend remains available to restore it."
+notebook.more_curve_tools:
+  text: "More"
+  context: "Secondary individual curve tools: opacity and presentation-only intensity multiplier."
+notebook.collection_settings:
+  text: "Waterfall collection"
+  context: "Settings applied to the collection, not an individual curve."
+notebook.label_note:
+  text: "Labels describe the figure; editing units does not convert the data."
+  context: "Clarifies scientific ownership of editable labels and units."
+notebook.back:
+  text: "Back to Notebook"
+  context: "Leave the expanded plot editor, retaining its adjustments in the document."
+notebook.document:
+  text: "Document"
+  context: "Compact menu for creating, opening and saving a copy of the notebook."
+notebook.outline:
+  text: "Outline"
+  context: "Toggle the notebook navigation outline."
+notebook.outline.tooltip:
+  text: "Headings and scientific plots in this document."
+  context: "Explains the notebook outline navigation list."
+notebook.untitled_heading:
+  text: "Untitled heading"
+  context: "Outline label for an empty document heading."
+notebook.resize:
+  text: "Resize plot (arrow keys or drag)"
+  context: "Drag the plot corner continuously between half and full document width; up/down adjusts height."
+notebook.insert:
+  text: "Insert block"
+  context: "Slash menu for writing and scientific plot insertion."
+notebook.placeholder:
+  text: "Write notes, or type / to insert a block…"
+  context: "Hint shown only in an empty document."
+notebook.plot_block:
+  text: "Plot — latest result"
+  context: "Slash menu entry opening the latest native plot to add to the notebook."
+notebook.curve_summary:
+  text: "{count} curves · Interactive scientific result"
+  context: "Concise scientific content summary below a notebook plot title."
+  placeholders:
+    count: "Number of successfully reduced curves."
+notebook.new:
+  text: "New"
+  context: "Start a new notebook after resolving unsaved changes."
+notebook.open:
+  text: "Open"
+  context: "Reopen a Markdown notebook and saved scientific objects."
+notebook.save:
+  text: "Save"
+  context: "Save notes, plot data, provenance and appearance."
+notebook.save_as:
+  text: "Save as"
+  context: "Save the notebook under a different filename."
+notebook.add:
+  text: "Add to Notebook"
+  context: "Insert the displayed waterfall as a linked document card."
+notebook.latest:
+  text: "Latest result"
+  context: "Native explorer is not editing a saved notebook object."
+notebook.figure_number:
+  text: "{name} {number}"
+  context: "Default title of an inserted scientific figure: its result name followed by its ordinal in the document."
+  placeholders:
+    name: "Localized result name, such as Waterfall or Circular Average."
+    number: "Ordinal of the inserted figure."
+notebook.inserted:
+  text: "Added to Notebook: {title}"
+  context: "Status after a processing tab inserted its current result into the notebook."
+  placeholders:
+    title: "Notebook figure title."
+notebook.image_size:
+  text: "{width} × {height} map"
+  context: "Compact figure header summary for a two-dimensional intensity map."
+  placeholders:
+    width: "Number of columns in the map."
+    height: "Number of rows in the map."
+notebook.image_section:
+  text: "Image"
+  context: "Plot-type-specific inspector section for an intensity map."
+notebook.colormap:
+  text: "Colormap"
+  context: "Color scale applied to a notebook intensity map."
+notebook.intensity_scale:
+  text: "Intensity scale"
+  context: "Linear or logarithmic color mapping of a notebook intensity map."
+notebook.intensity_min:
+  text: "Intensity min"
+  context: "Lower color limit of a notebook intensity map; data values are unchanged."
+notebook.intensity_max:
+  text: "Intensity max"
+  context: "Upper color limit of a notebook intensity map; data values are unchanged."
+notebook.auto_intensity:
+  text: "Automatic limits"
+  context: "Derive color limits from the map's intensity distribution."
+notebook.linear:
+  text: "Linear"
+  context: "Linear intensity color scale."
+notebook.log:
+  text: "Logarithmic"
+  context: "Logarithmic intensity color scale."
+notebook.intensity:
+  text: "Intensity"
+  context: "Label preceding the sampled intensity in an image figure readout."
+notebook.hover_map:
+  text: "Move over the map for values"
+  context: "Idle coordinate readout below an intensity-map figure."
+notebook.exploring:
+  text: "Exploring: {title}"
+  context: "Native plot adjustments update the identified notebook card."
+  placeholders:
+    title: "Notebook plot title."
+notebook.heading:
+  text: "Heading"
+  context: "Make the selected document block a heading."
+notebook.notes:
+  text: "Notes"
+  context: "Insert an empty paragraph."
+notebook.list:
+  text: "List"
+  context: "Create a bullet list in the document."
+notebook.up:
+  text: "Move up"
+  context: "Move the selected document block earlier."
+notebook.down:
+  text: "Move down"
+  context: "Move the selected document block later."
+notebook.move:
+  text: "Drag to reorder"
+  context: "Handle for moving a document block without triggering plot gestures."
+notebook.loading:
+  text: "Loading notebook editor…"
+  context: "Offline Milkdown initialization."
+notebook.processing:
+  text: "Wait for processing to finish, or cancel it before exploring a saved plot."
+  context: "Keep one processing lifecycle and one active native plot."
+notebook.failed:
+  text: "Notebook: {error}"
+  context: "Visible editor, persistence or bridge error."
+  placeholders:
+    error: "Failure details."
+notebook.load_failed:
+  text: "The bundled notebook editor could not load."
+  context: "Local WebEngine document failed to load."
+notebook.snapshot_failed:
+  text: "Could not read the editor. Your document has not been overwritten."
+  context: "Editor did not return its current Markdown before saving."
+notebook.missing_object:
+  text: "The scientific object is missing from this notebook."
+  context: "A plot card refers to unavailable scientific data."
+notebook.preview_failed:
+  text: "The plot preview could not be displayed."
+  context: "Saved scientific data remain available despite an image rendering error."
+notebook.image_failed:
+  text: "The image could not be loaded. Import a local image to keep it available offline."
+  context: "Native Milkdown image upload or image loading failed."
+notebook.link_failed:
+  text: "Cannot open this link. Use an HTTP, HTTPS, or email link."
+  context: "A notebook link could not be opened safely in the system browser."
+notebook.markdown_filter:
+  text: "Markdown notebooks (*.md)"
+  context: "Notebook open/save file filter."
+notebook.saved:
+  text: "Notebook saved: {path}"
+  context: "Successful notebook save."
+  placeholders:
+    path: "Saved Markdown file."
+notebook.unsaved:
+  text: "Unsaved notebook"
+  context: "Protect notes and scientific objects on close, replacement or refresh."
+notebook.unsaved_detail:
+  text: "Save your notebook before continuing?"
+  context: "Save, discard or cancel the pending action."
+notebook.app_name:
+  text: "SciView Notebook"
+  context: "Application label in the notebook document bar."
+notebook.outline_heading:
+  text: "On this page"
+  context: "Heading for the document outline rail."
+notebook.insert_result:
+  text: "Insert waterfall"
+  context: "Insert the latest available waterfall into the notebook at the current cursor."
+notebook.file_menu:
+  text: "File"
+  context: "Notebook document actions menu."
+notebook.saved_state:
+  text: "All changes saved"
+  context: "Notebook save state shown in the document bar."
+notebook.curve_controls:
+  text: "Curve appearance"
+  context: "Inspector section for the selected curve."
+notebook.figure_controls:
+  text: "Figure settings"
+  context: "Inspector section for waterfall-wide display settings."
+notebook.display_settings:
+  text: "Waterfall display"
+  context: "Controls affecting the full waterfall plot."
+notebook.appearance:
+  text: "Edit figure"
+  context: "Open contextual settings for the selected notebook figure."
+notebook.separation:
+  text: "Separation"
+  context: "Adjust vertical spacing between waterfall curves."
+notebook.palette:
+  text: "Color palette"
+  context: "Choose colors for the waterfall curves."
+notebook.curves:
+  text: "Measurements"
+  context: "List of source measurements represented by waterfall curves."
+notebook.line_style:
+  text: "Line style"
+  context: "Selected curve line style."
+notebook.line_width:
+  text: "Line width"
+  context: "Selected curve line thickness."
+notebook.display_gain:
+  text: "Scaling"
+  context: "Visual-only intensity multiplier for the selected curve."
+notebook.default_line_style:
+  text: "Default line style"
+  context: "Figure-wide line style inherited by curves without individual overrides."
+notebook.default_line_width:
+  text: "Default thickness"
+  context: "Figure-wide line thickness inherited by curves without individual overrides."
+notebook.measurements:
+  text: "Measurements"
+  context: "Figure settings list for showing or hiding each measurement, including hidden curves."
+notebook.opacity:
+  text: "Opacity"
+  context: "Individual curve opacity, from transparent (0) to opaque (1)."
+notebook.color:
+  text: "Color"
+  context: "Selected curve color."
+notebook.use_palette:
+  text: "Use palette"
+  context: "Clear the custom curve color and use its palette color."
+notebook.close_inspector:
+  text: "Close figure settings"
+  context: "Close the contextual figure inspector."
+notebook.solid:
+  text: "Solid"
+  context: "Solid line appearance."
+notebook.dash:
+  text: "Dashed"
+  context: "Dashed line appearance."
+notebook.dot:
+  text: "Dotted"
+  context: "Dotted line appearance."
+notebook.dash_dot:
+  text: "Dash-dot"
+  context: "Dash-dot line appearance."
+notebook.expand:
+  text: "Expand"
+  context: "Enlarge the same interactive figure in the document, retaining its editing controls."
+notebook.collapse:
+  text: "Reduce size"
+  context: "Return the expanded figure to its previous document dimensions without discarding appearance edits."
+notebook.outline_show:
+  text: "Show document outline"
+  context: "Accessible label and tooltip for the collapsed outline rail."
+notebook.outline_hide:
+  text: "Collapse document outline"
+  context: "Accessible label and tooltip for the expanded outline rail."
+notebook.outline_empty:
+  text: "Headings and figures appear here."
+  context: "Empty document outline hint."
+notebook.display_note:
+  text: "Display gain and separation only · original intensities unchanged"
+  context: "Scientific interpretation note when figure presentation scales or offsets intensities."
+notebook.curve_count:
+  text: "{count} curves"
+  context: "Compact figure header summary."
+  placeholders:
+    count: "Number of processed measurement curves."
+notebook.formatting:
+  text: "Document formatting"
+  context: "Accessible label for the visible native Milkdown toolbar."
+notebook.pan:
+  text: "Pan"
+  context: "Drag inside the figure to move the plotted coordinate range."
+notebook.zoom:
+  text: "Zoom"
+  context: "Drag a rectangle inside the figure to inspect a coordinate range; Ctrl-wheel also zooms."
+notebook.home:
+  text: "Fit"
+  context: "Frame the visible scientific curves without changing numerical values."
+notebook.mark:
+  text: "Mark"
+  context: "Click a curve to annotate its original sampled q and intensity."
+notebook.undo_mark:
+  text: "Undo mark"
+  context: "Remove the most recent figure annotation."

@@ -109,6 +109,7 @@ class AppStyle:
         'transform': 'tab_transform.svg',
         'batch': 'tab_batch.svg',
         'info': 'tab_info.svg',
+        'results': 'tab_notebook.svg',
     }
     
     # Fallback color palette — consumed internally by theme_colors() only.

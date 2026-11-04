@@ -142,6 +142,17 @@ reduction.send_to_batch:
 reduction.send_to_batch.tooltip:
   text: "Push current settings as a protocol to the Batch tab"
   context: "Tooltip explaining that current reduction settings are sent to Batch."
+reduction.add_to_notebook:
+  text: "Add to Notebook"
+  context: "Button that inserts the previewed reduction curve into the notebook as an editable figure."
+reduction.add_to_notebook.tooltip:
+  text: "Insert this curve, with its calibration and mask provenance, into the Notebook."
+  context: "Tooltip explaining that the current reduction result becomes a saved notebook object."
+reduction.status.notebook_failed:
+  text: "Could not add the reduction to the notebook: {error}"
+  context: "Status when a reduction result could not be inserted into the notebook."
+  placeholders:
+    error: "Failure details."
 reduction.dialog.load_calibration:
   text: "Load Calibration YAML"
   context: "File dialog title for opening a calibration YAML file."

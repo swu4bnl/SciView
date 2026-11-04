@@ -42,7 +42,9 @@ from sciview.interfaces.theme.app_style import (
     apply_toolbar_text_button_style,
     setup_splitter_layout,
 )
+from sciview.core.notebook import ImageState
 from sciview.masking.io import load_mask_file as backend_load_mask_file
+from sciview.processing.notebook_results import transform_figure
 from sciview.processing.plot_rendering import (
     TRANSFORM_FIGURE_SIZE,
     create_transform_axes,
@@ -72,6 +74,7 @@ class TransformTab(BaseImageTab):
         super().__init__(parent_app)
         self.backend = TransformBackend()
         self._current_result = None
+        self._current_request = None
         self._transform_colorbar = None
         self._q_bounds = {}
         self._custom_calibration = None
@@ -384,6 +387,10 @@ class TransformTab(BaseImageTab):
         self.export_button = QPushButton(tr("transform.export_data"))
         self.export_button.clicked.connect(self.export_result)
         self.export_button.setEnabled(self._current_result is not None)
+        self.add_notebook_button = QPushButton(tr("transform.add_to_notebook"))
+        self.add_notebook_button.setToolTip(tr("transform.add_to_notebook.tooltip"))
+        self.add_notebook_button.clicked.connect(self._add_to_notebook)
+        self.add_notebook_button.setEnabled(False)
         self.send_to_batch_button = QPushButton(tr("transform.send_to_batch"))
         self.send_to_batch_button.setToolTip(tr("transform.send_to_batch.tooltip"))
         self.send_to_batch_button.clicked.connect(self._send_to_batch)
@@ -391,6 +398,7 @@ class TransformTab(BaseImageTab):
         button_row.addWidget(self.payload_apply_button)
         button_row.addWidget(self.preview_button)
         button_row.addWidget(self.export_button)
+        button_row.addWidget(self.add_notebook_button)
         button_row.addWidget(self.send_to_batch_button)
         layout.addLayout(button_row)
 
@@ -485,6 +493,8 @@ class TransformTab(BaseImageTab):
     def _on_parameters_changed(self, *args):
         if self._building_controls:
             return
+        if hasattr(self.parent_app, "notify_processing_settings_changed"):
+            self.parent_app.notify_processing_settings_changed("transform")
         self.plot_vmin_spin.setEnabled(not self.color_auto_check.isChecked())
         self.plot_vmax_spin.setEnabled(not self.color_auto_check.isChecked())
         for operation, widgets in self._operation_param_widgets.items():
@@ -721,8 +731,14 @@ class TransformTab(BaseImageTab):
                 widget.setValue(bound_value)
                 widget.blockSignals(False)
 
-    def _build_request(self):
-        image = self._get_image_array()
+    def build_transform_request(self, image, source_path: str):
+        """Current transform settings applied to a given image rather than the displayed one."""
+        return self._build_request(image, source_path)
+
+    def _build_request(self, image=None, source_path=None):
+        if image is None:
+            image = self._get_image_array()
+            source_path = self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None
         if image is None:
             return None
 
@@ -745,9 +761,11 @@ class TransformTab(BaseImageTab):
             y_max=self._op_float("y_max"),
             metadata={
                 "image_shape": tuple(int(v) for v in image.shape),
-                "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
+                "source_path": source_path,
                 "calibration_source": self.calibration_source_combo.currentData(),
                 "mask_source": self.mask_source_combo.currentData(),
+                "calibration_label": self._custom_calibration_label,
+                "mask_label": self._custom_mask_label,
                 "q_bounds": dict(self._q_bounds),
             },
         )
@@ -771,7 +789,7 @@ class TransformTab(BaseImageTab):
             self.parent_app.show_status(tr("transform.status.failed", error=exc))
             return
 
-        self._set_current_result(result)
+        self._set_current_result(result, request)
         try:
             self._update_transform_plot(result)
         except Exception as exc:
@@ -1124,9 +1142,39 @@ class TransformTab(BaseImageTab):
             else:
                 self.refresh_preview()
 
-    def _set_current_result(self, result) -> None:
+    def _set_current_result(self, result, request=None) -> None:
         self._current_result = result
+        self._current_request = request if result is not None else None
         self.export_button.setEnabled(result is not None)
+        self.add_notebook_button.setEnabled(result is not None)
+
+    def _add_to_notebook(self):
+        if self._current_result is None:
+            self.parent_app.show_status(tr("transform.status.preview_before_export"))
+            return
+        auto_intensity = self.color_auto_check.isChecked()
+        x_min, x_max, y_min, y_max = (self._op_float(key) for key in ("x_min", "x_max", "y_min", "y_max"))
+        cropped = (
+            not self._op_bool("auto_crop", True)
+            and None not in (x_min, x_max, y_min, y_max) and x_max > x_min and y_max > y_min
+        )
+        state = ImageState(
+            colormap=resolve_plot_style(self.parent_app).colormap,
+            scale=self.plot_scale_combo.currentText(),
+            vmin=None if auto_intensity else self.plot_vmin_spin.value(),
+            vmax=None if auto_intensity else self.plot_vmax_spin.value(),
+            view_range=[[x_min, x_max], [y_min, y_max]] if cropped else None,
+        )
+        try:
+            figure = transform_figure(
+                self._current_request, self._current_result,
+                title=tr(f"transform.operation.{self._current_result.operation}"), state=state,
+            )
+            self.parent_app.add_to_notebook(figure)
+        except Exception as exc:
+            self.parent_app.report_error(tr("transform.status.notebook_failed", error=exc), exc)
+            return
+        self.parent_app.show_status(tr("notebook.inserted", title=figure.title))
 
     def on_shared_state_activated(self):
         """Refresh transform state when shared image/calibration/mask becomes active."""

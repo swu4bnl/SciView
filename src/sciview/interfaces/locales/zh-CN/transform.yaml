@@ -151,6 +151,17 @@ transform.send_to_batch:
 transform.send_to_batch.tooltip:
   text: "将当前设置作为协议发送到 Batch 选项卡"
   context: "Tooltip explaining that current transform settings are sent to Batch."
+transform.add_to_notebook:
+  text: "添加到笔记本"
+  context: "Button that inserts the previewed reciprocal-space map into the notebook as an editable figure."
+transform.add_to_notebook.tooltip:
+  text: "将此强度图连同校准和掩膜来源信息插入笔记本。"
+  context: "Tooltip explaining that the current transform result becomes a saved notebook object."
+transform.status.notebook_failed:
+  text: "无法将变换结果添加到笔记本：{error}"
+  context: "Status when a transform result could not be inserted into the notebook."
+  placeholders:
+    error: "Failure details."
 transform.status.invalid_plot_style:
   text: "绘图样式无效：{error}"
   context: "Status explaining why the current plot-style values are invalid."

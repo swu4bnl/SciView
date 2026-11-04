@@ -60,8 +60,11 @@ from sciview.processing.plot_rendering import (
     REDUCTION_FIGURE_SIZE,
     render_reduction_plot,
 )
+from sciview.core.notebook import CurveStyle, PlotState
 from sciview.processing.calibration_geometry import chi_q_to_pixel, q_to_pixel_radius
+from sciview.processing.notebook_results import reduction_figure
 from sciview.processing.reduction import ReductionBackend, ReductionRequest, save_reduction_result
+from sciview.processing.waterfall import WaterfallInputError
 from sciview.profiles.cms_profile import DEFAULT_CALIBRATION, get_calibration_class as _get_calibration_class
 from sciview.settings.app_settings import SPINBOX_CONFIG
 from sciview.settings.plot_style import resolve_plot_style
@@ -84,6 +87,7 @@ class ReductionTab(BaseImageTab):
         super().__init__(parent_app)
         self.backend = ReductionBackend()
         self._current_result = None
+        self._current_request = None
         self._overlay_artists = []
         self._q_bounds = {}
         self._last_control_shape = None
@@ -409,6 +413,10 @@ class ReductionTab(BaseImageTab):
         self.export_button = QPushButton(tr("reduction.export_data"))
         self.export_button.clicked.connect(self.export_result)
         self.export_button.setEnabled(self._current_result is not None)
+        self.add_notebook_button = QPushButton(tr("reduction.add_to_notebook"))
+        self.add_notebook_button.setToolTip(tr("reduction.add_to_notebook.tooltip"))
+        self.add_notebook_button.clicked.connect(self._add_to_notebook)
+        self.add_notebook_button.setEnabled(False)
         self.send_to_batch_button = QPushButton(tr("reduction.send_to_batch"))
         self.send_to_batch_button.setToolTip(tr("reduction.send_to_batch.tooltip"))
         self.send_to_batch_button.clicked.connect(self._send_to_batch)
@@ -416,6 +424,7 @@ class ReductionTab(BaseImageTab):
         button_row.addWidget(self.payload_apply_button)
         button_row.addWidget(self.preview_button)
         button_row.addWidget(self.export_button)
+        button_row.addWidget(self.add_notebook_button)
         button_row.addWidget(self.send_to_batch_button)
         layout.addLayout(button_row)
 
@@ -712,6 +721,8 @@ class ReductionTab(BaseImageTab):
     def _on_parameters_changed(self, *args):
         if self._building_controls:
             return
+        if hasattr(self.parent_app, "notify_processing_settings_changed"):
+            self.parent_app.notify_processing_settings_changed("reduction")
         for operation in ("circular_average", "sector_average", "linecut_q"):
             widgets = self._operation_param_widgets[operation]
             manual_crop = not widgets["auto_crop"].isChecked()
@@ -757,21 +768,47 @@ class ReductionTab(BaseImageTab):
     def _sync_geometry_controls(self, image_shape: tuple[int, int]):
         self._last_control_shape = image_shape
 
-    def _build_request(self):
-        image = self._get_image_array()
-        if image is None:
+    def _build_request(self, *, series=False):
+        image = None if series else self._get_image_array()
+        if not series and image is None:
             return None
+        calibration = self._selected_calibration()
+        if series:
+            calibration_destination = (
+                "reduction" if self.calibration_source_combo.currentData() == "Custom profile" else "calibration"
+            )
+            if calibration is None:
+                raise WaterfallInputError("A calibrated q axis requires a calibration.", calibration_destination)
+            try:
+                shape = (int(calibration.height), int(calibration.width))
+                if min(shape) < 1:
+                    raise ValueError("Detector dimensions must be positive.")
+            except (TypeError, ValueError, AttributeError) as exc:
+                raise WaterfallInputError(str(exc), calibration_destination) from exc
+            from sciview.masking.io import coerce_mask_to_bool
+            raw_mask = self._selected_mask() if self._use_mask_enabled() else None
+            mask = coerce_mask_to_bool(raw_mask, shape)
+            if raw_mask is not None and mask is None:
+                destination = "reduction" if self.mask_source_combo.currentData() == "Custom mask" else "mask_editing"
+                raise WaterfallInputError("Mask dimensions do not match the detector.", destination)
+            if self.mask_source_combo.currentData() == "Custom mask" and raw_mask is None:
+                raise WaterfallInputError("Load the selected custom mask.", "reduction")
+        else:
+            shape = image.shape
+            mask = self._get_mask_array(shape)
 
         operation = self._selected_operation()
-        mask = self._get_mask_array(image.shape)
         q_min = self._op_float("q_min")
         q_max = self._op_float("q_max")
+        if series and operation in {"circular_average", "sector_average"}:
+            if self._operation_param_widgets[operation]["auto_crop"].isChecked():
+                q_min = q_max = None
 
         kwargs = dict(
             image=image,
             operation=operation,
-            center_x=float(self._active_center(image.shape)[0]),
-            center_y=float(self._active_center(image.shape)[1]),
+            center_x=float(self._active_center(shape)[0]),
+            center_y=float(self._active_center(shape)[1]),
             bins_relative=self._op_float("bins_relative"),
             q_min=q_min,
             q_max=q_max,
@@ -783,14 +820,16 @@ class ReductionTab(BaseImageTab):
             line_mode=self._selected_line_mode(),
             line_value=self._op_float("q0"),
             use_mask=self._use_mask_enabled(),
-            calibration=self._selected_calibration(),
+            calibration=calibration,
             mask=mask,
             show_region=True,
             metadata={
-                "image_shape": tuple(int(v) for v in image.shape),
+                "image_shape": tuple(int(v) for v in shape),
                 "source_path": self.parent_app.get_image_path() if hasattr(self.parent_app, "get_image_path") else None,
                 "calibration_source": self.calibration_source_combo.currentData(),
                 "mask_source": self.mask_source_combo.currentData(),
+                "calibration_label": self._custom_calibration_label,
+                "mask_label": self._custom_mask_label,
                 "line_mode": self._selected_line_mode(),
                 "q_bounds": dict(self._q_bounds),
             },
@@ -800,6 +839,10 @@ class ReductionTab(BaseImageTab):
             kwargs["radius_max"] = float(self._q_to_pixels(q_max))
 
         return ReductionRequest(**kwargs)
+
+    def build_waterfall_request(self):
+        """Capture the current reduction controls without loading a detector image."""
+        return self._build_request(series=True)
 
     def refresh_preview(self):
         request = self._build_request()
@@ -819,7 +862,7 @@ class ReductionTab(BaseImageTab):
             self.parent_app.show_status(tr("reduction.status.failed", error=exc))
             return
 
-        self._set_current_result(result)
+        self._set_current_result(result, request)
         self._update_preview_plot(result)
         point_count = int(np.count_nonzero(np.isfinite(result.y)))
         operation_name = tr(f"reduction.operation.status.{result.operation}")
@@ -1327,9 +1370,30 @@ class ReductionTab(BaseImageTab):
         if self.auto_update_check.isChecked():
             self.refresh_preview()
 
-    def _set_current_result(self, result) -> None:
+    def _set_current_result(self, result, request=None) -> None:
         self._current_result = result
+        self._current_request = request if result is not None else None
         self.export_button.setEnabled(result is not None)
+        self.add_notebook_button.setEnabled(result is not None)
+
+    def _add_to_notebook(self):
+        if self._current_result is None:
+            self.parent_app.show_status(tr("reduction.status.preview_before_export"))
+            return
+        plot_style = resolve_plot_style(self.parent_app)
+        state = PlotState(curve_styles={0: CurveStyle(
+            color=plot_style.line_color, line_width=min(8.0, max(1.0, plot_style.line_width)),
+        )})
+        try:
+            figure = reduction_figure(
+                self._current_request, self._current_result,
+                title=tr(f"reduction.operation.{self._current_result.operation}"), state=state,
+            )
+            self.parent_app.add_to_notebook(figure)
+        except Exception as exc:
+            self.parent_app.report_error(tr("reduction.status.notebook_failed", error=exc), exc)
+            return
+        self.parent_app.show_status(tr("notebook.inserted", title=figure.title))
 
     def on_shared_state_activated(self):
         """Refresh reduction state when shared image/calibration/mask changes become active."""

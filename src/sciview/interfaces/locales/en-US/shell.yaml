@@ -270,6 +270,9 @@ shell.batch_tab_n_import_error_error:
 shell.info:
   text: Info
   context: Tab showing file metadata, image statistics, and calibration information.
+shell.notebook:
+  text: Notebook
+  context: Tab for writing notes with embedded scientific results such as waterfalls.
 shell.info_tab_n_import_error_error:
   text: 'Info Tab\n(Import error: {error})'
   context: Fallback panel shown when an application tab cannot be imported.

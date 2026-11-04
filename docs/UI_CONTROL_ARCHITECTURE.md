@@ -85,6 +85,203 @@ during playback, as a 32-bit float TIFF with negative values preserved.
 Suggested names shorten filenames by length, without interpreting their
 structure. The TIFF description records the formula and both source paths.
 
+## Waterfall Results
+
+Select multiple local images in Image Browser and choose **Waterfall** to process
+them with the current Reduction settings. Results keeps this ordered input
+snapshot; **Update** uses the same inputs with the latest settings, not a later
+browser selection. Calibration, Masking, Reduction and Transform remain the
+settings owners; the Notebook owns presentation. Editing settings marks the
+figures that depend on them stale (shared calibration/mask, or the matching
+processing tab) without recomputing anything; each stale figure shows an
+**Update · settings changed** action in its own header, which reprocesses that
+figure's sources with the current settings and replaces its content in place,
+keeping identity, title, labels and appearance (marks reset because sample
+indices change). A cancelled or partly failed recomputation leaves the figure
+unchanged. The corner Recalculate action remains only for the explorer's
+unlinked latest result and for retrying after a settings problem.
+
+The GUI-independent waterfall adapter processes one image at a time through the
+existing Reduction backend. Each run captures calibration and mask snapshots;
+incompatible image shapes and failed reductions are reported per source, never
+replaced with pixel-coordinate results. This first version supports circular
+and sector averages with one calibration across the selected series.
+
+Spacing adds a display-only intensity offset; zero overlays the curves.
+Visibility and colors do not change numerical data. **Show source** reveals the
+raw image while retaining browser selection and its pinned reference.
+**Export curves** writes original, unshifted CSV values, the applied mask, and a
+JSON settings/source manifest, including failures and cancellation status.
+Cancellation takes effect between image reads and reduction calls.
+
+Results uses a pyqtgraph canvas with Pan, box Zoom, and Home. Image and curve
+viewers share toolbar builders, icons, plot theming, colormaps, and PNG export.
+Hovering a plotted curve or source row transiently highlights both; clicking a
+curve selects its source row and reveals its appearance controls. The canvas
+footer groups navigation with scientific coordinates and intensity readouts.
+Waterfall separation and palette stay visible in the source panel, separate
+from navigation. Recalculate appears only when processing settings are stale;
+export remains a secondary action. The source list expands above content-sized
+settings groups, and the panel scrolls when the available height is insufficient.
+Separation reports a compact intensity-unit value; automatic framing applies to a
+new run, while plot adjustments preserve a manually selected view range.
+Mark labels a sampled curve point with its original q and intensity, follows
+spacing and visibility, and never modifies numerical exports. Marks are
+reset on Update; Escape leaves marking and Ctrl+Z undoes a mark when the canvas
+has focus. Save writes the visible plot, including marks.
+
+### Scientific notebook
+
+Results opens into an offline Milkdown document with a document bar, centered
+writing canvas, and collapsed outline rail. The document bar owns New, Open,
+Save, Save As, and insertion of the latest completed waterfall. The outline's
+own rail controls its expansion; heading and figure navigation scrolls without
+changing the writing caret or figure selection. Milkdown's native sticky
+formatting bar exposes headings, marks, lists, links, and content insertion;
+Markdown shortcuts, slash commands, and block handles remain available.
+
+Image Browser's Waterfall action processes the ordered selected measurements
+and inserts the completed result directly into the active Notebook, without
+opening a separate plot explorer. Progress, cancellation and actionable
+failures appear contextually above the document; stale figures carry their own
+Update action.
+Partial or cancelled results retain their source errors and processing snapshot.
+The SciView insertion action also places the latest completed waterfall at the
+writing caret, preserving surrounding text and leaving a paragraph after the
+figure. Only block drag handles initiate reordering; plot gestures, sliders,
+annotations, and editable text cannot drag a figure. Curves render inline from the
+saved scientific arrays; hovering reports source coordinates and intensity,
+and clicking a curve reveals its measurement-specific controls inside the
+selected figure. Editing is owned by the visible element, not an embedded
+property panel: title and legend text edit in place, and clicking an axis
+opens label/unit editing over that axis title (including the rotated y axis).
+Clicking a curve opens a compact floating color/style/thickness strip near it;
+opacity and the presentation-only Intensity × multiplier are secondary tools.
+Thickness has one slider/value pair, not duplicate controls. Legend swatches select
+curves. Empty-canvas clicks and drags are reserved for
+selection and plot navigation; they never open figure settings. The explicit
+Figure settings action in the figure header opens palette, default line appearance,
+separation, measurement visibility and legend
+visibility in a dismissible panel attached to that figure block. It groups
+global elements under Figure, measurement visibility and collapsible default
+appearance under Curves, and separation/palette under Waterfall. Only the
+plot-type-specific section needs replacement for another visualization type.
+Titles and axis labels edit only at their displayed locations, not through
+remote inspector buttons. Titles, axis labels, legend names and future editable
+figure text use one shared `figure-editable` mechanism: a dashed outline and
+pencil appear only on hover, and focused text shows a solid editing box and caret.
+The panel does not repeat the figure title; its attachment conveys ownership. It
+stays available during curve editing, and closes when returning to writing.
+Selecting an element alone never narrows the scientific plot or adds a settings
+column. Explicitly opening advanced settings places them beside the plot within
+its document block, scrolling with it rather than docking to the application
+window. Narrow figure blocks place the settings below the plot instead of
+compressing the scientific content.
+Measurement visibility lives only in figure settings, where hidden measurements
+remain listed and can always be restored. Individual line overrides take
+precedence over figure defaults; opacity and multipliers leave source arrays
+unchanged. Curve tools group color, pattern, width and opacity in one Line row, with
+presentation-only Scaling on a separate compact slider/value row. Default
+pattern and width share a row in the inspector's collapsed appearance group.
+The figure has no permanent explanatory footer. Titles edit in place
+and update the outline and saved document.
+Clicking outside returns to writing and dismisses tools. Escape from a selected
+figure places the writing caret after it without replacing the figure block.
+Separation, palette, visibility, gain, color, line style and width update the
+canonical linked plot object. Sliders are paired
+with editable numbers for precise adjustments; slider ranges are convenient
+defaults, while typed Separation and Scaling accept any finite nonnegative value. The visible legend identifies
+measurements even when a figure is not selected. Figure titles, axis labels and
+units, and legend names are directly editable. Presentation metadata is separate
+from scientific source labels: editing a unit does not convert the arrays.
+Routine scientific titles and axis labels use plain text and Unicode symbols
+(such as Å⁻¹, χ, φ, and °), not Markdown or math delimiters. Older notebook
+axis metadata uses the same presentation without changing saved source labels.
+Only the selected element's tools are exposed; text editing does not open
+unrelated appearance controls. Expand enlarges
+the same document figure, with the same controls and interaction, rather than
+opening another editing workspace. Its corner handle continuously resizes
+between half and full document width and adjusts height; arrow keys provide
+accessible size adjustments. Axes, ticks, curves and sample annotations redraw
+at the actual display dimensions. Pan, box Zoom, Fit, and Mark share one
+interaction in both sizes; Ctrl-wheel zooms without intercepting ordinary
+document scrolling. Display gains and separation leave original data unchanged.
+The curve explorer behind the document is an editing convenience for curve
+figures, not a required processing or figure-editing step.
+
+### Scientific objects
+
+Every notebook figure is a `core.notebook.ScientificObject`: a stable ID,
+title, ordered source references, processing provenance, a PNG preview, shared
+figure metadata (axis labels/units, legend) and a kind-specific payload with
+its own presentation state and validation. Two kinds exist:
+
+- `CurveFigure` (`kind: curves`): one or more 1D curves sharing axes, with
+  waterfall presentation (`PlotState`). A waterfall and a single Reduction
+  preview are the same object type; the single curve simply has one source.
+- `ImageFigure` (`kind: image`): a 2D map on calibrated axes (a Transform
+  result) with `ImageState` — colormap, linear/log scale, automatic or explicit
+  intensity limits, and view range. Pan, box Zoom and Fit, title and axis
+  label/unit editing behave as for curves; the figure settings panel replaces
+  the Curves/Waterfall sections with an Image section.
+
+Reduction and Transform expose **Add to Notebook**. `processing.notebook_results`
+turns the previewed request/result pair into a figure using the same
+`processing.provenance` snapshot (detector geometry, mask hash, parameters,
+software versions) as waterfall processing; nothing is recomputed. The tab's
+current plot style is carried over as presentation state (line color/width;
+colormap, scale, intensity limits and manual crop) and remains editable in the
+document. Selecting an image figure never engages the curve explorer.
+
+Previews are rendered headlessly by `processing.plot_rendering.figure_preview_png`
+from the object itself at the size the card last reported, when a figure is
+inserted and again at save for objects whose content or size changed. The
+saved PNG is only used when the Markdown is viewed outside SciView.
+
+Save writes a Markdown document and a sibling `.assets` directory. Share both.
+The assets hold the original arrays (curves, maps, axes, mask), scientific
+provenance, presentation and PNG previews; reopening does not require the
+source images or reprocessing, and missing or changed source files never alter
+a saved object. The manifest records each object's `kind` (version 2);
+version 1 manifests without kinds are read as curve figures. The Python
+notebook object remains canonical; the editor receives arrays and presentation
+state only to render the interactive document view (map pixels travel as
+base64 float32, so large maps make documents heavier to load). Notebook marks
+retain original sample indices. Asset revisions are written before the document
+is replaced, so a failed save preserves the prior version. Previous successful
+asset revisions are retained; they can increase storage over repeated saves.
+Dedicated publication export and PDF are not included yet. The application
+session cache remembers the last opened or saved notebook path and restores it
+on restart; missing or invalid documents report an error. Unsaved-change
+prompts compare actual document and scientific-object content against the
+saved baseline. Curve selection and regenerated previews are not edits;
+undoing a content change back to that baseline restores clean state.
+
+The GUI-independent `core.notebook` values and `data.notebook` save/load APIs
+own document persistence. Processing adapters capture/restore figure values
+without rebuilding scientific logic. The Qt WebChannel carries Markdown, render
+data and presentation updates; the editor does not recalculate scientific
+results. The editor blocks network requests and is bundled locally; Node is a
+build dependency only.
+Import or paste local images: they are embedded as persistent data URLs in
+Markdown, not transient browser URLs. Remote image URLs remain blocked; import
+the image instead. Open links from the native link preview, or Ctrl-click
+(Command-click) a link, to use the system browser without leaving the document.
+AI and collaboration services are not enabled. Crepe's built-in labels retain
+their upstream language; SciView-owned actions use the application catalogs.
+
+After changing the editor sources, rebuild the checked-in bundle:
+
+```powershell
+cd src\sciview\interfaces\stable_qt\notebook
+pixi run --manifest-path ..\..\..\..\..\pixi.toml -e notebook-build npm ci
+pixi run --manifest-path ..\..\..\..\..\pixi.toml -e notebook-build npm run build
+```
+
+The generated distribution includes third-party license notices. Rebuild before
+testing or packaging changes to the editor. KaTeX is aligned to the renderer
+version used by Crepe, including the transitive Markdown math parser.
+
 ## Layer Map
 
 The UI stack is intentionally layered. Think of each layer as owning a different class of decision.

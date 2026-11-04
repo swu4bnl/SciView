@@ -20,11 +20,12 @@ Keep a flat, feature-based suite:
 
 | File | Retained coverage |
 | --- | --- |
-| [test_image_collection.py](test_image_collection.py) | Ordered selection, pin ownership, comparison arithmetic and input validation |
+| [test_image_collection.py](test_image_collection.py) | Ordered selection, comparison arithmetic, frozen waterfall settings, raw export, notebook persistence and failed-save integrity |
 | [test_image_io.py](test_image_io.py) | Local discovery, filtering/sorting, float-TIFF integrity and export rejection |
 | [test_image_viewer.py](test_image_viewer.py) | Display/data separation, comparison/export and cross-tab workflows |
-| [test_image_playback.py](test_image_playback.py) | Selection/navigation, asynchronous reads, shutdown and annotation isolation |
+| [test_image_playback.py](test_image_playback.py) | Selection/navigation, asynchronous reads, shutdown, annotation isolation and browser-to-notebook save/reopen workflow |
 | [test_mask_drawing.py](test_mask_drawing.py) | Pixel footprints, transactional edits, cancellation and undo/redo |
+| [test_notebook_objects.py](test_notebook_objects.py) | Reduction/Transform results as notebook objects: provenance, previews, mixed-object save/reopen, legacy manifests, and the tab → Notebook → edit → save → reopen workflow |
 | [test_tiled_workflow.py](test_tiled_workflow.py) | Mocked remote discovery/loading and local use without Tiled |
 | [test_ui_messages.py](test_ui_messages.py) | Catalog integrity, translation boundaries and scientific glyph support |
 

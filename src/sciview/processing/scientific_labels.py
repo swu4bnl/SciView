@@ -3,32 +3,32 @@
 from __future__ import annotations
 
 
-RECIPROCAL_ANGSTROM = r"$\mathrm{\AA}^{-1}$"
-DEGREES = r"$^\circ$"
-INTENSITY = r"Intensity (a.u.)"
+RECIPROCAL_ANGSTROM = "Å⁻¹"
+DEGREES = "°"
+INTENSITY = "Intensity (a.u.)"
 
 
 _REDUCTION_LABELS = {
-    "circular_average": (rf"$q$ ({RECIPROCAL_ANGSTROM})", r"$I(q)$ (a.u.)"),
-    "sector_average": (rf"$q$ ({RECIPROCAL_ANGSTROM})", r"$I(q)$ (a.u.)"),
-    "linecut_q": (rf"$q$ ({RECIPROCAL_ANGSTROM})", r"$I(q)$ (a.u.)"),
-    "linecut_angle": (rf"$\chi$ ({DEGREES})", r"$I(\chi)$ (a.u.)"),
+    "circular_average": (f"q ({RECIPROCAL_ANGSTROM})", "I(q) (a.u.)"),
+    "sector_average": (f"q ({RECIPROCAL_ANGSTROM})", "I(q) (a.u.)"),
+    "linecut_q": (f"q ({RECIPROCAL_ANGSTROM})", "I(q) (a.u.)"),
+    "linecut_angle": (f"χ ({DEGREES})", "I(χ) (a.u.)"),
 }
 
 _TRANSFORM_LABELS = {
-    "q_image": (rf"$q_x$ ({RECIPROCAL_ANGSTROM})", rf"$q_z$ ({RECIPROCAL_ANGSTROM})"),
-    "q_phi_image": (rf"$q$ ({RECIPROCAL_ANGSTROM})", rf"$\phi$ ({DEGREES})"),
-    "qr_qz_image": (rf"$q_r$ ({RECIPROCAL_ANGSTROM})", rf"$q_z$ ({RECIPROCAL_ANGSTROM})"),
+    "q_image": (f"q_x ({RECIPROCAL_ANGSTROM})", f"q_z ({RECIPROCAL_ANGSTROM})"),
+    "q_phi_image": (f"q ({RECIPROCAL_ANGSTROM})", f"φ ({DEGREES})"),
+    "qr_qz_image": (f"q_r ({RECIPROCAL_ANGSTROM})", f"q_z ({RECIPROCAL_ANGSTROM})"),
 }
 
 _PLOT_TITLES = {
     "circular_average": "Circular Average",
     "sector_average": "Sector Average",
-    "linecut_q": r"Line Cut $I(q)$",
-    "linecut_angle": r"Azimuthal Line Cut $I(\chi)$",
-    "q_image": r"$q_x$-$q_z$ Intensity Map",
-    "q_phi_image": r"$q$-$\phi$ Intensity Map",
-    "qr_qz_image": r"$q_r$-$q_z$ Intensity Map",
+    "linecut_q": "Line Cut I(q)",
+    "linecut_angle": "Azimuthal Line Cut I(χ)",
+    "q_image": "q_x-q_z Intensity Map",
+    "q_phi_image": "q-φ Intensity Map",
+    "qr_qz_image": "q_r-q_z Intensity Map",
 }
 
 
@@ -36,7 +36,7 @@ def reduction_axis_labels(operation: str, *, calibrated: bool = True) -> tuple[s
     if calibrated and operation in _REDUCTION_LABELS:
         return _REDUCTION_LABELS[operation]
     if operation == "linecut_angle":
-        return rf"$\chi$ ({DEGREES})", r"$I(\chi)$ (a.u.)"
+        return f"χ ({DEGREES})", "I(χ) (a.u.)"
     return "Detector radius (px)", INTENSITY
 
 

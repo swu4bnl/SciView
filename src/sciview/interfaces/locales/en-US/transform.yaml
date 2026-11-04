@@ -151,6 +151,17 @@ transform.send_to_batch:
 transform.send_to_batch.tooltip:
   text: "Push current settings as a protocol to the Batch tab"
   context: "Tooltip explaining that current transform settings are sent to Batch."
+transform.add_to_notebook:
+  text: "Add to Notebook"
+  context: "Button that inserts the previewed reciprocal-space map into the notebook as an editable figure."
+transform.add_to_notebook.tooltip:
+  text: "Insert this map, with its calibration and mask provenance, into the Notebook."
+  context: "Tooltip explaining that the current transform result becomes a saved notebook object."
+transform.status.notebook_failed:
+  text: "Could not add the transform to the notebook: {error}"
+  context: "Status when a transform result could not be inserted into the notebook."
+  placeholders:
+    error: "Failure details."
 transform.status.invalid_plot_style:
   text: "Invalid plot style: {error}"
   context: "Status explaining why the current plot-style values are invalid."

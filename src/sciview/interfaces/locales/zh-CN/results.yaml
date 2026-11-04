@@ -1,0 +1,251 @@
+results.title:
+  text: "结果"
+  context: "Tab for exploring processed image collections."
+results.mark.tooltip:
+  text: "点击曲线标记原始 q 和强度值。更新结果时清除标记。"
+  context: "Curve-linked visual annotation; spacing moves marks without changing their reported values."
+results.pan.tooltip:
+  text: "拖动以平移，使用滚轮缩放。"
+  context: "Results canvas navigation."
+results.home.tooltip:
+  text: "在本次处理的 q 范围内显示所有可见曲线。"
+  context: "Reset Results zoom and pan."
+results.save_plot:
+  text: "曲线图像 (PNG)"
+  context: "Save a PNG of the visible Results plot, including display offsets and marks; not numerical export."
+results.waterfall:
+  text: "瀑布图"
+  context: "Browser action that processes selected raw images with current Reduction settings."
+results.waterfall_selection:
+  text: "瀑布图 · 已选 {count} 张"
+  context: "Visible browser action, including the number of selected source images."
+  placeholders:
+    count: "Number of selected images."
+results.update:
+  text: "更新"
+  context: "Reprocess the same result inputs with current scientific settings."
+results.update_changed:
+  text: "更新 · 设置已更改"
+  context: "Update action after editing processing settings; existing results remain unchanged."
+results.recalculate:
+  text: "重新计算"
+  context: "Re-run this source collection with the current scientific settings as a new result."
+results.recalculate_changed:
+  text: "重新计算 · 设置已更改"
+  context: "Recalculation action after processing settings changed; saved notebook objects are not replaced."
+results.recalculate.tooltip:
+  text: "使用当前标定、掩膜和处理设置重新处理此图形的源图像，并就地更新图形。"
+  context: "Tooltip of the per-figure update action and of the explorer's recalculate action; marks are reset because sample indices change."
+results.update_kept:
+  text: "已保留原图形：{good} / {total} 个源处理成功。"
+  context: "An in-place update was not applied because the recomputation was cancelled or some sources failed."
+  placeholders:
+    good: "Successful source count."
+    total: "Requested source count."
+results.update_unsupported:
+  text: "无法根据当前设置更新此图形。"
+  context: "Update requested for a figure type that has no recomputation path."
+results.calibration:
+  text: "标定"
+  context: "Navigate from Results to calibration editing."
+results.masking:
+  text: "掩膜"
+  context: "Navigate from Results to mask editing."
+results.reduction:
+  text: "归约"
+  context: "Navigate from Results to reduction settings."
+results.empty:
+  text: "在图像浏览器中选择图像，然后点击瀑布图。"
+  context: "Empty Results workspace."
+results.curves:
+  text: "源图像"
+  context: "Curve identity and visibility list beside the waterfall."
+results.show_source:
+  text: "查看源图像"
+  context: "Reveal the selected curve's raw image in Image Browser without clearing selection."
+results.spacing:
+  text: "曲线分离"
+  context: "Interactive additive display offset between waterfall curves."
+results.spacing.tooltip:
+  text: "仅影响显示：0 表示曲线叠加；100 表示自动间距。原始强度和数值导出不变。"
+  context: "Explains the slider mapping and its display-only effect."
+results.spacing_value:
+  text: "{value} {units}"
+  context: "Exact additive display offset in the result's intensity units."
+  placeholders:
+    value: "Current offset value."
+    units: "Intensity units."
+results.colors:
+  text: "调色板"
+  context: "Palette applied in input order without changing data."
+results.colors.tooltip:
+  text: "选择默认颜色调色板。可在源图像列表中为单条曲线指定颜色。"
+  context: "Colormap selection; individual curve colors may override the palette."
+results.export:
+  text: "导出"
+  context: "Open export choices for the displayed plot image or raw curves and provenance."
+results.export_curves:
+  text: "曲线和来源信息 (ZIP)"
+  context: "Export raw one-dimensional values and processing provenance; display adjustments are not applied."
+results.cancel:
+  text: "取消"
+  context: "Stop processing after the current non-interruptible image operation."
+results.cancelling:
+  text: "正在完成当前图像…"
+  context: "Cancellation requested; the current SciAnalysis call must finish first."
+results.attention:
+  text: "处理需要检查：{error}"
+  context: "Settings validation problem with a direct navigation action beside it."
+  placeholders:
+    error: "Backend validation explanation."
+results.failed:
+  text: "瀑布图失败：{error}"
+  context: "Unexpected processing or export error."
+  placeholders:
+    error: "Error details."
+results.open.calibration:
+  text: "打开标定"
+  context: "Fix an invalid or missing calibration."
+results.open.mask_editing:
+  text: "打开掩膜"
+  context: "Fix an incompatible detector mask."
+results.open.reduction:
+  text: "打开归约"
+  context: "Fix reduction settings or a custom calibration/mask source."
+results.collection:
+  text: "结果 · {count} 张图像"
+  context: "Title for the frozen input collection."
+  placeholders:
+    count: "Total source image count."
+results.settings:
+  text: "{operation} · 标定：{calibration} · 掩膜：{mask}"
+  context: "Scientific input summary of the displayed processing run."
+  placeholders:
+    operation: "Localized reduction operation."
+    calibration: "Calibration source."
+    mask: "Mask source."
+results.settings.tooltip:
+  text: "当前结果所使用的处理设置。"
+  context: "Tooltip for the concise processing summary in the plot header."
+results.none:
+  text: "无"
+  context: "No mask was applied."
+results.shared:
+  text: "共享"
+  context: "Calibration or mask captured from the shared editing workspace."
+results.progress:
+  text: "正在处理 %v / %m"
+  context: "Qt progress format; preserve %v and %m tokens."
+results.previous:
+  text: "正在更新… 新结果到达前保留显示原曲线。"
+  context: "Old results remain on screen while the new settings are processed."
+results.pending:
+  text: "待处理 · {name}"
+  context: "Source awaiting processing."
+  placeholders:
+    name: "Source filename."
+results.not_processed:
+  text: "未处理 · {name}"
+  context: "Source not reached before cancellation; no curve or failure is implied."
+  placeholders:
+    name: "Source filename."
+results.curve_failed:
+  text: "失败 · {name}"
+  context: "Source that could not be reduced; tooltip contains the error."
+  placeholders:
+    name: "Source filename."
+results.cancelled:
+  text: "已取消 · {good} / {total} 条曲线可用（部分结果）"
+  context: "Stopped series; successful curves can still be exported."
+  placeholders:
+    good: "Successful curve count."
+    total: "Requested image count."
+results.incomplete:
+  text: "结果不完整 · {good} / {total} 条曲线可用；失败的源图像已在列表标出。"
+  context: "Finished with failures; retained curves can be inspected and exported."
+  placeholders:
+    good: "Successful curve count."
+    total: "Requested image count."
+results.complete:
+  text: "{good} / {total} 条曲线可用"
+  context: "Completed series; fewer available curves than inputs indicates failures."
+  placeholders:
+    good: "Successful curve count."
+    total: "Requested image count."
+results.intensity:
+  text: "{label} + 显示偏移"
+  context: "Waterfall y axis; original intensity is not modified."
+  placeholders:
+    label: "Scientific intensity label, including units."
+results.intensity_display:
+  text: "{label}（仅显示增益和偏移）"
+  context: "Axis label when per-curve display gains are active; data values remain unchanged."
+  placeholders:
+    label: "Scientific intensity label, including units."
+results.curve_search:
+  text: "查找源图像…"
+  context: "Filter the curve/source list by filename or path."
+results.waterfall_display:
+  text: "瀑布图显示"
+  context: "Waterfall-only presentation controls, including curve separation and palette."
+results.curve_appearance:
+  text: "曲线外观"
+  context: "Appearance controls for the selected source curve."
+results.curve_color:
+  text: "颜色"
+  context: "Override the selected curve's palette-assigned color."
+results.use_palette:
+  text: "使用调色板"
+  context: "Clear a selected curve's custom color and return it to the palette."
+results.palette_color:
+  text: "调色板颜色"
+  context: "Selected curve uses its position in the global palette."
+results.line_style:
+  text: "线型"
+  context: "Presentation-only stroke pattern for the selected curve."
+results.line.solid:
+  text: "实线"
+  context: "Solid line stroke."
+results.line.dash:
+  text: "虚线"
+  context: "Dashed line stroke."
+results.line.dot:
+  text: "点线"
+  context: "Dotted line stroke."
+results.line.dash_dot:
+  text: "点划线"
+  context: "Dash-dot line stroke."
+results.line_width:
+  text: "粗细"
+  context: "Presentation-only line thickness."
+results.display_gain:
+  text: "缩放"
+  context: "Per-curve presentation multiplier; raw intensities and exports remain unchanged."
+results.gain_value:
+  text: "{value}×"
+  context: "Display-only multiplier for the selected curve."
+  placeholders:
+    value: "Gain multiplier."
+results.hover.empty:
+  text: "将指针移至曲线上查看数值"
+  context: "Idle scientific coordinate readout."
+results.hover.tooltip:
+  text: "显示最近可见曲线的原始强度及经过显示调整的 y 值。"
+  context: "Clarifies raw versus display-only values in the cursor readout."
+results.hover.value:
+  text: "{coordinate} {coordinate_units} · I={intensity} {intensity_units} · 显示 y={display}"
+  context: "Nearest curve sample under the pointer; identity is shown by the highlighted source row."
+  placeholders:
+    coordinate: "Scientific x coordinate."
+    coordinate_units: "Coordinate units."
+    intensity: "Unmodified scientific intensity."
+    intensity_units: "Intensity units."
+    display: "Shown y coordinate after display gain and waterfall separation."
+results.zip_filter:
+  text: "曲线归档 (*.zip)"
+  context: "Archive containing numerical CSV curves and a JSON provenance manifest."
+results.exported:
+  text: "已导出曲线：{path}"
+  context: "Successful waterfall export."
+  placeholders:
+    path: "Written archive path."

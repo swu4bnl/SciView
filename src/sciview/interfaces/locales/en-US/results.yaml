@@ -1,0 +1,251 @@
+results.title:
+  text: "Results"
+  context: "Tab for exploring processed image collections."
+results.mark.tooltip:
+  text: "Click a curve to mark its original q and intensity. Marks reset on Update."
+  context: "Curve-linked visual annotation; spacing moves marks without changing their reported values."
+results.pan.tooltip:
+  text: "Drag to pan; use the wheel to zoom."
+  context: "Results canvas navigation."
+results.home.tooltip:
+  text: "Fit visible curves within the run's q range."
+  context: "Reset Results zoom and pan."
+results.save_plot:
+  text: "Plot image (PNG)"
+  context: "Save a PNG of the visible Results plot, including display offsets and marks; not numerical export."
+results.waterfall:
+  text: "Waterfall"
+  context: "Browser action that processes selected raw images with current Reduction settings."
+results.waterfall_selection:
+  text: "Waterfall · {count} selected"
+  context: "Visible browser action, including the number of selected source images."
+  placeholders:
+    count: "Number of selected images."
+results.update:
+  text: "Update"
+  context: "Reprocess the same result inputs with current scientific settings."
+results.update_changed:
+  text: "Update · settings changed"
+  context: "Update action after editing processing settings; existing results remain unchanged."
+results.recalculate:
+  text: "Recalculate"
+  context: "Re-run this source collection with the current scientific settings as a new result."
+results.recalculate_changed:
+  text: "Recalculate · settings changed"
+  context: "Recalculation action after processing settings changed; saved notebook objects are not replaced."
+results.recalculate.tooltip:
+  text: "Reprocess this figure's source images with the current Calibration, Mask and processing settings, updating the figure in place."
+  context: "Tooltip of the per-figure update action and of the explorer's recalculate action; marks are reset because sample indices change."
+results.update_kept:
+  text: "Update kept the previous figure: {good} / {total} sources succeeded."
+  context: "An in-place update was not applied because the recomputation was cancelled or some sources failed."
+  placeholders:
+    good: "Successful source count."
+    total: "Requested source count."
+results.update_unsupported:
+  text: "This figure cannot be updated from the current settings."
+  context: "Update requested for a figure type that has no recomputation path."
+results.calibration:
+  text: "Calibration"
+  context: "Navigate from Results to calibration editing."
+results.masking:
+  text: "Masking"
+  context: "Navigate from Results to mask editing."
+results.reduction:
+  text: "Reduction"
+  context: "Navigate from Results to reduction settings."
+results.empty:
+  text: "Select images in Image Browser, then choose Waterfall."
+  context: "Empty Results workspace."
+results.curves:
+  text: "Source images"
+  context: "Curve identity and visibility list beside the waterfall."
+results.show_source:
+  text: "Show source"
+  context: "Reveal the selected curve's raw image in Image Browser without clearing selection."
+results.spacing:
+  text: "Separation"
+  context: "Interactive additive display offset between waterfall curves."
+results.spacing.tooltip:
+  text: "Display only: 0 overlays curves; 100 is the automatic separation. Raw intensities and numeric exports are unchanged."
+  context: "Explains the slider mapping and its display-only effect."
+results.spacing_value:
+  text: "{value} {units}"
+  context: "Exact additive display offset in the result's intensity units."
+  placeholders:
+    value: "Current offset value."
+    units: "Intensity units."
+results.colors:
+  text: "Palette"
+  context: "Palette applied in input order without changing data."
+results.colors.tooltip:
+  text: "Choose the default color palette. Per-curve color overrides are available in the source list."
+  context: "Colormap selection; individual curve colors may override the palette."
+results.export:
+  text: "Export"
+  context: "Open export choices for the displayed plot image or raw curves and provenance."
+results.export_curves:
+  text: "Curves + provenance (ZIP)"
+  context: "Export raw one-dimensional values and processing provenance; display adjustments are not applied."
+results.cancel:
+  text: "Cancel"
+  context: "Stop processing after the current non-interruptible image operation."
+results.cancelling:
+  text: "Finishing current image…"
+  context: "Cancellation requested; the current SciAnalysis call must finish first."
+results.attention:
+  text: "Processing needs attention: {error}"
+  context: "Settings validation problem with a direct navigation action beside it."
+  placeholders:
+    error: "Backend validation explanation."
+results.failed:
+  text: "Waterfall failed: {error}"
+  context: "Unexpected processing or export error."
+  placeholders:
+    error: "Error details."
+results.open.calibration:
+  text: "Open Calibration"
+  context: "Fix an invalid or missing calibration."
+results.open.mask_editing:
+  text: "Open Masking"
+  context: "Fix an incompatible detector mask."
+results.open.reduction:
+  text: "Open Reduction"
+  context: "Fix reduction settings or a custom calibration/mask source."
+results.collection:
+  text: "Results · {count} images"
+  context: "Title for the frozen input collection."
+  placeholders:
+    count: "Total source image count."
+results.settings:
+  text: "{operation} · Calibration: {calibration} · Mask: {mask}"
+  context: "Scientific input summary of the displayed processing run."
+  placeholders:
+    operation: "Localized reduction operation."
+    calibration: "Calibration source."
+    mask: "Mask source."
+results.settings.tooltip:
+  text: "Processing settings used for the displayed result."
+  context: "Tooltip for the concise processing summary in the plot header."
+results.none:
+  text: "None"
+  context: "No mask was applied."
+results.shared:
+  text: "Shared"
+  context: "Calibration or mask captured from the shared editing workspace."
+results.progress:
+  text: "Processing %v / %m"
+  context: "Qt progress format; preserve %v and %m tokens."
+results.previous:
+  text: "Updating… Previous curves remain visible until replacement results arrive."
+  context: "Old results remain on screen while the new settings are processed."
+results.pending:
+  text: "{name} · pending"
+  context: "Source awaiting processing."
+  placeholders:
+    name: "Source filename."
+results.not_processed:
+  text: "{name} · not processed"
+  context: "Source not reached before cancellation; no curve or failure is implied."
+  placeholders:
+    name: "Source filename."
+results.curve_failed:
+  text: "{name} · failed"
+  context: "Source that could not be reduced; tooltip contains the error."
+  placeholders:
+    name: "Source filename."
+results.cancelled:
+  text: "Cancelled · {good} / {total} curves available (partial results)"
+  context: "Stopped series; successful curves can still be exported."
+  placeholders:
+    good: "Successful curve count."
+    total: "Requested image count."
+results.incomplete:
+  text: "Incomplete · {good} / {total} curves available; failed sources are marked in the list."
+  context: "Finished with failures; retained curves can be inspected and exported."
+  placeholders:
+    good: "Successful curve count."
+    total: "Requested image count."
+results.complete:
+  text: "{good} / {total} curves available"
+  context: "Completed series; fewer available curves than inputs indicates failures."
+  placeholders:
+    good: "Successful curve count."
+    total: "Requested image count."
+results.intensity:
+  text: "{label} + display offset"
+  context: "Waterfall y axis; original intensity is not modified."
+  placeholders:
+    label: "Scientific intensity label, including units."
+results.intensity_display:
+  text: "{label} (display gain and offset only)"
+  context: "Axis label when per-curve display gains are active; data values remain unchanged."
+  placeholders:
+    label: "Scientific intensity label, including units."
+results.curve_search:
+  text: "Find a source image…"
+  context: "Filter the curve/source list by filename or path."
+results.waterfall_display:
+  text: "Waterfall display"
+  context: "Waterfall-only presentation controls, including curve separation and palette."
+results.curve_appearance:
+  text: "Curve appearance"
+  context: "Appearance controls for the selected source curve."
+results.curve_color:
+  text: "Color"
+  context: "Override the selected curve's palette-assigned color."
+results.use_palette:
+  text: "Use palette"
+  context: "Clear a selected curve's custom color and return it to the palette."
+results.palette_color:
+  text: "Palette color"
+  context: "Selected curve uses its position in the global palette."
+results.line_style:
+  text: "Line style"
+  context: "Presentation-only stroke pattern for the selected curve."
+results.line.solid:
+  text: "Solid"
+  context: "Solid line stroke."
+results.line.dash:
+  text: "Dashed"
+  context: "Dashed line stroke."
+results.line.dot:
+  text: "Dotted"
+  context: "Dotted line stroke."
+results.line.dash_dot:
+  text: "Dash-dot"
+  context: "Dash-dot line stroke."
+results.line_width:
+  text: "Thickness"
+  context: "Presentation-only line thickness."
+results.display_gain:
+  text: "Scaling"
+  context: "Per-curve presentation multiplier; raw intensities and exports remain unchanged."
+results.gain_value:
+  text: "{value}×"
+  context: "Display-only multiplier for the selected curve."
+  placeholders:
+    value: "Gain multiplier."
+results.hover.empty:
+  text: "Move over a curve for values"
+  context: "Idle scientific coordinate readout."
+results.hover.tooltip:
+  text: "Shows the nearest visible curve's raw intensity and its display-adjusted y value."
+  context: "Clarifies raw versus display-only values in the cursor readout."
+results.hover.value:
+  text: "{coordinate} {coordinate_units} · I={intensity} {intensity_units} · display y={display}"
+  context: "Nearest curve sample under the pointer; identity is shown by the highlighted source row."
+  placeholders:
+    coordinate: "Scientific x coordinate."
+    coordinate_units: "Coordinate units."
+    intensity: "Unmodified scientific intensity."
+    intensity_units: "Intensity units."
+    display: "Shown y coordinate after display gain and waterfall separation."
+results.zip_filter:
+  text: "Curve archive (*.zip)"
+  context: "Archive containing numerical CSV curves and a JSON provenance manifest."
+results.exported:
+  text: "Exported curves: {path}"
+  context: "Successful waterfall export."
+  placeholders:
+    path: "Written archive path."

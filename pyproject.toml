@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=1.26",
     "Pillow>=10.0",
     "PyQt5>=5.15",
+    "PyQtWebEngine>=5.15,<5.16",
     "PyYAML>=6.0",
     "matplotlib>=3.8",
     "psutil>=7.1",
@@ -33,6 +34,7 @@ display_name = "SciView"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+exclude = ["*.node_modules", "*.node_modules.*"]
 
 [tool.setuptools.package-data]
 sciview = [
@@ -42,6 +44,7 @@ sciview = [
     "interfaces/fonts/*/*.ttf",
     "interfaces/fonts/*/*.otf",
     "interfaces/fonts/*/LICENSE.txt",
+    "interfaces/stable_qt/notebook/dist/*",
 ]
 
 [project.optional-dependencies]

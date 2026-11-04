@@ -247,6 +247,19 @@ def resolve_matplotlib_colormap(name: str):
     from matplotlib.colors import LinearSegmentedColormap
     return LinearSegmentedColormap.from_list(name, _ordered_palette_colors(palette.colors), N=256)
 
+
+def colormap_lut(name: str):
+    """Return the 256-entry RGB lookup table shared by image views and notebook figures."""
+    if name not in SUPPORTED_IMAGE_COLORMAPS and name not in ARTIST_IMAGE_COLORMAPS:
+        raise ValueError(f"Unsupported colormap: {name}")
+    import matplotlib as mpl
+    import numpy as np
+
+    colormap = resolve_matplotlib_colormap(name)
+    if isinstance(colormap, str):
+        colormap = mpl.colormaps[colormap]
+    return (colormap(np.linspace(0.0, 1.0, 256))[:, :3] * 255).astype(np.ubyte)
+
 VIEWER_TOOLBAR_ACTIONS = (
     ViewerToolbarAction("pan", "viewer.pan.label", "viewer.pan.tooltip"),
     ViewerToolbarAction("zoom", "viewer.zoom.label", "viewer.zoom.tooltip"),

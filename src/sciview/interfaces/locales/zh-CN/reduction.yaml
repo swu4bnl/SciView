@@ -142,6 +142,17 @@ reduction.send_to_batch:
 reduction.send_to_batch.tooltip:
   text: "将当前设置作为处理方案发送到批处理选项卡"
   context: "Tooltip explaining that current reduction settings are sent to Batch."
+reduction.add_to_notebook:
+  text: "添加到笔记本"
+  context: "Button that inserts the previewed reduction curve into the notebook as an editable figure."
+reduction.add_to_notebook.tooltip:
+  text: "将此曲线连同校准和掩膜来源信息插入笔记本。"
+  context: "Tooltip explaining that the current reduction result becomes a saved notebook object."
+reduction.status.notebook_failed:
+  text: "无法将归约结果添加到笔记本：{error}"
+  context: "Status when a reduction result could not be inserted into the notebook."
+  placeholders:
+    error: "Failure details."
 reduction.dialog.load_calibration:
   text: "加载校准 YAML"
   context: "File dialog title for opening a calibration YAML file."
