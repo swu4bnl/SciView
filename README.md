@@ -25,13 +25,13 @@ The tabs are connected, so once you load an image, the app can carry that same i
 
 ## Getting started
 
-For most users, the easiest way to start is with the launcher script for your system.
+For most users, the easiest way to start is with the launcher script for your system. The first launch installs a Python environment, which takes a few minutes. See [Application shortcuts](#application-shortcuts) to add SciView to your system's app list.
 
 ### Windows
 
 Double-click [Launch-SciView-win64.cmd](Launch-SciView-win64.cmd).
 
-If Windows asks to install required components, choose Y. If the launcher asks you to close it, double-click the launcher again.
+If SmartScreen warns about the downloaded file, choose More info, then Run anyway. If Windows asks to install required components, choose Y. If the launcher asks you to close it, double-click the launcher again.
 
 ### macOS and Linux
 
@@ -39,6 +39,8 @@ From the repository folder, use the launcher for your system:
 
 - macOS: `./Launch-SciView-macOS.command`
 - Linux: `./Launch-SciView-linux.sh`
+
+If macOS blocks the downloaded launcher, right-click it and choose Open. After a source update, the launcher restarts itself before starting SciView.
 
 > **Note**
 >
@@ -108,6 +110,15 @@ To disable the update check, use one of these options:
 - Windows: `Launch-SciView-win64.cmd -NoAutoPull`
 - macOS or Linux: `--no-auto-pull`
 - All systems: set `SCIVIEW_AUTO_PULL=0`
+
+### Application shortcuts
+
+On first launch, choose whether to add SciView to the Start menu and Desktop on Windows, the Applications folder on macOS, or the application menu on Linux. Keep the repository folder in place so the app shortcut can find SciView. On Windows, pin SciView to the taskbar from the Start menu if needed.
+
+To change your answers, run the shortcut script for your system. Without options it asks again; the add or remove option applies that choice without a prompt.
+
+- Windows: `powershell -ExecutionPolicy Bypass -File scripts\install_sciview_launcher_windows.ps1` with optional `-Add` or `-Remove`
+- macOS or Linux: `./scripts/install_sciview_launcher_unix.sh` with optional `--add` or `--remove`
 
 ### If something is not working
 

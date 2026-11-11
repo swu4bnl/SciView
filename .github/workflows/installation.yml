@@ -61,6 +61,18 @@ jobs:
             if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
             }
+          & .\scripts\install_sciview_launcher_windows.ps1 -Add
+          $shell = New-Object -ComObject Shell.Application
+          foreach ($shortcutPath in @(
+              (Join-Path ([Environment]::GetFolderPath("Desktop")) "SciView.lnk"),
+              (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\SciView.lnk")
+          )) {
+              $item = $shell.Namespace((Split-Path -Parent $shortcutPath)).ParseName((Split-Path -Leaf $shortcutPath))
+              if ($item.ExtendedProperty("System.AppUserModel.ID") -ne "io.github.swu4bnl.sciview") {
+                  throw "Shortcut AppUserModelID was not set: $shortcutPath"
+              }
+          }
+          & .\scripts\install_sciview_launcher_windows.ps1 -Remove
 
       - name: Install through Unix launcher
         if: runner.os != 'Windows'
@@ -73,6 +85,13 @@ jobs:
           ./scripts/run_sciview_unix.sh --setup-only --no-auto-pull
           "$HOME/.pixi/bin/pixi" run verify-installation
           "$HOME/.pixi/bin/pixi" run test
+            ./scripts/install_sciview_launcher_unix.sh --add
+            if [[ "$(uname -s)" == "Darwin" ]]; then
+              test -f "$HOME/Applications/SciView.app/Contents/Resources/sciview.icns"
+            else
+              test -f "${XDG_DATA_HOME:-$HOME/.local/share}/applications/SciView.desktop"
+            fi
+            ./scripts/install_sciview_launcher_unix.sh --remove
 
   rhel-installation:
     name: rhel-ubi8.10
@@ -99,3 +118,6 @@ jobs:
           ./scripts/run_sciview_unix.sh --setup-only --no-auto-pull
           "$HOME/.pixi/bin/pixi" run verify-installation
           "$HOME/.pixi/bin/pixi" run test
+          ./scripts/install_sciview_launcher_unix.sh --add
+          test -f "${XDG_DATA_HOME:-$HOME/.local/share}/applications/SciView.desktop"
+          ./scripts/install_sciview_launcher_unix.sh --remove

@@ -31,3 +31,8 @@
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+
+# pyinstaller
+/dist/
+/build/
+*.spec

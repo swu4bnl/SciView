@@ -7,8 +7,10 @@ cd "$PROJECT_ROOT"
 
 export PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 
+ORIGINAL_ARGS=("$@")
 SETUP_ONLY=0
 AUTO_PULL="${SCIVIEW_AUTO_PULL:-1}"
+ACCEPT_PIXI_INSTALL="${SCIVIEW_ACCEPT_PIXI_INSTALL:-0}"
 KEEP_SHELL_OPEN="${SCIVIEW_KEEP_SHELL_OPEN:-0}"
 DEV_TOOLS_FLAG="${DEV_TOOLS:-0}"
 
@@ -20,6 +22,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-auto-pull)
             AUTO_PULL=0
+            shift
+            ;;
+        --accept-pixi-install)
+            ACCEPT_PIXI_INSTALL=1
             shift
             ;;
         --dev-tools)
@@ -37,15 +43,37 @@ while [[ $# -gt 0 ]]; do
 done
 
 export DEV_TOOLS="$DEV_TOOLS_FLAG"
-
 if [[ "$DEV_TOOLS" == "1" ]]; then
     echo "Developer tools: ON"
-else
-    echo "Developer tools: OFF"
 fi
+
+# When started from a desktop entry or Finder, keep the window open so the
+# user can read what happened before it closes.
+pause_before_exit() {
+    local exit_code=$?
+    if [[ "$KEEP_SHELL_OPEN" == "1" ]]; then
+        echo ""
+        if [[ "$exit_code" -ne 0 ]]; then
+            echo "SciView stopped with exit code $exit_code. Review the messages above."
+        fi
+        read -r -p "Press Enter to close this window. " _ || true
+    fi
+}
+trap pause_before_exit EXIT
 
 echo_step() {
     printf "\n%s\n" "$1"
+}
+
+ask_yes_no() {
+    # Usage: ask_yes_no "Question? [Y/n]" default-letter
+    local answer
+    read -r -p "$1 " answer || answer=""
+    answer="${answer:-$2}"
+    case "$answer" in
+        [Yy]|[Yy][Ee][Ss]) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 find_pixi() {
@@ -73,7 +101,6 @@ find_pixi() {
 }
 
 install_pixi() {
-    echo "SciView needs Pixi to prepare the Python environment." >&2
     echo "Installing Pixi for this user account..." >&2
     if ! curl -fsSL https://pixi.sh/install.sh | bash >&2; then
         echo "ERROR: Pixi installation failed." >&2
@@ -130,36 +157,24 @@ maybe_auto_pull() {
     fi
 
     echo "$behind update commit(s) available from $upstream."
-    local answer
-    read -r -p "Update SciView now? [y/N] " answer || answer=""
-    case "$answer" in
-        [Yy]|[Yy][Ee][Ss]) ;;
-        *)
-            echo "Skipping SciView source update."
-            return 0
-            ;;
-    esac
+    if ! ask_yes_no "Update SciView now? [y/N]" n; then
+        echo "Skipping SciView source update."
+        return 0
+    fi
 
     if "${git_cmd[@]}" -C "$PROJECT_ROOT" merge --ff-only "$upstream"; then
-        echo "SciView source updated."
-        SOURCE_UPDATED=1
-    else
-        echo "Skipping source auto-update (fast-forward merge failed)."
+        echo "SciView source updated. Restarting the launcher..."
+        # The update may have changed this script on disk. Bash reads scripts
+        # incrementally, so restart instead of continuing with stale code.
+        exec "$SCRIPT_DIR/run_sciview_unix.sh" --no-auto-pull ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
     fi
+    echo "Skipping source auto-update (fast-forward merge failed)."
 }
 
-run_app_command() {
-    "$@"
-    local exit_code=$?
-
-    if [[ "$KEEP_SHELL_OPEN" == "1" ]]; then
-        echo ""
-        echo "SciView exited with code $exit_code."
-        echo "SciView Closed. Press Enter to Quit."
-        read -r _
-    fi
-
-    exit "$exit_code"
+offer_app_entry() {
+    # Best effort: a failed application-list step must not block SciView.
+    bash "$SCRIPT_DIR/install_sciview_launcher_unix.sh" --from-launcher \
+        || echo "SciView could not update its application-list entry; continuing."
 }
 
 run_with_venv() {
@@ -173,14 +188,23 @@ run_with_venv() {
         exit 0
     fi
 
-    run_app_command "$PROJECT_ROOT/.venv/bin/python" main.py
+    offer_app_entry
+    echo_step "Starting SciView..."
+    "$PROJECT_ROOT/.venv/bin/python" main.py "$@"
 }
 
 PIXI_BIN="$(find_pixi || true)"
+if [[ -z "$PIXI_BIN" || ! -d "$PROJECT_ROOT/.pixi/envs/default" ]]; then
+    echo_step "First-time setup: SciView installs its Python environment once. This takes a few minutes."
+fi
+
 if [[ -z "$PIXI_BIN" ]]; then
-    echo_step "Pixi not found. Installing..."
-    if ! PIXI_BIN="$(install_pixi)"; then
-        PIXI_BIN=""
+    echo "SciView uses Pixi, a small Python environment manager, installed for this user account only."
+    if [[ "$ACCEPT_PIXI_INSTALL" == "1" ]] || ask_yes_no "Install Pixi now? [Y/n]" y; then
+        PIXI_BIN="$(install_pixi || true)"
+    else
+        echo "Setup was cancelled. SciView needs Pixi before it can start."
+        exit 1
     fi
 fi
 
@@ -191,24 +215,19 @@ if [[ -n "$PIXI_BIN" ]]; then
         exit 1
     fi
 
-    SOURCE_UPDATED=0
     maybe_auto_pull "$PIXI_BIN"
-    if [[ "$SOURCE_UPDATED" == "1" ]]; then
-        echo_step "Synchronizing updated SciView dependencies..."
-        if ! "$PIXI_BIN" install; then
-            echo "ERROR: SciView updated its source but could not update its dependencies. Review the error above, then run the launcher again."
-            exit 1
-        fi
-    fi
 
     if [[ "$SETUP_ONLY" == "1" ]]; then
         echo "SciView setup is ready (pixi mode)."
         exit 0
     fi
 
-    run_app_command "$PIXI_BIN" run launch-app
+    offer_app_entry
+    echo_step "Starting SciView..."
+    "$PIXI_BIN" run launch-app "$@"
+    exit 0
 fi
 
-SOURCE_UPDATED=0
+echo "Pixi is not available. Falling back to a local Python venv."
 maybe_auto_pull ""
-run_with_venv
+run_with_venv "$@"

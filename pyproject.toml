@@ -31,6 +31,8 @@ package-dir = {"" = "src"}
 
 [tool.sciview]
 display_name = "SciView"
+# Shared by main.py and the launcher scripts for OS application registration.
+app_id = "io.github.swu4bnl.sciview"
 
 [tool.setuptools.packages.find]
 where = ["src"]

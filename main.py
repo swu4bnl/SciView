@@ -50,6 +50,7 @@ from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QMainWindow, QMessageBox, QPushButton, QTabWidget, QLabel,
     QWidget, QAction, QMenu, QTabBar, QToolButton
 )
+from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QEvent, QThread, QTimer
 from PyQt5 import QtWebEngineWidgets  # Initialize WebEngine before QApplication.
 from PyQt5 import sip
@@ -1364,6 +1365,18 @@ class SciAnaApp(QMainWindow):
 def create_application():
     """Create and configure the main application"""
     print("[SciView] Starting up...")
+    project_root = Path(__file__).resolve().parent
+    with (project_root / "pyproject.toml").open("rb") as handle:
+        metadata = tomllib.load(handle)
+    project = metadata["project"]
+    sciview_metadata = metadata["tool"]["sciview"]
+
+    if sys.platform == "win32":
+        # Must run before any window exists. Matches the AppUserModelID on the Start menu
+        # shortcut so the taskbar groups and pins SciView windows under the SciView icon.
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(sciview_metadata["app_id"])
     app = QApplication(sys.argv)
     AppStyle.apply_bundled_fonts(app)
 
@@ -1374,16 +1387,20 @@ def create_application():
     if not AppStyle.apply_qdarktheme('auto', app):
         AppStyle.apply_global_style(app)
     
-    with (Path(__file__).resolve().parent / "pyproject.toml").open("rb") as handle:
-        metadata = tomllib.load(handle)
-    project = metadata["project"]
-    app.setApplicationName(metadata["tool"]["sciview"]["display_name"])
+    app.setApplicationName(sciview_metadata["display_name"])
     app.setApplicationVersion(project["version"])
     app.setOrganizationName(project["name"])
+
+    # Load the brand mark directly: AppStyle.load_icon tints SVGs with the theme icon color.
+    # The ICO carries multiple raster sizes, which Windows uses for taskbar and title bar.
+    icon_name = "sciview.ico" if sys.platform == "win32" else "sciview.svg"
+    app_icon = QIcon(str(AppStyle.icon_directory(project_root) / icon_name))
+    app.setWindowIcon(app_icon)
     
     # Create main window
     print("[SciView] Initializing main window...")
     main_window = SciAnaApp()
+    main_window.setWindowIcon(app_icon)
     
     # Add tabs
     import time as _time

@@ -161,6 +161,9 @@ try {
     }
 
     $tool = Find-ManagedPythonTool
+    if ($null -eq $tool -or -not (Test-Path (Join-Path $ProjectRoot ".pixi\envs\default"))) {
+        Write-Step "First-time setup: SciView installs its Python environment once. This takes a few minutes."
+    }
     if ($null -eq $tool) {
         $tool = Install-ManagedPythonTool
     }
@@ -184,6 +187,13 @@ try {
         Write-Host ""
         Write-Host "SciView setup is ready." -ForegroundColor Green
         exit 0
+    }
+
+    # Best effort: a failed shortcut step must not block SciView.
+    try {
+        & (Join-Path $ScriptDir "install_sciview_launcher_windows.ps1") -FromLauncher
+    } catch {
+        Write-Host "SciView could not update its shortcuts (non-fatal): $($_.Exception.Message)"
     }
 
     Write-Step "Starting SciView..."

@@ -30,6 +30,7 @@ exit /b 0
 echo Windows policy blocks local PowerShell scripts.
 echo Starting SciView with the compatibility launcher.
 echo.
+if not exist "%~dp0.pixi\envs\default" echo First-time setup: SciView installs its Python environment once. This takes a few minutes.
 
 call :find_pixi
 if defined PIXI_EXE goto pixi_ready
@@ -61,6 +62,10 @@ if "%SCIVIEW_SETUP_ONLY%"=="1" (
     echo SciView setup is ready.
     exit /b 0
 )
+
+rem Best effort: a failed shortcut step must not block SciView.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install_sciview_launcher_windows.ps1" -FromLauncher
+if errorlevel 1 echo SciView could not update its shortcuts; continuing.
 
 echo.
 echo Starting SciView...

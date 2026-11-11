@@ -16,7 +16,7 @@ Use the launcher for your platform:
 - macOS: open `Launch-SciView-macOS.command`.
 - Linux: run `./Launch-SciView-linux.sh`.
 
-On the first launch, approve the installation of required components if prompted.
+On the first launch, approve the installation of required components if prompted. Choose whether to add SciView to your system's application list.
 
 ## Main Window
 
