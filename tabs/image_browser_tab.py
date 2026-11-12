@@ -665,6 +665,8 @@ class ImageBrowserApp(BaseImageTab):
 
         # Build UI
         self._build_ui()
+        self._refresh_folder_browser(stop_playback=False, force=True)
+        self._update_folder_auto_refresh()
         self.image_viewer.comparison_opacity_adjusted.connect(
             self._adjust_overlay_opacity_from_canvas
         )
@@ -2193,6 +2195,8 @@ class ImageBrowserApp(BaseImageTab):
         recents = [p for p in recents if isinstance(p, str)] if isinstance(recents, list) else []
         recents = [p for p in recents if Path(p).is_dir()]
         current = self.folder_path_input.text() if hasattr(self, "folder_path_input") else ""
+        if not current:
+            current = recents[0] if recents else str(Path.home())
         with QSignalBlocker(self.folder_path_combo):
             self.folder_path_combo.clear()
             self.folder_path_combo.addItems(recents)
