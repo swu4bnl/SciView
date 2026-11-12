@@ -420,6 +420,8 @@ class ImageFigure(ScientificObject):
             ):
                 raise ValueError("Image axes must be finite, increasing and match the map dimensions.")
         self.state.validate()
+        if self.state.scale == "log":
+            self.intensity_limits()
         self.figure.validate([])
         self._validate_mask(self.mask)
 
@@ -474,9 +476,10 @@ class ImageFigure(ScientificObject):
             low, high = float(self.state.vmin), float(self.state.vmax)
         if self.state.scale == "log":
             positive = finite[finite > 0]
-            if positive.size:
-                low = max(low, float(positive.min()))
-                high = max(high, low * (1 + 1e-6))
+            if not positive.size:
+                raise ValueError("Log intensity scale requires positive image values.")
+            low = max(low, float(positive.min()))
+            high = max(high, low * (1 + 1e-6))
         if high <= low:
             high = low + 1.0
         return low, high

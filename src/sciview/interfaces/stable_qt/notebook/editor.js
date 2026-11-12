@@ -325,8 +325,8 @@ function intensityPosition(value, object) {
 }
 
 function imageDataUrl(card, object) {
-  const key = `${object.image.data.length}|${object.state.colormap}|${object.state.scale}|${object.limits.join(',')}|${object.lut.join('')}`;
-  if (card.imageBitmap?.key === key) return card.imageBitmap.url;
+  const key = `${object.state.colormap}|${object.state.scale}|${object.limits.join(',')}|${object.lut.join('')}`;
+  if (card.imageBitmap?.key === key && card.imageBitmap.data === object.image.data) return card.imageBitmap.url;
   const { width, height } = object.image;
   const values = imageValues(card, object);
   const lut = object.lut.map(color => [1, 3, 5].map(offset => parseInt(color.slice(offset, offset + 2), 16)));
@@ -350,7 +350,7 @@ function imageDataUrl(card, object) {
     }
   }
   context.putImageData(pixels, 0, 0);
-  card.imageBitmap = { key, url: canvas.toDataURL('image/png') };
+  card.imageBitmap = { key, data: object.image.data, url: canvas.toDataURL('image/png') };
   return card.imageBitmap.url;
 }
 

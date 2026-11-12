@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from base64 import b64encode
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -210,6 +210,7 @@ class NotebookBridge(QObject):
         else:
             raise ValueError("Unknown notebook image control.")
         state.validate()
+        replace(plot, state=state).intensity_limits()
         return state
 
     @pyqtSlot(str, str, str)
@@ -235,6 +236,8 @@ class NotebookBridge(QObject):
                 plot.state = state
         except (KeyError, TypeError, ValueError) as exc:
             self.pane._error(str(exc))
+            if key in self.pane.document.objects:
+                self.pane.update_plot_state(key)
             return
         self.pane.status.hide()
         self.pane.set_dirty()

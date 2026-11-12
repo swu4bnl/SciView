@@ -199,8 +199,73 @@ def test_reduction_and_transform_results_become_reusable_notebook_objects(tmp_pa
     np.testing.assert_array_equal(curve_figure.curves[0].y, result.y)
 
 
-def test_processing_tabs_insert_results_into_notebook_and_reopen(tmp_path, monkeypatch):
-    from PyQt5.QtWidgets import QApplication, QMessageBox
+@pytest.mark.parametrize("image", [
+    np.zeros((2, 3)),
+    -np.ones((2, 3)),
+    np.array([[0.0, -1.0, np.nan], [0.0, -2.0, -np.inf]]),
+])
+def test_notebook_log_scale_rejects_images_without_positive_intensities(image):
+    plot = ImageFigure(
+        title="Nonpositive map", sources=[], image=image, provenance={}, state=ImageState(),
+    )
+    plot.validate()
+    assert figure_preview_png(plot)
+    plot.state.scale = "log"
+    with pytest.raises(ValueError, match="requires positive"):
+        plot.validate()
+    with pytest.raises(ValueError, match="requires positive"):
+        plot.intensity_limits()
+
+
+@pytest.fixture(scope="module")
+def notebook_app():
+    from PyQt5.QtWidgets import QApplication
+
+    return QApplication.instance() or QApplication([])
+
+
+def test_notebook_image_controls_reject_invalid_log_scale_without_losing_state(notebook_app):
+    from sciview.interfaces.stable_qt.widgets.notebook_editor import NotebookEditor
+    from test_image_playback import read_editor_value, wait_until
+
+    errors = []
+    editor = NotebookEditor(SimpleNamespace(report_error=errors.append))
+    editor.resize(1100, 800)
+    editor.show()
+    plot = ImageFigure(
+        title="Zero map", sources=[], image=np.zeros((3, 4)), provenance={}, state=ImageState(),
+    )
+    try:
+        wait_until(lambda: editor.editor_ready)
+        editor.add_object(plot)
+        wait_until(lambda: read_editor_value(editor.page, "document.querySelector('.plot-card') !== null"))
+        editor.page.runJavaScript("document.querySelector('[data-plot-action=\"settings\"]').click()")
+        wait_until(lambda: read_editor_value(
+            editor.page, "document.querySelector('#figure-settings select') !== null",
+        ))
+        editor.page.runJavaScript(
+            "(() => { const scale = document.querySelector("
+            "'#figure-settings select[aria-label=\"Intensity scale\"]'); "
+            "scale.value = 'log'; scale.dispatchEvent(new Event('change', {bubbles: true})); })()",
+        )
+        wait_until(lambda: bool(errors))
+        wait_until(lambda: read_editor_value(
+            editor.page, "document.querySelector('select[aria-label=\"Intensity scale\"]').value",
+        ) == "linear")
+        assert plot.state.scale == "linear"
+        assert len(errors) == 1
+        assert "requires positive" in errors[0]
+        assert editor.status.isVisible()
+        editor.bridge.setPlotControl(plot.id, "colormap", "plasma")
+        assert plot.state.colormap == "plasma"
+        assert not editor.status.isVisible()
+        assert len(errors) == 1
+    finally:
+        editor.close()
+
+
+def test_processing_tabs_insert_results_into_notebook_and_reopen(tmp_path, monkeypatch, notebook_app):
+    from PyQt5.QtWidgets import QMessageBox
 
     from main import SciAnaApp
     from sciview.interfaces.theme.app_style import AppStyle
@@ -211,7 +276,7 @@ def test_processing_tabs_insert_results_into_notebook_and_reopen(tmp_path, monke
     from tabs.transform_tab import TransformTab
     from test_image_playback import read_editor_value, wait_until
 
-    app = QApplication.instance() or QApplication([])
+    app = notebook_app
     AppStyle.apply_bundled_fonts(app)
     monkeypatch.setattr(SciAnaApp, "_setup_resource_monitor", lambda self: None)
     monkeypatch.setattr(SciAnaApp, "save_session_state", lambda self: None)
@@ -351,6 +416,11 @@ def test_processing_tabs_insert_results_into_notebook_and_reopen(tmp_path, monke
             transform_result.x_label, transform_result.y_label, dict(transform_result.metadata),
         )
         monkeypatch.setattr(TransformBackend, "run", lambda _backend, request: updated_result)
+        image_query = (
+            f"document.querySelector('.plot-card[data-object-id=\"{image_key}\"] "
+            "image[data-image-map]').getAttribute('href')"
+        )
+        previous_bitmap = read_editor_value(results.notebook.page, image_query)
         results.notebook.bridge.updateFigure(image_key)
         assert image_key not in results.notebook.stale
         assert results.notebook.document.objects[image_key] is image_object
@@ -358,6 +428,7 @@ def test_processing_tabs_insert_results_into_notebook_and_reopen(tmp_path, monke
         assert image_object.title == "Q Image 2"
         assert image_object.provenance["mask"]["excluded_pixels"] == 0
         assert image_object.state.vmin == 10.0
+        wait_until(lambda: read_editor_value(results.notebook.page, image_query) != previous_bitmap)
 
         bridge = results.notebook.bridge
         bridge.setPlotControl(image_key, "colormap", "plasma")

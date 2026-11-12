@@ -1364,6 +1364,9 @@ class SciAnaApp(QMainWindow):
 
 def create_application():
     """Create and configure the main application"""
+    # Avoid the Windows desktop OpenGL driver path used during WebEngine repaints.
+    if sys.platform == "win32":
+        os.environ.setdefault("QT_OPENGL", "angle")
     print("[SciView] Starting up...")
     project_root = Path(__file__).resolve().parent
     with (project_root / "pyproject.toml").open("rb") as handle:

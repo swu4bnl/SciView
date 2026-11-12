@@ -225,6 +225,10 @@ its own presentation state and validation. Two kinds exist:
   label/unit editing behave as for curves; the figure settings panel replaces
   the Curves/Waterfall sections with an Image section.
 
+Log intensity requires positive image values. A rejected display edit reports
+the reason and keeps the previous settings. Recomputing a map refreshes its
+pixels even when its dimensions and intensity limits are unchanged.
+
 Reduction and Transform expose **Add to Notebook**. `processing.notebook_results`
 turns the previewed request/result pair into a figure using the same
 `processing.provenance` snapshot (detector geometry, mask hash, parameters,
