@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pyqtgraph as pg
 import pyqtgraph.exporters
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QIcon
-from PyQt5.QtWidgets import QLabel, QToolButton, QVBoxLayout, QWidget
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtWidgets import QLabel, QToolButton, QVBoxLayout, QWidget
 
 from sciview.interfaces.text import tr
 from sciview.interfaces.theme.app_style import AppStyle
@@ -33,7 +33,7 @@ def make_tool_button(action: ViewerToolbarAction, icon: QIcon) -> QToolButton:
     AppStyle.apply_widget_style(button, "compact_button")
     if icon.isNull():
         button.setText(tr(action.label_id))
-        button.setFont(AppStyle.make_font("h3", weight=QFont.Bold))
+        button.setFont(AppStyle.make_font("h3", weight=QFont.Weight.Bold))
     else:
         button.setIcon(icon)
         button.setIconSize(AppStyle.viewer_toolbar_icon_size())
@@ -46,9 +46,9 @@ def make_labeled_tool_cell(label_text: str, button: QToolButton) -> QWidget:
     layout = QVBoxLayout(cell)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(AppStyle.LAYOUT["tool_label_spacing"])
-    layout.addWidget(button, 0, Qt.AlignHCenter)
+    layout.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
     label = QLabel(label_text)
-    label.setAlignment(Qt.AlignHCenter)
+    label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
     AppStyle.set_font_role(label, "toolbar_text")
-    layout.addWidget(label, 0, Qt.AlignHCenter)
+    layout.addWidget(label, 0, Qt.AlignmentFlag.AlignHCenter)
     return cell

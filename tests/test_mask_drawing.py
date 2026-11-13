@@ -7,9 +7,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import numpy as np
 import pytest
 from matplotlib.path import Path
-from PyQt5.QtCore import QEvent, QPointF, Qt
-from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtCore import QEvent, QPointF, Qt
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
 
 from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
     BrushDrawingTool, MaskDrawingSession, RectangleDrawingTool, WatershedFillTool,
@@ -25,7 +25,7 @@ from test_image_viewer import DummyParentApp
 
 @pytest.fixture(scope="module")
 def qapp():
-    return QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication(["sciview-tests"])
 
 
 @pytest.fixture
@@ -125,13 +125,13 @@ def test_clear_layers_undo_restores_order_and_combined_mask(qapp):
         assert tab.combined_mask is None
         viewport = tab.image_viewer._graphics.viewport()
         viewport.setFocus()
-        QTest.keyClick(viewport, Qt.Key_Z, Qt.ControlModifier)
+        QTest.keyClick(viewport, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
         assert tab.mask_layers == [first, second]
         np.testing.assert_array_equal(tab.combined_mask, expected_mask)
     finally:
         tab.close()
         tab.deleteLater()
-        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def test_mask_layer_composition_replaces_only_visible_target():
@@ -146,7 +146,7 @@ def test_mask_layer_composition_replaces_only_visible_target():
 
 
 def pointer(x, y, inside_image=True, inside_canvas=True):
-    return ImagePointerEvent(x, y, Qt.LeftButton, Qt.NoModifier, inside_image, inside_canvas)
+    return ImagePointerEvent(x, y, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, inside_image, inside_canvas)
 
 
 def drawing_session(tool, layer, viewer):
@@ -254,7 +254,7 @@ def test_mask_brush_keeps_alt_effect_per_segment_and_commits_release_endpoint(vi
 def test_release_outside_canvas_commits_last_accepted_point_and_ignores_right_click(viewer):
     layer = MaskLayer(np.zeros((16, 16), dtype=bool))
     session = drawing_session(RectangleDrawingTool(), layer, viewer)
-    right_click = ImagePointerEvent(1, 1, Qt.RightButton, Qt.NoModifier, True, True)
+    right_click = ImagePointerEvent(1, 1, Qt.MouseButton.RightButton, Qt.KeyboardModifier.NoModifier, True, True)
     session.handle_press(right_click)
     session.handle_press(pointer(2, 3))
     session.handle_motion(pointer(6, 7))
@@ -350,11 +350,11 @@ def test_real_mask_pointer_workflow_commits_or_cancels_safely(qapp):
             tab.undo_stack.clear()
             tab.tool_buttons["Rectangle"].click()
             qapp.processEvents()
-            QTest.mousePress(viewport, Qt.LeftButton, pos=position(3, 4))
+            QTest.mousePress(viewport, Qt.MouseButton.LeftButton, pos=position(3, 4))
             QTest.mouseMove(viewport, position(9, 10))
             assert not layer.data.any(), cancel
             if cancel == "escape":
-                QTest.keyClick(viewport, Qt.Key_Escape)
+                QTest.keyClick(viewport, Qt.Key.Key_Escape)
             elif cancel == "image":
                 tab.image_data = np.full((20, 30), 2.0)
                 tab.update_plot()
@@ -362,10 +362,10 @@ def test_real_mask_pointer_workflow_commits_or_cancels_safely(qapp):
                 tab._set_layer_visibility(0, False)
             elif cancel == "tool":
                 tab.tool_buttons["Brush"].click()
-            QTest.mouseRelease(viewport, Qt.LeftButton, pos=position(9, 10))
+            QTest.mouseRelease(viewport, Qt.MouseButton.LeftButton, pos=position(9, 10))
             assert bool(layer.data.any()) == (cancel is None), cancel
             assert tab.undo_stack.count() == (1 if cancel is None else 0), cancel
     finally:
         tab.close()
         tab.deleteLater()
-        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)

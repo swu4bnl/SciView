@@ -219,9 +219,9 @@ def test_notebook_log_scale_rejects_images_without_positive_intensities(image):
 
 @pytest.fixture(scope="module")
 def notebook_app():
-    from PyQt5.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication
 
-    return QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication(["sciview-tests"])
 
 
 def test_notebook_image_controls_reject_invalid_log_scale_without_losing_state(notebook_app):
@@ -265,7 +265,7 @@ def test_notebook_image_controls_reject_invalid_log_scale_without_losing_state(n
 
 
 def test_processing_tabs_insert_results_into_notebook_and_reopen(tmp_path, monkeypatch, notebook_app):
-    from PyQt5.QtWidgets import QMessageBox
+    from PyQt6.QtWidgets import QMessageBox
 
     from main import SciAnaApp
     from sciview.interfaces.theme.app_style import AppStyle
@@ -282,7 +282,7 @@ def test_processing_tabs_insert_results_into_notebook_and_reopen(tmp_path, monke
     monkeypatch.setattr(SciAnaApp, "save_session_state", lambda self: None)
     monkeypatch.setattr(session_cache, "clear_scratch", lambda: None)
     # A modal prompt would block a failing test forever; the assertions check dirtiness explicitly.
-    monkeypatch.setattr(QMessageBox, "warning", lambda *_args, **_kwargs: QMessageBox.Discard)
+    monkeypatch.setattr(QMessageBox, "warning", lambda *_args, **_kwargs: QMessageBox.StandardButton.Discard)
     window = SciAnaApp()
     reduction = ReductionTab(window)
     reduction.auto_update_check.setChecked(False)

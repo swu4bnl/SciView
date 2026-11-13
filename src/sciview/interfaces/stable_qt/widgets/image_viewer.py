@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PyQt5.QtCore import QEvent, QPointF, QSize, Qt, pyqtSignal
-from PyQt5.QtGui import QFontMetrics, QIcon
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QEvent, QPointF, QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QFontMetrics, QIcon
+from PyQt6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QGridLayout, QLabel, QLayout,
     QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
@@ -160,7 +160,7 @@ class ImageViewer(QWidget):
         self._save_button = self._toolbar_buttons["save"]
         self._palette_info_label = QLabel("")
         self._palette_info_label.setVisible(False)
-        self._palette_info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._palette_info_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self._palette_info_label.setStyleSheet("")
         self._pan_button.setCheckable(True)
         self._zoom_button.setCheckable(True)
@@ -178,9 +178,9 @@ class ImageViewer(QWidget):
 
         self._toolbar = QWidget()
         self._toolbar.setObjectName("imageViewerToolbar")
-        self._toolbar.setAttribute(Qt.WA_StyledBackground, True)
+        self._toolbar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._toolbar_layout = QGridLayout(self._toolbar)
-        self._toolbar_layout.setSizeConstraint(QLayout.SetMinAndMaxSize)
+        self._toolbar_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
         self._toolbar_layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
         self._toolbar_layout.setHorizontalSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         self._overlay_tool_cells: list[QWidget] = []
@@ -194,7 +194,7 @@ class ImageViewer(QWidget):
             for key in specification.actions:
                 action = toolbar_actions[key]
                 cell = make_labeled_tool_cell(tr(action.label_id), self._toolbar_buttons[key])
-                self._toolbar_layout.addWidget(cell, 0, column, Qt.AlignHCenter)
+                self._toolbar_layout.addWidget(cell, 0, column, Qt.AlignmentFlag.AlignHCenter)
                 group_cells.append(cell)
                 column += 1
             if specification.key == "navigation":
@@ -217,11 +217,11 @@ class ImageViewer(QWidget):
         self._toolbar_layout.addWidget(self._palette_info_label, 0, column)
 
         self._toolbar_scroll = _ToolbarScrollArea()
-        self._toolbar_scroll.setFrameShape(QFrame.NoFrame)
+        self._toolbar_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._toolbar_scroll.setWidgetResizable(True)
-        self._toolbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self._toolbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._toolbar_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._toolbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._toolbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._toolbar_scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._toolbar_scroll.setWidget(self._toolbar)
 
         layout = QVBoxLayout(self)
@@ -367,7 +367,7 @@ class ImageViewer(QWidget):
         title_width = max(60, self.width() - 120)
         metrics = QFontMetrics(self.font())
         display_title = "<br>".join(
-            html.escape(metrics.elidedText(line, Qt.ElideMiddle, title_width))
+            html.escape(metrics.elidedText(line, Qt.TextElideMode.ElideMiddle, title_width))
             for line in title.splitlines()
         )
         self._plot_item.setTitle(
@@ -489,7 +489,7 @@ class ImageViewer(QWidget):
     def set_annotation_tool(self, button: QToolButton, tools: QWidget) -> None:
         """Place Mark beside navigation and its contextual strip above the toolbar."""
         cell = make_labeled_tool_cell(tr("annotations.toolbar"), button)
-        self._toolbar_layout.addWidget(cell, 0, self._annotation_tool_column, Qt.AlignHCenter)
+        self._toolbar_layout.addWidget(cell, 0, self._annotation_tool_column, Qt.AlignmentFlag.AlignHCenter)
         self.layout().insertWidget(self.layout().indexOf(self._toolbar_scroll), tools)
 
     def image_to_widget(self, point: QPointF) -> QPointF:
@@ -523,7 +523,7 @@ class ImageViewer(QWidget):
         if self._auto_levels_handler is not None:
             self._auto_levels_handler()
             return
-        if QApplication.keyboardModifiers() & Qt.AltModifier:
+        if QApplication.keyboardModifiers() & Qt.KeyboardModifier.AltModifier:
             self.apply_next_artist_palette()
         self.auto_levels()
 
@@ -806,37 +806,37 @@ class ImageViewer(QWidget):
     def eventFilter(self, watched: object, event: QEvent) -> bool:
         if (
             watched is self._graphics.viewport()
-            and event.type() == QEvent.Wheel
-            and event.modifiers() & Qt.ShiftModifier
+            and event.type() == QEvent.Type.Wheel
+            and event.modifiers() & Qt.KeyboardModifier.ShiftModifier
         ):
             pointer = self._pointer_event_from_viewport_pos(
-                event.pos(), Qt.NoButton, event.modifiers()
+                event.position().toPoint(), Qt.MouseButton.NoButton, event.modifiers()
             )
             if pointer.inside_image:
                 self.comparison_opacity_adjusted.emit(event.angleDelta().y())
                 event.accept()
                 return True
         if watched is self._graphics.viewport() and event.type() in {
-            QEvent.MouseButtonPress,
-            QEvent.MouseButtonDblClick,
-            QEvent.MouseMove,
-            QEvent.MouseButtonRelease,
+            QEvent.Type.MouseButtonPress,
+            QEvent.Type.MouseButtonDblClick,
+            QEvent.Type.MouseMove,
+            QEvent.Type.MouseButtonRelease,
         }:
-            pointer_event = self._pointer_event_from_viewport_pos(event.pos(), event.button(), event.modifiers())
-            if event.type() == QEvent.MouseButtonDblClick:
+            pointer_event = self._pointer_event_from_viewport_pos(event.position().toPoint(), event.button(), event.modifiers())
+            if event.type() == QEvent.Type.MouseButtonDblClick:
                 self.mouse_double_clicked.emit(pointer_event)
-            elif event.type() == QEvent.MouseButtonPress:
+            elif event.type() == QEvent.Type.MouseButtonPress:
                 if self._interaction_locked:
                     self._capture_pointer()
                 self.mouse_pressed.emit(pointer_event)
-            elif event.type() == QEvent.MouseMove:
+            elif event.type() == QEvent.Type.MouseMove:
                 self.mouse_moved.emit(pointer_event)
-            elif event.type() == QEvent.MouseButtonRelease:
+            elif event.type() == QEvent.Type.MouseButtonRelease:
                 self.mouse_released.emit(pointer_event)
                 self._release_pointer_capture()
             if self._interaction_locked:
                 return True
-        if watched is self._graphics.viewport() and event.type() == QEvent.Wheel and self._interaction_locked:
+        if watched is self._graphics.viewport() and event.type() == QEvent.Type.Wheel and self._interaction_locked:
             return True
         return super().eventFilter(watched, event)
 

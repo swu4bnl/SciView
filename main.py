@@ -1,7 +1,7 @@
 """
 SciAnalysis GUI - Main Application
 
-A modular PyQt5-based GUI for X-ray scattering data analysis and calibration.
+A modular PyQt6-based GUI for X-ray scattering data analysis and calibration.
 Designed for easy adaptation to different beamlines and analysis workflows.
 """
 
@@ -46,14 +46,14 @@ app_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, app_dir)
 sys.path.insert(0, os.path.join(app_dir, 'src'))
 
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QApplication, QHBoxLayout, QMainWindow, QMessageBox, QPushButton, QTabWidget, QLabel,
-    QWidget, QAction, QMenu, QTabBar, QToolButton
+    QWidget, QMenu, QTabBar, QToolButton,
 )
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt, QEvent, QThread, QTimer
-from PyQt5 import QtWebEngineWidgets  # Initialize WebEngine before QApplication.
-from PyQt5 import sip
+from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtCore import Qt, QEvent, QThread, QTimer
+from PyQt6 import QtWebEngineWidgets  # Initialize WebEngine before QApplication.
+from PyQt6 import sip
 
 # Import configuration from package modules.
 from sciview.interfaces.text import tr
@@ -74,7 +74,7 @@ from sciview.session import session_cache
 
 def _build_placeholder_tab(message):
     """Create a small placeholder widget when a tab module is unavailable."""
-    from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+    from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
 
     placeholder = QWidget()
     layout = QVBoxLayout(placeholder)
@@ -219,7 +219,7 @@ class SciAnaApp(QMainWindow):
         corner_layout.addStretch()
 
         # Use QTabWidget's corner widget feature to place buttons on same line as tabs
-        self.tab_widget.setCornerWidget(corner_widget, Qt.TopRightCorner)
+        self.tab_widget.setCornerWidget(corner_widget, Qt.Corner.TopRightCorner)
 
         self._update_process = None
         self._update_timer = QTimer(self)
@@ -240,8 +240,8 @@ class SciAnaApp(QMainWindow):
         self._setup_resource_monitor()
         
         # Setup keyboard shortcut for refresh
-        from PyQt5.QtWidgets import QShortcut
-        from PyQt5.QtGui import QKeySequence
+        from PyQt6.QtGui import QShortcut
+        from PyQt6.QtGui import QKeySequence
         self.refresh_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         self.refresh_shortcut.activated.connect(self._refresh_current_tab)
         self.theme_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
@@ -261,7 +261,7 @@ class SciAnaApp(QMainWindow):
         self._style_hot_reloader = None
         self._style_inspector = None
         self._inspector_shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
-        self._inspector_shortcut.setContext(Qt.ApplicationShortcut)
+        self._inspector_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
         self._inspector_shortcut.activated.connect(self._show_style_inspector)
         if os.environ.get("DEV_TOOLS") == "1":
             self._start_dev_tools()
@@ -435,12 +435,12 @@ class SciAnaApp(QMainWindow):
         # Clicking the More tab opens its menu instead of selecting an empty page.
         if (
             watched is self.tab_widget.tabBar()
-            and event.type() in (QEvent.MouseButtonPress, QEvent.MouseButtonDblClick)
-            and event.button() == Qt.LeftButton
+            and event.type() in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonDblClick)
+            and event.button() == Qt.MouseButton.LeftButton
             and self._more_tab_index() >= 0
             and watched.tabAt(event.pos()) == self._more_tab_index()
         ):
-            if event.type() == QEvent.MouseButtonPress:
+            if event.type() == QEvent.Type.MouseButtonPress:
                 self._show_more_tabs_menu()
             return True
         return super().eventFilter(watched, event)
@@ -454,7 +454,7 @@ class SciAnaApp(QMainWindow):
     def _show_more_tabs_menu(self):
         tab_bar = self.tab_widget.tabBar()
         rect = tab_bar.tabRect(self._more_tab_index())
-        self.more_tabs_menu.exec_(tab_bar.mapToGlobal(rect.bottomLeft()))
+        self.more_tabs_menu.exec(tab_bar.mapToGlobal(rect.bottomLeft()))
 
     def _install_hide_tab_button(self, index: int, key: str) -> None:
         button = QToolButton(self.tab_widget.tabBar())
@@ -464,7 +464,7 @@ class SciAnaApp(QMainWindow):
         button.setToolTip(tr('shell.hide_tab'))
         button.setAccessibleName(tr('shell.hide_tab'))
         button.clicked.connect(lambda _checked=False, k=key: self.hide_optional_tab(k))
-        self.tab_widget.tabBar().setTabButton(index, QTabBar.RightSide, button)
+        self.tab_widget.tabBar().setTabButton(index, QTabBar.ButtonPosition.RightSide, button)
         # QTabBar deletes a tab's buttons when the tab is removed (e.g. Ctrl+R rebuild).
         self._hide_tab_buttons = [b for b in self._hide_tab_buttons if not sip.isdeleted(b)]
         self._hide_tab_buttons.append(button)
@@ -562,10 +562,10 @@ class SciAnaApp(QMainWindow):
             self,
             tr('shell.clear_session_cache'),
             tr('shell.this_deletes_the_saved_last_session'),
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        if response != QMessageBox.Yes:
+        if response != QMessageBox.StandardButton.Yes:
             return
         session_cache.clear_session()
         self.show_status(tr('shell.session_cache_cleared'))
@@ -1175,10 +1175,10 @@ class SciAnaApp(QMainWindow):
             self,
             title,
             confirm_message,
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        if response != QMessageBox.Yes:
+        if response != QMessageBox.StandardButton.Yes:
             self.show_status(tr('shell.title_canceled', title=title))
             return
 
@@ -1364,9 +1364,6 @@ class SciAnaApp(QMainWindow):
 
 def create_application():
     """Create and configure the main application"""
-    # Avoid the Windows desktop OpenGL driver path used during WebEngine repaints.
-    if sys.platform == "win32":
-        os.environ.setdefault("QT_OPENGL", "angle")
     print("[SciView] Starting up...")
     project_root = Path(__file__).resolve().parent
     with (project_root / "pyproject.toml").open("rb") as handle:
@@ -1545,7 +1542,7 @@ def main():
         print(f"[SciView] Ready  |  Beamline: {BEAMLINE_NAME}  |  SciAnalysis: {sa_status}")
         print("[SciView] *** Do not close this window — it keeps the app running ***")
         
-        sys.exit(app.exec_())
+        sys.exit(app.exec())
         
     except Exception as e:
         print(f"[SciView] Fatal error starting application: {e}")

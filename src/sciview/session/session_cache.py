@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
-from PyQt5.QtCore import QCoreApplication, QStandardPaths
-from PyQt5.QtWidgets import QFileDialog
+from PyQt6.QtCore import QCoreApplication, QStandardPaths
+from PyQt6.QtWidgets import QFileDialog
 
 _SESSION_FILENAME = "session_state.json"
 _DIALOG_FILENAME = "dialog_state.json"
@@ -42,12 +42,12 @@ def legacy_qt_dir(location: QStandardPaths.StandardLocation) -> Path | None:
 
 def session_dir() -> Path:
     """Directory holding this user's session cache, created if missing."""
-    base = QStandardPaths.writableLocation(QStandardPaths.GenericDataLocation)
+    base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericDataLocation)
     if not base:
         raise RuntimeError("No per-user data directory available")
     directory = Path(base) / "sciview" / "session"
     if not directory.exists():
-        legacy_base = legacy_qt_dir(QStandardPaths.AppDataLocation)
+        legacy_base = legacy_qt_dir(QStandardPaths.StandardLocation.AppDataLocation)
         directory.parent.mkdir(parents=True, exist_ok=True)
         if legacy_base is not None:
             legacy_dir = legacy_base / "session"
@@ -64,8 +64,8 @@ def _session_file() -> Path:
 def _dialog_file() -> Path:
     target = session_dir() / _DIALOG_FILENAME
     if not target.exists():
-        current = QStandardPaths.writableLocation(QStandardPaths.AppConfigLocation)
-        old_locations = (Path(current) if current else None, legacy_qt_dir(QStandardPaths.AppConfigLocation))
+        current = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppConfigLocation)
+        old_locations = (Path(current) if current else None, legacy_qt_dir(QStandardPaths.StandardLocation.AppConfigLocation))
         for directory in old_locations:
             if directory is None:
                 continue
@@ -122,21 +122,21 @@ def choose_path(parent, title: str, *, mode: str = "open", file_filter: str = ""
 
     dialog = QFileDialog(parent, title, start_dir, file_filter)
     if mode == "save":
-        dialog.setAcceptMode(QFileDialog.AcceptSave)
-        dialog.setFileMode(QFileDialog.AnyFile)
+        dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        dialog.setFileMode(QFileDialog.FileMode.AnyFile)
         if default_name:
             dialog.selectFile(default_name)
     elif mode == "directory":
-        dialog.setFileMode(QFileDialog.Directory)
-        dialog.setOption(QFileDialog.ShowDirsOnly, True)
+        dialog.setFileMode(QFileDialog.FileMode.Directory)
+        dialog.setOption(QFileDialog.Option.ShowDirsOnly, True)
     elif mode == "open_files":
-        dialog.setFileMode(QFileDialog.ExistingFiles)
+        dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
     elif mode == "open":
-        dialog.setFileMode(QFileDialog.ExistingFile)
+        dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
     else:
         raise ValueError(f"Unknown dialog mode: {mode}")
 
-    if not dialog.exec_():
+    if not dialog.exec():
         return ([] if mode == "open_files" else ""), ""
     paths = dialog.selectedFiles()
     if not paths:

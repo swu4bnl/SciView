@@ -5,24 +5,24 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 import math
 
-from PyQt5.QtCore import QEvent, QObject, QPointF, QRectF, Qt
-from PyQt5.QtGui import QKeySequence, QPainterPath, QPainterPathStroker
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QEvent, QObject, QPointF, QRectF, Qt
+from PyQt6.QtGui import QKeySequence, QPainterPath, QPainterPathStroker
+from PyQt6.QtWidgets import (
     QAbstractSpinBox, QApplication, QComboBox, QLineEdit,
     QPlainTextEdit, QTextEdit, QWidget,
 )
 
 
 TOOL_KEYS = {
-    "brush": Qt.Key_B, "eraser": Qt.Key_E, "line": Qt.Key_L,
-    "rectangle": Qt.Key_R, "circle": Qt.Key_C, "polygon": Qt.Key_P,
-    "smart_fill": Qt.Key_F, "text": Qt.Key_T,
+    "brush": Qt.Key.Key_B, "eraser": Qt.Key.Key_E, "line": Qt.Key.Key_L,
+    "rectangle": Qt.Key.Key_R, "circle": Qt.Key.Key_C, "polygon": Qt.Key.Key_P,
+    "smart_fill": Qt.Key.Key_F, "text": Qt.Key.Key_T,
 }
 
 
 def tool_key_label(tool: str) -> str:
     """Return the native display spelling from the same binding used for dispatch."""
-    return QKeySequence(TOOL_KEYS[tool]).toString(QKeySequence.NativeText)
+    return QKeySequence(TOOL_KEYS[tool]).toString(QKeySequence.SequenceFormat.NativeText)
 
 
 class DrawingGesture:
@@ -127,8 +127,8 @@ class DrawingGesture:
                 elif filled:
                     stroker = QPainterPathStroker()
                     stroker.setWidth(width)
-                    stroker.setCapStyle(Qt.RoundCap)
-                    stroker.setJoinStyle(Qt.RoundJoin)
+                    stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
+                    stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
                     path = stroker.createStroke(path)
         return path
 
@@ -167,7 +167,7 @@ class DrawingCommands(QObject):
         return False
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if event.type() not in (QEvent.ShortcutOverride, QEvent.KeyPress):
+        if event.type() not in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress):
             return False
         focus = QApplication.focusWidget()
         if (focus is None or not self.owner.isVisible()
@@ -175,22 +175,22 @@ class DrawingCommands(QObject):
                 or self._editing(focus) or not self.enabled()):
             return False
         callback = None
-        if event.matches(QKeySequence.Undo):
+        if event.matches(QKeySequence.StandardKey.Undo):
             callback = self.undo
-        elif event.matches(QKeySequence.Redo) or (
-            event.key() == Qt.Key_Z and event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier)
+        elif event.matches(QKeySequence.StandardKey.Redo) or (
+            event.key() == Qt.Key.Key_Z and event.modifiers() == (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
         ):
             callback = self.redo
-        elif event.modifiers() in (Qt.NoModifier, Qt.KeypadModifier):
-            if event.key() == Qt.Key_Escape:
+        elif event.modifiers() in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.KeypadModifier):
+            if event.key() == Qt.Key.Key_Escape:
                 callback = self.cancel
-            elif event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 callback = self.finish
             else:
                 callback = self._tools.get(event.key())
         if callback is None:
             return False
         event.accept()
-        if event.type() == QEvent.KeyPress and not event.isAutoRepeat():
+        if event.type() == QEvent.Type.KeyPress and not event.isAutoRepeat():
             callback()
         return True

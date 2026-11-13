@@ -12,7 +12,8 @@ REQUIRED_DISTRIBUTIONS = (
     "bluesky-tiled-plugins",
     "numpy",
     "Pillow",
-    "PyQt5",
+    "PyQt6",
+    "PyQt6-WebEngine",
     "scitoolsscianalysis",
     "tiled",
 )
@@ -22,7 +23,8 @@ REQUIRED_MODULES = (
     "main",
     "numpy",
     "PIL",
-    "PyQt5.QtCore",
+    "PyQt6.QtCore",
+    "PyQt6.QtWebEngineCore",
     "sciview.launchers",
     "tiled.client",
 )

@@ -1,4 +1,4 @@
-﻿"""Batch processing tab - minimal working version."""
+"""Batch processing tab - minimal working version."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QFormLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
     QMessageBox, QProgressBar, QPushButton, QSpinBox, QSplitter, QTableWidget,
@@ -177,9 +177,9 @@ class BatchTab(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        left = QSplitter(Qt.Vertical)
+        left = QSplitter(Qt.Orientation.Vertical)
         left.addWidget(self._build_file_panel())
         left.addWidget(self._build_log_panel())
         setup_splitter_layout(left, [1, 1])
@@ -220,7 +220,7 @@ class BatchTab(QWidget):
         form.addWidget(self._file_count_label)
 
         self._file_list_widget = QListWidget()
-        self._file_list_widget.setSelectionMode(QAbstractItemView.NoSelection)
+        self._file_list_widget.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self._file_list_widget.setUniformItemSizes(True)
         self._file_list_widget.setMinimumHeight(80)
         form.addWidget(self._file_list_widget, 1)
@@ -260,8 +260,8 @@ class BatchTab(QWidget):
              tr("batch.table.time"), tr("batch.table.message")]
         )
         self.results_table.horizontalHeader().setStretchLastSection(True)
-        self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.results_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.results_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.results_table.setMinimumHeight(AppStyle.LAYOUT['record_list_min_height'])
         lay.addWidget(self.results_table, 1)
         return panel
@@ -306,7 +306,7 @@ class BatchTab(QWidget):
         pv.addLayout(tb)
 
         self.protocol_list = QListWidget()
-        self.protocol_list.setDragDropMode(QAbstractItemView.InternalMove)
+        self.protocol_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.protocol_list.itemSelectionChanged.connect(self._on_protocol_selected)
         self.protocol_list.model().rowsMoved.connect(self._sync_protocol_order)
         pv.addWidget(self.protocol_list)
@@ -387,7 +387,7 @@ class BatchTab(QWidget):
     def _add_protocol(self, proto: BatchProtocol, select: bool = True) -> None:
         self._protocols.append(proto)
         item = QListWidgetItem(self._proto_label(proto))
-        item.setCheckState(Qt.Checked)
+        item.setCheckState(Qt.CheckState.Checked)
         self.protocol_list.addItem(item)
         if select:
             new_row = len(self._protocols) - 1
@@ -440,9 +440,9 @@ class BatchTab(QWidget):
         reply = QMessageBox.question(
             self, tr("batch.protocol_queue.clear.title"),
             tr("batch.protocol_queue.clear.confirm"),
-            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
         self._selected_proto_row = -1
         self.protocol_list.clear()
@@ -647,7 +647,7 @@ class BatchTab(QWidget):
         for i, proto in enumerate(self._protocols):
             item = self.protocol_list.item(i)
             if item is not None:
-                proto.enabled = item.checkState() == Qt.Checked
+                proto.enabled = item.checkState() == Qt.CheckState.Checked
 
         active = [p for p in self._protocols if p.enabled]
         if not active:

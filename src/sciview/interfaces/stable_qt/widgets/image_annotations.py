@@ -6,13 +6,11 @@ import math
 from pathlib import Path
 
 import pyqtgraph as pg
-from PyQt5.QtCore import QEvent, QObject, QPointF, Qt
-from PyQt5.QtGui import QColor, QIcon
-from PyQt5.QtWidgets import (
-    QAction, QActionGroup, QColorDialog, QFrame, QGraphicsItem, QHBoxLayout,
-    QGraphicsPathItem, QGraphicsRectItem, QLabel, QLayout, QLineEdit,
-    QScrollArea, QSizePolicy, QSpinBox, QToolButton,
-    QUndoCommand, QUndoStack, QWidget,
+from PyQt6.QtCore import QEvent, QObject, QPointF, Qt
+from PyQt6.QtGui import QAction, QActionGroup, QColor, QIcon, QUndoCommand, QUndoStack
+from PyQt6.QtWidgets import (
+    QColorDialog, QFrame, QGraphicsItem, QHBoxLayout, QGraphicsPathItem, QGraphicsRectItem,
+    QLabel, QLayout, QLineEdit, QScrollArea, QSizePolicy, QSpinBox, QToolButton, QWidget,
 )
 
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImagePointerEvent, ImageViewer
@@ -59,8 +57,8 @@ class ImageAnnotations(QObject):
         self.layer = QGraphicsRectItem()
         self.layer.setPen(pg.mkPen(None))
         self.layer.setBrush(pg.mkBrush(None))
-        self.layer.setFlag(QGraphicsItem.ItemClipsChildrenToShape, True)
-        self.layer.setAcceptedMouseButtons(Qt.NoButton)
+        self.layer.setFlag(QGraphicsItem.GraphicsItemFlag.ItemClipsChildrenToShape, True)
+        self.layer.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         self.layer.setZValue(30)
         self.gesture = DrawingGesture()
         self._preview: QGraphicsPathItem | None = None
@@ -75,18 +73,18 @@ class ImageAnnotations(QObject):
         self.button.setProperty("sciview_viewer_tool_button", True)
         self.tools = QScrollArea()
         self.tools.setAccessibleName(tr("annotations.tools"))
-        self.tools.setFrameShape(QFrame.NoFrame)
+        self.tools.setFrameShape(QFrame.Shape.NoFrame)
         self.tools.setWidgetResizable(True)
-        self.tools.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.tools.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.tools.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.tools.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.tools.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.tools.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.tools.setVisible(False)
         self._strip = QWidget()
-        self._strip.setAttribute(Qt.WA_StyledBackground, True)
+        self._strip.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         strip_layout = QHBoxLayout(self._strip)
         strip_layout.setContentsMargins(*([AppStyle.LAYOUT["panel_margin"]] * 4))
         strip_layout.setSpacing(AppStyle.LAYOUT["toolbar_spacing"])
-        strip_layout.setSizeConstraint(QLayout.SetMinimumSize)
+        strip_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         self.tools.setWidget(self._strip)
         self._strip_buttons: list[QToolButton] = []
         self.tool_actions: dict[str, QAction] = {}
@@ -184,8 +182,8 @@ class ImageAnnotations(QObject):
 
     def _add_separator(self) -> None:
         separator = QFrame()
-        separator.setFrameShape(QFrame.VLine)
-        separator.setFrameShadow(QFrame.Plain)
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setFrameShadow(QFrame.Shadow.Plain)
         self._strip.layout().addWidget(separator)
 
     def select_tool(self, tool: str) -> None:
@@ -263,7 +261,7 @@ class ImageAnnotations(QObject):
         if enabled:
             self.show_marks.setChecked(True)
         self.viewer.set_interaction_locked(enabled, navigation_enabled=True)
-        self.viewer.setCursor(Qt.CrossCursor if enabled else Qt.ArrowCursor)
+        self.viewer.setCursor(Qt.CursorShape.CrossCursor if enabled else Qt.CursorShape.ArrowCursor)
 
     def _set_visible(self, visible: bool) -> None:
         if not visible:
@@ -328,11 +326,11 @@ class ImageAnnotations(QObject):
         )
 
     def handle_press(self, event: ImagePointerEvent) -> None:
-        if event.button == Qt.RightButton and self.button.isChecked():
+        if event.button == Qt.MouseButton.RightButton and self.button.isChecked():
             self.cancel()
             self.button.setChecked(False)
             return
-        if event.button != Qt.LeftButton or not self._can_draw(event):
+        if event.button != Qt.MouseButton.LeftButton or not self._can_draw(event):
             return
         point = self._point(event)
         tool = self._tool
@@ -353,7 +351,7 @@ class ImageAnnotations(QObject):
         self._update_preview()
 
     def handle_release(self, event: ImagePointerEvent) -> None:
-        if event.button != Qt.LeftButton or not self.gesture.active or self._tool == "polygon":
+        if event.button != Qt.MouseButton.LeftButton or not self.gesture.active or self._tool == "polygon":
             return
         if not (math.isfinite(event.x) and math.isfinite(event.y)):
             self.cancel()
@@ -366,7 +364,7 @@ class ImageAnnotations(QObject):
             self.cancel()
 
     def handle_double_click(self, event: ImagePointerEvent) -> None:
-        if event.button == Qt.LeftButton and self._can_draw(event) and self._tool == "polygon":
+        if event.button == Qt.MouseButton.LeftButton and self._can_draw(event) and self._tool == "polygon":
             if self.gesture.finish_polygon(self._point(event)):
                 self.finish_polygon()
 
@@ -384,10 +382,10 @@ class ImageAnnotations(QObject):
         )
         if self._preview is None:
             self._preview = QGraphicsPathItem(self.layer)
-            self._preview.setAcceptedMouseButtons(Qt.NoButton)
+            self._preview.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         pen = pg.mkPen(self._color, width=self.stroke_width.value(), cosmetic=False)
-        pen.setCapStyle(Qt.RoundCap)
-        pen.setJoinStyle(Qt.RoundJoin)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         self._preview.setPen(pg.mkPen(None) if brush else pen)
         self._preview.setBrush(pg.mkBrush(self._color) if brush else pg.mkBrush(None))
         self._preview.setPath(path)
@@ -400,7 +398,7 @@ class ImageAnnotations(QObject):
             self._commit(item)
 
     def _commit(self, item: QGraphicsItem) -> None:
-        item.setAcceptedMouseButtons(Qt.NoButton)
+        item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         self.undo_stack.push(_AnnotationCommand(self, [item], adding=True))
 
     def _start_text_editor(self, point: QPointF) -> None:
@@ -438,8 +436,8 @@ class ImageAnnotations(QObject):
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self._text_editor:
-            if event.type() == QEvent.KeyPress:
-                if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            if event.type() == QEvent.Type.KeyPress:
+                if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                     text = self._text_editor.text()
                     if text.strip():
                         item = pg.TextItem(text=text, color=self._color, anchor=(0, 0))
@@ -448,9 +446,9 @@ class ImageAnnotations(QObject):
                         self._commit(item)
                     self._close_text_editor()
                     return True
-                if event.key() == Qt.Key_Escape:
+                if event.key() == Qt.Key.Key_Escape:
                     self._leave_drawing()
                     return True
-            elif event.type() == QEvent.FocusOut:
+            elif event.type() == QEvent.Type.FocusOut:
                 self._close_text_editor()
         return super().eventFilter(watched, event)

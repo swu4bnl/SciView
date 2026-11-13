@@ -4,10 +4,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest
-from PyQt5.QtCore import QPoint, QPointF, Qt
-from PyQt5.QtGui import QWheelEvent
-from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QPoint, QPointF, Qt
+from PyQt6.QtGui import QWheelEvent
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
 )
@@ -21,7 +21,7 @@ from tabs.image_browser_tab import ImageBrowserApp
 
 @pytest.fixture(scope="module")
 def qapp():
-    app = QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication(["sciview-tests"])
     return app
 
 
@@ -170,12 +170,12 @@ def test_folder_row_reopens_after_session_navigation(qapp, tmp_path):
     try:
         first_path = str(tmp_path / "first.tif")
         second_path = str(tmp_path / "second.tif")
-        from PyQt5.QtWidgets import QListWidgetItem
+        from PyQt6.QtWidgets import QListWidgetItem
 
         first_item = QListWidgetItem("first.tif")
-        first_item.setData(Qt.UserRole, first_path)
+        first_item.setData(Qt.ItemDataRole.UserRole, first_path)
         second_item = QListWidgetItem("second.tif")
-        second_item.setData(Qt.UserRole, second_path)
+        second_item.setData(Qt.ItemDataRole.UserRole, second_path)
         tab.folder_files_list.addItem(first_item)
         tab.folder_files_list.addItem(second_item)
 
@@ -255,7 +255,7 @@ def test_browser_pin_compare_and_export_workflow(qapp, tmp_path, monkeypatch):
         item_rect = tab.folder_files_list.visualItemRect(item)
         QTest.mouseClick(
             tab.folder_files_list.viewport(),
-            Qt.LeftButton,
+            Qt.MouseButton.LeftButton,
             pos=QPoint(item_rect.left() + 10, item_rect.center().y()),
         )
         assert tab.session_manager.collection.pinned_path == reference_path
@@ -285,10 +285,10 @@ def test_browser_pin_compare_and_export_workflow(qapp, tmp_path, monkeypatch):
             QPointF(viewport.mapToGlobal(wheel_position)),
             QPoint(),
             QPoint(0, 120),
-            120,
-            Qt.Vertical,
-            Qt.NoButton,
-            Qt.ShiftModifier,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.ShiftModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
         )
         QApplication.sendEvent(viewport, wheel_event)
         assert tab.comparison_parameter_slider.value() == 30
@@ -352,7 +352,7 @@ def test_browser_pin_compare_and_export_workflow(qapp, tmp_path, monkeypatch):
             np.testing.assert_allclose(np.asarray(image), reference - 0.5 * current)
             assert "A - B*0.50" in image.tag_v2[270]
         assert any(
-            tab.folder_files_list.item(row).data(Qt.UserRole) == str(tmp_path / "difference.tiff")
+            tab.folder_files_list.item(row).data(Qt.ItemDataRole.UserRole) == str(tmp_path / "difference.tiff")
             for row in range(tab.folder_files_list.count())
         )
 
@@ -386,14 +386,14 @@ def test_browser_pin_compare_and_export_workflow(qapp, tmp_path, monkeypatch):
         pinned_row = next(
             row
             for row in range(tab.folder_files_list.count())
-            if tab.folder_files_list.item(row).data(Qt.UserRole) == reference_path
+            if tab.folder_files_list.item(row).data(Qt.ItemDataRole.UserRole) == reference_path
         )
         pinned_item = tab.folder_files_list.item(pinned_row)
         assert tab.session_manager.get_pinned_image()["data"] is reference
         rect = tab.folder_files_list.visualItemRect(pinned_item)
         QTest.mouseClick(
             tab.folder_files_list.viewport(),
-            Qt.LeftButton,
+            Qt.MouseButton.LeftButton,
             pos=rect.topLeft() + QPointF(10, rect.height() / 2).toPoint(),
         )
         assert tab.session_manager.collection.pinned_path is None

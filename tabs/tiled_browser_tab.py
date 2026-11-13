@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Callable
 
 import numpy as np
-from PyQt5.QtCore import QObject, Qt, QThread, QTimer, QUrl, pyqtSignal
-from PyQt5.QtGui import QDesktopServices
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QObject, Qt, QThread, QTimer, QUrl, pyqtSignal
+from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
@@ -114,7 +114,7 @@ class _TiledAuthorizationDialog(QDialog):
         code_row.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         self.code_input = QLineEdit(authorization.user_code)
         self.code_input.setReadOnly(True)
-        self.code_input.setAlignment(Qt.AlignCenter)
+        self.code_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.code_input.setToolTip(tr("tiled_browser.auth.dialog.code.tooltip"))
         apply_input_style(self.code_input)
         code_row.addWidget(self.code_input, 1)
@@ -132,7 +132,7 @@ class _TiledAuthorizationDialog(QDialog):
         layout.addLayout(code_row)
 
         self.url_label = QLabel(authorization.verification_uri)
-        self.url_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.url_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.url_label.setWordWrap(True)
         apply_info_style(self.url_label)
         layout.addWidget(self.url_label)
@@ -211,7 +211,7 @@ class TiledBrowserTab(BaseImageTab):
         self.run_scan_id_button.setEnabled(False)
         self.load_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         return self._operation_token
 
     def _finish_operation(self) -> None:
@@ -350,7 +350,7 @@ class TiledBrowserTab(BaseImageTab):
 
     def _build_ui(self) -> None:
         root = QHBoxLayout(self)
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
         self._main_splitter = splitter
         root.addWidget(splitter)
         layout_cfg = AppStyle.get_layout_ratios()
@@ -358,12 +358,12 @@ class TiledBrowserTab(BaseImageTab):
         controls = QWidget()
         controls.setMinimumWidth(layout_cfg['tiled_controls_min_width'])
         controls.setMaximumWidth(layout_cfg['tiled_controls_max_width'])
-        controls.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        controls.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
         controls_scroll = self.make_scrollable_panel(controls)
         controls_scroll.setMinimumWidth(layout_cfg['tiled_controls_min_width'])
         controls_scroll.setMaximumWidth(layout_cfg['tiled_controls_max_width'])
-        controls_scroll.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        controls_scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self._controls_panel = controls_scroll
 
         controls_layout = QVBoxLayout(controls)
@@ -377,7 +377,7 @@ class TiledBrowserTab(BaseImageTab):
         controls_layout.addWidget(self._create_playback_group())
 
         viewer = QWidget()
-        viewer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        viewer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         viewer_layout = QVBoxLayout(viewer)
         subtitle = QLabel(tr("tiled_browser.preview.title"))
         apply_subtitle_style(subtitle)
@@ -427,14 +427,14 @@ class TiledBrowserTab(BaseImageTab):
         layout = QVBoxLayout(group)
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
         layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
-        group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
 
         row = QHBoxLayout()
         row.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         row.addWidget(QLabel(tr("tiled_browser.connection.catalog.label")))
         self.catalog_combo = QComboBox()
-        self.catalog_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.catalog_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.catalog_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.catalog_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.catalog_combo.currentIndexChanged.connect(self._on_catalog_changed)
         row.addWidget(self.catalog_combo, 1)
 
@@ -461,7 +461,7 @@ class TiledBrowserTab(BaseImageTab):
         layout = QVBoxLayout(group)
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
         layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
-        group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
 
         search_grid = QGridLayout()
         search_grid.setHorizontalSpacing(AppStyle.LAYOUT['toolbar_spacing'])
@@ -603,14 +603,14 @@ class TiledBrowserTab(BaseImageTab):
                 tr("tiled_browser.results.column.time"),
             ]
         )
-        self.scan_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.scan_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.scan_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.scan_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.scan_table.itemSelectionChanged.connect(self._on_scan_selected)
         self.scan_table.cellClicked.connect(self._on_scan_clicked)
         self.scan_table.setMinimumWidth(0)
         self.scan_table.setMinimumHeight(AppStyle.LAYOUT['tiled_results_min_height'])
         header = self.scan_table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setStretchLastSection(True)
         column_widths = AppStyle.get_layout_ratios()['tiled_results_column_widths']
         for column, width in enumerate(column_widths):
@@ -641,7 +641,7 @@ class TiledBrowserTab(BaseImageTab):
         layout = QVBoxLayout(group)
         layout.setContentsMargins(*([AppStyle.LAYOUT['panel_margin']] * 4))
         layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
-        group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
 
         row = QHBoxLayout()
         row.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
@@ -670,7 +670,7 @@ class TiledBrowserTab(BaseImageTab):
     def _create_playback_group(self) -> QWidget:
         group = QGroupBox(tr("tiled_browser.series.group"))
         layout = QVBoxLayout(group)
-        self.series_slider = QSlider(Qt.Horizontal)
+        self.series_slider = QSlider(Qt.Orientation.Horizontal)
         self.series_slider.setEnabled(False)
         self.series_slider.valueChanged.connect(self._on_slider_changed)
         layout.addWidget(self.series_slider)
@@ -720,7 +720,7 @@ class TiledBrowserTab(BaseImageTab):
     def _create_frame_group(self) -> QWidget:
         group = QGroupBox(tr("tiled_browser.frames.group"))
         layout = QHBoxLayout(group)
-        self.frame_slider = QSlider(Qt.Horizontal)
+        self.frame_slider = QSlider(Qt.Orientation.Horizontal)
         self.frame_slider.setEnabled(False)
         self.frame_slider.valueChanged.connect(self._on_frame_changed)
         layout.addWidget(QLabel(tr("tiled_browser.frames.label")))

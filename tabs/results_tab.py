@@ -10,13 +10,13 @@ from threading import Event
 
 import numpy as np
 import pyqtgraph as pg
-from PyQt5.QtCore import QEvent, QSignalBlocker, QThread, QTimer, Qt, pyqtSignal
-from PyQt5.QtGui import QBrush, QColor, QIcon, QKeySequence, QPixmap
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QEvent, QSignalBlocker, QThread, QTimer, Qt, pyqtSignal
+from PyQt6.QtGui import QBrush, QColor, QIcon, QKeySequence, QPixmap, QShortcut
+from PyQt6.QtWidgets import (
     QApplication, QColorDialog, QComboBox, QFormLayout, QFrame, QGroupBox, QLayout,
-    QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
-    QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider, QSplitter,
-    QShortcut, QStackedWidget, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QProgressBar,
+    QPushButton, QScrollArea, QSizePolicy, QSlider, QSplitter, QStackedWidget,
+    QVBoxLayout, QWidget,
 )
 
 from sciview.interfaces.text import tr
@@ -127,11 +127,11 @@ class ResultsTab(QWidget):
         self._mouse_proxy = pg.SignalProxy(
             self.plot.scene().sigMouseMoved, rateLimit=20, slot=self._hover_plot,
         )
-        self._undo_shortcut = QShortcut(QKeySequence.Undo, self.canvas)
-        self._undo_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._undo_shortcut = QShortcut(QKeySequence.StandardKey.Undo, self.canvas)
+        self._undo_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self._undo_shortcut.activated.connect(self._undo_mark)
-        self._escape_shortcut = QShortcut(QKeySequence(Qt.Key_Escape), self.canvas)
-        self._escape_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._escape_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self.canvas)
+        self._escape_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self._escape_shortcut.activated.connect(lambda: self._select_navigation("pan"))
         self._redraw_timer = QTimer(self)
         self._redraw_timer.setSingleShot(True)
@@ -210,7 +210,7 @@ class ResultsTab(QWidget):
         feedback_row.addWidget(self.update_button)
         self._root_layout.insertLayout(0, feedback_row)
 
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
         self.explorer_splitter = splitter
         plot_panel = QWidget()
         plot_layout = QVBoxLayout(plot_panel)
@@ -254,7 +254,7 @@ class ResultsTab(QWidget):
         self.mark_controls.hide()
         self.cursor_label = QLabel(tr("results.hover.empty"))
         self.cursor_label.setMinimumWidth(0)
-        self.cursor_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.cursor_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.cursor_label.setToolTip(tr("results.hover.tooltip"))
         tools_layout.addWidget(self.cursor_label, 1)
         plot_layout.addWidget(self.toolbar)
@@ -266,10 +266,10 @@ class ResultsTab(QWidget):
         source_panel_layout.setContentsMargins(0, 0, 0, 0)
         self.source_scroll = QScrollArea()
         self.source_scroll.setWidgetResizable(True)
-        self.source_scroll.setFrameShape(QFrame.NoFrame)
+        self.source_scroll.setFrameShape(QFrame.Shape.NoFrame)
         source_content = QWidget()
         source_layout = QVBoxLayout(source_content)
-        source_layout.setSizeConstraint(QLayout.SetMinimumSize)
+        source_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         source_layout.setContentsMargins(0, 0, 0, 0)
         source_layout.setSpacing(AppStyle.LAYOUT["section_spacing"])
         source_layout.addWidget(QLabel(tr("results.curves")))
@@ -279,10 +279,10 @@ class ResultsTab(QWidget):
         self.curve_search.textChanged.connect(self._filter_curves)
         source_layout.addWidget(self.curve_search)
         self.curve_list = QListWidget()
-        self.curve_list.setTextElideMode(Qt.ElideMiddle)
-        self.curve_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.curve_list.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        self.curve_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.curve_list.setUniformItemSizes(True)
-        self.curve_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.curve_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.curve_list.setMinimumHeight(0)
         self.curve_list.setMouseTracking(True)
         self.curve_list.viewport().setMouseTracking(True)
@@ -293,12 +293,12 @@ class ResultsTab(QWidget):
         source_layout.addWidget(self.curve_list, 1)
         self.source_button = QPushButton(tr("results.show_source"))
         self.source_button.setEnabled(False)
-        self.source_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        self.source_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self.source_button.hide()
         self.source_button.clicked.connect(self._show_source)
         source_layout.addWidget(self.source_button)
 
-        self.spacing_slider = QSlider(Qt.Horizontal)
+        self.spacing_slider = QSlider(Qt.Orientation.Horizontal)
         self.spacing_slider.setRange(0, 300)
         self.spacing_slider.setSingleStep(5)
         self.spacing_slider.setPageStep(25)
@@ -319,18 +319,18 @@ class ResultsTab(QWidget):
         show_colormap_previews(self.palette)
         self.palette.currentTextChanged.connect(self._update_artists)
         display_form = QFormLayout()
-        display_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        display_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         display_form.addRow(tr("results.spacing"), spacing_controls)
         display_form.addRow(tr("results.colors"), self.palette)
         display_group = QGroupBox(tr("results.waterfall_display"))
-        display_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        display_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         display_group.setLayout(display_form)
         source_layout.addWidget(display_group)
 
         self.curve_appearance = QGroupBox(tr("results.curve_appearance"))
-        self.curve_appearance.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        self.curve_appearance.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         appearance_form = QFormLayout(self.curve_appearance)
-        appearance_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        appearance_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.curve_color_button = QPushButton()
         self.curve_color_button.clicked.connect(self._choose_curve_color)
         self.curve_palette_button = QPushButton(tr("results.use_palette"))
@@ -349,7 +349,7 @@ class ResultsTab(QWidget):
             self.curve_line_style.addItem(tr(message), key)
         self.curve_line_style.currentIndexChanged.connect(self._line_style_changed)
         appearance_form.addRow(tr("results.line_style"), self.curve_line_style)
-        self.curve_width_slider = QSlider(Qt.Horizontal)
+        self.curve_width_slider = QSlider(Qt.Orientation.Horizontal)
         self.curve_width_slider.setRange(1, 8)
         self.curve_width_label = QLabel()
         width_controls = QWidget()
@@ -359,7 +359,7 @@ class ResultsTab(QWidget):
         width_layout.addWidget(self.curve_width_label)
         self.curve_width_slider.valueChanged.connect(self._line_width_changed)
         appearance_form.addRow(tr("results.line_width"), width_controls)
-        self.curve_gain_slider = QSlider(Qt.Horizontal)
+        self.curve_gain_slider = QSlider(Qt.Orientation.Horizontal)
         self.curve_gain_slider.setRange(0, 300)
         self.curve_gain_slider.setSingleStep(5)
         self.curve_gain_label = QLabel()
@@ -561,9 +561,9 @@ class ResultsTab(QWidget):
         self._items.clear()
         for index, path in enumerate(self._paths):
             item = QListWidgetItem(tr("results.pending", name=Path(path).name))
-            item.setData(Qt.UserRole, index)
+            item.setData(Qt.ItemDataRole.UserRole, index)
             item.setToolTip(path)
-            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             self.curve_list.addItem(item)
             self._items[index] = item
         self.title.setText(tr("results.collection", count=len(request.paths)))
@@ -638,8 +638,8 @@ class ResultsTab(QWidget):
                     item.setToolTip(f"{curve.path}\n{curve.error}")
                 else:
                     item.setText(Path(curve.path).name)
-                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                    item.setCheckState(Qt.Unchecked if curve.path in self._hidden_paths else Qt.Checked)
+                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                    item.setCheckState(Qt.CheckState.Unchecked if curve.path in self._hidden_paths else Qt.CheckState.Checked)
                     line = self.plot.plot(curve.result.x, curve.result.y, connect="finite")
                     line.setCurveClickable(True)
                     line.sigClicked.connect(
@@ -880,8 +880,8 @@ class ResultsTab(QWidget):
         if highlighted:
             width *= 1.8
         line_styles = {
-            "solid": Qt.SolidLine, "dash": Qt.DashLine,
-            "dot": Qt.DotLine, "dash_dot": Qt.DashDotLine,
+            "solid": Qt.PenStyle.SolidLine, "dash": Qt.PenStyle.DashLine,
+            "dot": Qt.PenStyle.DotLine, "dash_dot": Qt.PenStyle.DashDotLine,
         }
         return pg.mkPen(color, width=width, style=line_styles[style.line_style or "solid"])
 
@@ -889,7 +889,7 @@ class ResultsTab(QWidget):
         item = self.curve_list.currentItem()
         if item is None:
             return
-        index = item.data(Qt.UserRole)
+        index = item.data(Qt.ItemDataRole.UserRole)
         if index not in self._lines:
             return
         style = replace(self._curve_style(index), **changes)
@@ -901,7 +901,7 @@ class ResultsTab(QWidget):
         item = self.curve_list.currentItem()
         if item is None:
             return
-        index = item.data(Qt.UserRole)
+        index = item.data(Qt.ItemDataRole.UserRole)
         style = self._curve_style(index)
         initial = QColor(style.color) if style.color else self._palette_color(index)
         color = QColorDialog.getColor(initial, self, tr("results.curve_color"))
@@ -921,7 +921,7 @@ class ResultsTab(QWidget):
 
     def _selection_changed(self, current, _previous=None):
         self._highlight_curve(current)
-        index = current.data(Qt.UserRole) if current is not None else None
+        index = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
         valid = index in self._lines if index is not None else False
         self.source_button.setEnabled(valid)
         self.source_button.setVisible(valid)
@@ -979,8 +979,8 @@ class ResultsTab(QWidget):
                 color = QColor(style.color) if style.color else self._palette_color(index, palette)
                 line.setPen(self._curve_pen(index))
                 item = self._items[index]
-                item.setData(Qt.DecorationRole, color)
-                line.setVisible(item.checkState() == Qt.Checked)
+                item.setData(Qt.ItemDataRole.DecorationRole, color)
+                line.setVisible(item.checkState() == Qt.CheckState.Checked)
         self._draw()
         self._refresh_curve_highlights()
         self._schedule_notebook_update()
@@ -1015,8 +1015,8 @@ class ResultsTab(QWidget):
         self._update_marks()
 
     def _visibility_changed(self, item):
-        path = self._paths[item.data(Qt.UserRole)]
-        if item.checkState() == Qt.Checked:
+        path = self._paths[item.data(Qt.ItemDataRole.UserRole)]
+        if item.checkState() == Qt.CheckState.Checked:
             self._hidden_paths.discard(path)
         else:
             self._hidden_paths.add(path)
@@ -1090,7 +1090,7 @@ class ResultsTab(QWidget):
 
     def _refresh_curve_highlights(self):
         current = self.curve_list.currentItem()
-        selected = current.data(Qt.UserRole) if current is not None else None
+        selected = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
         if self._showing_current_run:
             for key, line in self._lines.items():
                 line.setPen(self._curve_pen(
@@ -1108,12 +1108,12 @@ class ResultsTab(QWidget):
             return
         previous = self._items.get(self._hovered_curve_index)
         if previous is not None:
-            previous.setData(Qt.BackgroundRole, QBrush())
+            previous.setData(Qt.ItemDataRole.BackgroundRole, QBrush())
         self._hovered_curve_index = index
         item = self._items.get(index)
         if item is not None and item is not self.curve_list.currentItem():
             item.setData(
-                Qt.BackgroundRole,
+                Qt.ItemDataRole.BackgroundRole,
                 QBrush(AppStyle.theme_colors()["control_hover"]),
             )
         self._refresh_curve_highlights()
@@ -1121,14 +1121,14 @@ class ResultsTab(QWidget):
             self.notebook.highlight_curve(self._active_object, index)
 
     def _hover_source_item(self, item: QListWidgetItem | None):
-        index = item.data(Qt.UserRole) if item is not None else None
+        index = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
         self._set_hovered_curve(index)
 
     def eventFilter(self, watched, event):
         if (
             hasattr(self, "curve_list")
             and watched is self.curve_list.viewport()
-            and event.type() == QEvent.Leave
+            and event.type() == QEvent.Type.Leave
         ):
             self._set_hovered_curve(None)
         return super().eventFilter(watched, event)
@@ -1153,8 +1153,8 @@ class ResultsTab(QWidget):
             point_index = int(np.argmin(distance))
             dot = pg.ScatterPlotItem(size=VIEWER_BEHAVIOR.default_point_size)
             label = pg.TextItem(anchor=(0, 1))
-            dot.setAcceptedMouseButtons(Qt.NoButton)
-            label.setAcceptedMouseButtons(Qt.NoButton)
+            dot.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+            label.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
             self.plot.addItem(dot, ignoreBounds=True)
             self.plot.addItem(label, ignoreBounds=True)
             self._marks.append(CurveMark(index, point_index, dot, label))
@@ -1176,7 +1176,7 @@ class ResultsTab(QWidget):
         self.mark_controls.setVisible(key == "mark")
         self.view_box.setMouseEnabled(x=key != "mark", y=key != "mark")
         self.view_box.setMouseMode(pg.ViewBox.RectMode if key == "zoom" else pg.ViewBox.PanMode)
-        self.canvas.setCursor(Qt.CrossCursor if key == "mark" else Qt.ArrowCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor if key == "mark" else Qt.CursorShape.ArrowCursor)
 
     def _update_marks(self):
         if self._run is None:
@@ -1224,7 +1224,7 @@ class ResultsTab(QWidget):
     def _show_source(self):
         item = self.curve_list.currentItem()
         if item is not None:
-            self.parent_app.show_waterfall_source(self._paths[item.data(Qt.UserRole)])
+            self.parent_app.show_waterfall_source(self._paths[item.data(Qt.ItemDataRole.UserRole)])
 
     def _open_issue_settings(self):
         self.parent_app.show_processing_tab(self._issue_destination)
@@ -1313,7 +1313,7 @@ class ResultsTab(QWidget):
             spacing=self._spacing_value, palette=self.palette.currentText(),
             hidden_sources=sorted(self._hidden_paths),
             view_range=None if self._view_is_home() else self.view_box.viewRange(),
-            selected_index=current.data(Qt.UserRole) if current is not None else None,
+            selected_index=current.data(Qt.ItemDataRole.UserRole) if current is not None else None,
             marks=[[mark.curve_index, mark.point_index] for mark in self._marks],
             curve_styles=self._curve_styles.copy(),
             width=previous.state.width if previous else 100,
@@ -1482,7 +1482,7 @@ class ResultsTab(QWidget):
             self._items.clear()
             for index, path in enumerate(self._paths):
                 item = QListWidgetItem(Path(path).name)
-                item.setData(Qt.UserRole, index)
+                item.setData(Qt.ItemDataRole.UserRole, index)
                 item.setToolTip(path)
                 self.curve_list.addItem(item)
                 self._items[index] = item
@@ -1496,8 +1496,8 @@ class ResultsTab(QWidget):
             for index, point in state.marks:
                 dot = pg.ScatterPlotItem(size=VIEWER_BEHAVIOR.default_point_size)
                 label = pg.TextItem(anchor=(0, 1))
-                dot.setAcceptedMouseButtons(Qt.NoButton)
-                label.setAcceptedMouseButtons(Qt.NoButton)
+                dot.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+                label.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
                 self.plot.addItem(dot, ignoreBounds=True)
                 self.plot.addItem(label, ignoreBounds=True)
                 self._marks.append(CurveMark(index, point, dot, label))

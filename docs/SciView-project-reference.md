@@ -4,7 +4,7 @@ This is a compact project-specific companion to the reusable instructions in [do
 
 ## Current Project Shape
 
-- SciView is a PyQt5 desktop application for X-ray scattering workflows, using SciAnalysis for processing and supporting local files and configured Tiled sources.
+- SciView is a PyQt6 desktop application for X-ray scattering workflows, using SciAnalysis for processing and supporting local files and configured Tiled sources.
 - `main.py` composes the application and shares active workspace state. Feature tabs live under `tabs/`.
 - The installable package is under `src/sciview/`. Its current areas include data models, source adapters, calibration, masking, processing, profiles, settings, sessions, and interface services.
 - Reusable Qt viewers, tools, and utilities live under `src/sciview/interfaces/stable_qt/`; shared application presentation is in `src/sciview/interfaces/theme/app_style.py`. The image viewer uses PyQtGraph.
@@ -23,6 +23,11 @@ This is a compact project-specific companion to the reusable instructions in [do
 
 ## Environment And Checks
 
+- Qt bindings and runtimes use PyPI wheels from the Qt 6.8 series so Linux
+  resolution retains a glibc 2.28 baseline for RHEL 8.10. Compatibility still
+  requires runtime testing on the target system. macOS targets 14 or newer.
+  Matplotlib uses its binding-neutral QtAgg backend; Pixi uses
+  `matplotlib-base` to avoid installing a second Qt binding.
 - Confirm the current environment and task definitions before suggesting commands. Pixi is the documented development workflow; the project also has Python package metadata.
 - The checked `pyproject.toml` declares pytest as a development extra and configures `testpaths = ["tests"]`. A `tests/` directory exists locally with pytest coverage for most backend modules (data models, calibration/mask I/O, processing recipes, reduction/transform, batch processing, sources). Note: this checkout's `.gitignore` ignores `tests/`, so a fresh clone or a public mirror may not show it even though pytest runs it locally — verify locally with `pixi run pytest -q` rather than assuming from `git status`/`git ls-files` alone.
 - Keep runtime probes focused and local. Add community-facing tests for important supported behavior and specific regressions, not an exhaustive AI-generated suite.

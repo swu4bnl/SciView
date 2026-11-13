@@ -12,14 +12,14 @@ import numpy as np
 from typing import Dict, List, Optional, Any
 from PIL import Image
 
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QDoubleSpinBox, QSpinBox, QLineEdit, QComboBox, QGridLayout, 
     QFileDialog, QListWidget, QListWidgetItem, QCheckBox, QGroupBox,
     QScrollArea, QSplitter, QTextEdit, QTabWidget, QMessageBox
 )
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 
 import matplotlib.pyplot as plt
 
@@ -106,14 +106,14 @@ class ProtocolPreviewApp(BaseImageTab):
     
     def _build_ui(self):
         """Build the main user interface"""
-        from PyQt5.QtWidgets import QSplitter
+        from PyQt6.QtWidgets import QSplitter
         
         # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
         # Main horizontal splitter: visualization | controls
-        main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # Left side: Visualization area
         self.viz_tabs = QTabWidget()
@@ -700,7 +700,7 @@ class ProtocolPreviewApp(BaseImageTab):
     
     def _show_add_protocol_menu(self):
         """Show menu to add a protocol"""
-        from PyQt5.QtWidgets import QMenu
+        from PyQt6.QtWidgets import QMenu
         
         menu = QMenu(self)
         
@@ -714,7 +714,7 @@ class ProtocolPreviewApp(BaseImageTab):
                     self._add_protocol(name, func)
                 )
         
-        menu.exec_(self.sender().mapToGlobal(self.sender().rect().bottomLeft()))
+        menu.exec(self.sender().mapToGlobal(self.sender().rect().bottomLeft()))
     
     def _add_protocol(self, protocol_name: str, protocol_func: Any):
         """Add a protocol to the stack"""
@@ -766,14 +766,14 @@ class ProtocolPreviewApp(BaseImageTab):
         
         for protocol in self.protocol_stack:
             item = QListWidgetItem(str(protocol))
-            item.setCheckState(Qt.Checked if protocol.enabled else Qt.Unchecked)
+            item.setCheckState(Qt.CheckState.Checked if protocol.enabled else Qt.CheckState.Unchecked)
             self.protocol_list.addItem(item)
     
     def _on_protocol_item_changed(self, item: QListWidgetItem):
         """Handle protocol item check state change"""
         row = self.protocol_list.row(item)
         if 0 <= row < len(self.protocol_stack):
-            self.protocol_stack[row].enabled = (item.checkState() == Qt.Checked)
+            self.protocol_stack[row].enabled = (item.checkState() == Qt.CheckState.Checked)
     
     def _on_protocol_selected(self, current_row: int):
         """Handle protocol selection"""
@@ -1223,7 +1223,7 @@ class ProtocolPreviewApp(BaseImageTab):
         dialog.setWindowTitle(tr("protocol_preview.dialog.export_preview"))
         dialog.setText(tr("protocol_preview.dialog.export_preview_text", format=format_label))
         dialog.setDetailedText(content)
-        dialog.exec_()
+        dialog.exec()
     
     def _export_workflow(self):
         """Export protocol workflow to file"""

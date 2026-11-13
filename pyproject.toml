@@ -11,8 +11,10 @@ requires-python = ">=3.12"
 dependencies = [
     "numpy>=1.26",
     "Pillow>=10.0",
-    "PyQt5>=5.15",
-    "PyQtWebEngine>=5.15,<5.16",
+    "PyQt6>=6.8,<6.9",
+    "PyQt6-WebEngine>=6.8,<6.9",
+    "PyQt6-Qt6>=6.8,<6.9",
+    "PyQt6-WebEngine-Qt6>=6.8,<6.9",
     "PyYAML>=6.0",
     "matplotlib>=3.8",
     "psutil>=7.1",

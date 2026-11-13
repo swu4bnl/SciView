@@ -12,10 +12,10 @@ import logging
 from typing import TYPE_CHECKING
 import xml.etree.ElementTree as ET
 
-from PyQt5.QtWidgets import QApplication, QPushButton, QToolBar, QToolButton
-from PyQt5.QtCore import Qt, QSize, QTimer, QDataStream, QFile, QIODevice, QSaveFile, QStandardPaths, QT_VERSION_STR
-from PyQt5.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap, QPixmapCache
-from PyQt5.QtSvg import QSvgRenderer
+from PyQt6.QtWidgets import QApplication, QPushButton, QToolBar, QToolButton
+from PyQt6.QtCore import Qt, QSize, QTimer, QDataStream, QFile, QIODevice, QSaveFile, QStandardPaths, QT_VERSION_STR
+from PyQt6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap, QPixmapCache
+from PyQt6.QtSvg import QSvgRenderer
 
 if TYPE_CHECKING:
     from pyqtgraph import PlotItem
@@ -30,7 +30,7 @@ class AppStyle:
     _ICON_CACHE_LIMIT = 256
     _ICON_CACHE_HEADER = b'SciView icon v1\n'
     _ICON_SIZES = (16, 18, 20, 22, 24, 28, 32)
-    _ICON_STATES = ((QIcon.Normal, QIcon.Off), (QIcon.Normal, QIcon.On), (QIcon.Disabled, QIcon.Off))
+    _ICON_STATES = ((QIcon.Mode.Normal, QIcon.State.Off), (QIcon.Mode.Normal, QIcon.State.On), (QIcon.Mode.Disabled, QIcon.State.Off))
 
     TAB_UI = {
         'icon_size': 24,
@@ -157,19 +157,19 @@ class AppStyle:
     STYLE_KEY_PROPERTY = "sciview_style_key"
 
     FONT_ROLE_MAP = {
-        'title': ('h1', QFont.Bold),
-        'subtitle': ('h2', QFont.Bold),
-        'section': ('h3', QFont.Bold),
-        'body': ('body', QFont.Normal),
-        'info': ('body', QFont.Normal),
-        'status': ('caption', QFont.Normal),
-        'button': ('body', QFont.Normal),
-        'button_emphasis': ('body', QFont.Bold),
-        'protocol_selector': ('h3', QFont.Bold),
-        'toolbar_symbol': ('h3', QFont.Bold),
-        'toolbar_text': ('small', QFont.Normal),
-        'input': ('body', QFont.Normal),
-        'group_box': ('h3', QFont.Bold),
+        'title': ('h1', QFont.Weight.Bold),
+        'subtitle': ('h2', QFont.Weight.Bold),
+        'section': ('h3', QFont.Weight.Bold),
+        'body': ('body', QFont.Weight.Normal),
+        'info': ('body', QFont.Weight.Normal),
+        'status': ('caption', QFont.Weight.Normal),
+        'button': ('body', QFont.Weight.Normal),
+        'button_emphasis': ('body', QFont.Weight.Bold),
+        'protocol_selector': ('h3', QFont.Weight.Bold),
+        'toolbar_symbol': ('h3', QFont.Weight.Bold),
+        'toolbar_text': ('small', QFont.Weight.Normal),
+        'input': ('body', QFont.Weight.Normal),
+        'group_box': ('h3', QFont.Weight.Bold),
     }
     
     # ---------------------------------------------------------------------------
@@ -656,16 +656,16 @@ class AppStyle:
         colors = cls.theme_colors(app)
         palette = QPalette(app.palette())
         for role, key in (
-            (QPalette.Window, 'window'), (QPalette.WindowText, 'text'),
-            (QPalette.Base, 'base'), (QPalette.AlternateBase, 'control_hover'),
-            (QPalette.Text, 'text'), (QPalette.Button, 'control_bg'),
-            (QPalette.ButtonText, 'text'), (QPalette.Highlight, 'accent'),
-            (QPalette.HighlightedText, 'checked_fg'), (QPalette.ToolTipBase, 'base'),
-            (QPalette.ToolTipText, 'text'), (QPalette.Link, 'accent'),
+            (QPalette.ColorRole.Window, 'window'), (QPalette.ColorRole.WindowText, 'text'),
+            (QPalette.ColorRole.Base, 'base'), (QPalette.ColorRole.AlternateBase, 'control_hover'),
+            (QPalette.ColorRole.Text, 'text'), (QPalette.ColorRole.Button, 'control_bg'),
+            (QPalette.ColorRole.ButtonText, 'text'), (QPalette.ColorRole.Highlight, 'accent'),
+            (QPalette.ColorRole.HighlightedText, 'checked_fg'), (QPalette.ColorRole.ToolTipBase, 'base'),
+            (QPalette.ColorRole.ToolTipText, 'text'), (QPalette.ColorRole.Link, 'accent'),
         ):
             palette.setColor(role, colors[key])
-        for role in (QPalette.WindowText, QPalette.Text, QPalette.ButtonText):
-            palette.setColor(QPalette.Disabled, role, colors['muted'])
+        for role in (QPalette.ColorRole.WindowText, QPalette.ColorRole.Text, QPalette.ColorRole.ButtonText):
+            palette.setColor(QPalette.ColorGroup.Disabled, role, colors['muted'])
         app.setPalette(palette)
 
     @classmethod
@@ -797,7 +797,9 @@ class AppStyle:
             else:
                 qdarktheme.stop_sync()
             base = qdarktheme.load_stylesheet(actual)
-            app.setPalette(qdarktheme.load_palette(actual, for_stylesheet=True))
+            # Qt 6: the for_stylesheet palette variant leaves accent and light-mode surfaces wrong;
+            # the plain palette matches the stylesheet.
+            app.setPalette(qdarktheme.load_palette(actual))
             app.setProperty(cls.THEME_KEY_PROPERTY, f'qdarktheme:{actual}')
             if contrast:
                 rules = cls._global_style_rules(app)
@@ -984,18 +986,18 @@ class AppStyle:
             break
         else:
             return cached
-        cache_root = QStandardPaths.writableLocation(QStandardPaths.GenericCacheLocation)
+        cache_root = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericCacheLocation)
         cache_path = Path(cache_root) / 'sciview' / 'icons-v1' / f'{key}.icon' if cache_root else None
         icon = QIcon()
         if cache_path is not None and cache_path.is_file():
             source = QFile(str(cache_path))
-            if source.open(QIODevice.ReadOnly):
+            if source.open(QIODevice.OpenModeFlag.ReadOnly):
                 stream = QDataStream(source)
-                stream.setVersion(QDataStream.Qt_5_15)
+                stream.setVersion(QDataStream.Version.Qt_5_15)
                 header = stream.readRawData(len(cls._ICON_CACHE_HEADER))
                 if header == cls._ICON_CACHE_HEADER and source.size() <= 1024 * 1024:
                     stream >> icon
-                valid = stream.status() == QDataStream.Ok and not icon.isNull()
+                valid = stream.status() == QDataStream.Status.Ok and not icon.isNull()
                 source.close()
                 if valid:
                     cls._remember_icon(key, icon)
@@ -1006,20 +1008,20 @@ class AppStyle:
             icon.addPixmap(cls._render_svg_pixmap(path, size, colors['icon']))
             icon.addPixmap(
                 cls._render_svg_pixmap(path, size, colors['checked_fg']),
-                QIcon.Normal, QIcon.On,
+                QIcon.Mode.Normal, QIcon.State.On,
             )
-            icon.addPixmap(cls._render_svg_pixmap(path, size, colors['muted']), QIcon.Disabled)
+            icon.addPixmap(cls._render_svg_pixmap(path, size, colors['muted']), QIcon.Mode.Disabled)
         if cache_path is not None:
             try:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 target = QSaveFile(str(cache_path))
-                if not target.open(QIODevice.WriteOnly):
+                if not target.open(QIODevice.OpenModeFlag.WriteOnly):
                     raise OSError(target.errorString())
                 stream = QDataStream(target)
-                stream.setVersion(QDataStream.Qt_5_15)
+                stream.setVersion(QDataStream.Version.Qt_5_15)
                 stream.writeRawData(cls._ICON_CACHE_HEADER)
                 stream << icon
-                if stream.status() != QDataStream.Ok:
+                if stream.status() != QDataStream.Status.Ok:
                     target.cancelWriting()
                     raise OSError("Could not serialize icon")
                 if not target.commit():
@@ -1089,7 +1091,7 @@ class AppStyle:
         app = app or QApplication.instance()
         if app is None:
             return False
-        return app.palette().color(QPalette.Window).lightness() < 128
+        return app.palette().color(QPalette.ColorRole.Window).lightness() < 128
 
     @classmethod
     def theme_colors(cls, app=None):
@@ -1147,30 +1149,30 @@ class AppStyle:
 
         palette = app.palette()
         if cls.theme_is_dark(app):
-            window = palette.color(QPalette.Window)
-            text = palette.color(QPalette.WindowText)
+            window = palette.color(QPalette.ColorRole.Window)
+            text = palette.color(QPalette.ColorRole.WindowText)
             if window.lightness() >= 128:
                 window = QColor('#232629')
             if text.lightness() <= 128:
                 text = QColor('#f2f2f2')
-            base = palette.color(QPalette.Base)
+            base = palette.color(QPalette.ColorRole.Base)
             if base.lightness() >= 128:
                 base = QColor('#1b1e20')
-            muted = palette.color(QPalette.Disabled, QPalette.WindowText)
+            muted = palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText)
             if muted.lightness() <= 96:
                 muted = QColor('#9aa0a6')
             grid = QColor('#5f6368')
         else:
-            window = palette.color(QPalette.Window)
-            base = palette.color(QPalette.Base)
-            text = palette.color(QPalette.WindowText)
-            muted = palette.color(QPalette.Disabled, QPalette.WindowText)
-            grid = palette.color(QPalette.Mid)
+            window = palette.color(QPalette.ColorRole.Window)
+            base = palette.color(QPalette.ColorRole.Base)
+            text = palette.color(QPalette.ColorRole.WindowText)
+            muted = palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText)
+            grid = palette.color(QPalette.ColorRole.Mid)
 
-        accent = palette.color(QPalette.Highlight)
+        accent = palette.color(QPalette.ColorRole.Highlight)
         if not accent.isValid():
             accent = QColor(cls.COLORS['accent'])
-        border = accent if cls.theme_is_dark(app) else palette.color(QPalette.Mid)
+        border = accent if cls.theme_is_dark(app) else palette.color(QPalette.ColorRole.Mid)
         control_bg = base if cls.theme_is_dark(app) else window
         control_hover = control_bg.lighter(115) if cls.theme_is_dark(app) else control_bg.darker(104)
         checked_fg = QColor('#ffffff') if accent.lightness() < 170 else QColor('#111111')
@@ -1324,12 +1326,12 @@ class AppStyle:
         return scale_pct / 100.0
 
     @classmethod
-    def make_font(cls, token_name, weight=QFont.Normal):
+    def make_font(cls, token_name, weight=QFont.Weight.Normal):
         """Build a QFont from a size token and native regular/bold weight."""
         font = QFont()
         family = cls.effective_font_family()
         font.setFamilies([family, 'Noto Sans CJK SC'])
-        font.setStyleHint(QFont.SansSerif)
+        font.setStyleHint(QFont.StyleHint.SansSerif)
         font.setPixelSize(cls.font_px(token_name))
         font.setWeight(weight)
         return font
@@ -1542,7 +1544,7 @@ class AppStyle:
         if not role_name:
             return
 
-        token_name, weight = cls.FONT_ROLE_MAP.get(role_name, ('body', QFont.Normal))
+        token_name, weight = cls.FONT_ROLE_MAP.get(role_name, ('body', QFont.Weight.Normal))
         widget.setFont(cls.make_font(token_name, weight=weight))
 
     @classmethod
@@ -1550,11 +1552,11 @@ class AppStyle:
         """Render an SVG icon to a tinted pixmap for the active theme."""
         renderer = QSvgRenderer(str(path))
         pixmap = QPixmap(size, size)
-        pixmap.fill(Qt.transparent)
+        pixmap.fill(Qt.GlobalColor.transparent)
 
         painter = QPainter(pixmap)
         renderer.render(painter)
-        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
         painter.fillRect(pixmap.rect(), color)
         painter.end()
         return pixmap
@@ -1627,7 +1629,7 @@ def apply_toolbar_symbol_button_style(widget):
     widget.setFixedSize(AppStyle.toolbar_symbol_button_size())
     AppStyle.apply_widget_style(widget, 'compact_button')
     widget.setMinimumSize(AppStyle.toolbar_symbol_button_size())
-    widget.setFont(AppStyle.make_font('h3', weight=QFont.Bold))
+    widget.setFont(AppStyle.make_font('h3', weight=QFont.Weight.Bold))
     widget.setProperty(AppStyle.FONT_ROLE_PROPERTY, 'toolbar_symbol')
 
 def apply_toolbar_text_button_style(widget):
@@ -1701,7 +1703,7 @@ def setup_splitter_layout(splitter, ratios):
         if count <= 0:
             return
 
-        if splitter.orientation() == Qt.Horizontal:
+        if splitter.orientation() == Qt.Orientation.Horizontal:
             total = splitter.width()
         else:
             total = splitter.height()

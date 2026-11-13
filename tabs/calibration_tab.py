@@ -9,15 +9,15 @@ import os
 import sys
 import numpy as np
 
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QCheckBox, QSpinBox, QFormLayout
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
-from matplotlib.backends.backend_qt5agg import (
+from matplotlib.backends.backend_qtagg import (
     FigureCanvasQTAgg as FigureCanvas,
     NavigationToolbar2QT as NavigationToolbar
 )
@@ -82,17 +82,17 @@ class CalibrationApp(BaseImageTab):
 
     def _build_ui(self):
         """Build the main user interface"""
-        from PyQt5.QtWidgets import QSplitter
+        from PyQt6.QtWidgets import QSplitter
         
         # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
         # Main horizontal splitter: visualization area | controls area
-        main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # Left side: Visualization area with vertical splitter for image | plot
-        visualization_splitter = QSplitter(Qt.Vertical)
+        visualization_splitter = QSplitter(Qt.Orientation.Vertical)
         
         # Image panel (top)
         image_panel = self._create_image_panel()
@@ -108,7 +108,7 @@ class CalibrationApp(BaseImageTab):
         main_splitter.addWidget(visualization_splitter)
 
         # Right side: Controls area with vertical splitter for each panel
-        controls_splitter = QSplitter(Qt.Vertical)
+        controls_splitter = QSplitter(Qt.Orientation.Vertical)
         
         # Ring center calculation panel
         ring_center_panel = self._create_ring_center_panel()
@@ -229,7 +229,7 @@ class CalibrationApp(BaseImageTab):
         self.spin_wl_ang.setSingleStep(0.001)
         self.spin_wl_ang.setDecimals(4)
         self.spin_wl_ang.setValue(DEFAULT_CALIBRATION['wavelength_A'])
-        self.spin_wl_ang.setAlignment(Qt.AlignRight)
+        self.spin_wl_ang.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.spin_wl_ang.setMinimumWidth(AppStyle.wide_input_min_width())
         self.spin_wl_ang.valueChanged.connect(self.on_wavelength_changed)
         params_form.addRow(QLabel(tr("calibration.wavelength")), self._right_aligned_field_row(self.spin_wl_ang))
@@ -238,7 +238,7 @@ class CalibrationApp(BaseImageTab):
         self.spin_energy_ev.setRange(100.0, 50000.0)
         self.spin_energy_ev.setSingleStep(1.0)
         self.spin_energy_ev.setValue(DEFAULT_CALIBRATION['energy_eV'])
-        self.spin_energy_ev.setAlignment(Qt.AlignRight)
+        self.spin_energy_ev.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.spin_energy_ev.setMinimumWidth(AppStyle.wide_input_min_width())
         self.spin_energy_ev.valueChanged.connect(self.on_energy_changed)
         energy_label = QLabel(tr("calibration.energy"))
@@ -289,7 +289,7 @@ class CalibrationApp(BaseImageTab):
         snap_row.addWidget(self.snap_to_max_check)
 
         window_label = QLabel(tr("calibration.ring.window"))
-        window_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        window_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         window_label.setMinimumWidth(AppStyle.inline_label_width())
         snap_row.addWidget(window_label)
 
@@ -405,7 +405,7 @@ class CalibrationApp(BaseImageTab):
         spin.setSingleStep(step)
         spin.setValue(default)
         spin.setDecimals(4 if step < 0.01 else 2)
-        spin.setAlignment(Qt.AlignRight)
+        spin.setAlignment(Qt.AlignmentFlag.AlignRight)
         spin.setMinimumWidth(AppStyle.wide_input_min_width())
         spin.valueChanged.connect(self._schedule_calibration_update)
 
@@ -1020,7 +1020,7 @@ class CalibrationApp(BaseImageTab):
         if not getattr(event, 'inside_image', False):
             return
 
-        if event.button == Qt.MiddleButton:
+        if event.button == Qt.MouseButton.MiddleButton:
             self.spin_x.setValue(event.x)
             self.spin_y.setValue(event.y)
             self._calibration_update_timer.stop()
@@ -1028,7 +1028,7 @@ class CalibrationApp(BaseImageTab):
             return
         
         # Mouse button mapping: 1=left, 2=middle, 3=right
-        if event.button == Qt.RightButton:  # Right click for coordinate selection (left click reserved for zoom/pan)
+        if event.button == Qt.MouseButton.RightButton:  # Right click for coordinate selection (left click reserved for zoom/pan)
             x, y = event.x, event.y
             if x is not None and y is not None:
                 display_x, display_y = x, y
@@ -1124,5 +1124,5 @@ class CalibrationApp(BaseImageTab):
     def keyPressEvent(self, event):
         """Handle key press events"""
         # Enter key to update plot
-        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.calibrate_and_update_status()

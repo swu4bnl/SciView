@@ -9,9 +9,9 @@ from types import SimpleNamespace
 from xml.etree import ElementTree as ET
 
 import pytest
-from PyQt5.QtCore import QTranslator
-from PyQt5.QtGui import QFont, QFontDatabase, QFontMetrics
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtCore import QTranslator
+from PyQt6.QtGui import QFont, QFontDatabase, QFontMetrics
+from PyQt6.QtWidgets import QApplication
 
 from sciview.interfaces.export_translations import export_ts
 from sciview.interfaces.theme.app_style import AppStyle
@@ -22,7 +22,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 @pytest.fixture(scope="module")
 def qapp():
-    return QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication(["sciview-tests"])
 
 
 @pytest.fixture(autouse=True)
@@ -79,11 +79,11 @@ def test_bundled_fonts_render_chinese_and_scientific_labels(qapp, caplog, monkey
         monkeypatch.setattr(font_manager.fontManager, "ttflist", [])
         font_manager.fontManager._findfont_cached.cache_clear()
         AppStyle.apply_bundled_fonts(qapp)
-        installed = {family.casefold() for family in QFontDatabase().families()}
+        installed = {family.casefold() for family in QFontDatabase.families()}
         assert {"source sans 3", "noto sans cjk sc"} <= installed
         assert AppStyle.effective_font_family(qapp) == "Source Sans 3"
         assert qapp.font().families() == ["Source Sans 3", "Noto Sans CJK SC"]
-        assert qapp.font().styleHint() == QFont.SansSerif
+        assert qapp.font().styleHint() == QFont.StyleHint.SansSerif
         metrics = QFontMetrics(qapp.font())
         assert all(metrics.inFontUcs4(ord(char)) for char in "Q (Å⁻¹) 水平垂直 αβγ ± × −")
         assert rcParams["font.family"] == ["Source Sans 3", "Noto Sans CJK SC"]

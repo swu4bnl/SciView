@@ -12,7 +12,7 @@ from types import MappingProxyType
 from typing import Mapping
 
 import yaml
-from PyQt5.QtCore import QCoreApplication
+from PyQt6.QtCore import QCoreApplication
 
 SOURCE_LOCALE = "en-US"
 _LOCALE_ROOT = ("locales",)

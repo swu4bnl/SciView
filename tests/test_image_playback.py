@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from PyQt5.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt, QTimer
-from PyQt5.QtGui import QImage, QMouseEvent
-from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import QApplication, QWidget
+from PyQt6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt, QTimer
+from PyQt6.QtGui import QImage, QMouseEvent
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication, QWidget
 
 from sciview.interfaces.theme.app_style import AppStyle
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImagePointerEvent
@@ -18,7 +18,7 @@ from test_image_viewer import DummyParentApp, select_exploration_task
 
 @pytest.fixture
 def browser():
-    app = QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication(["sciview-tests"])
     AppStyle.apply_bundled_fonts(app)
     parent = DummyParentApp()
     parent._workspace_root = Path(__file__).resolve().parents[1]
@@ -44,11 +44,11 @@ def read_editor_value(page, script):
     return value[0]
 
 
-def click_row(tab, row, modifiers=Qt.NoModifier, offset=100):
+def click_row(tab, row, modifiers=Qt.KeyboardModifier.NoModifier, offset=100):
     """Click away from the leading pin icon, so the row selects rather than pins."""
     rect = tab.folder_files_list.visualItemRect(tab.folder_files_list.item(row))
     QTest.mouseClick(
-        tab.folder_files_list.viewport(), Qt.LeftButton, modifiers,
+        tab.folder_files_list.viewport(), Qt.MouseButton.LeftButton, modifiers,
         QPoint(rect.left() + offset, rect.center().y()),
     )
 
@@ -74,14 +74,14 @@ def test_multiselection_selection_order_tracks_clicks_and_folder_changes(browser
     # Row 0 is the subfolder; file rows start at 1, so row (1 + index) is paths[index].
 
     click_row(tab, 1)
-    click_row(tab, 3, Qt.ControlModifier, offset=10)
+    click_row(tab, 3, Qt.KeyboardModifier.ControlModifier, offset=10)
     selected = (str(paths[0]), str(paths[2]))
     assert tab.session_manager.collection.selected_paths == selected
     assert tab.session_manager.collection.pinned_path is None
     assert tab.folder_timeline.maximum() == 1
 
     click_row(tab, 1)
-    click_row(tab, 3, Qt.ShiftModifier)
+    click_row(tab, 3, Qt.KeyboardModifier.ShiftModifier)
     baseline = tuple(str(p) for p in paths[0:3])
     assert tab.session_manager.collection.selected_paths == baseline
 
@@ -89,17 +89,17 @@ def test_multiselection_selection_order_tracks_clicks_and_folder_changes(browser
     viewport = tab.folder_files_list.viewport()
     start = QPoint(viewport.width() - 5, viewport.height() - 5)
     target = tab.folder_files_list.visualItemRect(tab.folder_files_list.item(1)).center()
-    QTest.mousePress(viewport, Qt.LeftButton, pos=start)
+    QTest.mousePress(viewport, Qt.MouseButton.LeftButton, pos=start)
     QApplication.sendEvent(
         viewport,
-        QMouseEvent(QEvent.MouseMove, QPointF(target), Qt.NoButton, Qt.LeftButton, Qt.NoModifier),
+        QMouseEvent(QEvent.Type.MouseMove, QPointF(target), Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier),
     )
-    QTest.mouseRelease(viewport, Qt.LeftButton, pos=target)
+    QTest.mouseRelease(viewport, Qt.MouseButton.LeftButton, pos=target)
     assert len(tab.session_manager.collection.selected_paths) >= 2
     assert tab.session_manager.collection.pinned_path is None
 
     click_row(tab, 1)
-    click_row(tab, 3, Qt.ShiftModifier)
+    click_row(tab, 3, Qt.KeyboardModifier.ShiftModifier)
     assert tab.session_manager.collection.selected_paths == baseline
 
     (tmp_path / "new.tif").touch()
@@ -127,18 +127,18 @@ def test_keyboard_navigation_moves_through_selection_and_pauses_playback(browser
     app.processEvents()
 
     click_row(tab, 0)
-    click_row(tab, 2, Qt.ControlModifier, offset=10)
+    click_row(tab, 2, Qt.KeyboardModifier.ControlModifier, offset=10)
     selected = (str(paths[0]), str(paths[2]))
 
-    QTest.keyClick(tab.folder_timeline, Qt.Key_Up)
+    QTest.keyClick(tab.folder_timeline, Qt.Key.Key_Up)
     assert tab.session_manager.collection.current_reference.path == selected[0]
     assert tab.session_manager.collection.selected_paths == selected
 
     for key, expected in (
-        (Qt.Key_Up, selected[0]),
-        (Qt.Key_Down, selected[1]),
-        (Qt.Key_Down, selected[1]),
-        (Qt.Key_Up, selected[0]),
+        (Qt.Key.Key_Up, selected[0]),
+        (Qt.Key.Key_Down, selected[1]),
+        (Qt.Key.Key_Down, selected[1]),
+        (Qt.Key.Key_Up, selected[0]),
     ):
         QTest.keyClick(tab.folder_files_list, key)
         assert tab.session_manager.collection.current_reference.path == expected
@@ -147,7 +147,7 @@ def test_keyboard_navigation_moves_through_selection_and_pauses_playback(browser
 
     tab.folder_play_button.click()
     assert tab.folder_play_timer.isActive()
-    QTest.keyClick(tab.folder_files_list, Qt.Key_Down)
+    QTest.keyClick(tab.folder_files_list, Qt.Key.Key_Down)
     assert not tab.folder_play_timer.isActive()
     assert tab.session_manager.collection.current_reference.path == selected[1]
 
@@ -157,7 +157,7 @@ def test_playback_transport_advances_speed_and_loops(browser, tmp_path):
     paths = add_files(tab, tmp_path, 3)
     app.processEvents()
     click_row(tab, 0)
-    click_row(tab, 2, Qt.ControlModifier, offset=10)
+    click_row(tab, 2, Qt.KeyboardModifier.ControlModifier, offset=10)
     selected = (str(paths[0]), str(paths[2]))
     assert tab.session_manager.collection.selected_paths == selected
 
@@ -253,7 +253,7 @@ def test_shutdown_keeps_inflight_reads_alive_without_blocking_ui(tmp_path, monke
     from main import SciAnaApp
     from sciview.session import session_cache
 
-    app = QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication(["sciview-tests"])
     AppStyle.apply_bundled_fonts(app)
     monkeypatch.setattr(SciAnaApp, "_setup_resource_monitor", lambda self: None)
     monkeypatch.setattr(session_cache, "clear_scratch", lambda: None)
@@ -294,7 +294,7 @@ def test_shutdown_keeps_inflight_reads_alive_without_blocking_ui(tmp_path, monke
         window.tab_widget.removeTab(0)
         window.tab_widget.insertTab(0, QWidget(), "Replacement")
         tab.deleteLater()
-        QCoreApplication.sendPostedEvents(tab, QEvent.DeferredDelete)
+        QCoreApplication.sendPostedEvents(tab, QEvent.Type.DeferredDelete)
         assert worker.isRunning()
         release.set()
         wait_until(lambda: bool(finished) and not window.isVisible())
@@ -320,22 +320,22 @@ def test_pinned_playback_preserves_calculation_selection_and_rejects_incompatibl
     tab.folder_files_list.setCurrentRow(0)
     tab._toggle_selected_pinned_image()
     tab.folder_files_list.setCurrentRow(1)
-    assert tab.folder_files_list.item(0).data(Qt.UserRole + 2)
-    assert not tab.folder_files_list.item(1).data(Qt.UserRole + 2)
+    assert tab.folder_files_list.item(0).data(Qt.ItemDataRole.UserRole + 2)
+    assert not tab.folder_files_list.item(1).data(Qt.ItemDataRole.UserRole + 2)
 
     tab.folder_files_list.item(2).setSelected(True)
     select_exploration_task(tab, "difference")
     tab.comparison_parameter_slider.setValue(50)
     selected = tab.session_manager.collection.selected_paths
     np.testing.assert_array_equal(tab.image_viewer.source_array, arrays[0] - arrays[1] * 0.5)
-    assert tab.folder_files_list.item(1).data(Qt.UserRole + 2)
+    assert tab.folder_files_list.item(1).data(Qt.ItemDataRole.UserRole + 2)
 
     tab.folder_play_button.click()
     tab._advance_folder_playback()
     tab.folder_play_button.click()
     np.testing.assert_array_equal(tab.image_viewer.source_array, arrays[0] - arrays[2] * 0.5)
-    assert tab.folder_files_list.item(2).data(Qt.UserRole + 2)
-    assert not tab.folder_files_list.item(1).data(Qt.UserRole + 2)
+    assert tab.folder_files_list.item(2).data(Qt.ItemDataRole.UserRole + 2)
+    assert not tab.folder_files_list.item(1).data(Qt.ItemDataRole.UserRole + 2)
     assert tab.session_manager.collection.selected_paths == selected
     assert tab.session_manager.collection.pinned_path == str(paths[0])
 
@@ -381,9 +381,9 @@ def test_file_hold_restores_flicker_after_playback_and_preserves_multiselection(
     tab.folder_play_button.click()
     tab.folder_play_button.click()
     assert tab.image_viewer.source_array is arrays[1]
-    QTest.keyPress(tab.folder_files_list, Qt.Key_Space)
+    QTest.keyPress(tab.folder_files_list, Qt.Key.Key_Space)
     assert tab.image_viewer.source_array is arrays[1]
-    QTest.keyRelease(tab.folder_files_list, Qt.Key_Space)
+    QTest.keyRelease(tab.folder_files_list, Qt.Key.Key_Space)
     assert tab.image_viewer.source_array is arrays[0]
     assert tab.session_manager.collection.selected_paths == selected
 
@@ -391,10 +391,10 @@ def test_file_hold_restores_flicker_after_playback_and_preserves_multiselection(
     app.processEvents()
     rect = tab.folder_files_list.visualItemRect(tab.folder_files_list.item(2))
     position = QPoint(rect.left() + 100, rect.center().y())
-    QTest.mousePress(tab.folder_files_list.viewport(), Qt.LeftButton, pos=position)
+    QTest.mousePress(tab.folder_files_list.viewport(), Qt.MouseButton.LeftButton, pos=position)
     assert not tab.folder_play_timer.isActive()
     assert tab.image_viewer.source_array is arrays[2]
-    QTest.mouseRelease(tab.folder_files_list.viewport(), Qt.LeftButton, pos=position)
+    QTest.mouseRelease(tab.folder_files_list.viewport(), Qt.MouseButton.LeftButton, pos=position)
     assert tab.image_viewer.source_array is arrays[0]
     assert tab.folder_files_list.currentRow() == 2
 
@@ -424,7 +424,7 @@ def test_annotations_survive_playback_without_changing_images_masks_or_exports(b
     mask_before = mask_item.image.copy()
 
     def pointer(x, y):
-        return ImagePointerEvent(x, y, Qt.LeftButton, Qt.NoModifier, True, True)
+        return ImagePointerEvent(x, y, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, True, True)
 
     try:
         marks.select_tool("rectangle")
@@ -469,7 +469,7 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
     from tabs.reduction_tab import ReductionTab
     from tabs.results_tab import ResultsTab
 
-    app = QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication(["sciview-tests"])
     AppStyle.apply_bundled_fonts(app)
     monkeypatch.setattr(SciAnaApp, "_setup_resource_monitor", lambda self: None)
     monkeypatch.setattr(SciAnaApp, "save_session_state", lambda self: None)
@@ -569,7 +569,7 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
         results._hover_plot([hover_position])
         assert results._hovered_curve_index == 1
         assert results.curve_list.currentItem() is None
-        assert results._items[1].data(Qt.BackgroundRole).style() != Qt.NoBrush
+        assert results._items[1].data(Qt.ItemDataRole.BackgroundRole).style() != Qt.BrushStyle.NoBrush
         results._hover_source_item(results._items[0])
         assert results._hovered_curve_index == 0
         assert results.curve_list.currentItem() is None
@@ -580,7 +580,7 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
         app.processEvents()
         results._tool_buttons["mark"].click()
         position = results.canvas.mapFromScene(results.view_box.mapViewToScene(QPointF(0.15, 31)))
-        QTest.mouseClick(results.canvas.viewport(), Qt.LeftButton, pos=position)
+        QTest.mouseClick(results.canvas.viewport(), Qt.MouseButton.LeftButton, pos=position)
         assert len(results._marks) == 1
         assert results.curve_list.currentItem() is results._items[1]
         assert results.curve_appearance.isVisible()
@@ -596,7 +596,7 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
         results.palette.setCurrentText("plasma")
         np.testing.assert_allclose(results.view_box.viewRange(), zoomed)
         item = results._items[1]
-        item.setCheckState(Qt.Unchecked)
+        item.setCheckState(Qt.CheckState.Unchecked)
         assert not results._lines[1].isVisible()
         assert not results._marks[0].dot.isVisible()
         np.testing.assert_array_equal(results._run.curves[1].result.y, [30, 30])
@@ -784,7 +784,7 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
             and results.notebook.document.objects[key].state.default_line_width == 2.5
         ))
         assert results._curve_pen(0).widthF() == 2.5
-        assert results._curve_pen(0).style() == Qt.DotLine
+        assert results._curve_pen(0).style() == Qt.PenStyle.DotLine
         assert results._curve_pen(1).color().alphaF() == pytest.approx(.4)
         assert read_editor_value(results.notebook.page,
             f"document.querySelector('.plot-card[data-object-id=\"{key}\"] .plot-surface svg g[data-curve-index=\"1\"] path').getAttribute('stroke-opacity')") == "0.4"
@@ -824,7 +824,7 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
         )
         QTest.qWait(50)
         QTest.mouseClick(
-            editor_target, Qt.LeftButton,
+            editor_target, Qt.MouseButton.LeftButton,
             pos=QPoint(round(click_point[0]), round(click_point[1])),
         )
         wait_until(lambda: len(results.notebook.document.objects[key].state.marks) == 2)
@@ -876,7 +876,7 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
             }})()""",
         )
         wait_until(lambda: results._hovered_curve_index == 0)
-        assert results._items[0].data(Qt.BackgroundRole).style() != Qt.NoBrush
+        assert results._items[0].data(Qt.ItemDataRole.BackgroundRole).style() != Qt.BrushStyle.NoBrush
         assert " q " in results.cursor_label.text()
         results.notebook.page.runJavaScript(
             f"""(() => {{
@@ -928,15 +928,15 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
         )
         resize_origin = QPoint(round(resize_start[0]), round(resize_start[1]))
         resize_end = resize_origin + QPoint(-35, 25)
-        QTest.mousePress(editor_target, Qt.LeftButton, pos=resize_origin)
+        QTest.mousePress(editor_target, Qt.MouseButton.LeftButton, pos=resize_origin)
         QTest.mouseMove(editor_target, resize_end, delay=30)
         QTest.qWait(150)
-        QTest.mouseRelease(editor_target, Qt.LeftButton, pos=resize_end)
+        QTest.mouseRelease(editor_target, Qt.MouseButton.LeftButton, pos=resize_end)
         wait_until(lambda: (
             results.notebook.document.objects[key].state.width < 100
             and results.notebook.document.objects[key].state.height == round(resize_start[2]) + 25
         ))
-        QTest.keyClick(editor_target, Qt.Key_Escape)
+        QTest.keyClick(editor_target, Qt.Key.Key_Escape)
         QTest.keyClicks(editor_target, "The reflection changes during heating.")
         wait_until(lambda: "reflection changes" in results.notebook.document.markdown)
         assert f"sciview:{key}" in results.notebook.document.markdown, results.notebook.document.markdown
@@ -974,9 +974,9 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
         ) == "title")
         assert read_editor_value(results.notebook.page,
             f"document.querySelector('.plot-card[data-object-id=\"{key}\"] .figure-context-tools').hidden")
-        QTest.keyClick(editor_target, Qt.Key_A, Qt.ControlModifier)
+        QTest.keyClick(editor_target, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
         QTest.keyClicks(editor_target, "Heating series")
-        QTest.keyClick(editor_target, Qt.Key_Return)
+        QTest.keyClick(editor_target, Qt.Key.Key_Return)
         wait_until(lambda: results.notebook.document.objects[key].title == "Heating series")
         wait_until(lambda: read_editor_value(results.notebook.page,
             f"document.querySelector('#outline [data-object-id=\"{key}\"]').textContent") == "Heating series")
@@ -992,9 +992,9 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
         ) == "x_label")
         assert read_editor_value(results.notebook.page,
             f"document.querySelector('.plot-card[data-object-id=\"{key}\"] .figure-context-tools').hidden")
-        QTest.keyClick(editor_target, Qt.Key_A, Qt.ControlModifier)
+        QTest.keyClick(editor_target, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
         QTest.keyClicks(editor_target, "Scattering vector")
-        QTest.keyClick(editor_target, Qt.Key_Return)
+        QTest.keyClick(editor_target, Qt.Key.Key_Return)
         wait_until(lambda: results.notebook.document.objects[key].figure.x_label == "Scattering vector")
         results.notebook.page.runJavaScript(
             f"""(() => {{
@@ -1008,9 +1008,9 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
         wait_until(lambda: read_editor_value(
             results.notebook.page, "document.activeElement.dataset.figureField",
         ) == "legend:1")
-        QTest.keyClick(editor_target, Qt.Key_A, Qt.ControlModifier)
+        QTest.keyClick(editor_target, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
         QTest.keyClicks(editor_target, "Heated sample")
-        QTest.keyClick(editor_target, Qt.Key_Return)
+        QTest.keyClick(editor_target, Qt.Key.Key_Return)
         wait_until(lambda: results.notebook.document.objects[key].figure.legend_names.get(1) == "Heated sample")
         results.notebook.page.runJavaScript(
             f"""(() => {{
@@ -1061,7 +1061,7 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
         assert (second_preview.width(), second_preview.height()) == (320, 180)
         assert results._active_object == key
         assert results._run.request.paths == selected
-        assert results.curve_list.currentItem().data(Qt.UserRole) == 1
+        assert results.curve_list.currentItem().data(Qt.ItemDataRole.UserRole) == 1
         np.testing.assert_allclose(results.view_box.viewRange(), previous_range)
         notebook_path = tmp_path / "findings.md"
         import sciview.interfaces.stable_qt.widgets.notebook_editor as notebook_editor
@@ -1071,7 +1071,7 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
         assert not results.notebook.dirty
         assert results._plot_state() == results.notebook.document.objects[key].state
         original_calls = len(calls)
-        from PyQt5.QtWidgets import QMessageBox
+        from PyQt6.QtWidgets import QMessageBox
         restart_state = window._collect_session_state()
         assert restart_state["results"]["notebook_path"] == str(notebook_path.resolve())
         restarted_window = SciAnaApp()
@@ -1159,9 +1159,9 @@ def test_selected_images_to_waterfall_preserves_context_and_updates_from_setting
             assert not results.notebook.save()
             assert notebook_path.read_bytes() == saved
         results._sync_notebook_plot()
-        from PyQt5.QtWidgets import QMessageBox
+        from PyQt6.QtWidgets import QMessageBox
         with monkeypatch.context() as close_patch:
-            close_patch.setattr(QMessageBox, "warning", lambda *_args: QMessageBox.Cancel)
+            close_patch.setattr(QMessageBox, "warning", lambda *_args: QMessageBox.StandardButton.Cancel)
             window.close()
             assert window.isVisible()
             assert results.notebook.dirty

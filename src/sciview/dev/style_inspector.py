@@ -28,8 +28,8 @@ from sciview.interfaces.text import tr
 import importlib
 from pathlib import Path
 
-from PyQt5.QtCore import QFileSystemWatcher, Qt
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QFileSystemWatcher, Qt
+from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
     QFormLayout,
@@ -157,7 +157,7 @@ def _apply_theme(theme_key: str | None, app_style_cls: type | None = None) -> bo
     if theme_key == "qdarkstyle":
         qdarkstyle = importlib.import_module("qdarkstyle")
 
-        qapp.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+        qapp.setStyleSheet(qdarkstyle.load_stylesheet(qt_api="pyqt6"))
         app_style_cls.apply_global_style(qapp, preserve_existing=True)
         _ACTIVE_THEME_KEY = theme_key
         return True
@@ -249,7 +249,7 @@ class StyleInspector(QWidget):
     """Floating panel for live CSS-token editing and layout-token inspection."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent, Qt.Window | Qt.WindowStaysOnTopHint)
+        super().__init__(parent, Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
         self.setWindowTitle(tr('style_inspector.style_inspector_dev'))
         self.resize(340, 600)
         self._style_combo: QComboBox | None = None
@@ -272,7 +272,7 @@ class StyleInspector(QWidget):
         style_form = QFormLayout(style_group)
         style_form.setContentsMargins(6, 10, 6, 6)
         style_form.setSpacing(3)
-        style_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        style_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         self._style_combo = QComboBox()
         theme_options = _theme_option_items()
@@ -302,7 +302,7 @@ class StyleInspector(QWidget):
         css_form = QFormLayout(css_group)
         css_form.setContentsMargins(6, 10, 6, 6)
         css_form.setSpacing(3)
-        css_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        css_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         css_tokens = AppStyle.CSS_TOKENS
         # Build a human label from the key name
@@ -323,7 +323,7 @@ class StyleInspector(QWidget):
         font_form = QFormLayout(font_group)
         font_form.setContentsMargins(6, 10, 6, 6)
         font_form.setSpacing(3)
-        font_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        font_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         fonts = AppStyle.FONTS
         for key, (label, mn, mx) in _FONT_SIZE_TOKENS.items():
@@ -356,7 +356,7 @@ class StyleInspector(QWidget):
         layout_form = QFormLayout(layout_group)
         layout_form.setContentsMargins(6, 10, 6, 6)
         layout_form.setSpacing(3)
-        layout_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        layout_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         for key, (label, mn, mx) in _LAYOUT_TOKENS.items():
             value = AppStyle.LAYOUT.get(key, 0)
@@ -378,7 +378,7 @@ class StyleInspector(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setWidget(content)
         root.addWidget(scroll, 1)
 

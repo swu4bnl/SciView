@@ -29,8 +29,8 @@ def _measure_worker(cache_dir: Path, samples: int) -> dict:
         raise RuntimeError("Run the UI benchmark from a SciView source checkout.")
     sys.path.insert(0, str(root))
     import main
-    from PyQt5.QtCore import QCoreApplication, QEvent, QEventLoop, QStandardPaths
-    from PyQt5.QtWidgets import QWidget
+    from PyQt6.QtCore import QCoreApplication, QEvent, QEventLoop, QStandardPaths
+    from PyQt6.QtWidgets import QWidget
     from sciview.interfaces.theme.app_style import AppStyle
 
     imported = perf_counter()
@@ -44,7 +44,7 @@ def _measure_worker(cache_dir: Path, samples: int) -> dict:
         return original_render(*args)
 
     def location(kind):
-        if kind == QStandardPaths.GenericCacheLocation:
+        if kind == QStandardPaths.StandardLocation.GenericCacheLocation:
             return str(cache_dir)
         return original_location(kind)
 
@@ -60,10 +60,10 @@ def _measure_worker(cache_dir: Path, samples: int) -> dict:
         def settle():
             # Include queued layouts, paints and deferred canvas updates; no sleep.
             for _ in range(4):
-                QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
-                app.processEvents(QEventLoop.AllEvents)
+                QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents)
             app.sync()
-            app.processEvents(QEventLoop.AllEvents)
+            app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents)
 
         try:
             created = perf_counter()

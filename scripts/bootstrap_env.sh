@@ -84,7 +84,7 @@ setup_with_venv() {
 
     echo "[4/4] Installing project dependencies..."
     "$VENV_PIP" install -e . --no-deps
-    "$VENV_PIP" install PyQt5 matplotlib scipy psutil tiled PyYAML pillow numpy
+    "$VENV_PIP" install 'PyQt6>=6.8,<6.9' 'PyQt6-WebEngine>=6.8,<6.9' 'PyQt6-Qt6>=6.8,<6.9' 'PyQt6-WebEngine-Qt6>=6.8,<6.9' matplotlib scipy psutil tiled PyYAML pillow numpy
 
     if ! "$VENV_PIP" install scitoolsscianalysis; then
         echo "ERROR: Required dependency scitoolsscianalysis could not be installed in venv mode."

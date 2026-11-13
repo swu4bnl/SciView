@@ -9,8 +9,8 @@ import math
 
 import numpy as np
 import pyqtgraph as pg
-from PyQt5.QtCore import QPointF, Qt
-from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsRectItem
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtWidgets import QGraphicsPathItem, QGraphicsRectItem
 
 from sciview.interfaces.stable_qt.utils.image_utils import validate_and_prepare_image_array
 from sciview.interfaces.stable_qt.widgets.image_viewer import ImagePointerEvent, ImageViewer
@@ -165,8 +165,8 @@ class MaskDrawingSession:
         self._preview = QGraphicsRectItem(0, 0, width, height)
         self._preview.setPen(pg.mkPen(None))
         self._preview.setBrush(pg.mkBrush(None))
-        self._preview.setFlag(QGraphicsRectItem.ItemClipsChildrenToShape, True)
-        self._preview.setAcceptedMouseButtons(Qt.NoButton)
+        self._preview.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemClipsChildrenToShape, True)
+        self._preview.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         self._preview.setZValue(30)
         self._preview.setOpacity(0.5)
         self.get_viewer().set_overlay_item(
@@ -186,7 +186,7 @@ class MaskDrawingSession:
         return None
 
     def handle_press(self, event: ImagePointerEvent) -> None:
-        if event.button != Qt.LeftButton or not self.is_enabled():
+        if event.button != Qt.MouseButton.LeftButton or not self.is_enabled():
             return
         tool = self.get_tool()
         if tool is None:
@@ -232,7 +232,7 @@ class MaskDrawingSession:
 
     def handle_release(self, event: ImagePointerEvent) -> None:
         tool = self._edit_tool
-        if event.button != Qt.LeftButton or tool is None or isinstance(tool, PolygonDrawingTool):
+        if event.button != Qt.MouseButton.LeftButton or tool is None or isinstance(tool, PolygonDrawingTool):
             return
         target = self._edit_target()
         if target is None or not self.is_enabled():
@@ -252,7 +252,7 @@ class MaskDrawingSession:
 
     def handle_double_click(self, event: ImagePointerEvent) -> bool:
         tool = self._edit_tool
-        if event.button != Qt.LeftButton or not isinstance(tool, PolygonDrawingTool):
+        if event.button != Qt.MouseButton.LeftButton or not isinstance(tool, PolygonDrawingTool):
             return False
         target = self._edit_target()
         if target is None or not self.is_enabled():
@@ -276,10 +276,10 @@ class MaskDrawingSession:
         if self._stroke_item is None or style != self._stroke_style:
             self._stroke_gesture.press("brush", self._qt_point(previous))
             self._stroke_item = QGraphicsPathItem(self._preview)
-            self._stroke_item.setAcceptedMouseButtons(Qt.NoButton)
+            self._stroke_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
             pen = pg.mkPen(self._preview_color(sample.value), width=max(1, sample.radius * 2), cosmetic=False)
-            pen.setCapStyle(Qt.RoundCap)
-            pen.setJoinStyle(Qt.RoundJoin)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             self._stroke_item.setPen(pen)
             self._stroke_style = style
         self._stroke_gesture.move(self._qt_point(point))
@@ -288,7 +288,7 @@ class MaskDrawingSession:
             dot.setPath(self._stroke_gesture.path(max(1, sample.radius * 2), filled=True, pixel_mask=True))
             dot.setPen(pg.mkPen(None))
             dot.setBrush(pg.mkBrush(self._preview_color(sample.value)))
-            dot.setAcceptedMouseButtons(Qt.NoButton)
+            dot.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         if len(self._stroke_gesture.points) > 1:
             self._stroke_item.setPath(self._stroke_gesture.path(max(1, sample.radius * 2)))
 
@@ -301,7 +301,7 @@ class MaskDrawingSession:
         path = tool.gesture.path(width, filled=True, pixel_mask=True)
         if self._shape_item is None:
             self._shape_item = QGraphicsPathItem(self._preview)
-            self._shape_item.setAcceptedMouseButtons(Qt.NoButton)
+            self._shape_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
             self._shape_item.setPen(pg.mkPen(None))
         self._shape_item.setBrush(pg.mkBrush(self._preview_color(tool.draw_value)))
         self._shape_item.setPath(path)

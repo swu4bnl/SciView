@@ -1,6 +1,6 @@
 """Dedicated Info tab that centralizes image information display."""
 
-from PyQt5.QtWidgets import QVBoxLayout
+from PyQt6.QtWidgets import QVBoxLayout
 
 from sciview.interfaces.theme.app_style import AppStyle
 from tabs.base_image_tab import BaseImageTab

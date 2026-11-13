@@ -11,9 +11,9 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -33,8 +33,8 @@ from PyQt5.QtWidgets import (
 )
 
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 
 from sciview.session.session_cache import choose_path
 from sciview.interfaces.text import tr
@@ -106,11 +106,11 @@ class ReductionTab(BaseImageTab):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
         preview_panel = self._create_preview_panel()
         main_splitter.addWidget(preview_panel)
 
-        right_splitter = QSplitter(Qt.Vertical)
+        right_splitter = QSplitter(Qt.Orientation.Vertical)
         right_splitter.addWidget(self._create_image_panel())
         right_splitter.addWidget(self.make_scrollable_panel(self._create_controls_panel()))
         # Recipe/parameters now stretch to fill the sidebar, so the raw image

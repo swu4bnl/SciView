@@ -13,15 +13,15 @@ import glob
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QListWidget, QListWidgetItem, QCheckBox, QComboBox, QLineEdit,
     QFileDialog, QMessageBox, QScrollArea, QSplitter,
     QSizePolicy, QStyle, QSlider, QAbstractItemView,
     QStyledItemDelegate,
 )
-from PyQt5.QtCore import QEvent, QItemSelectionModel, QSignalBlocker, Qt, QThread, pyqtSignal, QTimer, QSize
-from PyQt5.QtGui import QIcon, QPainter, QPixmap
+from PyQt6.QtCore import QEvent, QItemSelectionModel, QSignalBlocker, Qt, QThread, pyqtSignal, QTimer, QSize
+from PyQt6.QtGui import QIcon, QPainter, QPixmap
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
@@ -61,7 +61,7 @@ class DisplayedImageDelegate(QStyledItemDelegate):
 
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
-        if index.data(Qt.UserRole + 2):
+        if index.data(Qt.ItemDataRole.UserRole + 2):
             option.font.setBold(True)
             option.text = "▶ " + option.text
 
@@ -819,7 +819,7 @@ class ImageBrowserApp(BaseImageTab):
         main_layout.setContentsMargins(0, 0, 0, 0)
 
         # Main horizontal splitter: visualization | controls
-        main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # Left panel: Image visualization with navigation
         visualization_panel = self._create_image_browser_panel()
@@ -868,19 +868,19 @@ class ImageBrowserApp(BaseImageTab):
         folder_layout = QHBoxLayout()
         self.folder_path_combo = QComboBox()
         self.folder_path_combo.setEditable(True)
-        self.folder_path_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.folder_path_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.folder_path_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.folder_path_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.folder_path_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.folder_path_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.folder_path_combo.setToolTip(tr("image_browser.folder.path.tooltip"))
         self.folder_path_input = self.folder_path_combo.lineEdit()
         self.folder_path_input.setPlaceholderText(
             tr("image_browser.folder.path.placeholder")
         )
-        self.folder_path_combo.activated[str].connect(self._go_to_folder)
+        self.folder_path_combo.textActivated.connect(self._go_to_folder)
         folder_layout.addWidget(self.folder_path_combo, 1)
         
         self.folder_up_button = QPushButton()
-        self.folder_up_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowUp))
+        self.folder_up_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowUp))
         self.folder_up_button.setToolTip(tr("image_browser.folder.parent.tooltip"))
         apply_toolbar_symbol_button_style(self.folder_up_button)
         self.folder_up_button.clicked.connect(self._navigate_folder_up)
@@ -888,7 +888,7 @@ class ImageBrowserApp(BaseImageTab):
         folder_layout.addWidget(self.folder_up_button)
 
         btn_browse_folder = QPushButton()
-        btn_browse_folder.setIcon(self.style().standardIcon(QStyle.SP_DirOpenIcon))
+        btn_browse_folder.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
         btn_browse_folder.setToolTip(tr("image_browser.folder.choose.tooltip"))
         btn_browse_folder.clicked.connect(self._browse_folder)
         apply_toolbar_symbol_button_style(btn_browse_folder)
@@ -947,20 +947,20 @@ class ImageBrowserApp(BaseImageTab):
         layout.addLayout(contents_header)
 
         self.folder_files_list = QListWidget()
-        self.folder_files_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.folder_files_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.folder_files_list.setItemDelegate(DisplayedImageDelegate(self.folder_files_list))
         self.folder_files_list.setDragEnabled(False)
         self.folder_files_list.itemSelectionChanged.connect(self._on_folder_selection_changed)
         self.folder_files_list.currentItemChanged.connect(self._open_folder_file)
         self.folder_files_list.itemClicked.connect(self._reopen_folder_file)
         self.folder_files_list.itemDoubleClicked.connect(self._handle_folder_list_double_click)
-        self.folder_files_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.folder_files_list.setTextElideMode(Qt.ElideMiddle)
+        self.folder_files_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.folder_files_list.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         # Every row is one line with one icon; uniform sizes avoid measuring
         # each row, which keeps folders with many thousands of files responsive.
         self.folder_files_list.setUniformItemSizes(True)
         self.folder_files_list.setIconSize(AppStyle.corner_button_icon_size())
-        self._file_icon = self.style().standardIcon(QStyle.SP_FileIcon)
+        self._file_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)
         self._pin_icon = self._emoji_icon("📌")
         self._pin_preview_icon = self._emoji_icon("📌", opacity=0.35)
         self._pin_hover_row = -1
@@ -973,7 +973,7 @@ class ImageBrowserApp(BaseImageTab):
         controls_layout = QHBoxLayout()
         controls_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
         self.folder_playback_widget = QWidget()
-        self.folder_playback_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.folder_playback_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         playback_layout = QHBoxLayout(self.folder_playback_widget)
         playback_layout.setContentsMargins(0, 0, 0, 0)
         playback_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
@@ -1016,7 +1016,7 @@ class ImageBrowserApp(BaseImageTab):
             button.setAccessibleName(tr(f"image_browser.compare.mode.{mode}"))
             button.setToolTip(tr(f"image_browser.compare.mode.{mode}.tooltip"))
             apply_toolbar_text_button_style(button)
-            button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             button.clicked.connect(
                 lambda _checked, task=mode.value: self._activate_exploration_task(task)
             )
@@ -1027,7 +1027,7 @@ class ImageBrowserApp(BaseImageTab):
         timeline_layout = QHBoxLayout(self.folder_timeline_widget)
         timeline_layout.setContentsMargins(0, 0, 0, 0)
         timeline_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
-        self.folder_timeline = QSlider(Qt.Horizontal)
+        self.folder_timeline = QSlider(Qt.Orientation.Horizontal)
         self.folder_timeline.setMinimumWidth(AppStyle.compact_input_min_width())
         self.folder_timeline.setAccessibleName(tr("image_browser.playback.timeline"))
         self.folder_timeline.setToolTip(tr("image_browser.playback.timeline"))
@@ -1043,7 +1043,7 @@ class ImageBrowserApp(BaseImageTab):
         apply_info_style(self.comparison_parameter_label)
         self.comparison_parameter_label.hide()
 
-        self.comparison_parameter_slider = QSlider(Qt.Horizontal)
+        self.comparison_parameter_slider = QSlider(Qt.Orientation.Horizontal)
         self.comparison_parameter_slider.setRange(0, 100)
         self.comparison_parameter_slider.setValue(50)
         self.comparison_parameter_slider.setAccessibleName(
@@ -1136,9 +1136,9 @@ class ImageBrowserApp(BaseImageTab):
 
     def _toggle_selected_pinned_image(self) -> None:
         item = self.folder_files_list.currentItem()
-        if item is None or item.data(Qt.UserRole + 1) == "dir":
+        if item is None or item.data(Qt.ItemDataRole.UserRole + 1) == "dir":
             return
-        file_path = item.data(Qt.UserRole)
+        file_path = item.data(Qt.ItemDataRole.UserRole)
         if not file_path:
             return
 
@@ -1172,20 +1172,20 @@ class ImageBrowserApp(BaseImageTab):
         """Render a symbol into the list's icon slot so all rows share one column."""
         size = self.folder_files_list.iconSize()
         pixmap = QPixmap(size)
-        pixmap.fill(Qt.transparent)
+        pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
         painter.setOpacity(opacity)
         font = painter.font()
         font.setPixelSize(round(size.height() * 0.8))
         painter.setFont(font)
-        painter.drawText(pixmap.rect(), Qt.AlignCenter, text)
+        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, text)
         painter.end()
         return QIcon(pixmap)
 
     def _pin_target_row(self, pos) -> int:
         """Return the file row whose leading pin slot contains ``pos``, else -1."""
         item = self.folder_files_list.itemAt(pos)
-        if item is None or item.data(Qt.UserRole + 1) == "dir":
+        if item is None or item.data(Qt.ItemDataRole.UserRole + 1) == "dir":
             return -1
         rect = self.folder_files_list.visualItemRect(item)
         slot_width = self.folder_files_list.iconSize().width() + AppStyle.control_px(12)
@@ -1200,7 +1200,7 @@ class ImageBrowserApp(BaseImageTab):
         self._pin_hover_row = row
         viewport = self.folder_files_list.viewport()
         if row >= 0:
-            viewport.setCursor(Qt.PointingHandCursor)
+            viewport.setCursor(Qt.CursorShape.PointingHandCursor)
         else:
             viewport.unsetCursor()
         pinned_path = self.session_manager.collection.pinned_path
@@ -1221,59 +1221,59 @@ class ImageBrowserApp(BaseImageTab):
             self._update_display()
 
     def eventFilter(self, watched, event):
-        if watched is getattr(self, "folder_timeline", None) and event.type() == QEvent.KeyPress:
-            if event.key() in (Qt.Key_Up, Qt.Key_Down) and not event.modifiers():
+        if watched is getattr(self, "folder_timeline", None) and event.type() == QEvent.Type.KeyPress:
+            if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down) and not event.modifiers():
                 watched.triggerAction(
-                    QSlider.SliderSingleStepSub if event.key() == Qt.Key_Up
-                    else QSlider.SliderSingleStepAdd
+                    QSlider.SliderAction.SliderSingleStepSub if event.key() == Qt.Key.Key_Up
+                    else QSlider.SliderAction.SliderSingleStepAdd
                 )
                 event.accept()
                 return True
         if watched is self.folder_files_list and event.type() in (
-            QEvent.KeyPress,
-            QEvent.KeyRelease,
+            QEvent.Type.KeyPress,
+            QEvent.Type.KeyRelease,
         ):
             if (
-                event.type() == QEvent.KeyPress
-                and event.key() in (Qt.Key_Up, Qt.Key_Down)
+                event.type() == QEvent.Type.KeyPress
+                and event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down)
                 and not event.modifiers()
                 and len(self.session_manager.collection.selected_paths) > 1
             ):
                 paths = self._folder_sequence_paths()
                 current = self.session_manager.collection.current_reference
                 if current is not None and current.path in paths:
-                    step = -1 if event.key() == Qt.Key_Up else 1
+                    step = -1 if event.key() == Qt.Key.Key_Up else 1
                     index = min(max(paths.index(current.path) + step, 0), len(paths) - 1)
                 else:
-                    index = len(paths) - 1 if event.key() == Qt.Key_Up else 0
+                    index = len(paths) - 1 if event.key() == Qt.Key.Key_Up else 0
                 self._seek_folder_sequence(index)
                 event.accept()
                 return True
-            if event.key() == Qt.Key_Space and not event.modifiers():
+            if event.key() == Qt.Key.Key_Space and not event.modifiers():
                 if not event.isAutoRepeat():
                     self._set_hold_shows_selected(
-                        event.type() == QEvent.KeyPress
+                        event.type() == QEvent.Type.KeyPress
                     )
                 event.accept()
                 return True
         if watched is self.folder_files_list.viewport():
-            if event.type() == QEvent.MouseMove:
-                self._set_pin_hover_row(self._pin_target_row(event.pos()))
-            elif event.type() == QEvent.Leave:
+            if event.type() == QEvent.Type.MouseMove:
+                self._set_pin_hover_row(self._pin_target_row(event.position().toPoint()))
+            elif event.type() == QEvent.Type.Leave:
                 self._set_pin_hover_row(-1)
             elif (
-                event.type() == QEvent.MouseButtonRelease
-                and event.button() == Qt.LeftButton
+                event.type() == QEvent.Type.MouseButtonRelease
+                and event.button() == Qt.MouseButton.LeftButton
             ):
                 self._set_hold_shows_selected(False)
             elif (
-                event.type() == QEvent.MouseButtonPress
-                and event.button() == Qt.LeftButton
+                event.type() == QEvent.Type.MouseButtonPress
+                and event.button() == Qt.MouseButton.LeftButton
             ):
-                item = self.folder_files_list.itemAt(event.pos())
-                if item is not None and item.data(Qt.UserRole + 1) != "dir":
-                    if not event.modifiers() and self._pin_target_row(event.pos()) >= 0:
-                        self.folder_files_list.setCurrentItem(item, QItemSelectionModel.NoUpdate)
+                item = self.folder_files_list.itemAt(event.position().toPoint())
+                if item is not None and item.data(Qt.ItemDataRole.UserRole + 1) != "dir":
+                    if not event.modifiers() and self._pin_target_row(event.position().toPoint()) >= 0:
+                        self.folder_files_list.setCurrentItem(item, QItemSelectionModel.SelectionFlag.NoUpdate)
                         self._toggle_selected_pinned_image()
                         event.accept()
                         return True
@@ -1296,8 +1296,8 @@ class ImageBrowserApp(BaseImageTab):
         selected_item = self.folder_files_list.currentItem()
         has_selected_image = (
             selected_item is not None
-            and selected_item.data(Qt.UserRole + 1) != "dir"
-            and bool(selected_item.data(Qt.UserRole))
+            and selected_item.data(Qt.ItemDataRole.UserRole + 1) != "dir"
+            and bool(selected_item.data(Qt.ItemDataRole.UserRole))
         )
         comparison_available = (
             pinned is not None
@@ -1305,7 +1305,7 @@ class ImageBrowserApp(BaseImageTab):
             and self.session_manager.cache_manager.get(current.cache_key) is not None
             and (current.path != pinned["path"] or mode != ComparisonMode.FLICKER)
             and has_selected_image
-            and selected_item.data(Qt.UserRole) == current.path
+            and selected_item.data(Qt.ItemDataRole.UserRole) == current.path
         )
         self.save_calculated_button.setVisible(
             comparison_available
@@ -1459,9 +1459,9 @@ class ImageBrowserApp(BaseImageTab):
 
     def _apply_file_row_marker(self, row: int, pinned_path: str | None) -> None:
         item = self.folder_files_list.item(row)
-        if item is None or item.data(Qt.UserRole + 1) == "dir":
+        if item is None or item.data(Qt.ItemDataRole.UserRole + 1) == "dir":
             return
-        file_path = item.data(Qt.UserRole)
+        file_path = item.data(Qt.ItemDataRole.UserRole)
         if file_path == pinned_path:
             item.setIcon(self._pin_icon)
             item.setToolTip(tr("image_browser.compare.reference_row.tooltip"))
@@ -1470,7 +1470,7 @@ class ImageBrowserApp(BaseImageTab):
                 self._pin_preview_icon if row == self._pin_hover_row else self._file_icon
             )
             item.setToolTip(item.text())
-        if item.data(Qt.UserRole + 2):
+        if item.data(Qt.ItemDataRole.UserRole + 2):
             item.setToolTip(
                 tr("image_browser.task.displayed_file", filename=item.text())
                 + "\n" + item.toolTip()
@@ -1860,7 +1860,7 @@ class ImageBrowserApp(BaseImageTab):
             row = self._folder_row_for_path(changed_path)
             if row >= 0:
                 item = self.folder_files_list.item(row)
-                item.setData(Qt.UserRole + 2, changed_path == path)
+                item.setData(Qt.ItemDataRole.UserRole + 2, changed_path == path)
                 self._apply_file_row_marker(row, self.session_manager.collection.pinned_path)
 
     @staticmethod
@@ -2086,7 +2086,7 @@ class ImageBrowserApp(BaseImageTab):
 
         for row in range(self.folder_files_list.count()):
             item = self.folder_files_list.item(row)
-            if item.data(Qt.UserRole) == last_path:
+            if item.data(Qt.ItemDataRole.UserRole) == last_path:
                 self._select_folder_browser_row(row)
                 break
         else:
@@ -2170,9 +2170,9 @@ class ImageBrowserApp(BaseImageTab):
 
     def _handle_folder_list_double_click(self, item) -> None:
         """Descend into a subfolder row."""
-        if item is None or item.data(Qt.UserRole + 1) != "dir":
+        if item is None or item.data(Qt.ItemDataRole.UserRole + 1) != "dir":
             return
-        path = item.data(Qt.UserRole)
+        path = item.data(Qt.ItemDataRole.UserRole)
         if path:
             self._go_to_folder(path)
 
@@ -2287,36 +2287,36 @@ class ImageBrowserApp(BaseImageTab):
         ]
 
         current_item = self.folder_files_list.currentItem()
-        current_path = current_item.data(Qt.UserRole) if current_item is not None else None
+        current_path = current_item.data(Qt.ItemDataRole.UserRole) if current_item is not None else None
         selected_paths = {
-            item.data(Qt.UserRole) for item in self.folder_files_list.selectedItems()
-            if item.data(Qt.UserRole + 1) != "dir"
+            item.data(Qt.ItemDataRole.UserRole) for item in self.folder_files_list.selectedItems()
+            if item.data(Qt.ItemDataRole.UserRole + 1) != "dir"
         }
 
-        folder_icon = self.style().standardIcon(QStyle.SP_DirIcon)
+        folder_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
         with QSignalBlocker(self.folder_files_list):
             self.folder_files_list.clear()
             self._pin_hover_row = -1
             for name, subfolder_path in zip(listing.subfolder_names, subfolder_strings):
                 item = QListWidgetItem(folder_icon, name)
-                item.setData(Qt.UserRole, subfolder_path)
-                item.setData(Qt.UserRole + 1, "dir")
+                item.setData(Qt.ItemDataRole.UserRole, subfolder_path)
+                item.setData(Qt.ItemDataRole.UserRole + 1, "dir")
                 self.folder_files_list.addItem(item)
             for name, file_path in zip(listing.file_names, path_strings):
                 item = QListWidgetItem(self._file_icon, name)
-                item.setData(Qt.UserRole, file_path)
+                item.setData(Qt.ItemDataRole.UserRole, file_path)
                 item.setToolTip(name)
                 self.folder_files_list.addItem(item)
                 item.setSelected(file_path in selected_paths)
             if pinned_outside_folder is not None:
                 pinned_item = QListWidgetItem(pinned_reference.filename)
-                pinned_item.setData(Qt.UserRole, pinned_reference.path)
+                pinned_item.setData(Qt.ItemDataRole.UserRole, pinned_reference.path)
                 self.folder_files_list.addItem(pinned_item)
                 pinned_item.setSelected(pinned_reference.path in selected_paths)
             if current_path in display_image_paths:
                 self.folder_files_list.setCurrentRow(
                     len(subfolder_strings) + display_image_paths.index(current_path),
-                    QItemSelectionModel.NoUpdate,
+                    QItemSelectionModel.SelectionFlag.NoUpdate,
                 )
 
         self._folder_dir_count = len(subfolder_strings)
@@ -2380,9 +2380,9 @@ class ImageBrowserApp(BaseImageTab):
 
     def _open_folder_file(self, item):
         """Show the selected folder image using deferred loading."""
-        if item is None or item.data(Qt.UserRole + 1) == "dir":
+        if item is None or item.data(Qt.ItemDataRole.UserRole + 1) == "dir":
             return
-        file_path = item.data(Qt.UserRole)
+        file_path = item.data(Qt.ItemDataRole.UserRole)
         if not file_path:
             return
 
@@ -2408,10 +2408,10 @@ class ImageBrowserApp(BaseImageTab):
             )
     def _reopen_folder_file(self, item) -> None:
         """Reopen a selected folder row after session navigation."""
-        if item is None or item.data(Qt.UserRole + 1) == "dir":
+        if item is None or item.data(Qt.ItemDataRole.UserRole + 1) == "dir":
             return
         current_image = self.session_manager.get_current_image()
-        file_path = item.data(Qt.UserRole)
+        file_path = item.data(Qt.ItemDataRole.UserRole)
         if (
             current_image is None
             or current_image['path'] != file_path
@@ -2446,8 +2446,8 @@ class ImageBrowserApp(BaseImageTab):
             self.folder_files_list.selectedItems(), key=self.folder_files_list.row
         )
         self.session_manager.collection.set_selection(
-            item.data(Qt.UserRole) for item in items
-            if item.data(Qt.UserRole + 1) != "dir" and item.data(Qt.UserRole)
+            item.data(Qt.ItemDataRole.UserRole) for item in items
+            if item.data(Qt.ItemDataRole.UserRole + 1) != "dir" and item.data(Qt.ItemDataRole.UserRole)
         )
         if len(self._folder_sequence_paths()) < 2:
             self._show_selected_frame = False
@@ -2649,9 +2649,9 @@ class ImageBrowserApp(BaseImageTab):
         self._navigating_sequence = True
         try:
             command = (
-                QItemSelectionModel.NoUpdate
+                QItemSelectionModel.SelectionFlag.NoUpdate
                 if preserve_selection or len(self.session_manager.collection.selected_paths) > 1
-                else QItemSelectionModel.ClearAndSelect
+                else QItemSelectionModel.SelectionFlag.ClearAndSelect
             )
             self.folder_files_list.setCurrentRow(row, command)
             item = self.folder_files_list.item(row)

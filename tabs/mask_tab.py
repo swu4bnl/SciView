@@ -38,16 +38,15 @@ from sciview.interfaces.stable_qt.tools.mask_drawing_tools import (
 )
 from sciview.interfaces.stable_qt.tools.drawing_interaction import DrawingCommands, tool_key_label
 
-from PyQt5.QtWidgets import (
-    QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QCheckBox, QComboBox, QSpinBox, QListWidget, QListWidgetItem,
-    QGroupBox, QSlider, QDoubleSpinBox, QGridLayout,
-    QScrollArea, QSplitter, QButtonGroup, QFrame, QMenu, QToolButton,
-    QSizePolicy, QProgressBar, QUndoCommand, QUndoStack, QApplication,
-    QInputDialog, QColorDialog, QMessageBox
+from PyQt6.QtWidgets import (
+    QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QCheckBox, QComboBox,
+    QSpinBox, QListWidget, QListWidgetItem, QGroupBox, QSlider, QDoubleSpinBox,
+    QGridLayout, QScrollArea, QSplitter, QButtonGroup, QFrame, QMenu, QToolButton,
+    QSizePolicy, QProgressBar, QApplication, QInputDialog, QColorDialog, QMessageBox,
 )
-from PyQt5.QtCore import QEvent, Qt
-from PyQt5.QtGui import QIcon, QCursor, QColor
+from PyQt6.QtGui import QUndoCommand, QUndoStack
+from PyQt6.QtCore import QEvent, Qt
+from PyQt6.QtGui import QIcon, QCursor, QColor
 
 # Import base class and configuration
 from tabs.base_image_tab import BaseImageTab
@@ -164,7 +163,7 @@ class MaskApp(BaseImageTab):
     @staticmethod
     def _use_compact_spinbox_width(spinbox):
         """Keep numeric controls from taking the whole control column."""
-        spinbox.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        spinbox.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         spinbox.setMaximumWidth(spinbox.sizeHint().width())
 
     def _effective_draw_value(self) -> bool:
@@ -258,7 +257,7 @@ class MaskApp(BaseImageTab):
 
     def eventFilter(self, watched, event):
         """Reflect Alt inversion without replacing standard viewer shortcuts."""
-        if event.type() == QEvent.KeyPress and event.key() == Qt.Key_Alt:
+        if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Alt:
             focus = QApplication.focusWidget()
             if (not self.isVisible() or focus is None
                     or not (focus is self or self.isAncestorOf(focus))):
@@ -268,11 +267,11 @@ class MaskApp(BaseImageTab):
             if not self._alt_inversion_active:
                 self._alt_inversion_active = True
                 self._refresh_inversion_feedback()
-        elif event.type() == QEvent.KeyRelease and self._alt_inversion_active:
-            if event.key() == Qt.Key_Alt or not event.modifiers() & Qt.AltModifier:
+        elif event.type() == QEvent.Type.KeyRelease and self._alt_inversion_active:
+            if event.key() == Qt.Key.Key_Alt or not event.modifiers() & Qt.KeyboardModifier.AltModifier:
                 self._alt_inversion_active = False
                 self._refresh_inversion_feedback()
-        elif event.type() == QEvent.ApplicationDeactivate and self._alt_inversion_active:
+        elif event.type() == QEvent.Type.ApplicationDeactivate and self._alt_inversion_active:
             self._alt_inversion_active = False
             self._refresh_inversion_feedback()
         return super().eventFilter(watched, event)
@@ -305,7 +304,7 @@ class MaskApp(BaseImageTab):
         """Build the main user interface"""
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
         main_splitter.addWidget(self._create_visualization_panel())
         main_splitter.addWidget(self.make_scrollable_panel(self._create_sidebar_panel()))
         setup_splitter_layout(main_splitter, AppStyle.get_layout_ratios()['main_splitter_ratio'])
@@ -425,14 +424,14 @@ class MaskApp(BaseImageTab):
         )):
             if index:
                 separator = QFrame()
-                separator.setFrameShape(QFrame.VLine)
-                separator.setFrameShadow(QFrame.Sunken)
+                separator.setFrameShape(QFrame.Shape.VLine)
+                separator.setFrameShadow(QFrame.Shadow.Sunken)
                 utility_row.addWidget(separator)
             utility_row.addWidget(
                 self._create_tool_group_widget(title, tools, columns=len(tools)),
                 len(tools),
             )
-        utility_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        utility_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         layout.addWidget(utility_widget)
 
         self._add_tool_group(layout, tr("mask.panel.draw"), drawing_tools, columns=len(drawing_tools))
@@ -474,7 +473,7 @@ class MaskApp(BaseImageTab):
         heading = QHBoxLayout()
         heading.addWidget(QLabel(title))
         line = QFrame()
-        line.setFrameShape(QFrame.HLine)
+        line.setFrameShape(QFrame.Shape.HLine)
         heading.addWidget(line, 1)
         parent_layout.addLayout(heading)
         parent_layout.addWidget(
@@ -493,10 +492,10 @@ class MaskApp(BaseImageTab):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(AppStyle.LAYOUT['panel_spacing'])
         column_count = min(columns, max(1, len(tools)))
-        group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         if title:
             title_label = QLabel(title)
-            title_label.setAlignment(Qt.AlignHCenter)
+            title_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
             layout.addWidget(title_label)
         grid = QGridLayout()
         grid.setHorizontalSpacing(4)
@@ -504,13 +503,13 @@ class MaskApp(BaseImageTab):
         for index, (label_text, button) in enumerate(tools):
             button.setAccessibleName(label_text)
             cell = QWidget()
-            cell.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            cell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             cell_layout = QVBoxLayout(cell)
             cell_layout.setContentsMargins(0, 0, 0, 0)
             cell_layout.setSpacing(AppStyle.LAYOUT['tool_label_spacing'])
-            cell_layout.addWidget(button, 0, Qt.AlignHCenter)
+            cell_layout.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
             label = QLabel(label_text)
-            label.setAlignment(Qt.AlignHCenter)
+            label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
             AppStyle.set_font_role(label, 'toolbar_text')
             cell_layout.addWidget(label)
             column = index % columns
@@ -534,10 +533,10 @@ class MaskApp(BaseImageTab):
         self.brush_size_spin.setSuffix(" px")
         self.brush_size_spin.valueChanged.connect(self._update_tool_brush_size)
         self._use_compact_spinbox_width(self.brush_size_spin)
-        self.brush_size_slider = QSlider(Qt.Horizontal)
+        self.brush_size_slider = QSlider(Qt.Orientation.Horizontal)
         self.brush_size_slider.setRange(1, 50)
         self.brush_size_slider.setValue(self.brush_size)
-        self.brush_size_slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.brush_size_slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.brush_size_slider.valueChanged.connect(self.brush_size_spin.setValue)
         self.brush_size_spin.valueChanged.connect(self.brush_size_slider.setValue)
         size_row.addWidget(self.tool_size_label)
@@ -572,13 +571,13 @@ class MaskApp(BaseImageTab):
     def _create_layer_panel(self):
         """Create layer selection, visibility, appearance, and composition controls."""
         panel = QGroupBox(tr("mask.panel.layers"))
-        panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        panel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         layout = QVBoxLayout(panel)
 
         self.layer_list = QListWidget()
         self.layer_list.setMinimumHeight(AppStyle.LAYOUT['record_list_min_height'])
-        self.layer_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.layer_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.layer_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.layer_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.layer_list.customContextMenuRequested.connect(self._show_layer_context_menu)
         self.layer_list.currentRowChanged.connect(self._on_layer_selected)
         layout.addWidget(self.layer_list, 1)
@@ -674,11 +673,11 @@ class MaskApp(BaseImageTab):
         ):
             button = QToolButton()
             button.setText(tr(label_id))
-            button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             self._register_asset_icon(button, icon_filename)
             button.setCheckable(True)
             button.setChecked(mode == "below")
-            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             button.setFixedHeight(AppStyle.toolbar_symbol_button_size().height())
             AppStyle.apply_widget_style(button, 'compact_button')
             AppStyle.set_font_role(button, 'toolbar_text')
@@ -957,8 +956,8 @@ class MaskApp(BaseImageTab):
     def _create_separator(self):
         """Create a horizontal separator line"""
         separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFrameShadow(QFrame.Sunken)
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
         return separator
     
     def _load_tool_icon(self, tool_name: str) -> QIcon:
@@ -1069,13 +1068,13 @@ class MaskApp(BaseImageTab):
         for index, layer in enumerate(self.mask_layers):
             if index:
                 connector_item = QListWidgetItem()
-                connector_item.setFlags(Qt.ItemIsEnabled)
+                connector_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
                 self.layer_list.addItem(connector_item)
                 connector_widget = QWidget()
                 connector_layout = QHBoxLayout(connector_widget)
                 connector_layout.setContentsMargins(8, 0, 8, 0)
                 left_line = QFrame()
-                left_line.setFrameShape(QFrame.HLine)
+                left_line.setFrameShape(QFrame.Shape.HLine)
                 connector_layout.addWidget(left_line)
                 connector = QPushButton()
                 connector.setFlat(True)
@@ -1093,14 +1092,14 @@ class MaskApp(BaseImageTab):
                 )
                 connector_layout.addWidget(connector)
                 right_line = QFrame()
-                right_line.setFrameShape(QFrame.HLine)
+                right_line.setFrameShape(QFrame.Shape.HLine)
                 connector_layout.addWidget(right_line)
                 connector_item.setSizeHint(connector_widget.sizeHint())
                 self.layer_list.setItemWidget(connector_item, connector_widget)
 
             coverage = 100.0 * float(np.count_nonzero(layer.data)) / max(1, layer.data.size)
             item = QListWidgetItem()
-            item.setData(Qt.UserRole, index)
+            item.setData(Qt.ItemDataRole.UserRole, index)
             self.layer_list.addItem(item)
             row_widget = self._create_layer_row(index, layer, coverage, index == active_index)
             item.setSizeHint(row_widget.sizeHint())
@@ -1166,7 +1165,7 @@ class MaskApp(BaseImageTab):
 
     def _show_layer_context_menu(self, position) -> None:
         item = self.layer_list.itemAt(position)
-        layer_index = item.data(Qt.UserRole) if item is not None else None
+        layer_index = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
         if not isinstance(layer_index, int) or not (0 <= layer_index < len(self.mask_layers)):
             return
         self.layer_list.setCurrentItem(item)
@@ -1187,14 +1186,14 @@ class MaskApp(BaseImageTab):
         )
         menu.addSeparator()
         menu.addAction(tr("mask.action.remove"), self._remove_selected_layer)
-        menu.exec_(self.layer_list.viewport().mapToGlobal(position))
+        menu.exec(self.layer_list.viewport().mapToGlobal(position))
     
     def _on_layer_selected(self, row):
         """Handle layer selection"""
         self.drawing_session.cancel_current_edit()
         self._clear_polygon_feedback()
         item = self.layer_list.item(row) if row >= 0 else None
-        layer_index = item.data(Qt.UserRole) if item is not None else None
+        layer_index = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
         has_active_layer = isinstance(layer_index, int) and (0 <= layer_index < len(self.mask_layers))
         self.remove_layer_button.setEnabled(has_active_layer)
         if not has_active_layer:
@@ -1238,7 +1237,7 @@ class MaskApp(BaseImageTab):
     def _get_active_layer_index(self) -> Optional[int]:
         """Return the currently editable layer index."""
         current_item = self.layer_list.currentItem() if hasattr(self, 'layer_list') else None
-        layer_index = current_item.data(Qt.UserRole) if current_item is not None else None
+        layer_index = current_item.data(Qt.ItemDataRole.UserRole) if current_item is not None else None
         if isinstance(layer_index, int) and 0 <= layer_index < len(self.mask_layers):
             return layer_index
 
@@ -1288,7 +1287,7 @@ class MaskApp(BaseImageTab):
     
     def _add_layer_menu(self):
         """Show menu for adding a new layer"""
-        from PyQt5.QtWidgets import QMenu
+        from PyQt6.QtWidgets import QMenu
         menu = QMenu(self)
         
         menu.addAction(tr("mask.menu.empty_layer"), self._add_empty_layer)
@@ -1317,7 +1316,7 @@ class MaskApp(BaseImageTab):
         
         menu.addAction(tr("mask.menu.threshold_layer"), self._generate_threshold_mask)
         
-        menu.exec_(self.sender().mapToGlobal(self.sender().rect().bottomLeft()))
+        menu.exec(self.sender().mapToGlobal(self.sender().rect().bottomLeft()))
     
     def _add_empty_layer(self):
         """Add an empty mask layer"""
@@ -1520,7 +1519,7 @@ class MaskApp(BaseImageTab):
 
         if self.drawing_mode:
             self.image_viewer.set_interaction_locked(True)
-            self.image_viewer.setCursor(QCursor(Qt.CrossCursor))
+            self.image_viewer.setCursor(QCursor(Qt.CursorShape.CrossCursor))
             for button in self.navigation_buttons.values():
                 button.blockSignals(True)
                 button.setChecked(False)
@@ -1539,7 +1538,7 @@ class MaskApp(BaseImageTab):
                     button.blockSignals(False)
                     button.setStyleSheet(button.property("baseStyleSheet") or "")
             self.image_viewer.set_interaction_locked(False)
-            self.image_viewer.setCursor(QCursor(Qt.ArrowCursor))
+            self.image_viewer.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
             self.tool_options_panel.setVisible(False)
 
         self._refresh_mask_overlay()

@@ -12,12 +12,12 @@ import sys
 import numpy as np
 import datetime
 
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QDoubleSpinBox, QLineEdit, QComboBox, QGridLayout, QFileDialog,
     QTextEdit, QFormLayout, QScrollArea, QSizePolicy
 )
-from PyQt5.QtCore import Qt
+from PyQt6.QtCore import Qt
 
 # Import configuration from package modules.
 from sciview.interfaces.theme.app_style import (
@@ -82,18 +82,18 @@ class BaseImageTab(QWidget):
     @staticmethod
     def configure_adaptive_form_layout(form_layout: QFormLayout) -> None:
         """Apply responsive defaults to forms used in side control panels."""
-        form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-        form_layout.setRowWrapPolicy(QFormLayout.WrapLongRows)
-        form_layout.setFormAlignment(Qt.AlignTop)
+        form_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        form_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop)
 
     @staticmethod
     def make_scrollable_panel(panel: QWidget) -> QScrollArea:
         """Wrap a panel in a scroll area to keep all controls reachable."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setMinimumHeight(AppStyle.LAYOUT.get('control_panel_min_height', 96))
         scroll.setWidget(panel)
         return scroll
@@ -416,7 +416,7 @@ class BaseImageTab(QWidget):
         layout.addWidget(self.image_viewer)
 
         display_controls = QWidget()
-        display_controls.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        display_controls.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
         display_layout = QGridLayout(display_controls)
         display_layout.setContentsMargins(0, 0, 0, 0)
         display_layout.setSpacing(AppStyle.LAYOUT['toolbar_spacing'])
@@ -427,7 +427,7 @@ class BaseImageTab(QWidget):
         self.cmap_selector = QComboBox()
         self.cmap_selector.setProperty("sciview_input_width", "wide_input_min_width")
         self.cmap_selector.setMinimumWidth(AppStyle.wide_input_min_width())
-        self.cmap_selector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.cmap_selector.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.cmap_selector.setAccessibleName(tr('base_image.colormap'))
         self.cmap_selector.setToolTip(tr('base_image.colormap'))
         self.cmap_selector.addItems(list(SUPPORTED_IMAGE_COLORMAPS))
@@ -442,7 +442,7 @@ class BaseImageTab(QWidget):
         self.img_scale_combo = QComboBox()
         self.img_scale_combo.setProperty("sciview_input_width", "compact_input_min_width")
         self.img_scale_combo.setMinimumWidth(AppStyle.compact_input_min_width())
-        self.img_scale_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.img_scale_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.img_scale_combo.setAccessibleName(tr('base_image.intensity_scale'))
         self.img_scale_combo.setToolTip(tr('base_image.intensity_scale_linear_or_log'))
         for scale in SUPPORTED_IMAGE_SCALES:

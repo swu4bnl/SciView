@@ -21,7 +21,7 @@ from sciview.processing.angle_conventions import (
     display_chi_to_scianalysis_sector_chi,
 )
 try:
-    from PyQt5.QtCore import QThread, pyqtSignal
+    from PyQt6.QtCore import QThread, pyqtSignal
 except Exception:  # pragma: no cover - fallback for headless/backend-only environments
     class _NoQtSignal:
         def __init__(self, *args, **kwargs):

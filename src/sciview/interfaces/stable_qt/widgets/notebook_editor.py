@@ -10,12 +10,14 @@ import json
 from pathlib import Path
 
 import numpy as np
-from PyQt5.QtCore import QEventLoop, QObject, QTimer, QUrl, Qt, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QDesktopServices, QKeySequence
-from PyQt5.QtWebChannel import QWebChannel
-from PyQt5.QtWebEngineCore import QWebEngineUrlRequestInterceptor
-from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineProfile, QWebEngineSettings, QWebEngineView
-from PyQt5.QtWidgets import QLabel, QMessageBox, QShortcut, QVBoxLayout, QWidget
+from PyQt6.QtCore import QEventLoop, QObject, QTimer, QUrl, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QDesktopServices, QKeySequence, QShortcut
+from PyQt6.QtWebChannel import QWebChannel
+from PyQt6.QtWebEngineCore import (
+    QWebEnginePage, QWebEngineProfile, QWebEngineSettings, QWebEngineUrlRequestInterceptor,
+)
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWidgets import QLabel, QMessageBox, QVBoxLayout, QWidget
 
 from sciview.core.notebook import (
     IMAGE_COLORMAPS, CurveFigure, CurveStyle, ImageFigure, Notebook, ScientificObject, object_signature,
@@ -51,13 +53,21 @@ EDITOR_STRINGS = (
 )
 
 
+def is_allowed_request(url: QUrl) -> bool:
+    """Only the bundled editor files and inline data may be loaded by the editor page.
+
+    Notebooks are shared files, so a link inside one must never make the embedded
+    browser read another local file or contact a remote server. External links are
+    opened in the system browser through the bridge instead.
+    """
+    if url.isLocalFile():
+        return Path(url.toLocalFile()).resolve().is_relative_to(EDITOR_ROOT.resolve())
+    return url.scheme() in {"data", "qrc", "about"}
+
+
 class LocalRequests(QWebEngineUrlRequestInterceptor):
     def interceptRequest(self, info):
-        url = info.requestUrl()
-        allowed = url.scheme() in {"data", "qrc", "about"}
-        if url.isLocalFile():
-            allowed = Path(url.toLocalFile()).resolve().is_relative_to(EDITOR_ROOT.resolve())
-        info.block(not allowed)
+        info.block(not is_allowed_request(info.requestUrl()))
 
 
 class EditorPage(QWebEnginePage):
@@ -67,7 +77,7 @@ class EditorPage(QWebEnginePage):
         return is_main_frame and url == QUrl.fromLocalFile(str(EDITOR_ROOT / "index.html"))
 
     def javaScriptConsoleMessage(self, level, message, line, source):
-        if level == QWebEnginePage.ErrorMessageLevel:
+        if level == QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel:
             self.error.emit(f"{message} ({Path(source).name}:{line})")
 
 
@@ -373,10 +383,11 @@ class NotebookEditor(QWidget):
         self.page = EditorPage(self.profile, self.view)
         self.page.error.connect(self._error)
         self.view.setPage(self.page)
-        self.page.settings().setAttribute(QWebEngineSettings.JavascriptCanOpenWindows, False)
-        self.page.settings().setAttribute(QWebEngineSettings.JavascriptCanAccessClipboard, True)
-        self.page.settings().setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, False)
-        self.page.settings().setAttribute(QWebEngineSettings.LocalContentCanAccessFileUrls, False)
+        self.page.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
+        self.page.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
+        self.page.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, False)
+        # LocalRequests confines file access to the bundled editor resources.
+        self.page.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         self.channel = QWebChannel(self.page)
         self.bridge = NotebookBridge(self)
         self.channel.registerObject("notebook", self.bridge)
@@ -384,8 +395,8 @@ class NotebookEditor(QWidget):
         self.view.loadFinished.connect(self._load_finished)
         layout.addWidget(self.view, 1)
         self.view.load(QUrl.fromLocalFile(str(EDITOR_ROOT / "index.html")))
-        self._save_shortcut = QShortcut(QKeySequence.Save, self)
-        self._save_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._save_shortcut = QShortcut(QKeySequence.StandardKey.Save, self)
+        self._save_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self._save_shortcut.activated.connect(self.save)
 
     def _error(self, message: str):
@@ -596,7 +607,7 @@ class NotebookEditor(QWidget):
 
         self.page.runJavaScript("sciview.flush()", received)
         timer.start(5000)
-        loop.exec_()
+        loop.exec()
         active = False
         timer.stop()
         if not result or not isinstance(result[0], str):
@@ -651,11 +662,11 @@ class NotebookEditor(QWidget):
             return True
         response = QMessageBox.warning(
             self, tr("notebook.unsaved"), tr("notebook.unsaved_detail"),
-            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Save,
+            QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Save,
         )
-        if response == QMessageBox.Save:
+        if response == QMessageBox.StandardButton.Save:
             return self.save()
-        if response == QMessageBox.Discard:
+        if response == QMessageBox.StandardButton.Discard:
             self.dirty = False
             return True
         return False
