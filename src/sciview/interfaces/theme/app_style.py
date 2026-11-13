@@ -226,7 +226,7 @@ class AppStyle:
         'mask_controls_ratio': [14, 20, 3, 6],
         # Splitter handle (also used in CSS via format_style; kept here so
         # setup_splitter_layout can read it for setHandleWidth())
-        'splitter_handle_width': 5,
+        'splitter_handle_width': 2,
         # Panel minimums
         'control_panel_min_height': 80,
         # Python layout spacing (setContentsMargins / setSpacing)
@@ -453,24 +453,20 @@ class AppStyle:
         'splitter': """
             QSplitter::handle {{
                 background-color: {border};
-                border: 1px solid {text_muted};
-                border-radius: 2px;
             }}
             QSplitter::handle:horizontal {{
                 width: {handle_width}px;
-                margin: 1px 0px;
+                margin: 0px;
             }}
             QSplitter::handle:vertical {{
                 height: {handle_width}px;
-                margin: 0px 1px;
+                margin: 0px;
             }}
             QSplitter::handle:hover {{
                 background-color: {border_active};
-                border-color: {border_active};
             }}
             QSplitter::handle:pressed {{
                 background-color: {primary};
-                border-color: {primary};
             }}
         """,
 

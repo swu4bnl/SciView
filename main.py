@@ -12,6 +12,8 @@ import shutil
 import tempfile
 import tomllib
 import logging
+import base64
+import binascii
 from dataclasses import replace
 from pathlib import Path
 import numpy as np
@@ -51,7 +53,7 @@ from PyQt6.QtWidgets import (
     QWidget, QMenu, QTabBar, QToolButton,
 )
 from PyQt6.QtGui import QAction, QIcon
-from PyQt6.QtCore import Qt, QEvent, QThread, QTimer
+from PyQt6.QtCore import Qt, QEvent, QThread, QTimer, QByteArray
 from PyQt6 import QtWebEngineWidgets  # Initialize WebEngine before QApplication.
 from PyQt6 import sip
 
@@ -92,6 +94,8 @@ class SciAnaApp(QMainWindow):
         self._workspace_root = Path(__file__).resolve().parent
         self._closing_browser_workers = False
         self._switching_to_notebook = False
+        self._theme_preference = None
+        self._return_window_mode = "windowed"
 
         # Shared application state
         self.image_data = None
@@ -246,6 +250,8 @@ class SciAnaApp(QMainWindow):
         self.refresh_shortcut.activated.connect(self._refresh_current_tab)
         self.theme_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
         self.theme_shortcut.activated.connect(self._toggle_dark_light_theme)
+        self.full_screen_shortcut = QShortcut(QKeySequence("F11"), self)
+        self.full_screen_shortcut.activated.connect(self._toggle_full_screen)
         self.text_smaller_action = QAction(tr('shell.text_smaller'), self)
         self.text_smaller_action.setShortcut(QKeySequence("Ctrl+-"))
         self.text_smaller_action.triggered.connect(self.text_smaller_button.click)
@@ -269,8 +275,22 @@ class SciAnaApp(QMainWindow):
     def _toggle_dark_light_theme(self):
         """Switch between qdarktheme dark and light."""
         variant = 'light' if AppStyle.theme_is_dark() else 'dark'
-        if not AppStyle.apply_qdarktheme(variant):
+        if AppStyle.apply_qdarktheme(variant):
+            self._theme_preference = variant
+        else:
             self.show_status(tr('shell.theme_unavailable'))
+
+    def _toggle_full_screen(self):
+        """Toggle full-screen mode, returning to the previous windowed mode."""
+        if self.isFullScreen():
+            if self._return_window_mode == "maximized":
+                self.showMaximized()
+            else:
+                self.showNormal()
+            return
+
+        self._return_window_mode = "maximized" if self.isMaximized() else "windowed"
+        self.showFullScreen()
 
     def _set_text_scale(self, percent):
         AppStyle.update_font_tokens({'scale_pct': percent})
@@ -390,8 +410,11 @@ class SciAnaApp(QMainWindow):
         min_w = min(min_w, target_w)
         min_h = min(min_h, target_h)
 
-        self.setMinimumSize(max(480, min_w), max(360, min_h))
+        self.setMinimumSize(min_w, min_h)
         self.resize(target_w, target_h)
+        frame = self.frameGeometry()
+        frame.moveCenter(available.center())
+        self.move(frame.topLeft())
 
     def add_tab(self, widget, name, icon_key=None):
         """Add a tab to the main interface"""
@@ -504,6 +527,20 @@ class SciAnaApp(QMainWindow):
     def _collect_session_state(self) -> dict:
         """Gather per-tab restart state, keyed by each tab's stable icon_key."""
         state = {"display_settings": dict(self.display_settings)}
+        state["ui_preferences"] = {
+            "theme": self._theme_preference,
+            "text_scale_pct": int(AppStyle.FONTS["scale_pct"]),
+            "high_contrast": AppStyle.high_contrast_enabled(),
+        }
+        state["window"] = {
+            "mode": (
+                "fullscreen" if self.isFullScreen()
+                else "maximized" if self.isMaximized()
+                else "windowed"
+            ),
+            "return_mode": self._return_window_mode,
+            "geometry": bytes(self.saveGeometry().toBase64()).decode("ascii"),
+        }
         state["open_optional_tabs"] = [
             key for key in self._optional_tab_keys
             if self.tab_widget.isTabVisible(self._tab_index(key))
@@ -534,6 +571,31 @@ class SciAnaApp(QMainWindow):
         state = session_cache.load_session()
         if not state:
             return
+        self._restore_window_state(state.get("window"))
+        preferences = state.get("ui_preferences")
+        if isinstance(preferences, dict):
+            theme = preferences.get("theme")
+            if theme in ("dark", "light"):
+                if AppStyle.apply_qdarktheme(theme):
+                    self._theme_preference = theme
+                else:
+                    print(f"[session] failed to restore theme preference: {theme}")
+
+            scale = preferences.get("text_scale_pct")
+            if isinstance(scale, int) and not isinstance(scale, bool) and scale in AppStyle.TEXT_SCALE_OPTIONS:
+                AppStyle.update_font_tokens({"scale_pct": scale})
+                AppStyle.apply_global_style(QApplication.instance(), preserve_existing=True)
+                self._update_text_scale_tooltips()
+            elif scale is not None:
+                print(f"[session] ignoring invalid text scale preference: {scale!r}")
+
+            high_contrast = preferences.get("high_contrast", False)
+            if isinstance(high_contrast, bool):
+                AppStyle.set_high_contrast(high_contrast, QApplication.instance())
+                self.high_contrast_button.setChecked(high_contrast)
+            else:
+                print(f"[session] ignoring invalid high-contrast preference: {high_contrast!r}")
+
         display_settings = state.get("display_settings")
         if display_settings:
             try:
@@ -555,6 +617,36 @@ class SciAnaApp(QMainWindow):
                 widget.restore_session_state(state[key])
             except Exception as exc:
                 print(f"[session] failed to restore state for '{key}': {exc}")
+
+    def _restore_window_state(self, state) -> None:
+        """Restore the saved normal geometry and requested top-level window mode."""
+        if not isinstance(state, dict):
+            return
+
+        encoded_geometry = state.get("geometry")
+        if isinstance(encoded_geometry, str):
+            try:
+                geometry = base64.b64decode(encoded_geometry, validate=True)
+            except (ValueError, binascii.Error):
+                print("[session] ignoring invalid saved window geometry")
+            else:
+                if not self.restoreGeometry(QByteArray(geometry)):
+                    print("[session] could not restore saved window geometry")
+
+        return_mode = state.get("return_mode")
+        if return_mode in ("windowed", "maximized"):
+            self._return_window_mode = return_mode
+
+        mode = state.get("mode")
+        window_states = {
+            "windowed": Qt.WindowState.WindowNoState,
+            "maximized": Qt.WindowState.WindowMaximized,
+            "fullscreen": Qt.WindowState.WindowFullScreen,
+        }
+        if isinstance(mode, str) and mode in window_states:
+            self.setWindowState(window_states[mode])
+        elif mode is not None:
+            print(f"[session] ignoring invalid saved window mode: {mode!r}")
 
     def _clear_session_cache(self) -> None:
         """Manually wipe the on-disk session cache (no auto-pruning)."""
