@@ -16,6 +16,9 @@ import base64
 import binascii
 from dataclasses import replace
 from pathlib import Path
+# Load conda-forge FreeType before the PyPI Qt wheel binds the system one on Linux;
+# otherwise matplotlib's harfbuzz fails with a missing FT_* symbol at first import.
+import matplotlib.ft2font  # noqa: F401
 import numpy as np
 
 logger = logging.getLogger(__name__)

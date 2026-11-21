@@ -21,6 +21,7 @@ REQUIRED_DISTRIBUTIONS = (
 REQUIRED_MODULES = (
     "bluesky_tiled_plugins",
     "main",
+    "matplotlib.ft2font",
     "numpy",
     "PIL",
     "PyQt6.QtCore",
