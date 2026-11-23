@@ -1,5 +1,7 @@
 # SciView
 
+[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/swu4bnl/SciView?utm_source=badge)
+
 ![Illustrated overview of the SciView application](docs/gallery/banner.png)
 
 *This AI-generated image is for demonstration only and may differ from the current application.*
@@ -96,6 +98,10 @@ Run `pixi run verify-installation` to check Python, Git, and the required Python
 Run `pixi run test-installation`. This command creates a temporary installation and removes it after the test. Add `--keep` to keep the temporary files.
 
 The `Installation` GitHub Actions workflow tests setup on Windows, macOS, and Red Hat UBI 8.10.
+
+### Performance benchmarks
+
+Run `pixi run bench` to run the benchmarks in [benchmarks/](benchmarks). They measure the reduction, transform, calibration-profile, and mask backends on small synthetic detector images. The `CodSpeed` GitHub Actions workflow runs the same command with [CodSpeed](https://codspeed.io) on every pull request and on `main`, and reports performance changes on the pull request.
 
 ### Source updates
 

@@ -8,6 +8,8 @@ version = "0.1.0"
 [tasks]
 launch-app = { cmd = "python -m sciview.launchers app", env = { PYTHONPATH = "src" } }
 test = { cmd = "python -m pytest", env = { PYTHONPATH = "src", QT_QPA_PLATFORM = "offscreen" } }
+# Single-threaded BLAS keeps CodSpeed results independent of the runner core count.
+bench = { cmd = "python -m pytest benchmarks --codspeed", env = { PYTHONPATH = "src", OPENBLAS_NUM_THREADS = "1", OMP_NUM_THREADS = "1" } }
 benchmark-ui = { cmd = "python -m sciview.dev.benchmark_ui", env = { PYTHONPATH = "src" } }
 verify-installation = { cmd = "python scripts/verify_installation.py", env = { QT_QPA_PLATFORM = "offscreen" } }
 test-installation = { cmd = "python scripts/test_installation.py", env = { QT_QPA_PLATFORM = "offscreen" } }
@@ -31,6 +33,7 @@ ipython = ">=9.13.0,<10"
 ipdb = ">=0.13.13,<0.14"
 debugpy = ">=1.8.20,<2"
 git = ">=2.40,<3"
+pytest-codspeed = ">=5.0.4,<6"
 
 [pypi-dependencies]
 pyqtdarktheme = ">=2.1,<3"

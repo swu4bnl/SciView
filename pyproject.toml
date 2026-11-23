@@ -47,6 +47,7 @@ sciview = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-codspeed>=5.0",
 ]
 
 [tool.pytest.ini_options]
